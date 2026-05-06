@@ -26,8 +26,6 @@ import type { Demanda } from "../types/demanda";
 import { fetchResponsaveisWithPapelByDemandaIds } from "../services/profiles.service";
 import { cn } from "@/lib/utils";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const SITUACAO_PAPEL_MAP: Record<string, string> = {
   fila_atendimento: "analista",
   planejamento_elaboracao: "analista",
@@ -41,12 +39,7 @@ const SITUACAO_PAPEL_MAP: Record<string, string> = {
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
-
-// ─── Fetch responsáveis ───────────────────────────────────────────────────────
-
 const fetchResponsaveisBatch = fetchResponsaveisWithPapelByDemandaIds;
-
-// ─── DemandasList ─────────────────────────────────────────────────────────────
 
 type ViewMode = "cards" | "table";
 
@@ -54,6 +47,8 @@ export function DemandasList() {
   const { demandas, loading, error, create, update, moveTo, remove, reload } = useDemandas();
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState<Demanda | null>(null);
+  /** Aba inicial do DemandaDetail — undefined = aba padrão, "horas" = aba de atividades */
+  const [selectedTab, setSelectedTab] = useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Demanda | null>(null);
   const [search, setSearch] = useState("");
   const [filterTipo, setFilterTipo] = useState("all");
@@ -99,17 +94,24 @@ export function DemandasList() {
 
   const { paginatedItems, currentPage, setCurrentPage, totalItems } = usePagination(filtered, { pageSize });
 
-  // ── Detail view ───────────────────────────────────────────────────────────
+  /** Abre demanda, com aba inicial opcional */
+  function openDemanda(d: Demanda, tab?: string) {
+    setSelectedTab(tab);
+    setSelected(d);
+  }
+
+  // ── Detail view ──────────────────────────────────────────────────────────────
   if (selected) {
     const current = demandas.find((d) => d.id === selected.id) || selected;
     return (
       <DemandaDetail
         demanda={current}
-        onBack={() => setSelected(null)}
+        onBack={() => { setSelected(null); setSelectedTab(undefined); }}
         onUpdate={async (id, updates) => {
           await update(id, updates);
         }}
         onMoveTo={moveTo}
+        initialTab={selectedTab}
       />
     );
   }
@@ -135,7 +137,7 @@ export function DemandasList() {
 
   return (
     <div className="space-y-4">
-      {/* ── Header ──────────────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Demandas</h2>
@@ -152,7 +154,7 @@ export function DemandasList() {
         </Button>
       </div>
 
-      {/* ── Filtros ─────────────────────────────────────────────── */}
+      {/* ── Filtros ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -172,9 +174,7 @@ export function DemandasList() {
           <SelectContent>
             <SelectItem value="all">Todos os tipos</SelectItem>
             {["corretiva", "evolutiva", "melhoria"].map((t) => (
-              <SelectItem key={t} value={t} className="capitalize">
-                {t}
-              </SelectItem>
+              <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -186,14 +186,11 @@ export function DemandasList() {
           <SelectContent>
             <SelectItem value="all">Todas as situações</SelectItem>
             {situacoesUnicas.map((s) => (
-              <SelectItem key={s} value={s}>
-                {SITUACAO_LABELS[s] || s}
-              </SelectItem>
+              <SelectItem key={s} value={s}>{SITUACAO_LABELS[s] || s}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        {/* Toggle cards / tabela */}
         <div className="flex items-center border rounded-md overflow-hidden h-9">
           <button
             onClick={() => setViewMode("cards")}
@@ -216,7 +213,7 @@ export function DemandasList() {
         </div>
       </div>
 
-      {/* ── Conteúdo ─────────────────────────────────────────────── */}
+      {/* ── Conteúdo ────────────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
         <EmptyState icon={ListTodo} title="Nenhuma demanda encontrada" />
       ) : (
@@ -225,37 +222,31 @@ export function DemandasList() {
             <CardView
               items={paginatedItems}
               getResponsavel={getResponsavel}
-              onSelect={setSelected}
+              onSelect={(d) => openDemanda(d)}
               onDelete={handleDelete}
+              onNovaAtividade={(d) => openDemanda(d, "horas")}
             />
           ) : (
             <TableView
               items={paginatedItems}
               getResponsavel={getResponsavel}
-              onSelect={setSelected}
+              onSelect={(d) => openDemanda(d)}
               onDelete={handleDelete}
+              onNovaAtividade={(d) => openDemanda(d, "horas")}
             />
           )}
 
-          {/* Rodapé paginação */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Itens por página:</span>
               <Select
                 value={String(pageSize)}
-                onValueChange={(v) => {
-                  setPageSize(Number(v));
-                  setCurrentPage(1);
-                }}
+                onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}
               >
-                <SelectTrigger className="h-8 w-20">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PAGE_SIZE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt} value={String(opt)}>
-                      {opt}
-                    </SelectItem>
+                    <SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -275,10 +266,7 @@ export function DemandasList() {
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         onConfirm={() => {
-          if (deleteTarget) {
-            remove(deleteTarget.id);
-            setDeleteTarget(null);
-          }
+          if (deleteTarget) { remove(deleteTarget.id); setDeleteTarget(null); }
         }}
       />
     </div>
@@ -292,25 +280,25 @@ function CardView({
   getResponsavel,
   onSelect,
   onDelete,
+  onNovaAtividade,
 }: {
   items: Demanda[];
   getResponsavel: (d: Demanda) => string | null;
   onSelect: (d: Demanda) => void;
   onDelete: (d: Demanda) => void;
+  onNovaAtividade?: (d: Demanda) => void;
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
       {items.map((d) => {
         const titulo = d.titulo || d.descricao;
         const responsavel = getResponsavel(d);
-
         return (
           <div
             key={d.id}
             onClick={() => onSelect(d)}
             className="group relative flex flex-col gap-3 p-4 rounded-xl border bg-card hover:border-amber-400/50 hover:shadow-md transition-all cursor-pointer"
           >
-            {/* Top: RHM + menu */}
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="h-5 w-1 rounded-full bg-amber-400 shrink-0" />
@@ -318,37 +306,18 @@ function CardView({
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                  >
+                  <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelect(d);
-                    }}
-                  >
-                    Detalhes
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(d);
-                    }}
-                  >
-                    Excluir
-                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSelect(d); }}>Detalhes</DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onNovaAtividade?.(d); }}>Nova atividade</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(d); }}>Excluir</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
 
-            {/* Título / projeto */}
             <div className="flex-1 min-w-0">
               {titulo ? (
                 <>
@@ -360,12 +329,9 @@ function CardView({
               )}
             </div>
 
-            {/* Footer: tipo + situação + responsável */}
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
               <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                <Badge variant="outline" className="text-[10px] capitalize shrink-0">
-                  {d.tipo}
-                </Badge>
+                <Badge variant="outline" className="text-[10px] capitalize shrink-0">{d.tipo}</Badge>
                 <Badge className={cn("text-[10px] shrink-0", SITUACAO_COLORS[d.situacao] || "")}>
                   {SITUACAO_LABELS[d.situacao] || d.situacao}
                 </Badge>
@@ -393,11 +359,13 @@ function TableView({
   getResponsavel,
   onSelect,
   onDelete,
+  onNovaAtividade,
 }: {
   items: Demanda[];
   getResponsavel: (d: Demanda) => string | null;
   onSelect: (d: Demanda) => void;
   onDelete: (d: Demanda) => void;
+  onNovaAtividade?: (d: Demanda) => void;
 }) {
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -419,67 +387,31 @@ function TableView({
             const responsavel = getResponsavel(d);
             return (
               <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onSelect(d)}>
+                <TableCell><span className="font-mono font-bold text-amber-500 text-sm">{d.rhm}</span></TableCell>
+                <TableCell><span className="text-sm truncate max-w-[140px] block">{d.projeto}</span></TableCell>
                 <TableCell>
-                  <span className="font-mono font-bold text-amber-500 text-sm">{d.rhm}</span>
+                  {titulo
+                    ? <span className="text-sm font-medium truncate max-w-[260px] block">{titulo}</span>
+                    : <span className="text-muted-foreground text-xs">—</span>}
                 </TableCell>
-
-                <TableCell>
-                  <span className="text-sm truncate max-w-[140px] block">{d.projeto}</span>
-                </TableCell>
-
-                <TableCell>
-                  {titulo ? (
-                    <span className="text-sm font-medium truncate max-w-[260px] block">{titulo}</span>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">—</span>
-                  )}
-                </TableCell>
-
-                <TableCell>
-                  <Badge variant="outline" className="capitalize text-[10px]">
-                    {d.tipo}
-                  </Badge>
-                </TableCell>
-
+                <TableCell><Badge variant="outline" className="capitalize text-[10px]">{d.tipo}</Badge></TableCell>
                 <TableCell>
                   <Badge className={cn("text-[10px]", SITUACAO_COLORS[d.situacao] || "")}>
                     {SITUACAO_LABELS[d.situacao] || d.situacao}
                   </Badge>
                 </TableCell>
-
                 <TableCell>
-                  {responsavel ? (
-                    <span className="text-xs">{responsavel}</span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
+                  {responsavel ? <span className="text-xs">{responsavel}</span> : <span className="text-muted-foreground">—</span>}
                 </TableCell>
-
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-7 w-7">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelect(d);
-                        }}
-                      >
-                        Detalhes
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete(d);
-                        }}
-                      >
-                        Excluir
-                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSelect(d); }}>Detalhes</DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onNovaAtividade?.(d); }}>Nova atividade</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(d); }}>Excluir</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

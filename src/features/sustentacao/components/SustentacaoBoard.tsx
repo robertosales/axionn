@@ -23,7 +23,6 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { NovaAtividadeDialog } from "./NovaAtividadeDialog";
 
 import type { Demanda } from "../types/demanda";
 import { SITUACAO_LABELS } from "../types/demanda";
@@ -83,7 +82,6 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-/** Retorna todos os responsáveis únicos da demanda (por papel) */
 function getResponsaveis(demanda: Demanda): { papel: string; nome: string }[] {
   const mapa: Record<string, string | null | undefined> = {
     desenvolvedor:  demanda.responsavel_dev,
@@ -129,7 +127,7 @@ function ResponsavelAvatar({
   );
 }
 
-// ── Grupo de avatares ─────────────────────────────────────────────────────────────
+// ── Grupo de avatares ─────────────────────────────────────────────────────────
 function ResponsaveisGroup({
   responsaveis,
   accentHex,
@@ -220,6 +218,7 @@ function DemandaCard({
   accentHex: string;
   onClick?: () => void;
   onMove?: (targetKey: string) => void;
+  /** Abre a demanda diretamente na aba de atividades */
   onNovaAtividade?: () => void;
 }) {
   const slaD = slaDaysRemaining(demanda);
@@ -232,18 +231,14 @@ function DemandaCard({
       <ContextMenuTrigger asChild>
         <div
           onClick={onClick}
-          className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)]
-            hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150
-            overflow-hidden cursor-pointer select-none group"
+          className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150 overflow-hidden cursor-pointer select-none group"
         >
           <div className="h-0.5" style={{ backgroundColor: accentHex }} />
           <div className="p-3">
-            {/* Título */}
             <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2 mb-2">
               {demanda.descricao ?? demanda.tipo ?? "Demanda"}
             </p>
 
-            {/* RHM + Projeto */}
             {(demanda.rhm || demanda.projeto) && (
               <div className="flex flex-wrap gap-1 mb-2">
                 {demanda.rhm && (
@@ -262,18 +257,15 @@ function DemandaCard({
               </div>
             )}
 
-            {/* Footer: SLA + Botão atividade + Avatares */}
             <div className="flex items-center justify-between mt-1">
               <div className="flex items-center gap-1.5">
                 {late && (
-                  <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
-                    bg-destructive/10 text-destructive border border-destructive/25">
+                  <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-destructive/10 text-destructive border border-destructive/25">
                     <AlertTriangle className="h-2.5 w-2.5" /> SLA
                   </span>
                 )}
                 {urgent && !late && (
-                  <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
-                    bg-warning/10 text-warning border border-warning/25">
+                  <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-warning/10 text-warning border border-warning/25">
                     <Clock className="h-2.5 w-2.5" /> {slaD}d
                   </span>
                 )}
@@ -285,32 +277,22 @@ function DemandaCard({
               </div>
 
               <div className="flex items-center gap-1.5">
-                {/* Botão Nova Atividade — visível no hover do card */}
                 {onNovaAtividade && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNovaAtividade();
-                          }}
-                          className="h-5 w-5 rounded flex items-center justify-center
-                            opacity-0 group-hover:opacity-100 transition-opacity
-                            text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          onClick={(e) => { e.stopPropagation(); onNovaAtividade(); }}
+                          className="h-5 w-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary hover:bg-primary/10"
                           aria-label="Nova atividade"
                         >
                           <ActivitySquare className="h-3.5 w-3.5" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        Nova atividade
-                      </TooltipContent>
+                      <TooltipContent side="top" className="text-xs">Nova atividade</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 )}
-
-                {/* Grupo de avatares */}
                 <ResponsaveisGroup responsaveis={responsaveis} accentHex={accentHex} />
               </div>
             </div>
@@ -318,47 +300,27 @@ function DemandaCard({
         </div>
       </ContextMenuTrigger>
 
-      {/* Context Menu */}
       <ContextMenuContent className="w-56">
-        <ContextMenuItem onClick={onClick}>
-          Abrir detalhes
-        </ContextMenuItem>
-
+        <ContextMenuItem onClick={onClick}>Abrir detalhes</ContextMenuItem>
         {onNovaAtividade && (
-          <ContextMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              onNovaAtividade();
-            }}
-          >
+          <ContextMenuItem onClick={(e) => { e.stopPropagation(); onNovaAtividade(); }}>
             <ActivitySquare className="h-3.5 w-3.5 mr-2 text-primary" />
             Nova atividade
           </ContextMenuItem>
         )}
-
         {onMove && (
           <>
             <ContextMenuSeparator />
             <ContextMenuSub>
               <ContextMenuSubTrigger>
-                <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
-                Mover para
+                <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />Mover para
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto w-52">
                 {VISIBLE_COLS.map((key) => (
-                  <ContextMenuItem
-                    key={key}
-                    disabled={key === demanda.situacao}
-                    onClick={() => onMove(key)}
-                  >
-                    <span
-                      className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
-                      style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }}
-                    />
+                  <ContextMenuItem key={key} disabled={key === demanda.situacao} onClick={() => onMove(key)}>
+                    <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
                     {WORKFLOWLABELS[key] ?? key}
-                    {key === demanda.situacao && (
-                      <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>
-                    )}
+                    {key === demanda.situacao && <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>}
                   </ContextMenuItem>
                 ))}
               </ContextMenuSubContent>
@@ -370,7 +332,6 @@ function DemandaCard({
   );
 }
 
-// ── Collapsed strip ───────────────────────────────────────────────────────────
 function CollapsedCol({
   label,
   count,
@@ -385,8 +346,7 @@ function CollapsedCol({
   return (
     <div
       onClick={onClick}
-      className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60
-        bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
+      className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -406,7 +366,6 @@ function CollapsedCol({
   );
 }
 
-// ── Expanded column ───────────────────────────────────────────────────────────
 function ExpandedCol({
   label,
   colKey,
@@ -430,8 +389,7 @@ function ExpandedCol({
 }) {
   return (
     <div
-      className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60
-        bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-all"
+      className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-all"
       style={{ borderTop: `3px solid ${accentHex}` }}
     >
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border">
@@ -448,10 +406,7 @@ function ExpandedCol({
           {demandas.length}
         </span>
         {onAdd && (
-          <button
-            onClick={onAdd}
-            className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-          >
+          <button onClick={onAdd} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
             <Plus className="h-3.5 w-3.5" />
           </button>
         )}
@@ -479,10 +434,11 @@ function ExpandedCol({
   );
 }
 
-// ── Board ─────────────────────────────────────────────────────────────────────
+// ── Props públicas do Board ───────────────────────────────────────────────────
 export interface SustentacaoBoardProps {
   demandas?: Demanda[];
-  onSelectDemanda?: (demanda: Demanda) => void;
+  /** Segundo argumento opcional: aba inicial a ser exibida no DemandaDetail */
+  onSelectDemanda?: (demanda: Demanda, initialTab?: string) => void;
   onCreateDemanda?: (situacao?: string) => void;
   onMoveDemanda?: (demanda: Demanda, targetKey: string) => void;
 }
@@ -496,8 +452,6 @@ export function SustentacaoBoard({
   const demandas = demandasProp ?? [];
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
-  // Estado para controlar o dialog de nova atividade
-  const [atividadeDemanda, setAtividadeDemanda] = useState<Demanda | null>(null);
 
   const toggle = (key: string) =>
     setCollapsed((prev) => {
@@ -512,8 +466,8 @@ export function SustentacaoBoard({
     return demandas.filter(
       (d) =>
         String(d.descricao ?? "").toLowerCase().includes(q) ||
-        String(d.projeto   ?? "").toLowerCase().includes(q) ||
-        String(d.rhm       ?? "").toLowerCase().includes(q),
+        String(d.projeto ?? "").toLowerCase().includes(q) ||
+        String(d.rhm ?? "").toLowerCase().includes(q),
     );
   }, [demandas, search]);
 
@@ -529,76 +483,67 @@ export function SustentacaoBoard({
   }, [demandas]);
 
   return (
-    <>
-      {/* Dialog de nova atividade — montado no Board para garantir acesso ao useHours */}
-      <NovaAtividadeDialog
-        demanda={atividadeDemanda}
-        open={!!atividadeDemanda}
-        onClose={() => setAtividadeDemanda(null)}
-      />
-
-      <div className="flex flex-col h-full gap-3">
-        {/* top bar */}
-        <div className="flex items-center gap-3 px-1">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar demanda..."
-              className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-foreground text-sm
-                placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          <Badge variant="outline" className="text-xs font-mono h-9 px-3">
-            {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
-          </Badge>
+    <div className="flex flex-col h-full gap-3">
+      {/* Barra de busca */}
+      <div className="flex items-center gap-3 px-1">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar demanda..."
+            className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
+        <Badge variant="outline" className="text-xs font-mono h-9 px-3">
+          {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
+        </Badge>
+      </div>
 
-        {/* board */}
-        <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
-          {VISIBLE_COLS.map((key) => {
-            const label = WORKFLOWLABELS[key] ?? key;
-            const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8" };
-            const items = byStatus[key] ?? [];
-            const isCol = collapsed.has(key);
+      {/* Colunas do board */}
+      <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
+        {VISIBLE_COLS.map((key) => {
+          const label = WORKFLOWLABELS[key] ?? key;
+          const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8" };
+          const items = byStatus[key] ?? [];
+          const isCol = collapsed.has(key);
 
-            if (isCol) {
-              return (
-                <CollapsedCol
-                  key={key}
-                  label={label}
-                  count={items.length}
-                  accentHex={color.hex}
-                  onClick={() => toggle(key)}
-                />
-              );
-            }
+          if (isCol) {
             return (
-              <ExpandedCol
+              <CollapsedCol
                 key={key}
-                colKey={key}
                 label={label}
-                demandas={items}
+                count={items.length}
                 accentHex={color.hex}
-                onCollapse={() => toggle(key)}
-                onCardClick={onSelectDemanda}
-                onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}
-                onMove={onMoveDemanda}
-                onNovaAtividade={(d) => setAtividadeDemanda(d)}
+                onClick={() => toggle(key)}
               />
             );
-          })}
-        </div>
+          }
+
+          return (
+            <ExpandedCol
+              key={key}
+              colKey={key}
+              label={label}
+              demandas={items}
+              accentHex={color.hex}
+              onCollapse={() => toggle(key)}
+              onCardClick={(d) => onSelectDemanda?.(d)}
+              onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}
+              onMove={onMoveDemanda}
+              onNovaAtividade={(d) => onSelectDemanda?.(d, "horas")}
+            />
+          );
+        })}
       </div>
-    </>
+    </div>
   );
 }

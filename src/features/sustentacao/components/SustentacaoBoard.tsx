@@ -1,5 +1,16 @@
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronRight, Plus, Search, X, Clock, AlertTriangle, ArrowRightLeft, User } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Search,
+  X,
+  Clock,
+  AlertTriangle,
+  ArrowRightLeft,
+  User,
+  ActivitySquare,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   ContextMenu,
@@ -12,6 +23,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { NovaAtividadeDialog } from "./NovaAtividadeDialog";
 
 import type { Demanda } from "../types/demanda";
 import { SITUACAO_LABELS } from "../types/demanda";
@@ -100,11 +112,10 @@ function ResponsavelAvatar({
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border border-background ring-1`}
+            className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border border-background`}
             style={{
               backgroundColor: hexAlpha(accentHex, 0.18),
               color: accentHex,
-              ringColor: accentHex,
             }}
           >
             {getInitials(nome)}
@@ -118,7 +129,7 @@ function ResponsavelAvatar({
   );
 }
 
-// ── Grupo de avatares: último em destaque, +N expansível ─────────────────────
+// ── Grupo de avatares ─────────────────────────────────────────────────────────────
 function ResponsaveisGroup({
   responsaveis,
   accentHex,
@@ -136,23 +147,18 @@ function ResponsaveisGroup({
     );
   }
 
-  // O último responsável fica em destaque (mais recente / mais relevante)
   const ultimo = responsaveis[responsaveis.length - 1];
   const demais = responsaveis.slice(0, -1);
 
   if (!expanded) {
     return (
       <div className="flex items-center gap-0.5">
-        {/* +N botão quando há mais de 1 */}
         {demais.length > 0 && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpanded(true);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
                   className="h-5 min-w-[20px] px-1 rounded-full text-[8px] font-bold border transition-colors"
                   style={{
                     backgroundColor: hexAlpha(accentHex, 0.1),
@@ -173,13 +179,11 @@ function ResponsaveisGroup({
             </Tooltip>
           </TooltipProvider>
         )}
-        {/* Último responsável em destaque */}
         <ResponsavelAvatar nome={ultimo.nome} accentHex={accentHex} size="md" />
       </div>
     );
   }
 
-  // Expandido: lista todos
   return (
     <div
       className="flex items-center gap-0.5 flex-wrap max-w-[140px]"
@@ -210,11 +214,13 @@ function DemandaCard({
   accentHex,
   onClick,
   onMove,
+  onNovaAtividade,
 }: {
   demanda: Demanda;
   accentHex: string;
   onClick?: () => void;
   onMove?: (targetKey: string) => void;
+  onNovaAtividade?: () => void;
 }) {
   const slaD = slaDaysRemaining(demanda);
   const urgent = slaD !== null && slaD <= 3 && slaD >= 0;
@@ -228,7 +234,7 @@ function DemandaCard({
           onClick={onClick}
           className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)]
             hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150
-            overflow-hidden cursor-pointer select-none"
+            overflow-hidden cursor-pointer select-none group"
         >
           <div className="h-0.5" style={{ backgroundColor: accentHex }} />
           <div className="p-3">
@@ -256,10 +262,9 @@ function DemandaCard({
               </div>
             )}
 
-            {/* Footer: SLA + Avatares (sem #ID) */}
+            {/* Footer: SLA + Botão atividade + Avatares */}
             <div className="flex items-center justify-between mt-1">
               <div className="flex items-center gap-1.5">
-                {/* SLA badges */}
                 {late && (
                   <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5
                     bg-destructive/10 text-destructive border border-destructive/25">
@@ -279,16 +284,57 @@ function DemandaCard({
                 )}
               </div>
 
-              {/* Grupo de avatares de responsáveis */}
-              <ResponsaveisGroup responsaveis={responsaveis} accentHex={accentHex} />
+              <div className="flex items-center gap-1.5">
+                {/* Botão Nova Atividade — visível no hover do card */}
+                {onNovaAtividade && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onNovaAtividade();
+                          }}
+                          className="h-5 w-5 rounded flex items-center justify-center
+                            opacity-0 group-hover:opacity-100 transition-opacity
+                            text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          aria-label="Nova atividade"
+                        >
+                          <ActivitySquare className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        Nova atividade
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+
+                {/* Grupo de avatares */}
+                <ResponsaveisGroup responsaveis={responsaveis} accentHex={accentHex} />
+              </div>
             </div>
           </div>
         </div>
       </ContextMenuTrigger>
 
       {/* Context Menu */}
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onClick={onClick}>Abrir detalhes</ContextMenuItem>
+      <ContextMenuContent className="w-56">
+        <ContextMenuItem onClick={onClick}>
+          Abrir detalhes
+        </ContextMenuItem>
+
+        {onNovaAtividade && (
+          <ContextMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onNovaAtividade();
+            }}
+          >
+            <ActivitySquare className="h-3.5 w-3.5 mr-2 text-primary" />
+            Nova atividade
+          </ContextMenuItem>
+        )}
 
         {onMove && (
           <>
@@ -370,6 +416,7 @@ function ExpandedCol({
   onCardClick,
   onAdd,
   onMove,
+  onNovaAtividade,
 }: {
   label: string;
   colKey: string;
@@ -379,6 +426,7 @@ function ExpandedCol({
   onCardClick?: (d: Demanda) => void;
   onAdd?: () => void;
   onMove?: (demanda: Demanda, targetKey: string) => void;
+  onNovaAtividade?: (demanda: Demanda) => void;
 }) {
   return (
     <div
@@ -422,6 +470,7 @@ function ExpandedCol({
               accentHex={accentHex}
               onClick={() => onCardClick?.(d)}
               onMove={onMove ? (targetKey) => onMove(d, targetKey) : undefined}
+              onNovaAtividade={onNovaAtividade ? () => onNovaAtividade(d) : undefined}
             />
           ))
         )}
@@ -447,6 +496,8 @@ export function SustentacaoBoard({
   const demandas = demandasProp ?? [];
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  // Estado para controlar o dialog de nova atividade
+  const [atividadeDemanda, setAtividadeDemanda] = useState<Demanda | null>(null);
 
   const toggle = (key: string) =>
     setCollapsed((prev) => {
@@ -456,10 +507,9 @@ export function SustentacaoBoard({
     });
 
   const filtered = useMemo(() => {
-    const safe = demandas ?? [];
-    if (!search) return safe;
+    if (!search) return demandas;
     const q = search.toLowerCase();
-    return safe.filter(
+    return demandas.filter(
       (d) =>
         String(d.descricao ?? "").toLowerCase().includes(q) ||
         String(d.projeto   ?? "").toLowerCase().includes(q) ||
@@ -479,66 +529,76 @@ export function SustentacaoBoard({
   }, [demandas]);
 
   return (
-    <div className="flex flex-col h-full gap-3">
-      {/* top bar */}
-      <div className="flex items-center gap-3 px-1">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar demanda..."
-            className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-foreground text-sm
-              placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
+    <>
+      {/* Dialog de nova atividade — montado no Board para garantir acesso ao useHours */}
+      <NovaAtividadeDialog
+        demanda={atividadeDemanda}
+        open={!!atividadeDemanda}
+        onClose={() => setAtividadeDemanda(null)}
+      />
+
+      <div className="flex flex-col h-full gap-3">
+        {/* top bar */}
+        <div className="flex items-center gap-3 px-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar demanda..."
+              className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-foreground text-sm
+                placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <Badge variant="outline" className="text-xs font-mono h-9 px-3">
+            {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
+          </Badge>
         </div>
-        <Badge variant="outline" className="text-xs font-mono h-9 px-3">
-          {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
-        </Badge>
-      </div>
 
-      {/* board */}
-      <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
-        {VISIBLE_COLS.map((key) => {
-          const label = WORKFLOWLABELS[key] ?? key;
-          const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8" };
-          const items = byStatus[key] ?? [];
-          const isCol = collapsed.has(key);
+        {/* board */}
+        <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
+          {VISIBLE_COLS.map((key) => {
+            const label = WORKFLOWLABELS[key] ?? key;
+            const color = COLUMN_COLORS[key] ?? { hex: "#94a3b8" };
+            const items = byStatus[key] ?? [];
+            const isCol = collapsed.has(key);
 
-          if (isCol) {
+            if (isCol) {
+              return (
+                <CollapsedCol
+                  key={key}
+                  label={label}
+                  count={items.length}
+                  accentHex={color.hex}
+                  onClick={() => toggle(key)}
+                />
+              );
+            }
             return (
-              <CollapsedCol
+              <ExpandedCol
                 key={key}
+                colKey={key}
                 label={label}
-                count={items.length}
+                demandas={items}
                 accentHex={color.hex}
-                onClick={() => toggle(key)}
+                onCollapse={() => toggle(key)}
+                onCardClick={onSelectDemanda}
+                onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}
+                onMove={onMoveDemanda}
+                onNovaAtividade={(d) => setAtividadeDemanda(d)}
               />
             );
-          }
-          return (
-            <ExpandedCol
-              key={key}
-              colKey={key}
-              label={label}
-              demandas={items}
-              accentHex={color.hex}
-              onCollapse={() => toggle(key)}
-              onCardClick={onSelectDemanda}
-              onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}
-              onMove={onMoveDemanda}
-            />
-          );
-        })}
+          })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

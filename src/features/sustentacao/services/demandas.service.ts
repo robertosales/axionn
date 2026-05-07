@@ -71,6 +71,17 @@ export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
   return (data || []) as unknown as DemandaHour[];
 }
 
+export async function updateHour(
+  id: string,
+  data: { horas: number; fase: string; descricao: string },
+) {
+  const { error } = await supabase
+    .from("demanda_hours" as any)
+    .update(data as any)
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteHour(id: string) {
   const { error } = await supabase
     .from("demanda_hours" as any)

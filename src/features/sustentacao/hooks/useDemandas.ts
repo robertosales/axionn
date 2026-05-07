@@ -221,6 +221,16 @@ export function useHours(demandaId: string | null) {
     }
   };
 
+  const update = async (id: string, h: { horas: number; fase: string; descricao: string }) => {
+    try {
+      await svc.updateHour(id, h);
+      toast.success("Registro atualizado com sucesso");
+      await load();
+    } catch {
+      toast.error("Erro ao atualizar registro");
+    }
+  };
+
   const remove = async (id: string) => {
     try {
       await svc.deleteHour(id);
@@ -233,5 +243,5 @@ export function useHours(demandaId: string | null) {
 
   const total = hours.reduce((s, h) => s + Number(h.horas), 0);
 
-  return { hours, loading, add, remove, total, reload: load };
+  return { hours, loading, add, update, remove, total, reload: load };
 }

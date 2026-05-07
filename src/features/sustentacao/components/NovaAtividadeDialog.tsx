@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,20 +20,36 @@ import {
 import { toast } from "sonner";
 import { useHours } from "../hooks/useDemandas";
 import { FASES, FASE_LABELS } from "../types/demanda";
-import type { Demanda } from "../types/demanda";
+import type { Demanda, DemandaHour } from "../types/demanda";
 
 interface NovaAtividadeDialogProps {
   demanda: Demanda | null;
   open: boolean;
   onClose: () => void;
+  /** Quando informado, o dialog entra em modo edição */
+  editHour?: DemandaHour | null;
 }
 
-export function NovaAtividadeDialog({ demanda, open, onClose }: NovaAtividadeDialogProps) {
-  const { add, loading } = useHours(demanda?.id ?? null);
+export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAtividadeDialogProps) {
+  const { add, update, loading } = useHours(demanda?.id ?? null);
+  const isEditing = !!editHour;
 
   const [fase, setFase] = useState<string>("execucao");
   const [horas, setHoras] = useState<string>("1");
   const [descricao, setDescricao] = useState("");
+
+  // Pré-preenche campos quando entra em modo edição
+  useEffect(() => {
+    if (editHour) {
+      setFase(editHour.fase);
+      setHoras(String(editHour.horas));
+      setDescricao(editHour.descricao ?? "");
+    } else {
+      setFase("execucao");
+      setHoras("1");
+      setDescricao("");
+    }
+  }, [editHour, open]);
 
   const reset = () => {
     setFase("execucao");
@@ -52,7 +68,11 @@ export function NovaAtividadeDialog({ demanda, open, onClose }: NovaAtividadeDia
     if (isNaN(h) || h <= 0) { toast.error("Informe um número de horas válido."); return; }
     if (!descricao.trim()) { toast.error("Informe uma descrição para a atividade."); return; }
 
-    await add({ fase, horas: h, descricao: descricao.trim() });
+    if (isEditing && editHour) {
+      await update(editHour.id, { fase, horas: h, descricao: descricao.trim() });
+    } else {
+      await add({ fase, horas: h, descricao: descricao.trim() });
+    }
     handleClose();
   };
 
@@ -71,9 +91,13 @@ export function NovaAtividadeDialog({ demanda, open, onClose }: NovaAtividadeDia
               strokeWidth="2"
             >
               <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M12 8v8M8 12h8" />
+              {isEditing ? (
+                <path d="M16.5 3.5l4 4L7 21H3v-4L16.5 3.5z" />
+              ) : (
+                <path d="M12 8v8M8 12h8" />
+              )}
             </svg>
-            Nova atividade
+            {isEditing ? "Editar atividade" : "Nova atividade"}
           </DialogTitle>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
             {demanda.rhm ? `RHM ${demanda.rhm} — ` : ""}
@@ -139,7 +163,7 @@ export function NovaAtividadeDialog({ demanda, open, onClose }: NovaAtividadeDia
             Cancelar
           </Button>
           <Button size="sm" onClick={handleSalvar} disabled={loading}>
-            {loading ? "Salvando..." : "Salvar atividade"}
+            {loading ? "Salvando..." : isEditing ? "Salvar alterações" : "Salvar atividade"}
           </Button>
         </DialogFooter>
       </DialogContent>

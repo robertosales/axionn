@@ -68,6 +68,14 @@ interface Participant {
   isFacilitator: boolean;
 }
 
+/** Retorna as iniciais usando a PRIMEIRA e a ÚLTIMA palavra do nome */
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export function PlanningPoker() {
   const { userStories, activeSprint, updateUserStory, refreshAll } = useSprint();
   const { currentTeamId, profile } = useAuth();
@@ -518,13 +526,6 @@ export function PlanningPoker() {
         const maxH = Math.max(...hoursList);
         const ratio = maxH / Math.max(minH, 1);
 
-        // Tabela de divergência por horas reais:
-        // P(4) → M(6): ratio 1.5 → normal
-        // M(6) → G(12): ratio 2.0 → low
-        // P(4) → G(12): ratio 3.0 → high
-        // M(6) → GG(16): ratio 2.67 → high
-        // P(4) → GG(16): ratio 4.0 → high
-        // qualquer → XG(24): provavelmente high
         if (ratio >= 2.5) {
           divergenceLevel = "high";
           divergenceLabel = `Diferença de ${minH}h → ${maxH}h (${ratio.toFixed(1)}x) — discussão necessária`;
@@ -887,12 +888,7 @@ export function PlanningPoker() {
                         <div key={v.id} className="flex items-center gap-3 rounded-lg border p-2">
                           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 shrink-0">
                             <span className="text-[10px] font-bold text-primary">
-                              {(profiles[v.userId] || "?")
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")
-                                .slice(0, 2)
-                                .toUpperCase()}
+                              {getInitials(profiles[v.userId] || "?")}
                             </span>
                           </div>
                           <span className="text-xs font-medium flex-1 truncate">
@@ -1155,7 +1151,7 @@ export function PlanningPoker() {
           )}
         </div>
 
-        {/* Right panel */}
+        {/* Right panel — Participantes */}
         <div className="col-span-3">
           <Card>
             <CardHeader className="pb-2">
@@ -1169,12 +1165,7 @@ export function PlanningPoker() {
                   <div key={p.id} className="flex items-center gap-2 rounded-lg border p-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 shrink-0">
                       <span className="text-[10px] font-bold text-primary">
-                        {p.displayName
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .slice(0, 2)
-                          .toUpperCase()}
+                        {getInitials(p.displayName)}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">

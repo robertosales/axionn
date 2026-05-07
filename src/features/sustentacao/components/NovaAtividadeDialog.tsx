@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -17,18 +18,57 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useHours } from "../hooks/useDemandas";
 import { FASES, FASE_LABELS } from "../types/demanda";
 import type { Demanda, DemandaHour } from "../types/demanda";
+
+interface Membro {
+  user_id: string;
+  display_name: string;
+  papel: string;
+}
 
 interface NovaAtividadeDialogProps {
   demanda: Demanda | null;
   open: boolean;
   onClose: () => void;
-  /** Quando informado, o dialog entra em modo edição */
+  /** Quando informado, o dialog entra em modo edição (somente admin) */
   editHour?: DemandaHour | null;
 }
+
+/** Busca responsáveis da demanda com display_name via join. */
+async function fetchMembros(demandaId: string): Promise<Membro[]> {
+  const { data, error } = await supabase
+    .from("demanda_responsaveis" as any)
+    .select("user_id, papel, profiles(display_name)")
+    .eq("demanda_id", demandaId);
+  if (error || !data) return [];
+  return (data as any[]).map((r) => ({
+    user_id: r.user_id,
+    display_name: r.profiles?.display_name ?? r.user_id,
+    papel: r.papel,
+  }));
+}
+
+/** Iniciais de até 2 palavras para o avatar. */
+function initials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+const PAPEL_COLORS: Record<string, string> = {
+  desenvolvedor: "bg-blue-500",
+  analista: "bg-emerald-500",
+  testador: "bg-amber-500",
+  arquiteto: "bg-violet-500",
+  gestor: "bg-rose-500",
+};
 
 export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAtividadeDialogProps) {
   const { add, update, loading } = useHours(demanda?.id ?? null);
@@ -37,6 +77,17 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
   const [fase, setFase] = useState<string>("execucao");
   const [horas, setHoras] = useState<string>("1");
   const [descricao, setDescricao] = useState("");
+  const [membros, setMembros] = useState<Membro[]>([]);
+  const [targetUserId, setTargetUserId] = useState<string>("");
+
+  // Carrega responsáveis sempre que abrir em modo edição
+  useEffect(() => {
+    if (open && isEditing && demanda?.id) {
+      fetchMembros(demanda.id).then(setMembros);
+    } else if (!open) {
+      setMembros([]);
+    }
+  }, [open, isEditing, demanda?.id]);
 
   // Pré-preenche campos quando entra em modo edição
   useEffect(() => {
@@ -44,10 +95,12 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
       setFase(editHour.fase);
       setHoras(String(editHour.horas));
       setDescricao(editHour.descricao ?? "");
+      setTargetUserId(editHour.user_id); // pré-seleciona quem lançou
     } else {
       setFase("execucao");
       setHoras("1");
       setDescricao("");
+      setTargetUserId("");
     }
   }, [editHour, open]);
 
@@ -55,6 +108,8 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
     setFase("execucao");
     setHoras("1");
     setDescricao("");
+    setTargetUserId("");
+    setMembros([]);
   };
 
   const handleClose = () => {
@@ -69,7 +124,13 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
     if (!descricao.trim()) { toast.error("Informe uma descrição para a atividade."); return; }
 
     if (isEditing && editHour) {
-      await update(editHour.id, { fase, horas: h, descricao: descricao.trim() });
+      await update(editHour.id, {
+        fase,
+        horas: h,
+        descricao: descricao.trim(),
+        // só envia user_id se foi alterado e é válido
+        ...(targetUserId && targetUserId !== editHour.user_id ? { user_id: targetUserId } : {}),
+      });
     } else {
       await add({ fase, horas: h, descricao: descricao.trim() });
     }
@@ -78,18 +139,14 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
 
   if (!demanda) return null;
 
+  const membroSelecionado = membros.find((m) => m.user_id === targetUserId);
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
-            <svg
-              className="h-4 w-4 text-primary"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg className="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               {isEditing ? (
                 <path d="M16.5 3.5l4 4L7 21H3v-4L16.5 3.5z" />
@@ -108,9 +165,7 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
         <div className="space-y-4 py-1">
           {/* Fase */}
           <div className="space-y-1.5">
-            <Label htmlFor="fase" className="text-xs font-medium">
-              Fase
-            </Label>
+            <Label htmlFor="fase" className="text-xs font-medium">Fase</Label>
             <Select value={fase} onValueChange={setFase}>
               <SelectTrigger id="fase" className="h-9 text-sm">
                 <SelectValue placeholder="Selecione a fase" />
@@ -127,9 +182,7 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
 
           {/* Horas */}
           <div className="space-y-1.5">
-            <Label htmlFor="horas" className="text-xs font-medium">
-              Horas
-            </Label>
+            <Label htmlFor="horas" className="text-xs font-medium">Horas</Label>
             <Input
               id="horas"
               type="number"
@@ -144,9 +197,7 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
 
           {/* Descrição */}
           <div className="space-y-1.5">
-            <Label htmlFor="descricao" className="text-xs font-medium">
-              Descrição da atividade
-            </Label>
+            <Label htmlFor="descricao" className="text-xs font-medium">Descrição da atividade</Label>
             <Textarea
               id="descricao"
               value={descricao}
@@ -156,6 +207,54 @@ export function NovaAtividadeDialog({ demanda, open, onClose, editHour }: NovaAt
               rows={3}
             />
           </div>
+
+          {/* ── Lançado por — somente no modo edição (admin) ── */}
+          {isEditing && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs font-medium">Lançado por</Label>
+                <Badge variant="outline" className="text-[10px] h-5 gap-1 border-amber-300 text-amber-700 bg-amber-50">
+                  <ShieldCheck className="h-3 w-3" />
+                  Somente admin
+                </Badge>
+              </div>
+
+              {membros.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  Nenhum responsável vinculado à demanda.
+                </p>
+              ) : (
+                <Select value={targetUserId} onValueChange={setTargetUserId}>
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue placeholder="Selecione o membro">
+                      {membroSelecionado && (
+                        <span className="flex items-center gap-2">
+                          <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold text-white ${PAPEL_COLORS[membroSelecionado.papel] ?? "bg-slate-500"}`}>
+                            {initials(membroSelecionado.display_name)}
+                          </span>
+                          <span>{membroSelecionado.display_name}</span>
+                          <span className="text-muted-foreground capitalize text-xs">· {membroSelecionado.papel}</span>
+                        </span>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {membros.map((m) => (
+                      <SelectItem key={m.user_id} value={m.user_id} className="text-sm">
+                        <span className="flex items-center gap-2">
+                          <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold text-white shrink-0 ${PAPEL_COLORS[m.papel] ?? "bg-slate-500"}`}>
+                            {initials(m.display_name)}
+                          </span>
+                          <span className="flex-1">{m.display_name}</span>
+                          <span className="text-muted-foreground capitalize text-xs">{m.papel}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter className="gap-2">

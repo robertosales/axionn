@@ -6,22 +6,18 @@ import * as svc from "../services/demandas.service";
 import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
 import { REQUIRES_JUSTIFICATIVA } from "../types/demanda";
 
-// ✅ 1 query com join automático via FK — sem N+1
 async function enrichComResponsaveis(demandas: Demanda[]): Promise<Demanda[]> {
   if (demandas.length === 0) return demandas;
-
   const ids = demandas.map((d) => d.id);
-
   const { data } = await supabase
     .from("demanda_responsaveis")
     .select("demanda_id, papel, profiles(display_name)")
     .in("demanda_id", ids);
-
   const rows = (data || []) as any[];
-
   return demandas.map((d) => {
     const resp = rows.filter((r) => r.demanda_id === d.id);
-    const getPorPapel = (papel: string) => resp.find((r) => r.papel === papel)?.profiles?.display_name ?? null;
+    const getPorPapel = (papel: string) =>
+      resp.find((r) => r.papel === papel)?.profiles?.display_name ?? null;
     return {
       ...d,
       responsavel_dev: getPorPapel("desenvolvedor") ?? d.responsavel_dev,
@@ -37,8 +33,6 @@ export function useDemandas() {
   const [demandas, setDemandas] = useState<Demanda[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // ✅ Evita load() duplicado quando realtime e useEffect disparam juntos
   const loadingRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -59,66 +53,39 @@ export function useDemandas() {
     }
   }, [currentTeamId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  // ✅ Realtime — atualiza só o item alterado, sem rebuscar tudo
   useEffect(() => {
     if (!currentTeamId) return;
-
     const channel = supabase
       .channel(`demandas-rt-${currentTeamId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "demandas",
-          filter: `team_id=eq.${currentTeamId}`,
-        },
+      .on("postgres_changes", { event: "*", schema: "public", table: "demandas", filter: `team_id=eq.${currentTeamId}` },
         async (payload) => {
           if (payload.eventType === "DELETE") {
             setDemandas((prev) => prev.filter((d) => d.id !== payload.old.id));
             return;
           }
           if (payload.eventType === "INSERT") {
-            const nova = payload.new as Demanda;
-            const [enriched] = await enrichComResponsaveis([nova]);
+            const [enriched] = await enrichComResponsaveis([payload.new as Demanda]);
             setDemandas((prev) => [...prev, enriched]);
             return;
           }
           if (payload.eventType === "UPDATE") {
-            const updated = payload.new as Demanda;
-            const [enriched] = await enrichComResponsaveis([updated]);
+            const [enriched] = await enrichComResponsaveis([payload.new as Demanda]);
             setDemandas((prev) => prev.map((d) => (d.id === enriched.id ? enriched : d)));
             return;
           }
-        },
-      )
+        })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [currentTeamId]);
 
   const create = async (d: Partial<Demanda>) => {
     if (!currentTeamId) return;
     try {
-      const created = await svc.createDemanda({
-        ...d,
-        team_id: currentTeamId,
-        rhm: d.rhm!,
-      });
+      const created = await svc.createDemanda({ ...d, team_id: currentTeamId, rhm: d.rhm! });
       if (user) {
-        await svc.addTransition({
-          demanda_id: created.id,
-          from_status: null,
-          to_status: "nova",
-          user_id: user.id,
-          justificativa: null,
-        });
+        await svc.addTransition({ demanda_id: created.id, from_status: null, to_status: "nova", user_id: user.id, justificativa: null });
       }
       toast.success("Demanda criada com sucesso");
     } catch {
@@ -143,13 +110,7 @@ export function useDemandas() {
     try {
       await svc.updateDemanda(demanda.id, { situacao: newStatus });
       if (user) {
-        await svc.addTransition({
-          demanda_id: demanda.id,
-          from_status: demanda.situacao,
-          to_status: newStatus,
-          user_id: user.id,
-          justificativa: justificativa || null,
-        });
+        await svc.addTransition({ demanda_id: demanda.id, from_status: demanda.situacao, to_status: newStatus, user_id: user.id, justificativa: justificativa || null });
       }
       toast.success("Status atualizado com sucesso");
       return true;
@@ -186,10 +147,7 @@ export function useTransitions(demandaId: string | null) {
     }
   }, [demandaId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
+  useEffect(() => { load(); }, [load]);
   return { transitions, loading, reload: load };
 }
 
@@ -206,9 +164,7 @@ export function useHours(demandaId: string | null) {
     setLoading(false);
   }, [demandaId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const add = async (h: { horas: number; fase: string; descricao: string; created_at?: string }) => {
     if (!demandaId || !user) return;
@@ -221,7 +177,11 @@ export function useHours(demandaId: string | null) {
     }
   };
 
-  const update = async (id: string, h: { horas: number; fase: string; descricao: string }) => {
+  /** Atualiza campos de um lançamento. user_id opcional — quando informado, reatribui o lançamento. */
+  const update = async (
+    id: string,
+    h: { horas: number; fase: string; descricao: string; user_id?: string },
+  ) => {
     try {
       await svc.updateHour(id, h);
       toast.success("Registro atualizado com sucesso");
@@ -242,6 +202,5 @@ export function useHours(demandaId: string | null) {
   };
 
   const total = hours.reduce((s, h) => s + Number(h.horas), 0);
-
   return { hours, loading, add, update, remove, total, reload: load };
 }

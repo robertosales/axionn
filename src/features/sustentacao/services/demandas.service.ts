@@ -71,9 +71,12 @@ export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
   return (data || []) as unknown as DemandaHour[];
 }
 
+/** Atualiza um lançamento de horas.
+ *  user_id é opcional — quando informado, reatribui o lançamento a outro membro.
+ */
 export async function updateHour(
   id: string,
-  data: { horas: number; fase: string; descricao: string },
+  data: { horas: number; fase: string; descricao: string; user_id?: string },
 ) {
   const { error } = await supabase
     .from("demanda_hours" as any)
@@ -90,8 +93,6 @@ export async function deleteHour(id: string) {
   if (error) throw error;
 }
 
-// ✅ CORRIGIDO: tipo do parâmetro agora inclui todos os campos opcionais
-// e ambos insert/update os enviam para o Supabase
 export async function upsertDemandas(
   teamId: string,
   rows: Array<{

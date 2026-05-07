@@ -281,7 +281,7 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
                         key={m.id}
                         onClick={() => setSelectedMember(m)}
                         className={`border-b last:border-0 cursor-pointer transition-colors hover:bg-primary/5 ${
-                          idx % 2 !== 0 ? "bg-[#f8fafc] dark:bg-muted/10" : ""
+                          idx % 2 !== 0 ? "bg-muted/40 dark:bg-muted/10" : ""
                         } ${isCritical ? "border-l-4 border-l-destructive" : ""}`}
                       >
                         <td className="py-3 font-semibold">
@@ -395,7 +395,7 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
                   {(selectedMember.activities && selectedMember.activities.length > 0) ? (
                     <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
                       {selectedMember.activities.map((a: any) => (
-                        <div key={a.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+                        <div key={a.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted/30 transition-colors">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium truncate">{a.title}</p>
                             <p className="text-xs text-muted-foreground">
@@ -428,7 +428,7 @@ export function IndividualPerformance({ members, sprintName, hoursPerMemberData,
 
 function SummaryCard({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string | number; accent: string }) {
   return (
-    <div className="rounded-xl bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+    <div className="rounded-xl bg-card p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] border border-border/40">
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}15` }}>
           <Icon className="h-5 w-5" style={{ color: accent }} />
@@ -444,7 +444,7 @@ function SummaryCard({ icon: Icon, label, value, accent }: { icon: React.Element
 
 function MiniKPI({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
-    <div className="text-center rounded-lg bg-muted/30 p-2">
+    <div className="text-center rounded-lg bg-muted/30 border border-border/40 p-2">
       <p className="text-[10px] text-muted-foreground">{label}</p>
       <p className="text-lg font-bold" style={color ? { color } : undefined}>{value}</p>
     </div>

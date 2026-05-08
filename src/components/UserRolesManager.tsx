@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ShieldCheck, Save, Search, Trash2, AlertTriangle, ArrowRightLeft, Mail, KeyRound, Copy, CheckCircle2 } from "lucide-react";
 import { fetchAllRoles, getRoleLabel, type AppRole } from "@/hooks/usePermissions";
+import { getInitials, formatPersonName } from "@/lib/personName";
 import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";

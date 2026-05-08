@@ -33,6 +33,7 @@ import {
 import { WorkflowColumn } from "@/types/sprint";
 import { KanbanFilterBar, KANBAN_FILTROS_DEFAULT } from "./KanbanFilterBar";
 import type { KanbanFiltros } from "./KanbanFilterBar";
+import { SprintImpedimentsBanner } from "./SprintImpedimentsBanner";
 
 const COLUMN_COLORS: Record<string, string> = {
   backlog:     "#6b7280",
@@ -57,11 +58,18 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     userStories,
     workflowColumns,
     developers,
+    sprints,
     updateUserStoryStatus,
     reorderUserStories,
   } = useSprint() as any;
 
   const canMove = true;
+
+  // Sprint ativa correspondente ao sprintId recebido (para o banner)
+  const currentSprint = useMemo(
+    () => (sprints ?? []).find((s: any) => s.id === sprintId) ?? null,
+    [sprints, sprintId],
+  );
 
   const [activeId, setActiveId]         = useState<string | null>(null);
   const [dragOverCol, setDragOverCol]   = useState<string | null>(null);
@@ -206,6 +214,13 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
 
   return (
     <>
+      {/* ── Banner de impedimentos da sprint ── */}
+      {currentSprint && (
+        <div className="mb-3">
+          <SprintImpedimentsBanner sprint={currentSprint} />
+        </div>
+      )}
+
       {/* ── Filter Bar ── */}
       <div className="rounded-xl border border-border/60 bg-card px-4 py-3 mb-4">
         <KanbanFilterBar

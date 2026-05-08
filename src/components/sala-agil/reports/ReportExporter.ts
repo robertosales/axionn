@@ -91,7 +91,7 @@ async function buildPDF(data: ReportData, scope: string, sprintName: string, emi
     doc.rect(0, 0, 297, 22, 'F');
     doc.setTextColor(255,255,255);
     doc.setFontSize(14); doc.setFont('helvetica','bold');
-    doc.text('NexOps — useSprintFlow', 10, 9);
+    doc.text('Axion — Operações & Fluxo Ágil', 10, 9);
     doc.setFontSize(10); doc.setFont('helvetica','normal');
     doc.text('Relatório de Produtividade Individual — Faturamento', 10, 16);
     doc.text(`Emitido em: ${dateStr} às ${timeStr}  ·  Por: ${emittedBy}`, 180, 9);

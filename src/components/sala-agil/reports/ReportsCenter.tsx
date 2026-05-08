@@ -30,7 +30,7 @@ export function ReportsCenter({
 
   return (
     <div className="space-y-0">
-      <div className="bg-white border-b">
+      <div className="bg-card border-b">
         <div className="px-4 pt-3 pb-1">
           <h2 className="text-sm font-semibold text-foreground">Selecione o relatório</h2>
           <p className="text-xs text-muted-foreground">Clique em um relatório para configurar e gerar</p>

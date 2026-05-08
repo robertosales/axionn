@@ -6,25 +6,47 @@ import * as svc from "../services/demandas.service";
 import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
 import { REQUIRES_JUSTIFICATIVA } from "../types/demanda";
 
+/**
+ * Enriquece as demandas com TODOS os responsáveis da tabela demanda_responsaveis.
+ * Cada demanda recebe:
+ *   - responsavel_dev / responsavel_requisitos / etc. → primeiro por papel (compat. legada)
+ *   - responsaveis_list → LISTA COMPLETA [{papel, nome, created_at}] ordenada por created_at
+ */
 async function enrichComResponsaveis(demandas: Demanda[]): Promise<Demanda[]> {
   if (demandas.length === 0) return demandas;
   const ids = demandas.map((d) => d.id);
+
   const { data } = await supabase
     .from("demanda_responsaveis")
-    .select("demanda_id, papel, profiles(display_name)")
-    .in("demanda_id", ids);
+    .select("demanda_id, papel, created_at, profiles(display_name)")
+    .in("demanda_id", ids)
+    .order("created_at", { ascending: true });
+
   const rows = (data || []) as any[];
+
   return demandas.map((d) => {
     const resp = rows.filter((r) => r.demanda_id === d.id);
+
+    // Compat. legada: primeiro por papel
     const getPorPapel = (papel: string) =>
       resp.find((r) => r.papel === papel)?.profiles?.display_name ?? null;
+
+    // NOVO: lista completa com todos, preservando ordem cronológica
+    const responsaveis_list = resp.map((r) => ({
+      papel: r.papel as string,
+      nome: (r.profiles?.display_name ?? "") as string,
+      created_at: r.created_at as string,
+    })).filter((r) => !!r.nome);
+
     return {
       ...d,
-      responsavel_dev: getPorPapel("desenvolvedor") ?? d.responsavel_dev,
-      responsavel_requisitos: getPorPapel("analista") ?? d.responsavel_requisitos,
-      responsavel_arquiteto: getPorPapel("arquiteto") ?? d.responsavel_arquiteto,
-      responsavel_teste: getPorPapel("testador") ?? d.responsavel_teste,
-    };
+      responsavel_dev:        getPorPapel("desenvolvedor") ?? d.responsavel_dev,
+      responsavel_requisitos: getPorPapel("analista")      ?? d.responsavel_requisitos,
+      responsavel_arquiteto:  getPorPapel("arquiteto")     ?? d.responsavel_arquiteto,
+      responsavel_teste:      getPorPapel("testador")      ?? d.responsavel_teste,
+      // ⭐ campo novo consumido pelo board
+      responsaveis_list,
+    } as Demanda & { responsaveis_list: { papel: string; nome: string; created_at: string }[] };
   });
 }
 
@@ -59,7 +81,8 @@ export function useDemandas() {
     if (!currentTeamId) return;
     const channel = supabase
       .channel(`demandas-rt-${currentTeamId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "demandas", filter: `team_id=eq.${currentTeamId}` },
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "demandas", filter: `team_id=eq.${currentTeamId}` },
         async (payload) => {
           if (payload.eventType === "DELETE") {
             setDemandas((prev) => prev.filter((d) => d.id !== payload.old.id));
@@ -177,7 +200,6 @@ export function useHours(demandaId: string | null) {
     }
   };
 
-  /** Atualiza campos de um lançamento. user_id opcional — quando informado, reatribui o lançamento. */
   const update = async (
     id: string,
     h: { horas: number; fase: string; descricao: string; user_id?: string },

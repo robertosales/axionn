@@ -22,6 +22,21 @@ import {
 } from "@/types/sprint";
 import { toast } from "sonner";
 
+// ─── Guard: converte qualquer valor para número decimal seguro ────────────────
+// Aceita: 4 | 4.0 | "4" | "4:00" | "1:30" | "0:45"
+function toDecimalHours(value: unknown): number {
+  if (typeof value === "number" && !isNaN(value)) return value;
+  const str = String(value ?? "").trim();
+  if (str.includes(":")) {
+    const [h = "0", m = "0"] = str.split(":");
+    const hours = parseInt(h, 10) || 0;
+    const minutes = parseInt(m, 10) || 0;
+    return hours + minutes / 60;
+  }
+  const parsed = parseFloat(str);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 export interface AddImpedimentData {
   reason: string;
   type: ImpedimentType;
@@ -314,11 +329,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   // ── ACTIVITIES ────────────────────────────────────────────────────────────
   const addActivity = async (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
     if (!teamId) return;
-    const endDate = calculateEndDate(act.startDate, act.hours);
+    // Garante que hours é sempre um número decimal, nunca uma string como "1:00"
+    const safeHours = toDecimalHours(act.hours);
+    const endDate = calculateEndDate(act.startDate, safeHours);
     const { error } = await supabase.from("activities").insert({
       team_id: teamId, hu_id: act.huId, title: act.title, description: act.description,
       activity_type: act.activityType, assignee_id: act.assigneeId || null,
-      hours: act.hours, start_date: act.startDate, end_date: endDate,
+      hours: safeHours, start_date: act.startDate, end_date: endDate,
     });
     if (error) { toast.error("Erro ao criar atividade"); return; }
     if (act.activityType === "bug") {
@@ -340,11 +357,17 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (act.description !== undefined) updateData.description = act.description;
     if (act.activityType !== undefined) updateData.activity_type = act.activityType;
     if (act.assigneeId !== undefined) updateData.assignee_id = act.assigneeId || null;
-    if (act.hours !== undefined) updateData.hours = act.hours;
+    if (act.hours !== undefined) {
+      // Garante que hours é sempre um número decimal, nunca uma string como "1:00"
+      updateData.hours = toDecimalHours(act.hours);
+    }
     if (act.startDate !== undefined) updateData.start_date = act.startDate;
-    const newStart = act.startDate || existing.startDate;
-    const newHours = act.hours || existing.hours;
-    if (act.startDate || act.hours) updateData.end_date = calculateEndDate(newStart, newHours);
+    // Recalcula end_date se start_date ou hours mudaram
+    if (act.startDate !== undefined || act.hours !== undefined) {
+      const newStart = act.startDate ?? existing.startDate;
+      const newHours = act.hours !== undefined ? toDecimalHours(act.hours) : existing.hours;
+      updateData.end_date = calculateEndDate(newStart, newHours);
+    }
     const { error } = await supabase.from("activities").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar atividade"); return; }
     await refreshAll();

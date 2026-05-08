@@ -1,8 +1,6 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useDemandas } from "../hooks/useDemandas";
 import { useProjetos } from "../hooks/useProjetos";
@@ -11,6 +9,8 @@ import { SITUACAO_LABELS } from "../types/demanda";
 import { calcAtendimento, calcTempos, calcSLA, formatHours } from "../utils/kpiCalculations";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { ImrDashboard } from "./ImrDashboard";
+import { MetricasFilterBar, FILTROS_DEFAULT } from "./MetricasFilterBar";
+import type { MetricasFiltros } from "./MetricasFilterBar";
 import {
   AlertTriangle,
   Clock,
@@ -26,11 +26,7 @@ import {
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const SEVERITY_ORDER = ["bloqueada", "aguardando_retorno"] as const;
-
-// ─── SustentacaoDashboard ─────────────────────────────────────────────────────
 
 export function SustentacaoDashboard() {
   const { demandas, loading } = useDemandas();
@@ -38,29 +34,47 @@ export function SustentacaoDashboard() {
   const { transitions } = useAllTransitions();
   const profiles = useProfiles();
 
-  const [filterProjeto, setFilterProjeto] = useState("all");
-  const [filterPeriodo, setFilterPeriodo] = useState("30");
+  const [filtros, setFiltros] = useState<MetricasFiltros>(FILTROS_DEFAULT);
 
   const filtered = useMemo(() => {
     let items = demandas;
-    if (filterProjeto !== "all") items = items.filter((d) => d.projeto === filterProjeto);
-    if (filterPeriodo !== "all") {
+
+    if (filtros.projeto !== "all")
+      items = items.filter((d) => d.projeto === filtros.projeto);
+
+    if (filtros.periodo !== "all") {
       const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - parseInt(filterPeriodo));
+      cutoff.setDate(cutoff.getDate() - parseInt(filtros.periodo));
       items = items.filter((d) => new Date(d.created_at) >= cutoff);
     }
+
+    if (filtros.situacao !== "all")
+      items = items.filter((d) => d.situacao === filtros.situacao);
+
+    if (filtros.membro !== "all") {
+      items = items.filter((d) => {
+        const lista = (d as any).responsaveis_list as { nome: string }[] | undefined;
+        if (lista && lista.length > 0)
+          return lista.some((r) => r.nome === filtros.membro);
+        return [
+          (d as any).responsavel_dev,
+          (d as any).responsavel_requisitos,
+          (d as any).responsavel_arquiteto,
+          (d as any).responsavel_teste,
+        ].includes(filtros.membro);
+      });
+    }
+
     return items;
-  }, [demandas, filterProjeto, filterPeriodo]);
+  }, [demandas, filtros]);
 
   const atendimento = useMemo(() => calcAtendimento(filtered), [filtered]);
-  const tempos = useMemo(() => calcTempos(filtered, transitions), [filtered, transitions]);
-  const sla = useMemo(() => calcSLA(filtered, transitions), [filtered, transitions]);
+  const tempos      = useMemo(() => calcTempos(filtered, transitions), [filtered, transitions]);
+  const sla         = useMemo(() => calcSLA(filtered, transitions), [filtered, transitions]);
 
   const porSituacao = useMemo(() => {
     const acc: Record<string, number> = {};
-    filtered.forEach((d) => {
-      acc[d.situacao] = (acc[d.situacao] || 0) + 1;
-    });
+    filtered.forEach((d) => { acc[d.situacao] = (acc[d.situacao] || 0) + 1; });
     return Object.entries(acc).sort((a, b) => b[1] - a[1]);
   }, [filtered]);
 
@@ -68,7 +82,6 @@ export function SustentacaoDashboard() {
     () =>
       filtered
         .filter((d) => d.situacao === "bloqueada" || d.situacao === "aguardando_retorno")
-        // bloqueadas primeiro, depois por tempo sem atualização (mais antigo = mais urgente)
         .sort((a, b) => {
           const oa = SEVERITY_ORDER.indexOf(a.situacao as any);
           const ob = SEVERITY_ORDER.indexOf(b.situacao as any);
@@ -76,11 +89,8 @@ export function SustentacaoDashboard() {
           return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
         })
         .map((d) => ({
-          id: d.id,
-          rhm: d.rhm,
-          projeto: d.projeto,
-          situacao: d.situacao,
-          updatedAt: d.updated_at,
+          id: d.id, rhm: d.rhm, projeto: d.projeto,
+          situacao: d.situacao, updatedAt: d.updated_at,
         })),
     [filtered],
   );
@@ -89,17 +99,13 @@ export function SustentacaoDashboard() {
     () =>
       filtered
         .filter((d) => (d as any).sla_violado || (d as any).sla_em_risco)
-        // mais atrasado primeiro
         .sort((a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime())
         .map((d) => ({
-          id: d.id,
-          rhm: d.rhm,
-          projeto: d.projeto,
-          situacao: d.situacao,
+          id: d.id, rhm: d.rhm, projeto: d.projeto, situacao: d.situacao,
           updatedAt: d.updated_at,
           diasAtraso: Math.floor((Date.now() - new Date(d.updated_at).getTime()) / 86400000),
         })),
-    [filtered, transitions],
+    [filtered],
   );
 
   if (loading) return <SkeletonList count={4} />;
@@ -108,46 +114,29 @@ export function SustentacaoDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* ── Header + Filters ──────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Dashboard Sustentação</h2>
-          <p className="text-sm text-muted-foreground">Visão consolidada de KPIs e alertas</p>
-        </div>
-        <div className="flex gap-2">
-          <Select value={filterProjeto} onValueChange={setFilterProjeto}>
-            <SelectTrigger className="w-[180px] h-9">
-              <SelectValue placeholder="Todos os Projetos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Projetos</SelectItem>
-              {projetos.map((p) => (
-                <SelectItem key={p.id} value={p.nome}>
-                  {p.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterPeriodo} onValueChange={setFilterPeriodo}>
-            <SelectTrigger className="w-[150px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Últimos 7 dias</SelectItem>
-              <SelectItem value="30">Últimos 30 dias</SelectItem>
-              <SelectItem value="90">Últimos 90 dias</SelectItem>
-              <SelectItem value="all">Todos</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* ── Header ── */}
+      <div>
+        <h2 className="text-lg font-semibold">Dashboard Sustentação</h2>
+        <p className="text-sm text-muted-foreground">Visão consolidada de KPIs e alertas</p>
       </div>
 
-      {/* ── Atendimento e Volume ───────────────────────────────── */}
+      {/* ── Filter Bar ── */}
+      <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
+        <MetricasFilterBar
+          filtros={filtros}
+          onChange={setFiltros}
+          demandas={demandas}
+          projetos={projetos}
+          totalFiltrado={filtered.length}
+        />
+      </div>
+
+      {/* ── Atendimento e Volume ── */}
       <Section title="Atendimento e Volume">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPICard icon={FileText} label="Chamados Ativos" value={atendimento.total} color="info" />
-          <KPICard icon={Zap} label="Abertos Hoje" value={atendimento.abertosHoje} color="info" />
-          <KPICard icon={CheckCircle2} label="Resolvidos Hoje" value={atendimento.resolvidosHoje} color="info" />
+          <KPICard icon={FileText}    label="Chamados Ativos"   value={atendimento.total}          color="info" />
+          <KPICard icon={Zap}         label="Abertos Hoje"      value={atendimento.abertosHoje}    color="info" />
+          <KPICard icon={CheckCircle2} label="Resolvidos Hoje"  value={atendimento.resolvidosHoje} color="info" />
           <KPICard
             icon={Activity}
             label={`Backlog (>${atendimento.backlogDays}d)`}
@@ -157,35 +146,17 @@ export function SustentacaoDashboard() {
         </div>
       </Section>
 
-      {/* ── Tempos Médios ─────────────────────────────────────── */}
+      {/* ── Tempos Médios ── */}
       <Section title="Tempos Médios">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPICard
-            icon={Timer}
-            label="TMR (Resposta)"
-            value={formatHours(tempos.tmr)}
-            sub={`${tempos.tmrCount} chamados`}
-            color="info"
-          />
-          <KPICard
-            icon={Clock}
-            label="MTTR (Resolução)"
-            value={formatHours(tempos.mttr)}
-            sub={`${tempos.mttrCount} resolvidos`}
-            color={tempos.mttr > 4 ? "destructive" : "info"}
-          />
+          <KPICard icon={Timer}     label="TMR (Resposta)"   value={formatHours(tempos.tmr)}  sub={`${tempos.tmrCount} chamados`}   color="info" />
+          <KPICard icon={Clock}     label="MTTR (Resolução)" value={formatHours(tempos.mttr)} sub={`${tempos.mttrCount} resolvidos`} color={tempos.mttr > 4 ? "destructive" : "info"} />
           <KPICard icon={TrendingUp} label="TMA (Atendimento)" value={formatHours(tempos.tma)} color="info" />
-          <KPICard
-            icon={Target}
-            label="MTTA (Reconhec.)"
-            value={formatHours(tempos.mtta)}
-            sub={`${tempos.mttaCount} chamados`}
-            color="info"
-          />
+          <KPICard icon={Target}    label="MTTA (Reconhec.)"  value={formatHours(tempos.mtta)} sub={`${tempos.mttaCount} chamados`} color="info" />
         </div>
       </Section>
 
-      {/* ── SLA ───────────────────────────────────────────────── */}
+      {/* ── SLA ── */}
       <Section title="SLA">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <KPICard
@@ -195,25 +166,13 @@ export function SustentacaoDashboard() {
             color={sla.total === 0 ? "muted" : sla.compliance >= 95 ? "info" : "destructive"}
             sub={sla.total === 0 ? "Sem demandas" : "Meta: ≥ 95%"}
           />
-          <KPICard
-            icon={AlertTriangle}
-            label="Em Risco"
-            value={sla.emRisco}
-            color={sla.emRisco > 0 ? "destructive" : "muted"}
-            sub="< 2h restantes"
-          />
-          <KPICard
-            icon={AlertTriangle}
-            label="SLA Violado"
-            value={sla.violados}
-            color={sla.violados > 0 ? "destructive" : "muted"}
-          />
+          <KPICard icon={AlertTriangle} label="Em Risco"     value={sla.emRisco}  color={sla.emRisco > 0 ? "destructive" : "muted"} sub="< 2h restantes" />
+          <KPICard icon={AlertTriangle} label="SLA Violado"  value={sla.violados} color={sla.violados > 0 ? "destructive" : "muted"} />
         </div>
       </Section>
 
-      {/* ── Situação + Alertas ─────────────────────────────────── */}
+      {/* ── Situação + Alertas ── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
-        {/* Demandas por Situação — 2/5 */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
@@ -230,17 +189,13 @@ export function SustentacaoDashboard() {
                   <span className="font-medium">{count}</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-info transition-all"
-                    style={{ width: `${(count / maxCount) * 100}%` }}
-                  />
+                  <div className="h-full rounded-full bg-info transition-all" style={{ width: `${(count / maxCount) * 100}%` }} />
                 </div>
               </div>
             ))}
           </CardContent>
         </Card>
 
-        {/* Alertas com abas — 3/5 — altura fixa, scroll interno */}
         <Card className="lg:col-span-3 flex flex-col" style={{ height: "420px" }}>
           <CardHeader className="pb-2 shrink-0">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -248,37 +203,25 @@ export function SustentacaoDashboard() {
               Alertas
             </CardTitle>
           </CardHeader>
-
           <CardContent className="pt-0 flex-1 flex flex-col min-h-0">
             <Tabs defaultValue="operacional" className="flex flex-col flex-1 min-h-0">
-              {/* Abas */}
               <TabsList className="w-full h-8 shrink-0 mb-2">
                 <TabsTrigger value="operacional" className="flex-1 text-xs gap-1.5">
                   Operacional
                   {alertasOperacionais.length > 0 && (
-                    <Badge variant="destructive" className="h-4 px-1.5 text-[10px] leading-none">
-                      {alertasOperacionais.length}
-                    </Badge>
+                    <Badge variant="destructive" className="h-4 px-1.5 text-[10px] leading-none">{alertasOperacionais.length}</Badge>
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="sla" className="flex-1 text-xs gap-1.5">
                   SLA (E8)
                   {alertasSLA.length > 0 && (
-                    <Badge variant="destructive" className="h-4 px-1.5 text-[10px] leading-none">
-                      {alertasSLA.length}
-                    </Badge>
+                    <Badge variant="destructive" className="h-4 px-1.5 text-[10px] leading-none">{alertasSLA.length}</Badge>
                   )}
                 </TabsTrigger>
               </TabsList>
 
-              {/* ── Aba Operacional ── */}
-              <TabsContent
-                value="operacional"
-                className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted"
-              >
-                {alertasOperacionais.length === 0 ? (
-                  <EmptyAlerts />
-                ) : (
+              <TabsContent value="operacional" className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted">
+                {alertasOperacionais.length === 0 ? <EmptyAlerts /> : (
                   alertasOperacionais.map((a) => {
                     const isBlocked = a.situacao === "bloqueada";
                     const hoursAgo = Math.round((Date.now() - new Date(a.updatedAt).getTime()) / 3_600_000);
@@ -287,11 +230,7 @@ export function SustentacaoDashboard() {
                         key={a.id}
                         icon={isBlocked ? AlertTriangle : Clock}
                         iconClass={isBlocked ? "text-destructive" : "text-orange-500"}
-                        borderClass={
-                          isBlocked
-                            ? "border-destructive/30 bg-destructive/5"
-                            : "border-orange-400/30 bg-orange-50 dark:bg-orange-950/20"
-                        }
+                        borderClass={isBlocked ? "border-destructive/30 bg-destructive/5" : "border-orange-400/30 bg-orange-50 dark:bg-orange-950/20"}
                         title={a.rhm}
                         sub={`${isBlocked ? "Bloqueada" : "Aguardando retorno"} há ${hoursAgo}h · ${a.projeto}`}
                       />
@@ -300,31 +239,19 @@ export function SustentacaoDashboard() {
                 )}
               </TabsContent>
 
-              {/* ── Aba SLA E8 ── */}
-              <TabsContent
-                value="sla"
-                className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted"
-              >
-                {alertasSLA.length === 0 ? (
-                  <EmptyAlerts />
-                ) : (
+              <TabsContent value="sla" className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted">
+                {alertasSLA.length === 0 ? <EmptyAlerts /> : (
                   <>
-                    {/* Resumo rápido no topo */}
                     <div className="flex items-center justify-between px-1 pb-1 border-b border-border/40">
                       <span className="text-[11px] text-muted-foreground">
-                        <span className="text-destructive font-semibold">{alertasSLA.length}</span> demanda
-                        {alertasSLA.length > 1 ? "s" : ""} com SLA violado
+                        <span className="text-destructive font-semibold">{alertasSLA.length}</span> demanda{alertasSLA.length > 1 ? "s" : ""} com SLA violado
                       </span>
                       <span className="text-[11px] text-destructive font-medium">
                         Glosa acumulada: {(alertasSLA.length * 0.2).toFixed(1)}%
                       </span>
                     </div>
-
                     {alertasSLA.map((a) => (
-                      <AlertRow
-                        key={a.id}
-                        icon={AlertTriangle}
-                        iconClass="text-destructive"
+                      <AlertRow key={a.id} icon={AlertTriangle} iconClass="text-destructive"
                         borderClass="border-destructive/20 bg-destructive/5"
                         title={`${a.rhm} — ${a.projeto}`}
                         sub={`${a.diasAtraso} dias de atraso · Glosa 0,2%`}
@@ -339,7 +266,6 @@ export function SustentacaoDashboard() {
         </Card>
       </div>
 
-      {/* ── IMR ───────────────────────────────────────────────── */}
       <Separator />
       <ImrDashboard />
     </div>
@@ -357,20 +283,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function AlertRow({
-  icon: Icon,
-  iconClass,
-  borderClass,
-  title,
-  sub,
-  badge,
-}: {
-  icon: any;
-  iconClass: string;
-  borderClass: string;
-  title: string;
-  sub: string;
-  badge?: string;
+function AlertRow({ icon: Icon, iconClass, borderClass, title, sub, badge }: {
+  icon: any; iconClass: string; borderClass: string; title: string; sub: string; badge?: string;
 }) {
   return (
     <div className={`flex items-center gap-3 p-2.5 rounded-lg border ${borderClass}`}>
@@ -380,9 +294,7 @@ function AlertRow({
         <p className="text-[10px] text-muted-foreground">{sub}</p>
       </div>
       {badge && (
-        <span className="text-[10px] font-bold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 shrink-0">
-          {badge}
-        </span>
+        <span className="text-[10px] font-bold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 shrink-0">{badge}</span>
       )}
     </div>
   );
@@ -397,23 +309,13 @@ function EmptyAlerts() {
   );
 }
 
-function KPICard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  color,
-}: {
-  icon: any;
-  label: string;
-  value: string | number;
-  sub?: string;
-  color: string;
+function KPICard({ icon: Icon, label, value, sub, color }: {
+  icon: any; label: string; value: string | number; sub?: string; color: string;
 }) {
   const colorMap: Record<string, string> = {
-    info: "bg-info/10 text-info",
+    info:        "bg-info/10 text-info",
     destructive: "bg-destructive/10 text-destructive",
-    muted: "bg-muted text-muted-foreground",
+    muted:       "bg-muted text-muted-foreground",
   };
   const borderMap: Record<string, string> = { destructive: "border-destructive/30" };
   return (

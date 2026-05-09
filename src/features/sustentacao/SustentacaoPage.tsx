@@ -41,6 +41,7 @@ export default function SustentacaoPage() {
     }
   }, [authLoading, teams]);
 
+  // VIEW "times" não precisa de time selecionado — não bloqueia com needsTeam
   const needsTeam = !currentTeamId && active !== "times";
 
   return (
@@ -75,11 +76,10 @@ export default function SustentacaoPage() {
           </div>
         )}
 
+        {/* SustentacaoSection só renderiza quando não está carregando e não é a view de times */}
         {!authLoading && !needsTeam && (
           <SustentacaoSection active={active} />
         )}
-
-        {!authLoading && active === "times" && <TeamManager />}
       </div>
     </AppShell>
   );
@@ -103,7 +103,6 @@ function SustentacaoSection({ active }: { active: string }) {
     [moveTo],
   );
 
-  // Handler chamado pelo context menu "Mover para" do SustentacaoBoard
   const handleMoveDemanda = useCallback(
     async (demanda: Demanda, targetKey: string) => {
       try {
@@ -178,6 +177,10 @@ function SustentacaoSection({ active }: { active: string }) {
       return <CustomFieldManager />;
     case "automacoes":
       return <AutomationManager />;
+    // FIX: case 'times' adicionado explicitamente para evitar queda no default
+    // que retornava SustentacaoDashboard, causando o Dashboard acima do TeamManager
+    case "times":
+      return <TeamManager moduleFilter="sustentacao" />;
     default:
       return <SustentacaoDashboard />;
   }

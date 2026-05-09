@@ -3,7 +3,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getReportConfig } from "@/features/sustentacao/utils/reportConfig";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   TrendingUp,
@@ -27,8 +26,7 @@ import { IndividualPerformance } from "@/components/dashboard/IndividualPerforma
 import { TeamPerformance } from "@/components/dashboard/TeamPerformance";
 import { QualityPanel } from "@/components/dashboard/QualityPanel";
 import { ReleasesPanel } from "@/components/dashboard/ReleasesPanel";
-import { ReportsCenter } from "@/components/sala-agil/reports/ReportsCenter";
-import { ReportData } from "@/components/sala-agil/reports/ReportExporter";
+import { SalaAgilRelatorios } from "@/components/sala-agil/reports/SalaAgilRelatorios";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -41,7 +39,7 @@ const STATUS_COLORS: Record<string, string> = {
   pronto_para_publicacao: "#22c55e",
 };
 
-const STALE_MS = 5 * 60 * 1000; // 5 minutos
+const STALE_MS = 5 * 60 * 1000;
 
 // ─── Persistência de filtros ──────────────────────────────────────────────────
 
@@ -78,16 +76,13 @@ function usePersistedState<T>(key: string, defaultValue: T) {
 export function MetricsDashboard() {
   const { isAdmin, teams, currentTeamId, user } = useAuth();
 
-  // Times apenas da sala ágil
   const agileTeams = useMemo(() => teams.filter((t: any) => t.module === "sala_agil"), [teams]);
 
-  // ✅ Filtros persistidos no sessionStorage — sobrevivem a troca de aba e foco
   const [filters, setFilters] = usePersistedState<DashboardFilterState>("metricas:filters", {
     ...INITIAL_FILTERS,
     teamId: currentTeamId || "all",
   });
 
-  // ✅ Aba ativa persistida
   const [activeTab, setActiveTab] = usePersistedState<string>("metricas:tab", "individual");
 
   const [loading, setLoading] = useState(false);
@@ -100,18 +95,15 @@ export function MetricsDashboard() {
     workflowCols: any[];
   }>({ sprints: [], hus: [], activities: [], impediments: [], developers: [], workflowCols: [] });
 
-  // ✅ Controle de staleTime — evita refetch desnecessário ao voltar ao foco
   const lastFetchRef = useRef<number>(0);
   const lastTeamIdRef = useRef<string>("");
 
-  // Sincroniza teamId inicial sem sobrescrever filtros já persistidos
   useEffect(() => {
     if (currentTeamId && filters.teamId === "all") {
       setFilters((f) => ({ ...f, teamId: currentTeamId }));
     }
   }, [currentTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Normaliza teamId se não existir em agileTeams (evita mostrar ID cru no chip)
   useEffect(() => {
     if (filters.teamId === "all") return;
     const existsInAgile = agileTeams.some((t: any) => t.id === filters.teamId);
@@ -120,13 +112,10 @@ export function MetricsDashboard() {
     }
   }, [filters.teamId, agileTeams, setFilters]);
 
-  // ✅ loadData com useCallback + staleTime + guard de teamId
   const loadData = useCallback(
     async (forceTeamId?: string) => {
       const teamId = forceTeamId ?? filters.teamId;
       const now = Date.now();
-
-      // Não refaz fetch se os dados são recentes E o teamId não mudou
       if (now - lastFetchRef.current < STALE_MS && lastTeamIdRef.current === teamId && rawData.sprints.length > 0)
         return;
 
@@ -134,12 +123,10 @@ export function MetricsDashboard() {
       lastFetchRef.current = now;
       lastTeamIdRef.current = teamId;
 
-      const baseTeams = agileTeams;
-
       const teamsToLoad =
         isAdmin && teamId === "all"
-          ? baseTeams
-          : baseTeams.filter((t: any) => t.id === (teamId === "all" ? currentTeamId : teamId));
+          ? agileTeams
+          : agileTeams.filter((t: any) => t.id === (teamId === "all" ? currentTeamId : teamId));
 
       const allSprints: any[] = [];
       const allHUs: any[] = [];
@@ -178,19 +165,14 @@ export function MetricsDashboard() {
     [filters.teamId, agileTeams, isAdmin, currentTeamId],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ Só dispara quando teamId realmente muda
   useEffect(() => {
     if (agileTeams.length > 0) loadData();
   }, [filters.teamId, agileTeams]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ Bloqueia refetch ao voltar o foco — Page Visibility API
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        // Só recarrega se dados estiverem stale (> 5 min)
-        if (Date.now() - lastFetchRef.current > STALE_MS) {
-          loadData();
-        }
+      if (document.visibilityState === "visible" && Date.now() - lastFetchRef.current > STALE_MS) {
+        loadData();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -210,7 +192,6 @@ export function MetricsDashboard() {
     const sprintIds = new Set(filteredSprints.map((s: any) => s.id));
 
     let filteredHUs = filters.sprintId === "all" ? hus : hus.filter((h: any) => sprintIds.has(h.sprint_id));
-
     if (filters.priority !== "all") filteredHUs = filteredHUs.filter((h: any) => h.priority === filters.priority);
 
     const huIds = new Set(filteredHUs.map((h: any) => h.id));
@@ -218,7 +199,6 @@ export function MetricsDashboard() {
 
     if (filters.dateFrom) filteredActs = filteredActs.filter((a: any) => a.end_date >= filters.dateFrom);
     if (filters.dateTo) filteredActs = filteredActs.filter((a: any) => a.start_date <= filters.dateTo);
-
     if (filters.dateFrom) {
       filteredHUs = filteredHUs.filter((h: any) => {
         if (h.end_date) return h.end_date >= filters.dateFrom;
@@ -234,11 +214,9 @@ export function MetricsDashboard() {
 
     const finalHuIds = new Set(filteredHUs.map((h: any) => h.id));
     filteredActs = filteredActs.filter((a: any) => finalHuIds.has(a.hu_id));
-
     if (filters.activityType !== "all")
       filteredActs = filteredActs.filter((a: any) => a.activity_type === filters.activityType);
     if (filters.memberId !== "all") filteredActs = filteredActs.filter((a: any) => a.assignee_id === filters.memberId);
-
     if (filters.status !== "all") {
       const today = new Date().toISOString().split("T")[0];
       if (filters.status === "concluida") filteredActs = filteredActs.filter((a: any) => a.is_closed);
@@ -258,15 +236,7 @@ export function MetricsDashboard() {
         ? [...workflowCols].sort((a: any, b: any) => a.sort_order - b.sort_order).at(-1)?.key
         : "pronto_para_publicacao";
 
-    return {
-      sprints: filteredSprints,
-      hus: filteredHUs,
-      activities: filteredActs,
-      impediments: filteredImps,
-      developers,
-      workflowCols,
-      lastCol,
-    };
+    return { sprints: filteredSprints, hus: filteredHUs, activities: filteredActs, impediments: filteredImps, developers, workflowCols, lastCol };
   }, [rawData, filters]);
 
   // ─── Member metrics ─────────────────────────────────────────────────────────
@@ -274,7 +244,6 @@ export function MetricsDashboard() {
     const { developers, activities, hus, impediments, lastCol } = filtered;
     const today = new Date().toISOString().split("T")[0];
     const blockedHuIds = new Set(impediments.filter((i: any) => !i.resolved_at).map((i: any) => i.hu_id));
-
     return developers.map((dev: any) => {
       const devActs = activities.filter((a: any) => a.assignee_id === dev.id);
       const devHUIds = new Set(devActs.map((a: any) => a.hu_id));
@@ -290,18 +259,14 @@ export function MetricsDashboard() {
       const spCompleted = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
       const avgTime = closedActs.length > 0 ? Math.round((hoursCompleted / closedActs.length) * 10) / 10 : 0;
       const wip = startedActs.length;
-
       let cycleTime = 0;
       if (closedActs.length > 0) {
         const totalDays = closedActs.reduce((s: number, a: any) => {
-          if (a.closed_at && a.start_date) {
-            return s + Math.max(0, (new Date(a.closed_at).getTime() - new Date(a.start_date).getTime()) / 86400000);
-          }
+          if (a.closed_at && a.start_date) return s + Math.max(0, (new Date(a.closed_at).getTime() - new Date(a.start_date).getTime()) / 86400000);
           return s + Math.max(0, (new Date(a.end_date).getTime() - new Date(a.start_date).getTime()) / 86400000);
         }, 0);
         cycleTime = Math.round((totalDays / closedActs.length) * 10) / 10;
       }
-
       const devBlockedActs = devActs.filter((a: any) => !a.is_closed && blockedHuIds.has(a.hu_id));
       const tasksByStatus = [
         { name: "Concluída", value: closedActs.length, color: "#22c55e" },
@@ -309,34 +274,20 @@ export function MetricsDashboard() {
         { name: "Não Iniciada", value: Math.max(0, notStartedCount), color: "#94a3b8" },
         { name: "Bloqueada", value: devBlockedActs.length, color: "#ef4444" },
       ].filter((s) => s.value > 0);
-
       return {
-        id: dev.id,
-        name: dev.name,
-        role: dev.role || "developer",
-        tasksAssigned: devActs.length,
-        tasksStarted: startedActs.length,
-        tasksCompleted: closedActs.length,
-        tasksNotStarted: Math.max(0, notStartedCount),
-        hoursPlanned,
-        hoursCompleted,
+        id: dev.id, name: dev.name, role: dev.role || "developer",
+        tasksAssigned: devActs.length, tasksStarted: startedActs.length, tasksCompleted: closedActs.length,
+        tasksNotStarted: Math.max(0, notStartedCount), hoursPlanned, hoursCompleted,
         hoursPending: hoursPlanned - hoursCompleted,
         efficiency: hoursPlanned > 0 ? Math.round((hoursCompleted / hoursPlanned) * 100) : 0,
-        bugsAssigned: bugActs.length,
-        bugsResolved: bugsClosed.length,
-        storyPointsCompleted: spCompleted,
-        avgTimePerActivity: avgTime,
-        wip,
-        cycleTime,
-        tasksByStatus,
-        activities: devActs,
+        bugsAssigned: bugActs.length, bugsResolved: bugsClosed.length, storyPointsCompleted: spCompleted,
+        avgTimePerActivity: avgTime, wip, cycleTime, tasksByStatus, activities: devActs,
       };
     });
   }, [filtered]);
 
   const hoursPerMemberData = useMemo(
-    () =>
-      memberMetrics.map((m) => ({ name: m.name.split(" ")[0], concluido: m.hoursCompleted, pendente: m.hoursPending })),
+    () => memberMetrics.map((m) => ({ name: m.name.split(" ")[0], concluido: m.hoursCompleted, pendente: m.hoursPending })),
     [memberMetrics],
   );
 
@@ -353,9 +304,7 @@ export function MetricsDashboard() {
         const entry: any = { sprint: sprint.name };
         filtered.developers.forEach((dev: any) => {
           const devActs = sprintActs.filter((a: any) => a.assignee_id === dev.id);
-          entry[dev.name.split(" ")[0]] = devActs
-            .filter((a: any) => a.is_closed)
-            .reduce((s: number, a: any) => s + Number(a.hours), 0);
+          entry[dev.name.split(" ")[0]] = devActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
         });
         return entry;
       });
@@ -368,73 +317,36 @@ export function MetricsDashboard() {
     const totalPoints = hus.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
     const completedPoints = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
     const totalHours = activities.reduce((s: number, a: any) => s + Number(a.hours), 0);
-    const completedHours = activities
-      .filter((a: any) => a.is_closed)
-      .reduce((s: number, a: any) => s + Number(a.hours), 0);
+    const completedHours = activities.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
     const today = new Date().toISOString().split("T")[0];
     const overdueCount = hus.filter((h: any) => h.status !== lastCol && h.end_date && h.end_date < today).length;
-    const blockedCount = hus.filter((h: any) =>
-      impediments.some((imp: any) => imp.hu_id === h.id && !imp.resolved_at),
-    ).length;
-
+    const blockedCount = hus.filter((h: any) => impediments.some((imp: any) => imp.hu_id === h.id && !imp.resolved_at)).length;
     const cols = workflowCols.length > 0 ? workflowCols : [{ key: "aguardando_desenvolvimento", label: "Aguardando" }];
-
     const statusData = [...cols]
       .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
-      .map((col: any) => ({
-        name: col.label,
-        value: hus.filter((h: any) => h.status === col.key).length,
-        color: STATUS_COLORS[col.key] || "#94a3b8",
-      }))
+      .map((col: any) => ({ name: col.label, value: hus.filter((h: any) => h.status === col.key).length, color: STATUS_COLORS[col.key] || "#94a3b8" }))
       .filter((d: any) => d.value > 0);
-
     const commitmentAccuracy = hus.length > 0 ? Math.round((completedHUs.length / hus.length) * 100) : 0;
-
     const cycleTimeDays = (() => {
       if (completedHUs.length === 0) return 0;
       const withDates = completedHUs.filter((h: any) => h.start_date && h.end_date);
       if (!withDates.length) return 0;
-      const total = withDates.reduce(
-        (s: number, h: any) =>
-          s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000),
-        0,
-      );
+      const total = withDates.reduce((s: number, h: any) => s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000), 0);
       return Math.round((total / withDates.length) * 10) / 10;
     })();
-
     return {
-      totalPoints,
-      completedPoints,
-      totalHUs: hus.length,
-      completedHUs: completedHUs.length,
-      totalHours,
-      completedHours,
-      totalActivities: activities.length,
+      totalPoints, completedPoints, totalHUs: hus.length, completedHUs: completedHUs.length,
+      totalHours, completedHours, totalActivities: activities.length,
       completedActivities: activities.filter((a: any) => a.is_closed).length,
-      overdueCount,
-      blockedCount,
-      devCount: filtered.developers.length,
-      statusData,
+      overdueCount, blockedCount, devCount: filtered.developers.length, statusData,
       sprintName: filtered.sprints[0]?.name || "Sem sprint",
       sprintStart: filtered.sprints[0]?.start_date || "",
       sprintEnd: filtered.sprints[0]?.end_date || "",
-      commitmentAccuracy,
-      cycleTimeDays,
+      commitmentAccuracy, cycleTimeDays,
       impedimentHistory: impediments
         .map((imp: any) => {
           const hu = hus.find((h: any) => h.id === imp.hu_id);
-          return {
-            id: imp.id,
-            reason: imp.reason,
-            type: imp.type,
-            criticality: imp.criticality,
-            ticketId: imp.ticket_id,
-            reportedAt: imp.reported_at,
-            resolvedAt: imp.resolved_at,
-            resolution: imp.resolution,
-            huCode: hu?.code || "?",
-            huTitle: hu?.title || "",
-          };
+          return { id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality, ticketId: imp.ticket_id, reportedAt: imp.reported_at, resolvedAt: imp.resolved_at, resolution: imp.resolution, huCode: hu?.code || "?", huTitle: hu?.title || "" };
         })
         .sort((a: any, b: any) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime()),
     };
@@ -455,68 +367,12 @@ export function MetricsDashboard() {
     const prevVelocity = prevCompletedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
     const prevCommitment = prevHUs.length > 0 ? Math.round((prevCompletedHUs.length / prevHUs.length) * 100) : 0;
     const prevWithDates = prevCompletedHUs.filter((h: any) => h.start_date && h.end_date);
-    const prevCycleTime =
-      prevWithDates.length > 0
-        ? Math.round(
-            (prevWithDates.reduce(
-              (s: number, h: any) =>
-                s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000),
-              0,
-            ) /
-              prevWithDates.length) *
-              10,
-          ) / 10
-        : 0;
+    const prevCycleTime = prevWithDates.length > 0
+      ? Math.round((prevWithDates.reduce((s: number, h: any) => s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000), 0) / prevWithDates.length) * 10) / 10
+      : 0;
     const prevDoneHrs = prevActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Number(a.hours), 0);
     return { velocity: prevVelocity, commitment: prevCommitment, cycleTime: prevCycleTime, hours: prevDoneHrs };
   }, [rawData, filtered]);
-
-  // ─── billingData para ReportsCenter ─────────────────────────────────────────
-  const billingData = useMemo((): ReportData => {
-    const sprint = filtered.sprints[0];
-    return {
-      sprintName: sprint?.name ?? "Sem sprint",
-      periodStart: sprint?.start_date
-        ? new Date(sprint.start_date).toLocaleDateString("pt-BR")
-        : "",
-      periodEnd: sprint?.end_date
-        ? new Date(sprint.end_date).toLocaleDateString("pt-BR")
-        : "",
-      teamName: agileTeams.find((t: any) => t.id === filters.teamId)?.name ?? "NexOps",
-      developers: filtered.developers.map((d: any) => ({
-        id: d.id,
-        name: d.name,
-        role: d.role || "developer",
-      })),
-      activities: filtered.activities.map((a: any) => {
-        const hu = filtered.hus.find((h: any) => h.id === a.hu_id);
-        const dev = filtered.developers.find((d: any) => d.id === a.assignee_id);
-        return {
-          id: a.id,
-          code: a.code || `ATI-${a.id.slice(0, 4).toUpperCase()}`,
-          title: a.title,
-          type: a.activity_type || "task",
-          status: a.is_closed ? "Concluída" : "Em Progresso",
-          startDate: a.start_date
-            ? new Date(a.start_date).toLocaleDateString("pt-BR")
-            : "",
-          endDate: a.end_date
-            ? new Date(a.end_date).toLocaleDateString("pt-BR")
-            : "",
-          hours: Number(a.hours) || 0,
-          huCode: hu?.code || "?",
-          developerName: dev?.name || "Desconhecido",
-          developerRole: dev?.role || "developer",
-        };
-      }),
-    };
-  }, [filtered, agileTeams, filters.teamId]);
-
-  // ─── sprints para ReportsCenter ──────────────────────────────────────────────
-  const sprintsForReports = useMemo(
-    () => rawData.sprints.map((s: any) => ({ id: s.id, name: s.name })),
-    [rawData.sprints],
-  );
 
   if (loading)
     return (
@@ -527,6 +383,7 @@ export function MetricsDashboard() {
 
   const memberNames = filtered.developers.map((d: any) => d.name.split(" ")[0]);
   const effectiveTeamId = filters.teamId === "all" ? currentTeamId || "" : filters.teamId;
+  const currentTeamName = agileTeams.find((t: any) => t.id === filters.teamId)?.name ?? "NexOps";
 
   return (
     <div className="space-y-4">
@@ -539,7 +396,6 @@ export function MetricsDashboard() {
         isAdmin={isAdmin}
       />
 
-      {/* Sprint info — sem ExportButton (movido para ReportsCenter) */}
       <div className="flex items-center gap-2">
         <BarChart3 className="h-5 w-5 text-primary" />
         <span className="text-sm font-semibold">{teamOverview.sprintName}</span>
@@ -553,142 +409,55 @@ export function MetricsDashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-        <OverviewKPI
-          icon={TrendingUp}
-          label="Velocity"
-          value={`${teamOverview.completedPoints}`}
-          sub={`/${teamOverview.totalPoints} pts`}
-          trend={trends ? getTrend(teamOverview.completedPoints, trends.velocity) : undefined}
-        />
-        <OverviewKPI
-          icon={Target}
-          label="HUs Concluídas"
-          value={`${teamOverview.completedHUs}`}
-          sub={`/${teamOverview.totalHUs}`}
-          trend={
-            trends ? getTrend(teamOverview.completedHUs, teamOverview.totalHUs > 0 ? trends.velocity : 0) : undefined
-          }
-        />
-        <OverviewKPI
-          icon={CheckCircle}
-          label="Commitment"
-          value={`${teamOverview.commitmentAccuracy}%`}
-          sub="HUs entregues/plan."
-          accent={
-            teamOverview.commitmentAccuracy >= 80
-              ? undefined
-              : teamOverview.commitmentAccuracy >= 60
-                ? "warning"
-                : "destructive"
-          }
-          trend={trends ? getTrend(teamOverview.commitmentAccuracy, trends.commitment) : undefined}
-        />
-        <OverviewKPI
-          icon={Clock}
-          label="Cycle Time"
-          value={`${teamOverview.cycleTimeDays}d`}
-          sub="média por HU"
-          trend={trends ? getTrend(trends.cycleTime, teamOverview.cycleTimeDays, true) : undefined}
-        />
-        <OverviewKPI
-          icon={Gauge}
-          label="Horas"
-          value={`${teamOverview.completedHours}h`}
-          sub={`/${teamOverview.totalHours}h plan.`}
-          trend={trends ? getTrend(teamOverview.completedHours, trends.hours) : undefined}
-        />
+        <OverviewKPI icon={TrendingUp} label="Velocity" value={`${teamOverview.completedPoints}`} sub={`/${teamOverview.totalPoints} pts`} trend={trends ? getTrend(teamOverview.completedPoints, trends.velocity) : undefined} />
+        <OverviewKPI icon={Target} label="HUs Concluídas" value={`${teamOverview.completedHUs}`} sub={`/${teamOverview.totalHUs}`} trend={trends ? getTrend(teamOverview.completedHUs, teamOverview.totalHUs > 0 ? trends.velocity : 0) : undefined} />
+        <OverviewKPI icon={CheckCircle} label="Commitment" value={`${teamOverview.commitmentAccuracy}%`} sub="HUs entregues/plan." accent={teamOverview.commitmentAccuracy >= 80 ? undefined : teamOverview.commitmentAccuracy >= 60 ? "warning" : "destructive"} trend={trends ? getTrend(teamOverview.commitmentAccuracy, trends.commitment) : undefined} />
+        <OverviewKPI icon={Clock} label="Cycle Time" value={`${teamOverview.cycleTimeDays}d`} sub="média por HU" trend={trends ? getTrend(trends.cycleTime, teamOverview.cycleTimeDays, true) : undefined} />
+        <OverviewKPI icon={Gauge} label="Horas" value={`${teamOverview.completedHours}h`} sub={`/${teamOverview.totalHours}h plan.`} trend={trends ? getTrend(teamOverview.completedHours, trends.hours) : undefined} />
         <OverviewKPI icon={Users} label="Time" value={`${teamOverview.devCount}`} sub="membros" />
-        <OverviewKPI
-          icon={AlertTriangle}
-          label="Atrasadas"
-          value={`${teamOverview.overdueCount}`}
-          sub="HUs"
-          accent={teamOverview.overdueCount > 0 ? "destructive" : undefined}
-        />
-        <OverviewKPI
-          icon={ShieldAlert}
-          label="Impedidas"
-          value={`${teamOverview.blockedCount}`}
-          sub="HUs"
-          accent={teamOverview.blockedCount > 0 ? "warning" : undefined}
-        />
+        <OverviewKPI icon={AlertTriangle} label="Atrasadas" value={`${teamOverview.overdueCount}`} sub="HUs" accent={teamOverview.overdueCount > 0 ? "destructive" : undefined} />
+        <OverviewKPI icon={ShieldAlert} label="Impedidas" value={`${teamOverview.blockedCount}`} sub="HUs" accent={teamOverview.blockedCount > 0 ? "warning" : undefined} />
       </div>
 
-      {/* ✅ Abas — Individual | Time | Qualidade | Impedimentos | Releases | Relatórios */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid grid-cols-6 w-full max-w-3xl">
-          <TabsTrigger value="individual" className="text-xs gap-1">
-            <User className="h-3.5 w-3.5" /> Individual
-          </TabsTrigger>
-          <TabsTrigger value="team" className="text-xs gap-1">
-            <Users className="h-3.5 w-3.5" /> Time
-          </TabsTrigger>
-          <TabsTrigger value="quality" className="text-xs gap-1">
-            <Bug className="h-3.5 w-3.5" /> Qualidade
-          </TabsTrigger>
-          <TabsTrigger value="impediments" className="text-xs gap-1">
-            <ShieldAlert className="h-3.5 w-3.5" /> Impedimentos
-          </TabsTrigger>
-          <TabsTrigger value="releases" className="text-xs gap-1">
-            <Rocket className="h-3.5 w-3.5" /> Releases
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="text-xs gap-1 text-primary">
-            <FileBarChart2 className="h-3.5 w-3.5" /> Relatórios
-          </TabsTrigger>
+          <TabsTrigger value="individual" className="text-xs gap-1"><User className="h-3.5 w-3.5" /> Individual</TabsTrigger>
+          <TabsTrigger value="team" className="text-xs gap-1"><Users className="h-3.5 w-3.5" /> Time</TabsTrigger>
+          <TabsTrigger value="quality" className="text-xs gap-1"><Bug className="h-3.5 w-3.5" /> Qualidade</TabsTrigger>
+          <TabsTrigger value="impediments" className="text-xs gap-1"><ShieldAlert className="h-3.5 w-3.5" /> Impedimentos</TabsTrigger>
+          <TabsTrigger value="releases" className="text-xs gap-1"><Rocket className="h-3.5 w-3.5" /> Releases</TabsTrigger>
+          <TabsTrigger value="reports" className="text-xs gap-1 text-primary"><FileBarChart2 className="h-3.5 w-3.5" /> Relatórios</TabsTrigger>
         </TabsList>
 
         <TabsContent value="individual">
-          <IndividualPerformance
-            members={memberMetrics}
-            sprintName={teamOverview.sprintName}
-            hoursPerMemberData={hoursPerMemberData}
-            progressBySprintData={progressBySprintData}
-            memberNames={memberNames}
-          />
+          <IndividualPerformance members={memberMetrics} sprintName={teamOverview.sprintName} hoursPerMemberData={hoursPerMemberData} progressBySprintData={progressBySprintData} memberNames={memberNames} />
         </TabsContent>
         <TabsContent value="team">
-          <TeamPerformance
-            sprints={filtered.sprints}
-            hus={filtered.hus}
-            activities={filtered.activities}
-            developers={filtered.developers}
-            impediments={filtered.impediments}
-            lastCol={filtered.lastCol}
-            allSprints={rawData.sprints}
-            allHUs={rawData.hus}
-            allActivities={rawData.activities}
-            statusData={teamOverview.statusData}
-            hoursPerMemberData={hoursPerMemberData}
-          />
+          <TeamPerformance sprints={filtered.sprints} hus={filtered.hus} activities={filtered.activities} developers={filtered.developers} impediments={filtered.impediments} lastCol={filtered.lastCol} allSprints={rawData.sprints} allHUs={rawData.hus} allActivities={rawData.activities} statusData={teamOverview.statusData} hoursPerMemberData={hoursPerMemberData} />
         </TabsContent>
         <TabsContent value="quality">
-          <QualityPanel
-            activities={filtered.activities}
-            developers={filtered.developers}
-            hus={filtered.hus}
-            lastCol={filtered.lastCol}
-          />
+          <QualityPanel activities={filtered.activities} developers={filtered.developers} hus={filtered.hus} lastCol={filtered.lastCol} />
         </TabsContent>
         <TabsContent value="impediments">
           <ImpedimentHistoryPanel data={teamOverview.impedimentHistory} />
         </TabsContent>
         <TabsContent value="releases">
-          <ReleasesPanel
-            teamId={effectiveTeamId}
-            sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name }))}
-          />
+          <ReleasesPanel teamId={effectiveTeamId} sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name }))} />
         </TabsContent>
 
-        {/* ── Nova aba: Relatórios ───────────────────────────────────── */}
+        {/* ── Fase 3: Relatórios Ágeis ─────────────────────────────── */}
         <TabsContent value="reports" className="mt-0 p-0">
-          <ReportsCenter
-            sprints={sprintsForReports}
-            developers={filtered.developers.map((d: any) => ({
-              id: d.id,
-              name: d.name,
-              role: d.role || "developer",
-            }))}
-            billingData={billingData}
+          <SalaAgilRelatorios
+            sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}
+            developers={filtered.developers.map((d: any) => ({ id: d.id, name: d.name, role: d.role || "developer" }))}
+            rawData={{
+              sprints: rawData.sprints,
+              hus: rawData.hus,
+              activities: rawData.activities,
+              impediments: rawData.impediments,
+              developers: rawData.developers,
+            }}
+            teamName={currentTeamName}
             currentUserName={(user as any)?.user_metadata?.name ?? (user as any)?.email ?? "Usuário"}
           />
         </TabsContent>
@@ -699,48 +468,20 @@ export function MetricsDashboard() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getTrend(
-  current: number,
-  previous: number,
-  invertColor = false,
-): { direction: "up" | "down" | "same"; isGood: boolean } {
+function getTrend(current: number, previous: number, invertColor = false): { direction: "up" | "down" | "same"; isGood: boolean } {
   if (current > previous) return { direction: "up", isGood: !invertColor };
   if (current < previous) return { direction: "down", isGood: invertColor };
   return { direction: "same", isGood: true };
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function OverviewKPI({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  accent,
-  trend,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-  sub: string;
-  accent?: "destructive" | "warning";
-  trend?: { direction: "up" | "down" | "same"; isGood: boolean };
-}) {
+function OverviewKPI({ icon: Icon, label, value, sub, accent, trend }: { icon: React.ElementType; label: string; value: string; sub: string; accent?: "destructive" | "warning"; trend?: { direction: "up" | "down" | "same"; isGood: boolean }; }) {
   const TrendIcon = trend?.direction === "up" ? TrendingUp : trend?.direction === "down" ? TrendingDown : Minus;
   return (
-    <Card
-      className={accent === "destructive" ? "border-destructive/30" : accent === "warning" ? "border-[#eab308]/30" : ""}
-    >
+    <Card className={accent === "destructive" ? "border-destructive/30" : accent === "warning" ? "border-[#eab308]/30" : ""}>
       <CardContent className="p-3 text-center">
-        <Icon
-          className={`h-4 w-4 mx-auto mb-1 ${accent === "destructive" ? "text-destructive" : accent === "warning" ? "text-[#eab308]" : "text-primary"}`}
-        />
+        <Icon className={`h-4 w-4 mx-auto mb-1 ${accent === "destructive" ? "text-destructive" : accent === "warning" ? "text-[#eab308]" : "text-primary"}`} />
         <div className="flex items-center justify-center gap-1">
-          <p
-            className={`text-xl font-bold ${accent === "destructive" ? "text-destructive" : accent === "warning" ? "text-[#eab308]" : ""}`}
-          >
-            {value}
-          </p>
+          <p className={`text-xl font-bold ${accent === "destructive" ? "text-destructive" : accent === "warning" ? "text-[#eab308]" : ""}`}>{value}</p>
           {trend && <TrendIcon className={`h-3.5 w-3.5 ${trend.isGood ? "text-[#22c55e]" : "text-[#ef4444]"}`} />}
         </div>
         <p className="text-[10px] text-muted-foreground leading-tight">{sub}</p>
@@ -761,7 +502,6 @@ function ImpedimentHistoryPanel({ data }: { data: any[] }) {
         </CardContent>
       </Card>
     );
-
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -785,39 +525,20 @@ function ImpedimentHistoryPanel({ data }: { data: any[] }) {
             </thead>
             <tbody>
               {data.map((imp: any, idx: number) => (
-                <tr
-                  key={imp.id}
-                  className={`border-b last:border-0 ${idx % 2 !== 0 ? "bg-[#f8fafc] dark:bg-muted/10" : ""}`}
-                >
+                <tr key={imp.id} className={`border-b last:border-0 ${idx % 2 !== 0 ? "bg-[#f8fafc] dark:bg-muted/10" : ""}`}>
                   <td className="py-2 font-mono text-xs font-bold">{imp.huCode}</td>
                   <td className="py-2 max-w-[200px] truncate">{imp.reason}</td>
                   <td className="text-center py-2 capitalize text-xs">{imp.type}</td>
                   <td className="text-center py-2">
-                    <Badge
-                      className={`text-[10px] ${
-                        imp.criticality === "critica"
-                          ? "bg-destructive/15 text-destructive"
-                          : imp.criticality === "alta"
-                            ? "bg-[#eab308]/15 text-[#eab308]"
-                            : imp.criticality === "media"
-                              ? "bg-[#3b82f6]/15 text-[#3b82f6]"
-                              : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {imp.criticality}
-                    </Badge>
+                    <Badge className={`text-[10px] ${imp.criticality === "critica" ? "bg-destructive/15 text-destructive" : imp.criticality === "alta" ? "bg-[#eab308]/15 text-[#eab308]" : imp.criticality === "media" ? "bg-[#3b82f6]/15 text-[#3b82f6]" : "bg-muted text-muted-foreground"}`}>{imp.criticality}</Badge>
                   </td>
                   <td className="text-center py-2 text-xs">{imp.ticketId || "—"}</td>
                   <td className="text-center py-2 text-xs">{new Date(imp.reportedAt).toLocaleDateString("pt-BR")}</td>
                   <td className="text-center py-2">
                     {imp.resolvedAt ? (
-                      <Badge variant="secondary" className="text-[10px] gap-1 bg-[#22c55e]/15 text-[#22c55e]">
-                        <CheckCircle className="h-3 w-3" /> Resolvido
-                      </Badge>
+                      <Badge variant="secondary" className="text-[10px] gap-1 bg-[#22c55e]/15 text-[#22c55e]"><CheckCircle className="h-3 w-3" /> Resolvido</Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-[10px] gap-1 bg-[#eab308]/15 text-[#eab308]">
-                        <ShieldAlert className="h-3 w-3" /> Ativo
-                      </Badge>
+                      <Badge variant="secondary" className="text-[10px] gap-1 bg-[#eab308]/15 text-[#eab308]"><ShieldAlert className="h-3 w-3" /> Ativo</Badge>
                     )}
                   </td>
                 </tr>

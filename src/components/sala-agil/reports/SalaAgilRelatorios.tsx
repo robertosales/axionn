@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { BarChart2, TrendingDown, LayoutList, ShieldAlert } from "lucide-react";
+import { BarChart2, TrendingDown, LayoutList, ShieldAlert, User } from "lucide-react";
 import { ReportLayout, ReportCatalog, ReportPageHeader } from "@/shared/components/reports";
 import type { CatalogItem } from "@/shared/components/reports";
 import { RelatorioVelocidade } from "./RelatorioVelocidade";
 import { RelatorioBurndown } from "./RelatorioBurndown";
 import { RelatorioBacklog } from "./RelatorioBacklog";
 import { RelatorioRetro } from "./RelatorioRetro";
+import { RelatorioAtividades } from "./RelatorioAtividades";
 
 interface SalaAgilRelatoriosProps {
   sprints: { id: string; name: string; isActive?: boolean }[];
@@ -54,6 +55,14 @@ const CATALOG: CatalogItem[] = [
     badge: "Ágil",
     color: "bg-red-500/10 text-red-600",
   },
+  {
+    id: "atividades",
+    title: "Atividades & Produtividade",
+    description: "Atividades por membro, eficiência, throughput por sprint e cycle time individual.",
+    icon: <User className="h-5 w-5" />,
+    badge: "Ágil",
+    color: "bg-emerald-500/10 text-emerald-600",
+  },
 ];
 
 export function SalaAgilRelatorios({
@@ -71,6 +80,7 @@ export function SalaAgilRelatorios({
   if (active === "burndown") return <RelatorioBurndown {...commonProps} />;
   if (active === "backlog") return <RelatorioBacklog {...commonProps} />;
   if (active === "retro") return <RelatorioRetro {...commonProps} />;
+  if (active === "atividades") return <RelatorioAtividades {...commonProps} />;
 
   return (
     <ReportLayout>

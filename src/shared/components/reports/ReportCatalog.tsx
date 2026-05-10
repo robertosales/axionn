@@ -1,113 +1,67 @@
+import { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export interface ReportCatalogItem {
-  /** Chave interna de identificação do relatório */
-  key: string;
-  /** Título exibido no card */
-  titulo: string;
-  /** Descrição curta */
-  descricao: string;
-  /** Ícone Lucide */
-  icon: React.ElementType;
-  /** Badge opcional ex: "Novo" | "IMR" */
+export interface CatalogItem {
+  id: string;
+  title: string;
+  description: string;
+  icon: ReactNode;
   badge?: string;
-  badgeVariant?: "default" | "secondary" | "destructive" | "outline";
+  color?: string; /** Tailwind bg class para o ícone, ex: 'bg-blue-500/10 text-blue-600' */
 }
 
-export interface ReportCatalogProps {
-  /** Título da seção ex: "Relatórios de Sustentação" */
-  titulo?: string;
-  items: ReportCatalogItem[];
-  /** Chave do relatório selecionado — marca o card com anel de seleção */
-  selected?: string;
-  onSelect: (key: string) => void;
-  /** Módulo — define cor de acento */
-  modulo?: "sustentacao" | "sala_agil";
+interface ReportCatalogProps {
+  items: CatalogItem[];
+  onSelect: (id: string) => void;
+  title?: string;
+  subtitle?: string;
 }
 
-const ACCENT = {
-  sustentacao: "ring-blue-500 bg-blue-500/5 border-blue-400/50",
-  sala_agil:   "ring-emerald-500 bg-emerald-500/5 border-emerald-400/50",
-};
-
-const ICON_BG = {
-  sustentacao: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  sala_agil:   "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-};
-
-export function ReportCatalog({
-  titulo,
-  items,
-  selected,
-  onSelect,
-  modulo = "sustentacao",
-}: ReportCatalogProps) {
+export function ReportCatalog({ items, onSelect, title, subtitle }: ReportCatalogProps) {
   return (
-    <div className="space-y-3">
-      {titulo && (
+    <div className="space-y-5">
+      {(title || subtitle) && (
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {titulo}
-          </h3>
+          {title && <h2 className="text-lg font-semibold">{title}</h2>}
+          {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
       )}
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const isSelected = selected === item.key;
-          return (
-            <Card
-              key={item.key}
-              className={`cursor-pointer transition-all duration-150 group hover:shadow-md ${
-                isSelected
-                  ? `ring-2 ${ACCENT[modulo]}`
-                  : "hover:border-muted-foreground/30"
-              }`}
-              onClick={() => onSelect(item.key)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  {/* Ícone */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+            className="group text-left w-full"
+          >
+            <Card className="h-full transition-all duration-200 hover:shadow-md hover:border-primary/40 group-hover:-translate-y-0.5">
+              <CardContent className="p-5 flex flex-col gap-3 h-full">
+                <div className="flex items-start justify-between">
                   <div
-                    className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                      isSelected ? ICON_BG[modulo] : "bg-muted group-hover:" + ICON_BG[modulo]
-                    }`}
+                    className={cn(
+                      "rounded-xl p-2.5",
+                      item.color ?? "bg-primary/10 text-primary",
+                    )}
                   >
-                    <Icon className="h-4 w-4" />
+                    <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                   </div>
-
-                  {/* Texto */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-sm font-semibold leading-tight">{item.titulo}</p>
-                      {item.badge && (
-                        <Badge
-                          variant={item.badgeVariant || "secondary"}
-                          className="text-[9px] px-1.5 h-4"
-                        >
-                          {item.badge}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                      {item.descricao}
-                    </p>
-                  </div>
-
-                  {/* Seta */}
-                  <ChevronRight
-                    className={`h-4 w-4 shrink-0 mt-0.5 transition-transform ${
-                      isSelected ? "text-foreground" : "text-muted-foreground/40 group-hover:translate-x-0.5"
-                    }`}
-                  />
+                  {item.badge && (
+                    <Badge variant="outline" className="text-[10px]">{item.badge}</Badge>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-sm leading-tight">{item.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{item.description}</p>
+                </div>
+                <div className="flex items-center gap-1 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                  Abrir relatório <ArrowRight className="h-3.5 w-3.5" />
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
+          </button>
+        ))}
       </div>
     </div>
   );

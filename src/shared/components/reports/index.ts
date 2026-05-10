@@ -1,23 +1,13 @@
-export { ReportPageHeader }    from "./ReportPageHeader";
-export type { ReportPageHeaderProps } from "./ReportPageHeader";
-
-export { ReportFilterBar }     from "./ReportFilterBar";
-export type { ReportFilterBarProps, FilterAnalista } from "./ReportFilterBar";
-
-export { ReportKPISummary }    from "./ReportKPISummary";
-export type { KPIItem, KPIStatus } from "./ReportKPISummary";
-
-export { ReportChart }         from "./ReportChart";
-export type { ReportChartProps } from "./ReportChart";
-
-export { ReportDataTable }     from "./ReportDataTable";
-export type { TableColumn, TotalRow, ReportDataTableProps, CellStatus } from "./ReportDataTable";
-
-export { ReportLayout }        from "./ReportLayout";
-export type { ReportLayoutProps } from "./ReportLayout";
-
-export { ReportCatalog }       from "./ReportCatalog";
-export type { ReportCatalogItem, ReportCatalogProps } from "./ReportCatalog";
-
-export { ReportLegendBlock }   from "./ReportLegendBlock";
-export type { LegendItem } from "./ReportLegendBlock";
+export { ReportLayout } from "./ReportLayout";
+export { ReportPageHeader } from "./ReportPageHeader";
+export { ReportKPISummary } from "./ReportKPISummary";
+export type { KPIItem } from "./ReportKPISummary";
+export { ReportCatalog } from "./ReportCatalog";
+export type { CatalogItem } from "./ReportCatalog";
+export { ReportChart } from "./ReportChart";
+export { ReportFilterBar } from "./ReportFilterBar";
+export type { FilterField, FilterOption } from "./ReportFilterBar";
+export { ReportDataTable } from "./ReportDataTable";
+export type { TableColumn } from "./ReportDataTable";
+export { ReportLegendBlock } from "./ReportLegendBlock";
+export { exportToCSV } from "./exportToCSV";

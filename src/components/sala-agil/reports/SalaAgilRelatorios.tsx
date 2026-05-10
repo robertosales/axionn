@@ -1,21 +1,13 @@
 import { useState } from "react";
-import {
-  ReportCatalog,
-  ReportLayout,
-  ReportPageHeader,
-  ReportFilterBar,
-  ReportKPISummary,
-  ReportDataTable,
-} from "@/shared/components/reports";
+import { BarChart2, TrendingDown, LayoutList, ShieldAlert } from "lucide-react";
+import { ReportLayout, ReportCatalog, ReportPageHeader } from "@/shared/components/reports";
+import type { CatalogItem } from "@/shared/components/reports";
 import { RelatorioVelocidade } from "./RelatorioVelocidade";
 import { RelatorioBurndown } from "./RelatorioBurndown";
 import { RelatorioBacklog } from "./RelatorioBacklog";
 import { RelatorioRetro } from "./RelatorioRetro";
-import { BarChart3, TrendingDown, LayoutList, MessageSquareText } from "lucide-react";
 
-export type SalaAgilReport = "velocidade" | "burndown" | "backlog" | "retro" | null;
-
-export interface SalaAgilRelatoriosProps {
+interface SalaAgilRelatoriosProps {
   sprints: { id: string; name: string; isActive?: boolean }[];
   developers: { id: string; name: string; role: string }[];
   rawData: {
@@ -29,61 +21,70 @@ export interface SalaAgilRelatoriosProps {
   currentUserName: string;
 }
 
-const CATALOG_ITEMS = [
+const CATALOG: CatalogItem[] = [
   {
     id: "velocidade",
-    title: "Velocidade do Time",
-    description: "Story points entregues vs. planejados por sprint. Commitment accuracy e cycle time.",
-    icon: BarChart3,
-    module: "Sala Ágil",
-    color: "blue" as const,
+    title: "Velocidade",
+    description: "Velocity por sprint, commitment accuracy e cycle time do time.",
+    icon: <BarChart2 className="h-5 w-5" />,
+    badge: "Ágil",
+    color: "bg-blue-500/10 text-blue-600",
   },
   {
     id: "burndown",
-    title: "Burndown / Progresso",
-    description: "Progresso de HUs e pontos por sprint. Tendência de entrega e itens em aberto.",
-    icon: TrendingDown,
-    module: "Sala Ágil",
-    color: "green" as const,
+    title: "Burndown",
+    description: "Progresso de HUs e pontos concluídos vs. planejados por sprint.",
+    icon: <TrendingDown className="h-5 w-5" />,
+    badge: "Ágil",
+    color: "bg-violet-500/10 text-violet-600",
   },
   {
     id: "backlog",
-    title: "Distribuição do Backlog",
-    description: "HUs por status, épico e membro responsável. Identifica gargalos e concentração.",
-    icon: LayoutList,
-    module: "Sala Ágil",
-    color: "purple" as const,
+    title: "Backlog",
+    description: "Distribuição de HUs por status, sprint e membro responsável.",
+    icon: <LayoutList className="h-5 w-5" />,
+    badge: "Ágil",
+    color: "bg-amber-500/10 text-amber-600",
   },
   {
     id: "retro",
-    title: "Impedimentos & Retro",
-    description: "Histórico de impedimentos com semáforo de criticidade e tempo médio de resolução.",
-    icon: MessageSquareText,
-    module: "Sala Ágil",
-    color: "orange" as const,
+    title: "Impedimentos",
+    description: "Histórico de impedimentos com criticidade e tempo de resolução.",
+    icon: <ShieldAlert className="h-5 w-5" />,
+    badge: "Ágil",
+    color: "bg-red-500/10 text-red-600",
   },
 ];
 
-export function SalaAgilRelatorios(props: SalaAgilRelatoriosProps) {
-  const [active, setActive] = useState<SalaAgilReport>(null);
+export function SalaAgilRelatorios({
+  sprints,
+  developers,
+  rawData,
+  teamName,
+  currentUserName,
+}: SalaAgilRelatoriosProps) {
+  const [active, setActive] = useState<string | null>(null);
 
-  if (!active) {
-    return (
-      <ReportCatalog
-        title="Relatórios — Sala Ágil"
-        subtitle="Selecione um relatório para visualizar os dados da sprint"
-        items={CATALOG_ITEMS}
-        onSelect={(id) => setActive(id as SalaAgilReport)}
-      />
-    );
-  }
-
-  const commonProps = { ...props, onBack: () => setActive(null) };
+  const commonProps = { sprints, developers, rawData, teamName, currentUserName, onBack: () => setActive(null) };
 
   if (active === "velocidade") return <RelatorioVelocidade {...commonProps} />;
   if (active === "burndown") return <RelatorioBurndown {...commonProps} />;
   if (active === "backlog") return <RelatorioBacklog {...commonProps} />;
   if (active === "retro") return <RelatorioRetro {...commonProps} />;
 
-  return null;
+  return (
+    <ReportLayout>
+      <ReportPageHeader
+        title="Relatórios — Sala Ágil"
+        description={`Time: ${teamName} · ${sprints.length} sprint(s) disponíveis`}
+        badge="Ágil"
+        badgeVariant="secondary"
+      />
+      <ReportCatalog
+        items={CATALOG}
+        onSelect={setActive}
+        subtitle="Selecione um relatório para visualizar métricas detalhadas do time."
+      />
+    </ReportLayout>
+  );
 }

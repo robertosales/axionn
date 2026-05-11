@@ -7,12 +7,13 @@ import { BarChart2, Clock, Bug, ListTodo, Users, ChevronDown, ChevronRight } fro
 import { MetricCard } from "./metrics/MetricCard";
 import { PerformanceHeader } from "./metrics/PerformanceHeader";
 import { ProductivityChart } from "./metrics/ProductivityChart";
+import { formatMinutes, sumDecimalsAsMinutes } from "@/lib/duration";
 
-// ─── Interfaces (inalteradas) ────────────────────────────────────────────────────────
+// ─── Interfaces ──────────────────────────────────────────────────────────────
 interface DeveloperProductivity {
   developerId: string;
   developerName: string;
-  totalHours: number;
+  totalHours: number;      // decimal interno; exibição sempre via formatMinutes()
   taskCount: number;
   bugCount: number;
   closedActivities: number;
@@ -23,12 +24,12 @@ interface HuProductivity {
   huId: string;
   huCode: string;
   huTitle: string;
-  totalHours: number;
+  totalHours: number;      // decimal interno
   activityCount: number;
   closedActivities: number;
 }
 
-// ─── ExpandableDevRow ─────────────────────────────────────────────────────────────────
+// ─── ExpandableDevRow ─────────────────────────────────────────────────────────
 function ExpandableDevRow({
   dev,
   totalHours,
@@ -61,7 +62,10 @@ function ExpandableDevRow({
         <td className="px-4 py-3 text-center tabular-nums text-sm">
           {dev.closedActivities}/{dev.closedActivities + dev.openActivities}
         </td>
-        <td className="px-4 py-3 text-center tabular-nums text-sm font-medium">{dev.totalHours.toFixed(1)}h</td>
+        {/* Horas: decimal → "Xh Ymin" */}
+        <td className="px-4 py-3 text-center tabular-nums text-sm font-medium">
+          {formatMinutes(Math.round(dev.totalHours * 60))}
+        </td>
         <td className="px-4 py-3 text-center tabular-nums text-sm">
           {dev.taskCount}
         </td>
@@ -110,9 +114,8 @@ function ExpandableDevRow({
   );
 }
 
-// ─── ProductivityReport (main export) ─────────────────────────────────────────────────
+// ─── ProductivityReport ───────────────────────────────────────────────────────
 export function ProductivityReport() {
-  // ─── Lógica de negócio 100% inalterada ────────────────────────────────────────────
   const { activities, userStories, developers, activeSprint } = useSprint();
   const { currentTeamId } = useAuth();
 
@@ -120,11 +123,8 @@ export function ProductivityReport() {
     if (!activeSprint) {
       return {
         devMetrics: [] as DeveloperProductivity[],
-        huMetrics: [] as HuProductivity[],
-        totalHours: 0,
-        totalActivities: 0,
-        totalBugs: 0,
-        closedActivities: 0,
+        huMetrics:  [] as HuProductivity[],
+        totalHours: 0, totalActivities: 0, totalBugs: 0, closedActivities: 0,
       };
     }
 
@@ -133,12 +133,8 @@ export function ProductivityReport() {
     );
 
     const devMap = new Map<string, DeveloperProductivity>();
-    const huMap = new Map<string, HuProductivity>();
-
-    let totalH = 0;
-    let totalA = 0;
-    let totalBugsCount = 0;
-    let closedA = 0;
+    const huMap  = new Map<string, HuProductivity>();
+    let totalH = 0, totalA = 0, totalBugsCount = 0, closedA = 0;
 
     for (const act of sprintActivities) {
       totalH += act.hours || 0;
@@ -148,19 +144,15 @@ export function ProductivityReport() {
 
       if (act.assigneeId) {
         const dev = developers.find((d) => d.id === act.assigneeId);
-        const key = act.assigneeId;
-        if (!devMap.has(key)) {
-          devMap.set(key, {
-            developerId: key,
+        if (!devMap.has(act.assigneeId)) {
+          devMap.set(act.assigneeId, {
+            developerId: act.assigneeId,
             developerName: dev?.name || "Sem responsável",
-            totalHours: 0,
-            taskCount: 0,
-            bugCount: 0,
-            closedActivities: 0,
-            openActivities: 0,
+            totalHours: 0, taskCount: 0, bugCount: 0,
+            closedActivities: 0, openActivities: 0,
           });
         }
-        const entry = devMap.get(key)!;
+        const entry = devMap.get(act.assigneeId)!;
         entry.totalHours += act.hours || 0;
         if (act.activityType === "bug") entry.bugCount += 1;
         else entry.taskCount += 1;
@@ -170,30 +162,28 @@ export function ProductivityReport() {
 
       const hu = userStories.find((h) => h.id === act.huId);
       if (hu) {
-        const key = hu.id;
-        if (!huMap.has(key)) {
-          huMap.set(key, {
-            huId: key,
-            huCode: hu.code,
-            huTitle: hu.title,
-            totalHours: 0,
-            activityCount: 0,
-            closedActivities: 0,
+        if (!huMap.has(hu.id)) {
+          huMap.set(hu.id, {
+            huId: hu.id, huCode: hu.code, huTitle: hu.title,
+            totalHours: 0, activityCount: 0, closedActivities: 0,
           });
         }
-        const entryHu = huMap.get(key)!;
-        entryHu.totalHours += act.hours || 0;
+        const entryHu = huMap.get(hu.id)!;
+        entryHu.totalHours   += act.hours || 0;
         entryHu.activityCount += 1;
         if (act.isClosed) entryHu.closedActivities += 1;
       }
     }
 
-    const devMetrics = Array.from(devMap.values()).sort((a, b) => b.totalHours - a.totalHours);
-    const huMetrics = Array.from(huMap.values()).sort((a, b) => b.totalHours - a.totalHours);
-
-    return { devMetrics, huMetrics, totalHours: totalH, totalActivities: totalA, totalBugs: totalBugsCount, closedActivities: closedA };
+    return {
+      devMetrics:       Array.from(devMap.values()).sort((a, b) => b.totalHours - a.totalHours),
+      huMetrics:        Array.from(huMap.values()).sort((a, b) => b.totalHours - a.totalHours),
+      totalHours:       totalH,
+      totalActivities:  totalA,
+      totalBugs:        totalBugsCount,
+      closedActivities: closedA,
+    };
   }, [activities, userStories, developers, activeSprint]);
-  // ─── Fim da lógica inalterada ─────────────────────────────────────────────────────
 
   if (!activeSprint || !currentTeamId) {
     return (
@@ -215,19 +205,24 @@ export function ProductivityReport() {
     );
   }
 
-  const avgHoursPerActivity = totalActivities > 0 ? totalHours / totalActivities : 0;
-  const completionRate = totalActivities > 0 ? (closedActivities / totalActivities) * 100 : 0;
+  // totalHours é decimal — converter para minutos antes de formatar
+  const totalHoursFormatted    = formatMinutes(Math.round(totalHours * 60));
+  const avgMinPerActivity      = totalActivities > 0 ? Math.round((totalHours * 60) / totalActivities) : 0;
+  const avgFormatted           = formatMinutes(avgMinPerActivity);
+  const completionRate         = totalActivities > 0 ? (closedActivities / totalActivities) * 100 : 0;
 
-  // Dados para gráfico de horas por dev
+  // Gráfico de horas por dev — mantém decimal para o eixo Y, label usa formatMinutes
   const hoursChartData = devMetrics.map((d) => ({
-    name: d.developerName.split(" ")[0],
-    horas: parseFloat(d.totalHours.toFixed(1)),
+    name:  d.developerName.split(" ")[0],
+    horas: parseFloat(d.totalHours.toFixed(2)),
+    label: formatMinutes(Math.round(d.totalHours * 60)),
   }));
 
-  // Dados para gráfico de tarefas por HU (top 8)
+  // Top 8 HUs
   const huChartData = huMetrics.slice(0, 8).map((h) => ({
-    name: h.huCode,
-    horas: parseFloat(h.totalHours.toFixed(1)),
+    name:       h.huCode,
+    horas:      parseFloat(h.totalHours.toFixed(2)),
+    label:      formatMinutes(Math.round(h.totalHours * 60)),
     atividades: h.activityCount,
   }));
 
@@ -238,7 +233,7 @@ export function ProductivityReport() {
         title="Relatório de Produtividade"
         sprintName={activeSprint.name}
         kpis={[
-          { label: "atividades", value: totalActivities },
+          { label: "atividades",    value: totalActivities },
           { label: "desenvolvedores", value: devMetrics.length },
         ]}
       />
@@ -249,8 +244,8 @@ export function ProductivityReport() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <MetricCard
             icon={Clock} label="Horas Lançadas" accent="blue"
-            value={`${totalHours.toFixed(1)}h`}
-            sublabel={`Média ${avgHoursPerActivity.toFixed(1)}h / atividade`}
+            value={totalHoursFormatted}
+            sublabel={`Média ${avgFormatted} / atividade`}
           />
           <MetricCard
             icon={ListTodo} label="Atividades Concluídas" accent="green"
@@ -289,7 +284,7 @@ export function ProductivityReport() {
                 subtitle="Top 8 HUs por esforço"
                 data={huChartData}
                 dataKeys={[
-                  { key: "horas", name: "Horas", color: "#8b5cf6" },
+                  { key: "horas",      name: "Horas",      color: "#8b5cf6" },
                   { key: "atividades", name: "Atividades", color: "#f59e0b" },
                 ]}
               />
@@ -306,13 +301,13 @@ export function ProductivityReport() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border/60">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Desenvolvedor</th>
+                  <th className="px-4 py-3 text-left   text-xs font-semibold text-muted-foreground">Desenvolvedor</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">Atividades</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">Horas</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">Tarefas</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">Bugs</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Conclusão</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">% do total</th>
+                  <th className="px-4 py-3 text-left   text-xs font-semibold text-muted-foreground">Conclusão</th>
+                  <th className="px-4 py-3 text-right  text-xs font-semibold text-muted-foreground">% do total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
@@ -333,22 +328,24 @@ export function ProductivityReport() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50 border-b border-border/60">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Código</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Título</th>
+                  <th className="px-4 py-3 text-left   text-xs font-semibold text-muted-foreground">Código</th>
+                  <th className="px-4 py-3 text-left   text-xs font-semibold text-muted-foreground">Título</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">Horas</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">Atividades</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Conclusão</th>
+                  <th className="px-4 py-3 text-left   text-xs font-semibold text-muted-foreground">Conclusão</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {huMetrics.map((hu, idx) => {
+                {huMetrics.map((hu) => {
                   const rate = hu.activityCount > 0 ? Math.round((hu.closedActivities / hu.activityCount) * 100) : 0;
                   const effC = rate >= 80 ? "#22c55e" : rate >= 60 ? "#f59e0b" : "#ef4444";
                   return (
                     <tr key={hu.huId} className="border-b border-border/40 hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 font-mono text-xs font-bold text-muted-foreground">{hu.huCode}</td>
                       <td className="px-4 py-3 max-w-[280px] truncate text-sm">{hu.huTitle}</td>
-                      <td className="px-4 py-3 text-center text-sm tabular-nums font-medium">{hu.totalHours.toFixed(1)}h</td>
+                      <td className="px-4 py-3 text-center text-sm tabular-nums font-medium">
+                        {formatMinutes(Math.round(hu.totalHours * 60))}
+                      </td>
                       <td className="px-4 py-3 text-center text-sm tabular-nums">
                         {hu.closedActivities}/{hu.activityCount}
                       </td>

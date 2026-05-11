@@ -1,12 +1,16 @@
 /**
  * Conversões para campos de duração no formato HH:MM (ou H:MM).
  *
- * - parseHmToMinutes("1:30")  -> 90
- * - parseHmToMinutes("0:48")  -> 48
- * - parseHmToMinutes("2")     -> 120 (apenas horas)
- * - parseHmToMinutes("0,8")   -> 48 (compat. com lançamentos antigos)
- * - minutesToHm(90)           -> "1:30"
- * - hoursDecimalToMinutes(0.8) -> 48
+ * - parseHmToMinutes("1:30")        -> 90
+ * - parseHmToMinutes("0:48")        -> 48
+ * - parseHmToMinutes("2")           -> 120 (apenas horas)
+ * - parseHmToMinutes("0,8")         -> 48 (compat. com lançamentos antigos)
+ * - minutesToHm(90)                 -> "1:30"
+ * - hoursDecimalToMinutes(0.8)      -> 48
+ * - formatMinutes(90)               -> "1h 30min"
+ * - formatMinutes(120)              -> "2h"
+ * - formatMinutes(30)               -> "0h 30min"
+ * - sumDecimalsAsMinutes([1.25, 0.5]) -> "1h 45min"
  */
 
 export function parseHmToMinutes(input: string | number | null | undefined): number | null {
@@ -55,4 +59,38 @@ export function minutesToHoursDecimal(minutes: number | null | undefined): numbe
 export function isValidHm(input: string): boolean {
   if (!input) return false;
   return parseHmToMinutes(input) !== null;
+}
+
+/**
+ * Formata um total de minutos no padrão legível "Xh Ymin".
+ *
+ * Exemplos:
+ *   formatMinutes(90)  → "1h 30min"
+ *   formatMinutes(120) → "2h"
+ *   formatMinutes(30)  → "0h 30min"
+ *   formatMinutes(0)   → "0h"
+ */
+export function formatMinutes(totalMinutes: number): string {
+  const safe = Math.max(0, Math.round(totalMinutes));
+  const h    = Math.floor(safe / 60);
+  const min  = safe % 60;
+  if (min === 0) return `${h}h`;
+  return `${h}h ${min}min`;
+}
+
+/**
+ * Recebe um array de valores decimais de horas (como armazenados no banco),
+ * converte cada um para minutos, soma e retorna a string formatada.
+ *
+ * Exemplos:
+ *   sumDecimalsAsMinutes([1.25, 0.5])  → "1h 45min"
+ *   sumDecimalsAsMinutes([2, 1])       → "3h"
+ *   sumDecimalsAsMinutes([])           → "0h"
+ */
+export function sumDecimalsAsMinutes(values: (number | null | undefined)[]): string {
+  const totalMin = values.reduce<number>((acc, v) => {
+    const n = Number(v ?? 0);
+    return acc + (isFinite(n) ? Math.round(n * 60) : 0);
+  }, 0);
+  return formatMinutes(totalMin);
 }

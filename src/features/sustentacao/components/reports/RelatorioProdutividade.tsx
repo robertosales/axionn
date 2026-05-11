@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import { getInitials } from "@/lib/personName";
 
-// ── hook demanda_responsaveis ─────────────────────────────────────────────────
 function useDemandaResponsaveis() {
   const [responsaveis, setResponsaveis] = useState<Array<{ demanda_id: string; user_id: string; papel: string }>>([]);
   useEffect(() => {
@@ -39,7 +38,6 @@ function useDemandaResponsaveis() {
   return { responsaveis };
 }
 
-// ── helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(d?: string | null) { return d ? new Date(d).toLocaleDateString("pt-BR") : "—"; }
 function today()        { return new Date().toISOString().split("T")[0]; }
 function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; }
@@ -86,12 +84,10 @@ function rateColor(r: number) {
        : "bg-destructive/10 text-destructive border-destructive/20";
 }
 
-// ── tipos ─────────────────────────────────────────────────────────────────────
 interface HoraLancada   { id: string; data: string; fase: string; descricao: string; horas: number; }
 interface AtividadeRow  { demandaId: string; rhm: string; projeto: string; situacao: string; dataInicio: string; dataFim: string; horasAnalista: number; outrosAnalistas: string[]; horasDetalhadas: HoraLancada[]; }
 interface AnalistaGroup { userId: string; nome: string; atividades: AtividadeRow[]; totalHoras: number; resolvidos: number; emAberto: number; taxaResolucao: number; }
 
-// ── linha RHM expansível ──────────────────────────────────────────────────────
 function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
   const [open, setOpen] = useState(false);
   const tem = atividade.horasDetalhadas.length > 0;
@@ -149,7 +145,6 @@ function AtividadeExpandivel({ atividade }: { atividade: AtividadeRow }) {
   );
 }
 
-// ── PDF individual (mantido integralmente) ────────────────────────────────────
 async function gerarPDFIndividual(grupo: AnalistaGroup, dataInicio: string, dataFim: string) {
   try {
     const { default: jsPDF } = await import("jspdf");
@@ -200,7 +195,6 @@ async function gerarPDFIndividual(grupo: AnalistaGroup, dataInicio: string, data
   } catch (err) { console.error(err); toast.error("Erro ao gerar relatório individual"); }
 }
 
-// ── componente principal ──────────────────────────────────────────────────────
 interface Props { onBack?: () => void; }
 
 export function RelatorioProdutividade({ onBack }: Props) {
@@ -243,7 +237,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
 
   const horasDetalhadasMap = useMemo(() => {
     const m=new Map<string,HoraLancada[]>();
-    hours.forEach(h => { const uid=resolveUserId(h); if(!h.demanda_id||!uid) return; const key=`${h.demanda_id}::${uid}`; if(!m.has(key)) m.set(key,[]); m.get(key)!.push({id:h.id||`${key}-${Math.random()}`,data:fmtDate(h.created_at),fase:fasesMap[h.fase]||h.fase||"—",descricao:h.descricao||"—",horas:Number(h.horas??0)}); });
+    hours.forEach(h => { const uid=resolveUserId(h); if(!h.demanda_id||!uid) return; const key=`${h.demanda_id}::${uid}`; if(!m.has(key)) m.set(key,[]); m.get(key)!.push({id:h.id||`${key}-${Math.random()}`,data:fmtDate(h.created_at),fase:fasesMap[h.fase]||h.fase||"--",descricao:h.descricao||"—",horas:Number(h.horas??0)}); });
     m.forEach(list => list.sort((a,b)=>new Date(b.data.split("/").reverse().join("-")).getTime()-new Date(a.data.split("/").reverse().join("-")).getTime()));
     return m;
   }, [hours, fasesMap]);
@@ -295,10 +289,10 @@ export function RelatorioProdutividade({ onBack }: Props) {
   const isIndividual = analista !== "all";
 
   const kpiItems: KPIItem[] = [
-    { label: "Total Atividades", value: kpis.totalAtividades, status: "neutral",  icon: ClipboardList },
-    { label: "Resolvidos",       value: kpis.totalResolvidos,  status: "success",  icon: CheckCircle2  },
-    { label: "Em Aberto",        value: kpis.totalEmAberto,    status: kpis.totalEmAberto > 10 ? "danger" : kpis.totalEmAberto > 0 ? "warning" : "success", icon: AlertTriangle },
-    { label: "Horas Lançadas",   value: `${kpis.totalHoras.toFixed(1)}h`, status: "neutral", icon: Clock },
+    { label: "Total Atividades", value: kpis.totalAtividades, status: "neutral",                                                                                         icon: <ClipboardList className="h-5 w-5" /> },
+    { label: "Resolvidos",       value: kpis.totalResolvidos,  status: "good",                                                                                           icon: <CheckCircle2  className="h-5 w-5" /> },
+    { label: "Em Aberto",        value: kpis.totalEmAberto,    status: kpis.totalEmAberto > 10 ? "danger" : kpis.totalEmAberto > 0 ? "warning" : "good",                  icon: <AlertTriangle className="h-5 w-5" /> },
+    { label: "Horas Lançadas",   value: `${kpis.totalHoras.toFixed(1)}h`,                                                                                 status: "neutral", icon: <Clock         className="h-5 w-5" /> },
   ];
 
   const getExportData = () => {
@@ -326,11 +320,10 @@ export function RelatorioProdutividade({ onBack }: Props) {
     <ReportLayout
       header={
         <ReportPageHeader
-          titulo="Produtividade por Analista"
-          subtitulo="Clique na linha do RHM para ver o detalhe das horas lançadas"
-          modulo="sustentacao"
-          periodoLabel={periodoLabel}
-          icon={FileText}
+          title="Produtividade por Analista"
+          description="Clique na linha do RHM para ver o detalhe das horas lançadas"
+          icon={<FileText className="h-5 w-5" />}
+          badge={periodoLabel}
           onBack={onBack}
         />
       }
@@ -349,7 +342,6 @@ export function RelatorioProdutividade({ onBack }: Props) {
       kpis={<ReportKPISummary items={kpiItems} />}
       table={
         <div className="space-y-4">
-          {/* Botões de ação */}
           <div className="flex items-center justify-between print:hidden">
             <div className="flex gap-2">
               {grupos.length > 0 && (
@@ -369,8 +361,6 @@ export function RelatorioProdutividade({ onBack }: Props) {
               <ExportButton getData={getExportData} />
             </div>
           </div>
-
-          {/* Grupos por analista */}
           {grupos.length === 0 ? (
             <Card className="border-dashed"><CardContent className="py-10 text-center"><p className="text-sm text-muted-foreground">Nenhuma atividade encontrada para os filtros selecionados.</p></CardContent></Card>
           ) : (

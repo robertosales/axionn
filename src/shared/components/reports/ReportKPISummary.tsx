@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,9 +8,8 @@ export interface KPIItem {
   value: string | number;
   sub?: string;
   meta?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon?: any;
-  status?: "good" | "success" | "warning" | "danger" | "neutral";
+  icon?: ReactNode;
+  status?: "good" | "warning" | "danger" | "neutral";
   trend?: { direction: "up" | "down" | "same"; isGood: boolean };
 }
 
@@ -40,20 +39,6 @@ const STATUS_ICON_BG: Record<string, string> = {
   neutral: "bg-primary/10 text-primary",
 };
 
-function resolveIcon(icon: unknown): ReactNode {
-  if (!icon) return null;
-  if (
-    typeof icon === "function" ||
-    (typeof icon === "object" &&
-      icon !== null &&
-      "$$typeof" in (icon as Record<string, unknown>))
-  ) {
-    const Ic = icon as React.FC<{ className?: string }>;
-    return <Ic className="h-5 w-5" />;
-  }
-  return icon as ReactNode;
-}
-
 export function ReportKPISummary({ items, cols = 4 }: ReportKPISummaryProps) {
   const gridClass = {
     2: "grid-cols-1 sm:grid-cols-2",
@@ -66,9 +51,7 @@ export function ReportKPISummary({ items, cols = 4 }: ReportKPISummaryProps) {
   return (
     <div className={cn("grid gap-3", gridClass)}>
       {items.map((item, i) => {
-        const rawSt = item.status ?? "neutral";
-        const st    = rawSt === "success" ? "good" : rawSt;
-        const iconNode = resolveIcon(item.icon);
+        const st = item.status ?? "neutral";
         const TrendIcon =
           item.trend?.direction === "up"
             ? TrendingUp
@@ -78,9 +61,9 @@ export function ReportKPISummary({ items, cols = 4 }: ReportKPISummaryProps) {
         return (
           <Card key={i} className={cn("transition-shadow hover:shadow-md", STATUS_RING[st])}>
             <CardContent className="p-4 flex items-start gap-3">
-              {iconNode && (
+              {item.icon && (
                 <div className={cn("rounded-lg p-2 shrink-0", STATUS_ICON_BG[st])}>
-                  <span className="flex h-5 w-5 items-center justify-center">{iconNode}</span>
+                  <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
                 </div>
               )}
               <div className="min-w-0 flex-1">

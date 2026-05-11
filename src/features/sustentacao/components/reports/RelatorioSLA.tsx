@@ -69,14 +69,14 @@ export function RelatorioSLA({ onBack }: Props) {
   const periodoLabel = `${fmtDateBR(dataInicio)} a ${fmtDateBR(dataFim)}`;
   const reportCfg    = getReportConfig("sla_compliance");
 
-  const complianceStatus: "good" | "warning" | "danger" =
+  const complianceStatus: KPIItem["status"] =
     sla.compliance >= META_SLA ? "good" : sla.compliance >= 80 ? "warning" : "danger";
 
   const kpiItems: KPIItem[] = [
-    { label: "Compliance",     value: `${sla.compliance.toFixed(1)}%`, meta: `Meta: ≥ ${META_SLA}%`, status: complianceStatus,                                          icon: Shield       },
-    { label: "Violados",       value: sla.violados,                    status: sla.violados > 0 ? "danger"  : "good",                                                   icon: AlertTriangle },
-    { label: "Em Risco",       value: sla.emRisco,                     status: sla.emRisco  > 0 ? "warning" : "good",                                                   icon: AlertTriangle },
-    { label: "Maior Violação", value: maiorViolacao,                   status: "neutral",                                                                               icon: CheckCircle2  },
+    { label: "Compliance",     value: `${sla.compliance.toFixed(1)}%`, meta: `Meta: ≥ ${META_SLA}%`, status: complianceStatus,                              icon: <Shield className="h-5 w-5" />       },
+    { label: "Violados",       value: sla.violados,                    status: sla.violados > 0 ? "danger"  : "good",                                        icon: <AlertTriangle className="h-5 w-5" /> },
+    { label: "Em Risco",       value: sla.emRisco,                     status: sla.emRisco  > 0 ? "warning" : "good",                                        icon: <AlertTriangle className="h-5 w-5" /> },
+    { label: "Maior Violação", value: maiorViolacao,                   status: "neutral",                                                                   icon: <CheckCircle2 className="h-5 w-5" />  },
   ];
 
   const statusBadge = (s: string) => {
@@ -96,7 +96,7 @@ export function RelatorioSLA({ onBack }: Props) {
     { key: "atraso",    label: "Atraso",     align: "right", sortable: true, render: (v) => v > 0 ? <span className="text-destructive font-medium">{formatHours(v)}</span> : "—" },
   ];
 
-  const tableData = sla.results.map(r => ({ ...r, abertura: r.abertura, prazoSLA: r.prazoSLA }));
+  const tableData = sla.results.map(r => ({ ...r }));
 
   const getExportData = () => ({
     title: reportCfg.tituloExportacao,
@@ -108,11 +108,10 @@ export function RelatorioSLA({ onBack }: Props) {
     <ReportLayout
       header={
         <ReportPageHeader
-          titulo={reportCfg.titulo.replace("Relatório — ", "")}
-          subtitulo={`${reportCfg.subtitulo} · Meta: ≥ ${META_SLA}%`}
-          modulo="sustentacao"
-          periodoLabel={periodoLabel}
-          icon={Shield}
+          title={reportCfg.titulo.replace("Relatório — ", "")}
+          description={`${reportCfg.subtitulo} · Meta: ≥ ${META_SLA}%`}
+          icon={<Shield className="h-5 w-5" />}
+          badge={periodoLabel}
           onBack={onBack}
         />
       }

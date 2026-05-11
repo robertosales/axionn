@@ -16,41 +16,56 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
-  Circle,
   ArrowRight,
   Users,
   Calendar,
   Target,
   Activity,
+  UserPlus,
 } from "lucide-react";
-import { differenceInDays, format, isAfter, isBefore, parseISO } from "date-fns";
+import { differenceInDays, format, isAfter, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
+// ── KPI Card — melhoria 1 e 2: borda semântica + número maior + progress visível ──
 interface KpiCardProps {
   label: string;
   value: string | number;
   sub?: string;
   icon: React.ElementType;
   iconClass?: string;
+  borderClass?: string;
   progress?: number;
+  progressClass?: string;
   trend?: "up" | "down" | "neutral";
   trendLabel?: string;
 }
 
-function KpiCard({ label, value, sub, icon: Icon, iconClass, progress, trend, trendLabel }: KpiCardProps) {
+function KpiCard({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  iconClass,
+  borderClass,
+  progress,
+  progressClass,
+  trend,
+  trendLabel,
+}: KpiCardProps) {
   return (
-    <Card className="relative overflow-hidden">
-      <CardContent className="pt-5 pb-4 px-5">
+    <Card className={cn("relative overflow-hidden border-l-4", borderClass || "border-l-border")}>
+      <CardContent className="pt-4 pb-4 px-5">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">{label}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums leading-none">{value}</p>
-            {sub && <p className="mt-1 text-xs text-muted-foreground truncate">{sub}</p>}
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">
+              {label}
+            </p>
+            <p className="mt-1 text-4xl font-bold tabular-nums leading-none">{value}</p>
+            {sub && <p className="mt-1.5 text-xs text-muted-foreground truncate">{sub}</p>}
             {trendLabel && (
               <p
                 className={cn(
-                  "mt-1 text-xs font-medium",
+                  "mt-1 text-xs font-semibold",
                   trend === "up" && "text-green-600 dark:text-green-400",
                   trend === "down" && "text-red-500 dark:text-red-400",
                   trend === "neutral" && "text-muted-foreground",
@@ -60,13 +75,16 @@ function KpiCard({ label, value, sub, icon: Icon, iconClass, progress, trend, tr
               </p>
             )}
           </div>
-          <div className={cn("shrink-0 rounded-lg p-2", iconClass || "bg-primary/10 text-primary")}>
+          <div className={cn("shrink-0 rounded-lg p-2.5", iconClass || "bg-primary/10 text-primary")}>
             <Icon className="h-5 w-5" />
           </div>
         </div>
         {progress !== undefined && (
           <div className="mt-3">
-            <Progress value={progress} className="h-1.5" />
+            <Progress
+              value={progress}
+              className={cn("h-2", progressClass)}
+            />
           </div>
         )}
       </CardContent>
@@ -75,10 +93,6 @@ function KpiCard({ label, value, sub, icon: Icon, iconClass, progress, trend, tr
 }
 
 // ── Sprint Progress Bar ───────────────────────────────────────────────────────
-// P2 FIX: cabeçalho reestruturado em duas linhas para evitar sobreposição
-// percentual ↔ data em resoluções menores (notebook/tablet).
-// Estratégia: linha 1 = nome + badge | linha 2 = data range + percentual
-// Ambos com flex-wrap e whitespace-nowrap nos valores para nunca sobrepor.
 function SprintProgressBar({
   sprint,
 }: {
@@ -94,9 +108,8 @@ function SprintProgressBar({
   const isOver = isAfter(today, end);
 
   return (
-    <Card className="col-span-full">
+    <Card className="col-span-full border-l-4 border-l-primary">
       <CardHeader className="pb-2">
-        {/* Linha 1: ícone + nome do sprint + badge de dias restantes */}
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <Target className="h-4 w-4 text-primary shrink-0" />
           <CardTitle className="text-sm font-semibold truncate flex-1 min-w-0">
@@ -109,8 +122,6 @@ function SprintProgressBar({
             {isOver ? "Encerrado" : `${daysLeft}d restantes`}
           </Badge>
         </div>
-
-        {/* Linha 2: data range (esquerda) + percentual (direita) — nunca sobrepõem */}
         <div className="flex items-center justify-between gap-x-4 gap-y-1 flex-wrap mt-1">
           <span className="text-xs text-muted-foreground whitespace-nowrap">
             {format(start, "dd MMM", { locale: ptBR })} → {format(end, "dd MMM yyyy", { locale: ptBR })}
@@ -120,12 +131,11 @@ function SprintProgressBar({
           </span>
         </div>
       </CardHeader>
-
       <CardContent className="pb-4 pt-1">
         {sprint.goal && (
           <p className="text-xs text-muted-foreground mb-3 italic">"{sprint.goal}"</p>
         )}
-        <Progress value={pct} className="h-2" />
+        <Progress value={pct} className="h-2.5" />
         <p className="mt-2 text-xs text-muted-foreground">
           Dia {elapsed} de {total} — sprint {pct >= 100 ? "concluído" : "em andamento"}
         </p>
@@ -134,7 +144,7 @@ function SprintProgressBar({
   );
 }
 
-// ── Recent HUs ────────────────────────────────────────────────────────────────
+// ── Priority colors ───────────────────────────────────────────────────────────
 const PRIORITY_COLOR: Record<string, string> = {
   critical: "bg-red-500",
   high: "bg-orange-400",
@@ -147,14 +157,17 @@ export function DashboardHome() {
   const { userStories, activities, developers, activeSprint, sprints, workflowColumns } = useSprint();
   const { profile } = useAuth();
 
-  // ── KPI Calculations ────────────────────────────────────────────────────────
-  const sprintHUs = activeSprint ? userStories.filter((h) => h.sprintId === activeSprint.id) : userStories;
+  const sprintHUs = activeSprint
+    ? userStories.filter((h) => h.sprintId === activeSprint.id)
+    : userStories;
 
   const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
   const doneHUs = sprintHUs.filter((h) => h.status === lastCol);
   const openHUs = sprintHUs.filter((h) => h.status !== lastCol);
   const bugHUs = sprintHUs.filter((h) => h.status === "bug");
-  const blockedHUs = sprintHUs.filter((h) => h.impediments && h.impediments.some((i) => !i.resolvedAt));
+  const blockedHUs = sprintHUs.filter(
+    (h) => h.impediments && h.impediments.some((i: any) => !i.resolvedAt)
+  );
 
   const totalPoints = sprintHUs.reduce((s, h) => s + (h.storyPoints || 0), 0);
   const donePoints = doneHUs.reduce((s, h) => s + (h.storyPoints || 0), 0);
@@ -163,7 +176,6 @@ export function DashboardHome() {
   const openActs = activities.filter((a) => !a.isClosed);
   const totalHours = activities.reduce((s, a) => s + (a.hours || 0), 0);
 
-  // ── Recent HUs (últimas 5 abertas) ─────────────────────────────────────────
   const recentHUs = [...openHUs]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
@@ -175,19 +187,28 @@ export function DashboardHome() {
     return "Boa noite";
   };
 
-  const firstName = (profile?.full_name ?? profile?.email?.split("@")[0] ?? "Dev").split(" ")[0];
+  // Melhoria 5: usa display_name ou full_name em vez do username técnico
+  const displayName =
+    profile?.display_name ||
+    profile?.full_name ||
+    profile?.email?.split("@")[0] ||
+    "Dev";
+  const firstName = displayName.split(" ")[0];
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-[1400px] mx-auto">
-      {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+
+      {/* ── Melhoria 7: Header com separador visual ───────────────────────── */}
+      <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-border">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <LayoutDashboard className="h-5 w-5 text-primary" />
             {greeting()}, {firstName}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {activeSprint ? `Sprint ativo: ${activeSprint.name}` : "Nenhum sprint ativo — crie um na aba Sprints"}
+            {activeSprint
+              ? `Sprint ativo: ${activeSprint.name}`
+              : "Nenhum sprint ativo — crie um na aba Sprints"}
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -203,7 +224,7 @@ export function DashboardHome() {
         </div>
       )}
 
-      {/* ── KPI Grid ─────────────────────────────────────────────────────── */}
+      {/* ── Melhoria 1 + 2: KPI Grid com borda semântica + números maiores + progress visível ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           label="HUs Concluídas"
@@ -211,7 +232,9 @@ export function DashboardHome() {
           sub={`${donePoints} de ${totalPoints} pts`}
           icon={CheckCircle2}
           iconClass="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+          borderClass="border-l-green-500"
           progress={completionPct}
+          progressClass="[&>div]:bg-green-500"
           trend="up"
           trendLabel={`${completionPct}% concluído`}
         />
@@ -221,6 +244,7 @@ export function DashboardHome() {
           sub={`${openActs.length} atividades abertas`}
           icon={Activity}
           iconClass="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+          borderClass="border-l-blue-500"
           trend="neutral"
         />
         <KpiCard
@@ -233,6 +257,7 @@ export function DashboardHome() {
               ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
               : "bg-muted text-muted-foreground"
           }
+          borderClass={bugHUs.length > 0 ? "border-l-red-500" : "border-l-border"}
           trend={bugHUs.length > 0 ? "down" : "neutral"}
         />
         <KpiCard
@@ -245,13 +270,15 @@ export function DashboardHome() {
               ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500"
               : "bg-muted text-muted-foreground"
           }
+          borderClass={blockedHUs.length > 0 ? "border-l-yellow-500" : "border-l-border"}
           trend={blockedHUs.length > 0 ? "down" : "neutral"}
         />
       </div>
 
-      {/* ── Linha 2: Equipe + HUs Recentes ───────────────────────────────── */}
+      {/* ── Linha 2: HUs Recentes + Equipe ───────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* HUs Recentes */}
+
+        {/* Melhoria 3: HUs em Aberto com estado vazio compacto */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -261,19 +288,27 @@ export function DashboardHome() {
           </CardHeader>
           <CardContent className="p-0">
             {recentHUs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-                <CheckCircle2 className="h-8 w-8 text-green-500" />
-                <p className="text-sm font-medium text-foreground">Tudo concluído!</p>
-                <p className="text-xs">Todas as HUs do sprint estão finalizadas.</p>
+              <div className="flex items-center gap-3 px-5 py-4 text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Tudo concluído!</p>
+                  <p className="text-xs">Todas as HUs do sprint estão finalizadas.</p>
+                </div>
               </div>
             ) : (
               <ul className="divide-y divide-border">
                 {recentHUs.map((hu) => {
                   const col = workflowColumns.find((c) => c.key === hu.status);
                   return (
-                    <li key={hu.id} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/40 transition-colors">
+                    <li
+                      key={hu.id}
+                      className="flex items-center gap-3 px-5 py-3 hover:bg-muted/40 transition-colors"
+                    >
                       <span
-                        className={cn("shrink-0 h-2 w-2 rounded-full", PRIORITY_COLOR[hu.priority] || "bg-muted")}
+                        className={cn(
+                          "shrink-0 h-2 w-2 rounded-full",
+                          PRIORITY_COLOR[hu.priority] || "bg-muted"
+                        )}
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{hu.title}</p>
@@ -301,7 +336,7 @@ export function DashboardHome() {
           </CardContent>
         </Card>
 
-        {/* Equipe */}
+        {/* Melhoria 4: Equipe com CTA quando vazia */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -311,14 +346,28 @@ export function DashboardHome() {
           </CardHeader>
           <CardContent className="p-0">
             {developers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-1">
+              <div className="flex flex-col items-center justify-center py-6 px-5 gap-3 text-muted-foreground">
                 <Users className="h-6 w-6" />
-                <p className="text-xs">Nenhum dev cadastrado</p>
+                <p className="text-xs text-center">Nenhum dev cadastrado neste time.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => {
+                    // navega para a aba de membros
+                    document.querySelector<HTMLElement>('[data-tab="members"]')?.click();
+                  }}
+                >
+                  <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                  Adicionar membro
+                </Button>
               </div>
             ) : (
               <ul className="divide-y divide-border">
                 {developers.slice(0, 6).map((dev) => {
-                  const myActs = activities.filter((a) => a.assigneeId === dev.id && !a.isClosed).length;
+                  const myActs = activities.filter(
+                    (a) => a.assigneeId === dev.id && !a.isClosed
+                  ).length;
                   return (
                     <li key={dev.id} className="flex items-center gap-3 px-5 py-2.5">
                       <div className="shrink-0 h-7 w-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
@@ -342,7 +391,7 @@ export function DashboardHome() {
         </Card>
       </div>
 
-      {/* ── Linha 3: Stats adicionais ─────────────────────────────────────── */}
+      {/* ── Melhoria 6: KPIs inferiores padronizados em text-3xl ─────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           label="Total de Sprints"
@@ -350,6 +399,7 @@ export function DashboardHome() {
           sub={`${sprints.filter((s) => s.isActive).length} ativo`}
           icon={Zap}
           iconClass="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+          borderClass="border-l-violet-400"
         />
         <KpiCard
           label="Horas Registradas"
@@ -357,6 +407,7 @@ export function DashboardHome() {
           sub={`${activities.length} atividades total`}
           icon={Clock}
           iconClass="bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400"
+          borderClass="border-l-cyan-400"
         />
         <KpiCard
           label="Devs na Equipe"
@@ -364,6 +415,7 @@ export function DashboardHome() {
           sub="membros ativos"
           icon={Users}
           iconClass="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+          borderClass="border-l-indigo-400"
         />
         <KpiCard
           label="Velocity"
@@ -371,7 +423,9 @@ export function DashboardHome() {
           sub={`meta: ${totalPoints}pts`}
           icon={TrendingUp}
           iconClass="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+          borderClass="border-l-emerald-500"
           progress={completionPct}
+          progressClass="[&>div]:bg-emerald-500"
         />
       </div>
     </div>

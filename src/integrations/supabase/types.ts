@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backup_demanda_hours_p5: {
+        Row: {
+          backup_at: string | null
+          created_at: string | null
+          demanda_id: string | null
+          descricao: string | null
+          fase: string | null
+          horas_original: number | null
+          id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          backup_at?: string | null
+          created_at?: string | null
+          demanda_id?: string | null
+          descricao?: string | null
+          fase?: string | null
+          horas_original?: number | null
+          id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          backup_at?: string | null
+          created_at?: string | null
+          demanda_id?: string | null
+          descricao?: string | null
+          fase?: string | null
+          horas_original?: number | null
+          id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       activities: {
         Row: {
           activity_type: string
@@ -938,12 +971,14 @@ export type Database = {
         Row: {
           criticality: string
           has_ticket: boolean
-          hu_id: string
+          hu_id: string | null
           id: string
           reason: string
           reported_at: string
           resolution: string | null
           resolved_at: string | null
+          sprint_id: string | null
+          started_at: string | null
           team_id: string
           ticket_id: string | null
           ticket_url: string | null
@@ -952,12 +987,14 @@ export type Database = {
         Insert: {
           criticality?: string
           has_ticket?: boolean
-          hu_id: string
+          hu_id?: string | null
           id?: string
           reason: string
           reported_at?: string
           resolution?: string | null
           resolved_at?: string | null
+          sprint_id?: string | null
+          started_at?: string | null
           team_id: string
           ticket_id?: string | null
           ticket_url?: string | null
@@ -966,12 +1003,14 @@ export type Database = {
         Update: {
           criticality?: string
           has_ticket?: boolean
-          hu_id?: string
+          hu_id?: string | null
           id?: string
           reason?: string
           reported_at?: string
           resolution?: string | null
           resolved_at?: string | null
+          sprint_id?: string | null
+          started_at?: string | null
           team_id?: string
           ticket_id?: string | null
           ticket_url?: string | null
@@ -986,6 +1025,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "impediments_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "impediments_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
@@ -993,6 +1039,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      migration_demanda_hours_log: {
+        Row: {
+          demanda_id: string
+          fase: string
+          horas_antes: number
+          horas_depois: number
+          hour_id: string
+          id: number
+          nota: string | null
+          run_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          demanda_id: string
+          fase: string
+          horas_antes: number
+          horas_depois: number
+          hour_id: string
+          id?: number
+          nota?: string | null
+          run_at?: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          demanda_id?: string
+          fase?: string
+          horas_antes?: number
+          horas_depois?: number
+          hour_id?: string
+          id?: number
+          nota?: string | null
+          run_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {

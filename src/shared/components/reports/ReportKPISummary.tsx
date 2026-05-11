@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, ElementType } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -7,9 +7,11 @@ export interface KPIItem {
   label: string;
   value: string | number;
   sub?: string;
-  icon?: ReactNode;
-  /** Semáforo: 'good' | 'warning' | 'danger' | 'neutral' */
-  status?: "good" | "warning" | "danger" | "neutral";
+  meta?: string;
+  /** Aceita ReactNode (JSX) ou referência a componente Lucide (ElementType) */
+  icon?: ReactNode | ElementType;
+  /** 'success' é alias de 'good' para retrocompatibilidade */
+  status?: "good" | "success" | "warning" | "danger" | "neutral";
   trend?: { direction: "up" | "down" | "same"; isGood: boolean };
 }
 
@@ -19,25 +21,34 @@ interface ReportKPISummaryProps {
 }
 
 const STATUS_RING: Record<string, string> = {
-  good: "ring-1 ring-emerald-500/40",
+  good:    "ring-1 ring-emerald-500/40",
   warning: "ring-1 ring-amber-400/40",
-  danger: "ring-1 ring-red-500/40",
+  danger:  "ring-1 ring-red-500/40",
   neutral: "",
 };
 
 const STATUS_VALUE: Record<string, string> = {
-  good: "text-emerald-600 dark:text-emerald-400",
+  good:    "text-emerald-600 dark:text-emerald-400",
   warning: "text-amber-500 dark:text-amber-400",
-  danger: "text-red-600 dark:text-red-400",
+  danger:  "text-red-600 dark:text-red-400",
   neutral: "",
 };
 
 const STATUS_ICON_BG: Record<string, string> = {
-  good: "bg-emerald-500/10 text-emerald-600",
+  good:    "bg-emerald-500/10 text-emerald-600",
   warning: "bg-amber-400/10 text-amber-500",
-  danger: "bg-red-500/10 text-red-600",
+  danger:  "bg-red-500/10 text-red-600",
   neutral: "bg-primary/10 text-primary",
 };
+
+function resolveIcon(icon: ReactNode | ElementType | undefined): ReactNode {
+  if (!icon) return null;
+  if (typeof icon === "function" || (typeof icon === "object" && icon !== null && "$$typeof" in (icon as object))) {
+    const Ic = icon as ElementType;
+    return <Ic className="h-5 w-5" />;
+  }
+  return icon as ReactNode;
+}
 
 export function ReportKPISummary({ items, cols = 4 }: ReportKPISummaryProps) {
   const gridClass = {
@@ -51,7 +62,10 @@ export function ReportKPISummary({ items, cols = 4 }: ReportKPISummaryProps) {
   return (
     <div className={cn("grid gap-3", gridClass)}>
       {items.map((item, i) => {
-        const st = item.status ?? "neutral";
+        // normaliza 'success' → 'good' para retrocompatibilidade
+        const rawSt = item.status ?? "neutral";
+        const st = rawSt === "success" ? "good" : rawSt;
+        const iconNode = resolveIcon(item.icon);
         const TrendIcon =
           item.trend?.direction === "up"
             ? TrendingUp
@@ -61,9 +75,9 @@ export function ReportKPISummary({ items, cols = 4 }: ReportKPISummaryProps) {
         return (
           <Card key={i} className={cn("transition-shadow hover:shadow-md", STATUS_RING[st])}>
             <CardContent className="p-4 flex items-start gap-3">
-              {item.icon && (
+              {iconNode && (
                 <div className={cn("rounded-lg p-2 shrink-0", STATUS_ICON_BG[st])}>
-                  <span className="flex h-5 w-5 items-center justify-center">{item.icon}</span>
+                  <span className="flex h-5 w-5 items-center justify-center">{iconNode}</span>
                 </div>
               )}
               <div className="min-w-0 flex-1">
@@ -83,8 +97,8 @@ export function ReportKPISummary({ items, cols = 4 }: ReportKPISummaryProps) {
                     />
                   )}
                 </div>
-                {item.sub && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{item.sub}</p>
+                {(item.sub ?? item.meta) && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{item.sub ?? item.meta}</p>
                 )}
               </div>
             </CardContent>

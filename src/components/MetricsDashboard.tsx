@@ -39,7 +39,8 @@ const STATUS_COLORS: Record<string, string> = {
   pronto_para_publicacao: "#22c55e",
 };
 
-const STALE_MS = 5 * 60 * 1000;
+// Tabelas que disparam reload ao receber evento Realtime
+const REALTIME_TABLES = ["user_stories", "activities", "sprints", "impediments", "developers"];
 
 // ─── Persistência de filtros ──────────────────────────────────────────────────
 
@@ -95,8 +96,9 @@ export function MetricsDashboard() {
     workflowCols: any[];
   }>({ sprints: [], hus: [], activities: [], impediments: [], developers: [], workflowCols: [] });
 
-  const lastFetchRef = useRef<number>(0);
   const lastTeamIdRef = useRef<string>("");
+  // Ref para evitar múltiplos reloads simultâneos vindos do Realtime
+  const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (currentTeamId && filters.teamId === "all") {
@@ -115,13 +117,9 @@ export function MetricsDashboard() {
   const loadData = useCallback(
     async (forceTeamId?: string) => {
       const teamId = forceTeamId ?? filters.teamId;
-      const now = Date.now();
-      if (now - lastFetchRef.current < STALE_MS && lastTeamIdRef.current === teamId && rawData.sprints.length > 0)
-        return;
+      lastTeamIdRef.current = teamId;
 
       setLoading(true);
-      lastFetchRef.current = now;
-      lastTeamIdRef.current = teamId;
 
       const teamsToLoad =
         isAdmin && teamId === "all"
@@ -165,15 +163,62 @@ export function MetricsDashboard() {
     [filters.teamId, agileTeams, isAdmin, currentTeamId],
   ); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Carga inicial ao montar / trocar time
   useEffect(() => {
     if (agileTeams.length > 0) loadData();
   }, [filters.teamId, agileTeams]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Supabase Realtime: escuta INSERT / UPDATE / DELETE nas tabelas relevantes
+  useEffect(() => {
+    if (agileTeams.length === 0) return;
+
+    const scheduleReload = () => {
+      if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current);
+      // Debounce de 800 ms para agrupar múltiplos eventos simultâneos
+      reloadDebounceRef.current = setTimeout(() => {
+        loadData();
+      }, 800);
+    };
+
+    const channel = supabase
+      .channel("metrics-realtime")
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "user_stories" },
+        scheduleReload,
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "activities" },
+        scheduleReload,
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "sprints" },
+        scheduleReload,
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "impediments" },
+        scheduleReload,
+      )
+      .on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table: "developers" },
+        scheduleReload,
+      )
+      .subscribe();
+
+    return () => {
+      if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [agileTeams, loadData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recarrega ao voltar para a aba do navegador (fallback)
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === "visible" && Date.now() - lastFetchRef.current > STALE_MS) {
-        loadData();
-      }
+      if (document.visibilityState === "visible") loadData();
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
@@ -445,7 +490,7 @@ export function MetricsDashboard() {
           <ReleasesPanel teamId={effectiveTeamId} sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name }))} />
         </TabsContent>
 
-        {/* ── Fase 3: Relatórios Ágeis ─────────────────────────────── */}
+        {/* ── Relatórios Ágeis ─────────────────────────────── */}
         <TabsContent value="reports" className="mt-0 p-0">
           <SalaAgilRelatorios
             sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}

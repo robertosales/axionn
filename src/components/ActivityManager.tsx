@@ -15,10 +15,9 @@ import {
   CheckCircle2,
   RotateCcw,
   MessageCircle,
-  ChevronDown,
-  ChevronRight,
   Search,
   X,
+  Copy,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,7 +35,6 @@ import { useDebounce } from "@/shared/hooks/useDebounce";
 // Helpers para duração H:MM ---------------------------------------
 
 function durationToDecimal(value: string): number {
-  // "4:00" → 4.0, "0:30" → 0.5, "1:15" → 1.25
   const [h = "0", m = "0"] = value.split(":");
   const hours = parseInt(h, 10) || 0;
   const minutes = parseInt(m, 10) || 0;
@@ -44,14 +42,12 @@ function durationToDecimal(value: string): number {
 }
 
 function decimalToDuration(decimal: number): string {
-  // 4 → "4:00", 0.5 → "0:30", 1.25 → "1:15"
   const hours = Math.floor(decimal);
   const minutes = Math.round((decimal - hours) * 60);
   return `${hours}:${String(minutes).padStart(2, "0")}`;
 }
 
 function isValidDuration(value: string): boolean {
-  // aceita "H:MM" ou "HH:MM"
   return /^\d+:[0-5]\d$/.test(value);
 }
 
@@ -75,12 +71,13 @@ export function ActivityManager() {
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [isCloning, setIsCloning] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [activityType, setActivityType] = useState<ActivityType>("task");
   const [huId, setHuId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
-  const [duration, setDuration] = useState("4:00"); // H:MM
+  const [duration, setDuration] = useState("4:00");
   const [startDate, setStartDate] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
@@ -151,6 +148,7 @@ export function ActivityManager() {
     setStartDate("");
     setErrors({});
     setEditId(null);
+    setIsCloning(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -161,8 +159,8 @@ export function ActivityManager() {
     }
     setSubmitting(true);
     try {
-      const numHours = durationToDecimal(duration); // decimal para backend
-      if (editId) {
+      const numHours = durationToDecimal(duration);
+      if (editId && !isCloning) {
         await updateActivity(editId, {
           title: title.trim(),
           description: description.trim(),
@@ -183,7 +181,7 @@ export function ActivityManager() {
           hours: numHours,
           startDate,
         });
-        toast.success("Registro criado com sucesso");
+        toast.success(isCloning ? "Atividade clonada com sucesso!" : "Registro criado com sucesso");
       }
       resetForm();
       setOpen(false);
@@ -198,12 +196,29 @@ export function ActivityManager() {
     const act = activities.find((a) => a.id === actId);
     if (!act) return;
     setEditId(act.id);
+    setIsCloning(false);
     setTitle(act.title);
     setDescription(act.description);
     setActivityType(act.activityType);
     setHuId(act.huId);
     setAssigneeId(act.assigneeId);
-    setDuration(decimalToDuration(act.hours)); // decimal → H:MM
+    setDuration(decimalToDuration(act.hours));
+    setStartDate(act.startDate);
+    setErrors({});
+    setOpen(true);
+  };
+
+  const handleClone = (actId: string) => {
+    const act = activities.find((a) => a.id === actId);
+    if (!act) return;
+    setEditId(act.id);
+    setIsCloning(true);
+    setTitle(`[CÓPIA] ${act.title}`);
+    setDescription(act.description);
+    setActivityType(act.activityType);
+    setHuId(act.huId);
+    setAssigneeId(act.assigneeId);
+    setDuration(decimalToDuration(act.hours));
     setStartDate(act.startDate);
     setErrors({});
     setOpen(true);
@@ -248,9 +263,14 @@ export function ActivityManager() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <ListTodo className="h-5 w-5 text-primary" />
-                  {editId ? "Editar Atividade" : "Nova Atividade"}
+                  {isCloning ? "Clonar Atividade" : editId ? "Editar Atividade" : "Nova Atividade"}
                 </DialogTitle>
               </DialogHeader>
+              {isCloning && (
+                <p className="text-xs text-muted-foreground -mt-2 mb-1">
+                  📋 Ajuste os dados abaixo e salve para criar uma nova atividade baseada na original.
+                </p>
+              )}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label>
@@ -390,7 +410,7 @@ export function ActivityManager() {
                     {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
                   </div>
                 </div>
-                {activityType === "bug" && editId && currentTeamId && (
+                {activityType === "bug" && editId && !isCloning && currentTeamId && (
                   <div className="border-t pt-3 space-y-2">
                     <Label className="text-xs font-semibold text-destructive flex items-center gap-1.5">
                       🐛 Prints / Evidências do Bug
@@ -398,7 +418,7 @@ export function ActivityManager() {
                     <FileUploader entityType="activity" entityId={editId} teamId={currentTeamId} />
                   </div>
                 )}
-                {activityType === "bug" && !editId && (
+                {activityType === "bug" && (!editId || isCloning) && (
                   <div className="text-xs bg-destructive/10 border border-destructive/30 text-destructive rounded p-2">
                     🐛 Após salvar, edite a atividade para anexar prints. A HU será movida para a coluna <b>Bug</b>.
                   </div>
@@ -406,10 +426,12 @@ export function ActivityManager() {
                 <Button type="submit" className="w-full gap-2" disabled={submitting}>
                   {submitting ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
+                  ) : isCloning ? (
+                    <Copy className="h-4 w-4" />
                   ) : (
                     <Plus className="h-4 w-4" />
                   )}
-                  {editId ? "Salvar Alterações" : "Criar Atividade"}
+                  {isCloning ? "Salvar como Nova Atividade" : editId ? "Salvar Alterações" : "Criar Atividade"}
                 </Button>
               </form>
             </DialogContent>
@@ -538,6 +560,17 @@ export function ActivityManager() {
                     >
                       <MessageCircle className="h-3.5 w-3.5" />
                     </Button>
+                    {canUpdate && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-blue-500"
+                        title="Clonar atividade"
+                        onClick={() => handleClone(act.id)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     {!isClosed ? (
                       <Button
                         variant="ghost"

@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, Users, UserPlus, Shield, Search } from "lucide-react";
+import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar, Code2 } from "lucide-react";
 import { getRoleLabel, type AppRole } from "@/hooks/usePermissions";
+import { getInitials } from "@/lib/nameUtils";
 
 const PREDEFINED_ROLES = [
   "Analista de Requisitos",
@@ -44,6 +45,8 @@ export function TeamMembersManager() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"name" | "recent" | "oldest">("name");
 
   const fetchMembers = async () => {
     if (!currentTeamId) return;
@@ -144,13 +147,43 @@ export function TeamMembersManager() {
 
   const filteredMembers = members.filter((m) => {
     const term = search.toLowerCase();
-    if (!term) return true;
-    return (
+    const matchesTerm =
+      !term ||
       m.profile?.display_name?.toLowerCase().includes(term) ||
       m.profile?.email?.toLowerCase().includes(term) ||
-      m.role?.toLowerCase().includes(term)
-    );
+      m.role?.toLowerCase().includes(term);
+    const matchesRole =
+      roleFilter === "all" || m.role === roleFilter;
+    return matchesTerm && matchesRole;
   });
+
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    if (sortBy === "name") {
+      return (a.profile?.display_name || "").localeCompare(
+        b.profile?.display_name || "",
+        "pt-BR",
+      );
+    }
+    const da = new Date(a.joined_at).getTime();
+    const db = new Date(b.joined_at).getTime();
+    return sortBy === "recent" ? db - da : da - db;
+  });
+
+  // Stats
+  const totalMembers = members.length;
+  const totalAdmins = members.filter((m) =>
+    m.user_roles?.includes("admin" as AppRole),
+  ).length;
+  const totalDevs = members.filter((m) =>
+    /desenvolvedor|developer|dev\b/i.test(m.role || ""),
+  ).length;
+  const totalQA = members.filter((m) =>
+    /qa|tester|quality/i.test(m.role || ""),
+  ).length;
+
+  const uniqueRoles = Array.from(
+    new Set(members.map((m) => m.role).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   if (!currentTeamId) {
     return (
@@ -165,21 +198,18 @@ export function TeamMembersManager() {
 
   return (
     <div className="space-y-6">
+      {/* ── HEADER ── */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">
+            Membros do Time
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Gerencie os membros e perfis de acesso associados a este time
+          </p>
+        </div>
 
-      {/* ── TOPO: T\u00edtulo + Busca + Bot\u00e3o ── */}
-      <div className="flex flex-col gap-3">
-        {/* Linha 1: t\u00edtulo \u00e0 esquerda e bot\u00e3o \u00e0 direita */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Users className="h-6 w-6 text-primary" /> Membros do Time
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Gerencie os membros associados a este time
-            </p>
-          </div>
-
-          {canManage && (
+        {canManage && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -265,92 +295,140 @@ export function TeamMembersManager() {
               </DialogContent>
             </Dialog>
           )}
-        </div>
+      </div>
 
-        {/* Linha 2: campo de busca ocupa largura total */}
-        <div className="relative">
+      {/* ── STATS PILLS ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <StatPill dotClass="bg-blue-500" value={totalMembers} label={totalMembers === 1 ? "membro" : "membros"} />
+        <StatPill dotClass="bg-emerald-500" value={totalAdmins} label="admins" />
+        <StatPill dotClass="bg-green-500" value={totalDevs} label="devs ativos" />
+        <StatPill dotClass="bg-yellow-500" value={totalQA} label="QA" />
+      </div>
+
+      {/* ── BUSCA + FILTROS ── */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
-            className="pl-9"
+            className="pl-9 rounded-full bg-card"
             placeholder="Buscar por nome, e-mail ou fun\u00e7\u00e3o\u2026"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="w-full sm:w-[200px] rounded-full bg-card">
+            <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Filtrar por fun\u00e7\u00e3o" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as fun\u00e7\u00f5es</SelectItem>
+            {uniqueRoles.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+          <SelectTrigger className="w-full sm:w-[160px] rounded-full bg-card">
+            <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Ordenar" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name">Nome (A-Z)</SelectItem>
+            <SelectItem value="recent">Mais recentes</SelectItem>
+            <SelectItem value="oldest">Mais antigos</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* ── INFORMA\u00c7\u00d5ES: total de membros abaixo da busca ── */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Users className="h-4 w-4" />
-        <span>
-          {search ? (
-            <>
-              <span className="font-semibold text-foreground">
-                {filteredMembers.length}
-              </span>{" "}
-              de{" "}
-              <span className="font-semibold text-foreground">
-                {members.length}
-              </span>{" "}
-              membros encontrados
-            </>
-          ) : (
-            <>
-              <span className="font-semibold text-foreground">
-                {members.length}
-              </span>{" "}
-              {members.length === 1 ? "membro" : "membros"} no time
-            </>
-          )}
-        </span>
-      </div>
+      {/* ── LISTA DE MEMBROS ── */}
+      <div className="space-y-3">
+        {sortedMembers.map((member) => {
+          const name = member.profile?.display_name || "Usu\u00e1rio";
+          return (
+            <Card
+              key={member.id}
+              className="rounded-2xl border-border/60 hover:border-border transition-colors"
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start gap-4">
+                  {/* Avatar */}
+                  <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/20 flex items-center justify-center text-sm font-semibold text-primary">
+                    {getInitials(name)}
+                  </div>
 
-      {/* ── GRID DE CARDS ── */}
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {filteredMembers.map((member) => (
-          <Card key={member.id}>
-            <CardHeader className="pb-2 flex flex-row items-start justify-between">
-              <div className="space-y-1">
-                <CardTitle className="text-sm font-semibold">
-                  {member.profile?.display_name || "Usu\u00e1rio"}
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {member.profile?.email}
-                </p>
-              </div>
-              {canManage && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemoveMember(member.id)}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex flex-wrap gap-1">
-                <Badge variant="secondary" className="text-[10px]">
-                  {member.role}
-                </Badge>
-                {member.user_roles?.map((role) => (
-                  <Badge key={role} variant="outline" className="text-[10px]">
-                    <Shield className="h-3 w-3 mr-1" />
-                    {getRoleLabel(role)}
-                  </Badge>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-2">
-                Desde{" "}
-                {new Date(member.joined_at).toLocaleDateString("pt-BR")}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+                  {/* Body */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold text-foreground truncate">
+                          {name}
+                        </h3>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {member.profile?.email}
+                        </p>
+                      </div>
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 -mr-1 -mt-1"
+                          onClick={() => handleRemoveMember(member.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Badges */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge variant="secondary" className="rounded-full font-normal">
+                        {member.role}
+                      </Badge>
+                      {member.user_roles?.map((role) => (
+                        <Badge
+                          key={role}
+                          variant="outline"
+                          className="rounded-full font-normal"
+                        >
+                          {role === "admin" ? (
+                            <Shield className="h-3 w-3 mr-1" />
+                          ) : role === "developer" ? (
+                            <Code2 className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Users className="h-3 w-3 mr-1" />
+                          )}
+                          {getRoleLabel(role)}
+                        </Badge>
+                      ))}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between pt-3 mt-1 border-t border-border/60">
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        Desde{" "}
+                        {new Date(member.joined_at).toLocaleDateString("pt-BR")}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        Ativo
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* ── ESTADO VAZIO ── */}
-      {filteredMembers.length === 0 && !loading && (
+      {sortedMembers.length === 0 && !loading && (
         <Card className="border-dashed p-8 text-center">
           <p className="text-muted-foreground">
             {search
@@ -359,6 +437,24 @@ export function TeamMembersManager() {
           </p>
         </Card>
       )}
+    </div>
+  );
+}
+
+function StatPill({
+  dotClass,
+  value,
+  label,
+}: {
+  dotClass: string;
+  value: number;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-border/60 bg-card text-sm">
+      <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+      <span className="font-semibold text-foreground">{value}</span>
+      <span className="text-muted-foreground">{label}</span>
     </div>
   );
 }

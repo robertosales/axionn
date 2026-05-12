@@ -7,7 +7,6 @@ import {
   Activity,
   Sprint,
   KanbanStatus,
-  calculateEndDate,
   Impediment,
   ImpedimentType,
   ImpedimentCriticality,
@@ -329,13 +328,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   // ── ACTIVITIES ────────────────────────────────────────────────────────────
   const addActivity = async (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
     if (!teamId) return;
-    // Garante que hours é sempre um número decimal, nunca uma string como "1:00"
     const safeHours = toDecimalHours(act.hours);
-    const endDate = calculateEndDate(act.startDate, safeHours);
+    // end_date = startDate: atividade sempre ocorre no mesmo dia
     const { error } = await supabase.from("activities").insert({
       team_id: teamId, hu_id: act.huId, title: act.title, description: act.description,
       activity_type: act.activityType, assignee_id: act.assigneeId || null,
-      hours: safeHours, start_date: act.startDate, end_date: endDate,
+      hours: safeHours, start_date: act.startDate, end_date: act.startDate,
     });
     if (error) { toast.error("Erro ao criar atividade"); return; }
     if (act.activityType === "bug") {
@@ -357,16 +355,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (act.description !== undefined) updateData.description = act.description;
     if (act.activityType !== undefined) updateData.activity_type = act.activityType;
     if (act.assigneeId !== undefined) updateData.assignee_id = act.assigneeId || null;
-    if (act.hours !== undefined) {
-      // Garante que hours é sempre um número decimal, nunca uma string como "1:00"
-      updateData.hours = toDecimalHours(act.hours);
-    }
-    if (act.startDate !== undefined) updateData.start_date = act.startDate;
-    // Recalcula end_date se start_date ou hours mudaram
-    if (act.startDate !== undefined || act.hours !== undefined) {
-      const newStart = act.startDate ?? existing.startDate;
-      const newHours = act.hours !== undefined ? toDecimalHours(act.hours) : existing.hours;
-      updateData.end_date = calculateEndDate(newStart, newHours);
+    if (act.hours !== undefined) updateData.hours = toDecimalHours(act.hours);
+    if (act.startDate !== undefined) {
+      updateData.start_date = act.startDate;
+      // Só atualiza end_date se a atividade ainda não foi encerrada
+      if (!existing.isClosed) {
+        updateData.end_date = act.startDate;
+      }
     }
     const { error } = await supabase.from("activities").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar atividade"); return; }
@@ -376,7 +371,13 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const removeActivity = async (id: string) => { await supabase.from("activities").delete().eq("id", id); await refreshAll(); };
 
   const closeActivity = async (id: string) => {
-    await supabase.from("activities").update({ is_closed: true, closed_at: new Date().toISOString() }).eq("id", id);
+    // Grava is_closed, closed_at E end_date com a data real de encerramento
+    const today = new Date().toISOString().slice(0, 10);
+    await supabase.from("activities").update({
+      is_closed: true,
+      closed_at: new Date().toISOString(),
+      end_date: today,
+    }).eq("id", id);
     await refreshAll();
     const act = activities.find((a) => a.id === id);
     if (act && act.activityType === "bug") {
@@ -397,7 +398,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   const reopenActivity = async (id: string) => {
-    await supabase.from("activities").update({ is_closed: false, closed_at: null }).eq("id", id);
+    // Ao reabrir, limpa end_date para indicar que está em andamento novamente
+    await supabase.from("activities").update({ is_closed: false, closed_at: null, end_date: null }).eq("id", id);
     await refreshAll();
   };
 

@@ -448,16 +448,18 @@ export const DEFAULT_KANBAN_COLUMNS: WorkflowColumn[] = [
 
 // ── Funções auxiliares ────────────────────────────────────────────────────────
 
-/** Calcula data final somando `days` dias úteis a partir de `startDate` */
-export function calculateEndDate(startDate: string, days: number): string {
-  const date = new Date(startDate + "T12:00:00");
-  let added = 0;
-  while (added < days) {
-    date.setDate(date.getDate() + 1);
-    const dow = date.getDay();
-    if (dow !== 0 && dow !== 6) added++;
-  }
-  return date.toISOString().slice(0, 10);
+/**
+ * Retorna a data de encerramento de uma atividade.
+ * Como uma atividade ocorre sempre no mesmo dia (máx 8h),
+ * end_date é igual a startDate — sem avançar dias úteis.
+ *
+ * @deprecated O cálculo de dias úteis foi removido pois recebia horas (não dias),
+ * gerando datas incorretas. Use diretamente `startDate` como end_date.
+ */
+export function calculateEndDate(startDate: string, _hours: number): string {
+  // Uma atividade sempre ocorre no mesmo dia do início.
+  // Não avançamos datas com base em horas — isso causava end_date errado.
+  return startDate;
 }
 
 /**

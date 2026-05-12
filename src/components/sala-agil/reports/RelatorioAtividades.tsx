@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye } from "lucide-react";
+import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye, CalendarDays } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, LineChart, Line, Legend,
@@ -16,6 +16,8 @@ import {
 } from "@/shared/components/reports";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +74,13 @@ function fmtDatePDF(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric",
   });
+}
+
+/** "YYYY-MM-DD" → "dd/MM/yyyy" para exibir no PDF exatamente como o usuário informou */
+function isoToBR(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 /** Decimal ou "H:mm" → minutos inteiros */
@@ -139,11 +148,11 @@ const PDF = {
   BORDER:    [226, 232, 240] as [number,number,number],
   HEAD_ROW:  [30,  41,  59]  as [number,number,number],
   // HU
-  HU_BG:     [220, 252, 231] as [number,number,number],   // verde claro
-  HU_TOTAL:  [187, 247, 208] as [number,number,number],   // verde médio
-  // Dia
-  DAY_BG:    [236, 253, 245] as [number,number,number],   // verde suavíssimo
-  DAY_TEXT:  [21,  128, 61]  as [number,number,number],
+  HU_BG:     [220, 252, 231] as [number,number,number],
+  HU_TOTAL:  [187, 247, 208] as [number,number,number],
+  // Período
+  PERIOD_BG:   [30,  58,  95] as [number,number,number],  // azul-marinho
+  PERIOD_TXT:  [147, 197, 253] as [number,number,number], // azul claro
   // Subtotal
   SUB_BG:    [241, 245, 249] as [number,number,number],
   // Status
@@ -153,8 +162,8 @@ const PDF = {
   OPEN_BG:   [254, 243, 199] as [number,number,number],
 };
 
-// Larguras das 4 colunas (mm) — A4 landscape útil ≈ 253mm (297 - 2×22)
-const COL = { DATE: 38, ACTIVITY: 148, STATUS: 36, HOURS: 31 };
+// 3 colunas: Atividade (165mm) · Status (46mm) · Horas (42mm) = 253mm úteis A4 landscape
+const COL = { ACTIVITY: 165, STATUS: 46, HOURS: 42 };
 
 async function buildPDFBlob(
   memberMetrics: ReturnType<typeof buildMemberMetrics>,
@@ -173,7 +182,11 @@ async function buildPDFBlob(
   const ML   = 22;
   const MR   = 22;
 
-  // Agrupa por membro
+  // Período informado pelo usuário (exato, sem recalcular)
+  const periodoLabel = (filters.dateFrom && filters.dateTo)
+    ? `${isoToBR(filters.dateFrom)} → ${isoToBR(filters.dateTo)}`
+    : "";
+
   const memberMap = new Map<string, typeof tableData>();
   for (const row of tableData) {
     if (!memberMap.has(row._assigneeId)) memberMap.set(row._assigneeId, []);
@@ -201,35 +214,40 @@ async function buildPDFBlob(
     );
 
     let y = 31;
-
-    // ── Card do membro
     const CW = W - ML - MR;
+
+    // ── Card do membro (altura 22 quando há período, 18 sem)
+    const cardH = periodoLabel ? 22 : 18;
     doc.setFillColor(...PDF.LIGHT_BG);
-    doc.roundedRect(ML, y, CW, 18, 2, 2, "F");
+    doc.roundedRect(ML, y, CW, cardH, 2, 2, "F");
     doc.setDrawColor(...PDF.BORDER);
-    doc.roundedRect(ML, y, CW, 18, 2, 2, "S");
+    doc.roundedRect(ML, y, CW, cardH, 2, 2, "S");
     doc.setFillColor(...AGIL_PRIMARY);
-    doc.circle(ML + 8, y + 9, 5.5, "F");
+    doc.circle(ML + 8, y + cardH / 2, 5.5, "F");
     doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont("helvetica", "bold");
-    doc.text(getInitials(member.name), ML + 8, y + 11, { align: "center" });
+    doc.text(getInitials(member.name), ML + 8, y + cardH / 2 + 2, { align: "center" });
     doc.setTextColor(...PDF.DARK); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(member.name, ML + 17, y + 8);
     doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(...PDF.MUTED);
     doc.text(member.role, ML + 17, y + 14);
-    doc.setFontSize(7.5);
-    doc.text(`Sprint: ${sprintLabel}  ·  Time: ${teamName}`, ML + CW - 3, y + 11, { align: "right" });
-    y += 23;
+    if (periodoLabel) {
+      doc.setFontSize(7.5); doc.setTextColor(...PDF.DARK);
+      doc.text(`Período: ${periodoLabel}`, ML + 17, y + 20);
+    }
+    doc.setFontSize(7.5); doc.setTextColor(...PDF.MUTED);
+    doc.text(`Sprint: ${sprintLabel}  ·  Time: ${teamName}`, ML + CW - 3, y + cardH / 2 + 2, { align: "right" });
+    y += cardH + 5;
 
-    // ── KPIs (5 cards)
+    // ── KPIs
     doc.setTextColor(...PDF.DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
     doc.text("RESUMO DO MEMBRO", ML, y);
     y += 3;
     const kpiW = CW / 5;
     const kpis = [
-      { label: "Atividades",   value: String(member.total),  bg: [219,234,254] as [number,number,number], txt: [30,64,175]   as [number,number,number] },
+      { label: "Atividades",   value: String(member.total),  bg: [219,234,254] as [number,number,number], txt: [30,64,175]  as [number,number,number] },
       { label: "Concluídas",   value: String(member.closed), bg: AGIL_LIGHT,                              txt: AGIL_DARK },
-      { label: "Em Aberto",    value: String(member.open),   bg: [255,237,213] as [number,number,number], txt: [154,52,18]   as [number,number,number] },
-      { label: "Eficiência",   value: `${member.eff}%`,      bg: [243,232,255] as [number,number,number], txt: [109,40,217]  as [number,number,number] },
+      { label: "Em Aberto",    value: String(member.open),   bg: [255,237,213] as [number,number,number], txt: [154,52,18] as [number,number,number] },
+      { label: "Eficiência",   value: `${member.eff}%`,      bg: [243,232,255] as [number,number,number], txt: [109,40,217] as [number,number,number] },
       { label: "Horas Concl.", value: fmtH(member.hoursC),   bg: [219,234,254] as [number,number,number], txt: AGIL_PRIMARY },
     ];
     kpis.forEach(({ label, value, bg, txt }, i) => {
@@ -242,7 +260,7 @@ async function buildPDFBlob(
     });
     y += 20;
 
-    // ── Tabela Layout 2: Data | Atividade | Status | Horas
+    // ── Tabela: 3 colunas — Atividade | Status | Horas
     const acts     = memberMap.get(member.id) ?? [];
     const huGroups = groupByHuDate(acts);
     const totalMin = acts.reduce((s: number, r: any) => s + toMin(r.horas), 0);
@@ -250,61 +268,77 @@ async function buildPDFBlob(
     const body: any[][] = [];
 
     for (const hu of huGroups) {
-      // ── Cabeçalho HU (colSpan 4, fundo verde claro, borda esquerda verde)
-      body.push([{
-        content: hu.huCode !== "—"
-          ? `${hu.huCode}${hu.huTitle ? "   —   " + hu.huTitle : ""}`
-          : "SEM HU",
-        colSpan: 3,
-        styles: {
-          fillColor: PDF.HU_BG,
-          textColor: AGIL_DARK,
-          fontStyle: "bold",
-          fontSize: 9,
-          cellPadding: { top: 3, bottom: 3, left: 4, right: 2 },
+      // ── Cabeçalho HU (colSpan 2 + horas)
+      body.push([
+        {
+          content: hu.huCode !== "—"
+            ? `${hu.huCode}${hu.huTitle ? "   —   " + hu.huTitle : ""}`
+            : "SEM HU",
+          colSpan: 2,
+          styles: {
+            fillColor: PDF.HU_BG,
+            textColor: AGIL_DARK,
+            fontStyle: "bold",
+            fontSize: 9,
+            cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 2 },
+          },
         },
-      }, {
-        content: `Total: ${formatMinutes(hu.totalMin)}`,
-        styles: {
-          fillColor: PDF.HU_BG,
-          textColor: AGIL_PRIMARY,
-          fontStyle: "bold",
-          fontSize: 9,
-          halign: "right",
-          cellPadding: { top: 3, bottom: 3, left: 2, right: 4 },
+        {
+          content: `Total: ${formatMinutes(hu.totalMin)}`,
+          styles: {
+            fillColor: PDF.HU_BG,
+            textColor: AGIL_PRIMARY,
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "right",
+            cellPadding: { top: 3.5, bottom: 3.5, left: 2, right: 4 },
+          },
         },
-      }]);
+      ]);
 
       for (const day of hu.days) {
-        // ── Linha de data do dia (colSpan 4)
-        body.push([{
-          content: day.date ? fmtDatePDF(day.date) : "Sem data",
-          colSpan: 4,
-          styles: {
-            fillColor: PDF.DAY_BG,
-            textColor: PDF.DAY_TEXT,
-            fontStyle: "bold",
-            fontSize: 8,
-            cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
+        // ── Cabeçalho de período por grupo de dia (azul-marinho, colSpan 2 + total)
+        const periodLabel = day.date ? fmtDatePDF(day.date) : "Sem data";
+        body.push([
+          {
+            content: `PERÍODO: ${periodLabel}`,
+            colSpan: 2,
+            styles: {
+              fillColor: PDF.PERIOD_BG,
+              textColor: [255, 255, 255] as [number,number,number],
+              fontStyle: "bold",
+              fontSize: 8,
+              cellPadding: { top: 3, bottom: 3, left: 5, right: 2 },
+            },
           },
-        }]);
+          {
+            content: `TOTAL: ${formatMinutes(day.totalMin)}`,
+            styles: {
+              fillColor: PDF.PERIOD_BG,
+              textColor: PDF.PERIOD_TXT,
+              fontStyle: "bold",
+              fontSize: 8,
+              halign: "right",
+              cellPadding: { top: 3, bottom: 3, left: 2, right: 4 },
+            },
+          },
+        ]);
 
-        // ── Atividades do dia (Data vazia, Atividade, Status, Horas)
+        // ── Atividades do dia
         day.rows.forEach((r: any, ri: number) => {
-          const isDone   = !!r.status;
+          const isDone    = !!r.status;
           const statusTxt = isDone ? "Concluída" : "Em aberto";
+          const rowBg     = ri % 2 === 0
+            ? [255, 255, 255] as [number,number,number]
+            : PDF.LIGHT_BG;
           body.push([
             {
-              content: "",   // data já está na linha do dia
-              styles: { fontStyle: "normal", textColor: PDF.MUTED, fontSize: 7.5, fillColor: ri % 2 === 0 ? [255,255,255] as [number,number,number] : PDF.LIGHT_BG },
-            },
-            {
-              content: r.titulo,   // sem trunc — cellWidth cuida da quebra
+              content: r.titulo,
               styles: {
                 fontStyle: "normal",
                 fontSize: 8,
-                fillColor: ri % 2 === 0 ? [255,255,255] as [number,number,number] : PDF.LIGHT_BG,
-                cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+                fillColor: rowBg,
+                cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 3 },
               },
             },
             {
@@ -324,7 +358,7 @@ async function buildPDFBlob(
                 fontStyle: "bold",
                 fontSize: 8.5,
                 textColor: AGIL_PRIMARY,
-                fillColor: ri % 2 === 0 ? [255,255,255] as [number,number,number] : PDF.LIGHT_BG,
+                fillColor: rowBg,
                 halign: "right",
                 cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 4 },
               },
@@ -332,17 +366,17 @@ async function buildPDFBlob(
           ]);
         });
 
-        // ── Subtotal do dia (colSpan 3 + horas)
+        // ── Subtotal do período
         body.push([
           {
-            content: `SUBTOTAL  —  ${day.date ? fmtDatePDF(day.date) : "Sem data"}`,
-            colSpan: 3,
+            content: "SUBTOTAL DO PERÍODO",
+            colSpan: 2,
             styles: {
               fillColor: PDF.SUB_BG,
               textColor: PDF.MUTED,
               fontStyle: "bold",
               fontSize: 7.5,
-              cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
+              cellPadding: { top: 3, bottom: 3, left: 5, right: 4 },
             },
           },
           {
@@ -353,24 +387,24 @@ async function buildPDFBlob(
               fontStyle: "bold",
               fontSize: 9,
               halign: "right",
-              cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 4 },
+              cellPadding: { top: 3, bottom: 3, left: 2, right: 4 },
             },
           },
         ]);
       }
 
-      // ── Total HU (colSpan 3 + horas, destaque verde forte)
+      // ── Total HU
       if (huGroups.length > 1 || hu.huCode !== "—") {
         body.push([
           {
             content: `TOTAL  ${hu.huCode !== "—" ? hu.huCode : "SEM HU"}${hu.huTitle ? "  —  " + hu.huTitle : ""}`,
-            colSpan: 3,
+            colSpan: 2,
             styles: {
               fillColor: PDF.HU_TOTAL,
               textColor: AGIL_DARK,
               fontStyle: "bold",
               fontSize: 8.5,
-              cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+              cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
             },
           },
           {
@@ -381,7 +415,7 @@ async function buildPDFBlob(
               fontStyle: "bold",
               fontSize: 10,
               halign: "right",
-              cellPadding: { top: 3, bottom: 3, left: 2, right: 4 },
+              cellPadding: { top: 3.5, bottom: 3.5, left: 2, right: 4 },
             },
           },
         ]);
@@ -390,7 +424,6 @@ async function buildPDFBlob(
 
     autoTable(doc, {
       head: [[
-        { content: "DATA",      styles: { halign: "left"   } },
         { content: "ATIVIDADE", styles: { halign: "left"   } },
         { content: "STATUS",    styles: { halign: "center" } },
         { content: "HORAS",     styles: { halign: "right"  } },
@@ -402,7 +435,7 @@ async function buildPDFBlob(
         cellPadding: 2.5,
         lineColor: PDF.BORDER,
         lineWidth: 0.15,
-        overflow: "linebreak",   // quebra de linha automática em títulos longos
+        overflow: "linebreak",
       },
       headStyles: {
         fillColor: PDF.HEAD_ROW,
@@ -412,15 +445,13 @@ async function buildPDFBlob(
         cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
       },
       columnStyles: {
-        0: { cellWidth: COL.DATE,     textColor: PDF.MUTED },
-        1: { cellWidth: COL.ACTIVITY                       },
-        2: { cellWidth: COL.STATUS,   halign: "center"     },
-        3: { cellWidth: COL.HOURS,    halign: "right", fontStyle: "bold", textColor: AGIL_PRIMARY },
+        0: { cellWidth: COL.ACTIVITY },
+        1: { cellWidth: COL.STATUS,  halign: "center" },
+        2: { cellWidth: COL.HOURS,   halign: "right", fontStyle: "bold", textColor: AGIL_PRIMARY },
       },
       margin: { left: ML, right: MR },
       tableLineColor: PDF.BORDER,
       tableLineWidth: 0.15,
-      // Evita cabeçalho de HU ou linha de data órfã no topo de página
       rowPageBreak: "avoid",
     });
 
@@ -430,7 +461,7 @@ async function buildPDFBlob(
     // ── Rodapé totalizador
     const summaryY = Math.min(finalY, pageH - 20);
     doc.setFillColor(...AGIL_PRIMARY);
-    doc.roundedRect(ML, summaryY, W - ML - MR, 11, 2, 2, "F");
+    doc.roundedRect(ML, summaryY, CW, 11, 2, 2, "F");
     doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont("helvetica", "bold");
     doc.text(
       `Total geral: ${formatMinutes(totalMin)}  ·  ${acts.length} atividade${acts.length !== 1 ? "s" : ""}`,
@@ -439,7 +470,7 @@ async function buildPDFBlob(
     doc.setFontSize(8); doc.setFont("helvetica", "normal");
     doc.text(
       `Cycle Time médio: ${member.cycleTime > 0 ? member.cycleTime + "d" : "—"}`,
-      W - MR - 4, summaryY + 7.5, { align: "right" },
+      ML + CW - 4, summaryY + 7.5, { align: "right" },
     );
 
     // ── Numeração de páginas
@@ -485,13 +516,23 @@ function buildMemberMetrics(developers: Props["developers"], filteredActivities:
 }
 
 export function RelatorioAtividades({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
+  // Filtros existentes + novos campos de período
   const [filters, setFilters] = useState<Record<string, string>>({
-    sprintId: "all", memberId: "all", type: "all", status: "all",
+    sprintId:  "all",
+    memberId:  "all",
+    type:      "all",
+    status:    "all",
+    dateFrom:  "",   // YYYY-MM-DD
+    dateTo:    "",   // YYYY-MM-DD
   });
+
   const [exportingPDF, setExportingPDF] = useState(false);
   const [previewUrl,   setPreviewUrl]   = useState<string | null>(null);
   const [previewBlob,  setPreviewBlob]  = useState<Blob | null>(null);
   const [previewNome,  setPreviewNome]  = useState<string>("");
+
+  const periodReady = !!(filters.dateFrom && filters.dateTo);
+  const periodValid = !periodReady || filters.dateFrom <= filters.dateTo;
 
   const sprintOptions = [
     { value: "all", label: "Todas" },
@@ -514,6 +555,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     { value: "open", label: "Em aberto" },
   ];
 
+  // Filtros de dados (inalterados)
   const filteredActivities = useMemo(() => {
     let acts = rawData.activities;
     if (filters.sprintId !== "all") {
@@ -541,10 +583,10 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     : 0;
 
   const kpis = [
-    { label: "Atividades",       value: totalActs,              sub: `${totalClosed} concluídas`,              icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
+    { label: "Atividades",       value: totalActs,               sub: `${totalClosed} concluídas`,              icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
     { label: "Horas Concluídas", value: formatMinutes(totalMinC), sub: `de ${formatMinutes(totalMinP)} planejadas`, icon: <Clock className="h-4 w-4" />,       status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "warning" as any },
-    { label: "Eficiência Média", value: `${avgEff}%`,           sub: "meta ≥ 80%",                              icon: <Zap className="h-4 w-4" />,         status: effStatus(avgEff) },
-    { label: "Membros Ativos",   value: memberMetrics.length,   sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
+    { label: "Eficiência Média", value: `${avgEff}%`,            sub: "meta ≥ 80%",                              icon: <Zap className="h-4 w-4" />,         status: effStatus(avgEff) },
+    { label: "Membros Ativos",   value: memberMetrics.length,    sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
   ];
 
   const hoursBarData = memberMetrics.map((m) => ({
@@ -617,7 +659,18 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   }
 
   async function handleExportPDF() {
-    if (memberMetrics.length === 0) { toast.error("Nenhum dado para gerar o relatório."); return; }
+    if (!periodReady) {
+      toast.error("Informe o período do relatório para continuar.");
+      return;
+    }
+    if (!periodValid) {
+      toast.error("A data inicial não pode ser maior que a data final.");
+      return;
+    }
+    if (memberMetrics.length === 0) {
+      toast.error("Nenhum dado para gerar o relatório.");
+      return;
+    }
     setExportingPDF(true);
     try {
       const selectedSprint = filters.sprintId !== "all"
@@ -657,20 +710,41 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     setPreviewBlob(null);
   }
 
+  function handleReset() {
+    setFilters({ sprintId: "all", memberId: "all", type: "all", status: "all", dateFrom: "", dateTo: "" });
+  }
+
+  // Tooltip do botão PDF
+  const pdfDisabledReason = !periodReady
+    ? "Informe o período do relatório para continuar."
+    : !periodValid
+    ? "A data inicial não pode ser maior que a data final."
+    : undefined;
+
   const exportActions = (
     <div className="flex items-center gap-2">
       <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-1.5 h-8">
         <FileDown className="h-3.5 w-3.5" /> CSV
       </Button>
-      <Button
-        size="sm" variant="outline" onClick={handleExportPDF} disabled={exportingPDF}
-        className="gap-1.5 h-8 border-primary text-primary hover:bg-primary/5"
-      >
-        {exportingPDF
-          ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
-          : <Eye className="h-3.5 w-3.5" />}
-        {exportingPDF ? "Gerando…" : "Visualizar PDF"}
-      </Button>
+      <div title={pdfDisabledReason}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleExportPDF}
+          disabled={exportingPDF || !periodReady || !periodValid}
+          className={cn(
+            "gap-1.5 h-8",
+            periodReady && periodValid
+              ? "border-primary text-primary hover:bg-primary/5"
+              : "opacity-50 cursor-not-allowed",
+          )}
+        >
+          {exportingPDF
+            ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
+            : <Eye className="h-3.5 w-3.5" />}
+          {exportingPDF ? "Gerando…" : "Visualizar PDF"}
+        </Button>
+      </div>
     </div>
   );
 
@@ -714,6 +788,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           extraActions={exportActions}
         />
 
+        {/* Filtros existentes */}
         <ReportFilterBar
           fields={[
             { key: "sprintId", label: "Sprint",  type: "select", options: sprintOptions },
@@ -723,8 +798,61 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           ]}
           values={filters}
           onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
-          onReset={() => setFilters({ sprintId: "all", memberId: "all", type: "all", status: "all" })}
+          onReset={handleReset}
         />
+
+        {/* Período obrigatório para gerar PDF */}
+        <div className="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <CalendarDays className="h-4 w-4 text-primary" />
+            Período do relatório
+            <span className="text-xs text-destructive font-semibold ml-0.5">*</span>
+          </div>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="dateFrom" className="text-xs text-muted-foreground">Data inicial</Label>
+              <Input
+                id="dateFrom"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
+                className={cn(
+                  "h-8 text-sm w-40",
+                  !periodValid && "border-destructive focus-visible:ring-destructive",
+                )}
+              />
+            </div>
+            <span className="text-muted-foreground pb-1.5">→</span>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="dateTo" className="text-xs text-muted-foreground">Data final</Label>
+              <Input
+                id="dateTo"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
+                className={cn(
+                  "h-8 text-sm w-40",
+                  !periodValid && "border-destructive focus-visible:ring-destructive",
+                )}
+              />
+            </div>
+          </div>
+          {!periodReady && (
+            <p className="text-xs text-muted-foreground italic self-end pb-1">
+              Informe o período do relatório para continuar.
+            </p>
+          )}
+          {periodReady && !periodValid && (
+            <p className="text-xs text-destructive font-medium self-end pb-1">
+              A data inicial não pode ser maior que a data final.
+            </p>
+          )}
+          {periodReady && periodValid && (
+            <p className="text-xs text-emerald-600 font-medium self-end pb-1">
+              Período válido — você já pode gerar o PDF.
+            </p>
+          )}
+        </div>
 
         <ReportKPISummary items={kpis} cols={4} />
 

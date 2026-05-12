@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye } from "lucide-react";
+import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye, CalendarDays } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, LineChart, Line, Legend,
@@ -16,6 +16,8 @@ import {
 } from "@/shared/components/reports";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/personName";
-import { formatMinutes, sumDecimalsAsMinutes } from "@/lib/duration";
+import { formatMinutes } from "@/lib/duration";
 import { toast } from "sonner";
 
 interface Props {
@@ -48,7 +50,6 @@ const MEMBER_COLORS = [
   "#ef4444", "#06b6d4", "#ec4899", "#f97316",
 ];
 
-// Paleta verde Sala Ágil
 const AGIL_PRIMARY: [number, number, number] = [22, 163, 74];
 const AGIL_DARK:    [number, number, number] = [20, 83, 45];
 const AGIL_LIGHT:   [number, number, number] = [220, 252, 231];
@@ -75,22 +76,108 @@ function fmtDatePDF(d: string) {
   });
 }
 
-function trunc(s: string, max: number) {
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+function isoToBR(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
 }
 
-/** Decimal → minutos inteiros (ex: 1.25 → 75) */
-function toMin(decimal: number | null | undefined): number {
-  const n = Number(decimal ?? 0);
+function toMin(val: number | string | null | undefined): number {
+  if (val === null || val === undefined || val === "") return 0;
+  const s = String(val);
+  if (s.includes(":")) {
+    const [h, m] = s.split(":").map(Number);
+    return (isFinite(h) ? h : 0) * 60 + (isFinite(m) ? m : 0);
+  }
+  const n = Number(s);
   return isFinite(n) ? Math.round(n * 60) : 0;
 }
 
-/** Exibe horas no formato "Xh Ymin" */
-function fmtH(decimal: number | null | undefined): string {
-  return formatMinutes(toMin(decimal));
+function fmtH(val: number | string | null | undefined): string {
+  return formatMinutes(toMin(val));
 }
 
-// ─── Gera PDF como Blob (jsPDF + autotable)
+function lancamentoDate(act: any): string {
+  return (act.created_at || act.start_date || act.end_date || "").slice(0, 10);
+}
+
+interface DayGroup {
+  date:     string;
+  rows:     any[];
+  totalMin: number;
+}
+interface HuGroup {
+  huCode:   string;
+  huTitle:  string;
+  days:     DayGroup[];
+  totalMin: number;
+}
+
+function groupByHuDate(acts: any[]): HuGroup[] {
+  const huMap = new Map<string, { huCode: string; huTitle: string; dateMap: Map<string, any[]> }>();
+  for (const row of acts) {
+    const huKey = row.hu !== "—" ? row.hu : "SEM-HU";
+    const date  = lancamentoDate(row);
+    if (!huMap.has(huKey)) huMap.set(huKey, { huCode: row.hu, huTitle: row._huTitle || "", dateMap: new Map() });
+    const huEntry = huMap.get(huKey)!;
+    if (!huEntry.dateMap.has(date)) huEntry.dateMap.set(date, []);
+    huEntry.dateMap.get(date)!.push(row);
+  }
+  const result: HuGroup[] = [];
+  for (const [, hu] of huMap) {
+    const days: DayGroup[] = [...hu.dateMap.keys()].sort().map((date) => {
+      const rows     = hu.dateMap.get(date)!;
+      const totalMin = rows.reduce((s: number, r: any) => s + toMin(r.horas), 0);
+      return { date, rows, totalMin };
+    });
+    result.push({
+      huCode: hu.huCode,
+      huTitle: hu.huTitle,
+      days,
+      totalMin: days.reduce((s, d) => s + d.totalMin, 0),
+    });
+  }
+  return result;
+}
+
+interface DateGroup {
+  date:     string;
+  rows:     any[];
+  totalMin: number;
+}
+
+// FIX: lê row.lancamento (já mapeado no tableData) em vez de lancamentoDate(row)
+function groupByDataInicio(acts: any[]): DateGroup[] {
+  const dateMap = new Map<string, any[]>();
+  for (const row of acts) {
+    const date = (row.lancamento || "").slice(0, 10);
+    if (!dateMap.has(date)) dateMap.set(date, []);
+    dateMap.get(date)!.push(row);
+  }
+  return [...dateMap.keys()].sort().map((date) => {
+    const rows     = dateMap.get(date)!;
+    const totalMin = rows.reduce((s: number, r: any) => s + toMin(r.horas), 0);
+    return { date, rows, totalMin };
+  });
+}
+
+const PDF = {
+  DARK:         [15,  23,  42]  as [number,number,number],
+  MUTED:        [100, 116, 139] as [number,number,number],
+  LIGHT_BG:     [248, 250, 252] as [number,number,number],
+  BORDER:       [226, 232, 240] as [number,number,number],
+  HEAD_ROW:     [30,  41,  59]  as [number,number,number],
+  DAY_TOTAL_BG: [241, 245, 249] as [number,number,number],
+  DAY_DATE_BG:  [236, 253, 245] as [number,number,number],
+  DAY_DATE_TXT: [21,  128, 61]  as [number,number,number],
+  DONE_TXT:     [6,   95,  70]  as [number,number,number],
+  OPEN_TXT:     [146, 64,  14]  as [number,number,number],
+  DONE_BG:      [209, 250, 229] as [number,number,number],
+  OPEN_BG:      [254, 243, 199] as [number,number,number],
+};
+
+const COL = { DATE: 38, ACTIVITY: 139, STATUS: 38, HOURS: 38 };
+
 async function buildPDFBlob(
   memberMetrics: ReturnType<typeof buildMemberMetrics>,
   tableData: any[],
@@ -98,7 +185,6 @@ async function buildPDFBlob(
   currentUserName: string,
   sprintLabel: string,
   filters: Record<string, string>,
-  sprints: any[],
 ): Promise<Blob> {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
@@ -106,19 +192,14 @@ async function buildPDFBlob(
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const now = new Date();
   const W   = doc.internal.pageSize.getWidth();
-  const ML  = 12;
-  const MR  = 12;
+  const ML  = 22;
+  const MR  = 22;
   const CW  = W - ML - MR;
 
-  const DARK:     [number, number, number] = [15,  23,  42];
-  const MUTED:    [number, number, number] = [100, 116, 139];
-  const LIGHT_BG: [number, number, number] = [248, 250, 252];
-  const BORDER:   [number, number, number] = [226, 232, 240];
-  const ALT_ROW:  [number, number, number] = [248, 250, 252];
-  const TOTAL_BG: [number, number, number] = [241, 245, 249];
-  const HEAD_ROW: [number, number, number] = [30,  41,  59];
+  const periodoLabel = (filters.dateFrom && filters.dateTo)
+    ? `${isoToBR(filters.dateFrom)} até ${isoToBR(filters.dateTo)}`
+    : "";
 
-  // Agrupa tableData por membro
   const memberMap = new Map<string, typeof tableData>();
   for (const row of tableData) {
     if (!memberMap.has(row._assigneeId)) memberMap.set(row._assigneeId, []);
@@ -132,7 +213,6 @@ async function buildPDFBlob(
   targets.forEach((member, idx) => {
     if (idx > 0) doc.addPage();
 
-    // Cabeçalho
     doc.setFillColor(...AGIL_PRIMARY);
     doc.rect(0, 0, W, 26, "F");
     doc.setTextColor(255, 255, 255);
@@ -147,153 +227,219 @@ async function buildPDFBlob(
 
     let y = 31;
 
-    // Card do membro
-    doc.setFillColor(...LIGHT_BG);
-    doc.roundedRect(ML, y, CW, 18, 2, 2, "F");
-    doc.setDrawColor(...BORDER);
-    doc.roundedRect(ML, y, CW, 18, 2, 2, "S");
+    const cardH = periodoLabel ? 24 : 18;
+    doc.setFillColor(...PDF.LIGHT_BG);
+    doc.roundedRect(ML, y, CW, cardH, 2, 2, "F");
+    doc.setDrawColor(...PDF.BORDER);
+    doc.roundedRect(ML, y, CW, cardH, 2, 2, "S");
     doc.setFillColor(...AGIL_PRIMARY);
-    doc.circle(ML + 8, y + 9, 5.5, "F");
+    doc.circle(ML + 8, y + cardH / 2, 5.5, "F");
     doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont("helvetica", "bold");
-    doc.text(getInitials(member.name), ML + 8, y + 11, { align: "center" });
-    doc.setTextColor(...DARK); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text(getInitials(member.name), ML + 8, y + cardH / 2 + 2, { align: "center" });
+    doc.setTextColor(...PDF.DARK); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(member.name, ML + 17, y + 8);
-    doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(...MUTED);
+    doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(...PDF.MUTED);
     doc.text(member.role, ML + 17, y + 14);
-    doc.setFontSize(7.5);
+    if (periodoLabel) {
+      doc.setFontSize(7.5); doc.setTextColor(...PDF.DARK); doc.setFont("helvetica", "normal");
+      doc.text(`Período: ${periodoLabel}`, ML + 17, y + 21);
+    }
+    doc.setFontSize(7.5); doc.setTextColor(...PDF.MUTED);
     doc.text(
       `Sprint: ${sprintLabel}  ·  Time: ${teamName}`,
-      ML + CW - 3, y + 11, { align: "right" },
+      ML + CW - 3, y + cardH / 2 + 2, { align: "right" },
     );
-    y += 23;
+    y += cardH + 5;
 
-    // KPIs — horas em "Xh Ymin"
-    doc.setTextColor(...DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
+    doc.setTextColor(...PDF.DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
     doc.text("RESUMO DO MEMBRO", ML, y);
     y += 3;
     const kpiW = CW / 5;
+    const acts = memberMap.get(member.id) ?? [];
+    const totalMin = acts.reduce((s: number, r: any) => s + toMin(r.horas), 0);
     const kpis = [
-      { label: "Atividades",   value: String(member.total),              bg: [219, 234, 254] as [number,number,number], txt: [30, 64, 175]  as [number,number,number] },
-      { label: "Concluídas",   value: String(member.closed),             bg: AGIL_LIGHT,                               txt: AGIL_DARK },
-      { label: "Em Aberto",    value: String(member.open),               bg: [255, 237, 213] as [number,number,number], txt: [154, 52, 18]  as [number,number,number] },
-      { label: "Eficiência",   value: `${member.eff}%`,                  bg: [243, 232, 255] as [number,number,number], txt: [109, 40, 217] as [number,number,number] },
-      { label: "Horas Concl.", value: fmtH(member.hoursC),              bg: [219, 234, 254] as [number,number,number], txt: AGIL_PRIMARY },
+      { label: "Atividades",   value: String(member.total),  bg: [219,234,254] as [number,number,number], txt: [30,64,175]  as [number,number,number] },
+      { label: "Concluídas",   value: String(member.closed), bg: AGIL_LIGHT,                              txt: AGIL_DARK },
+      { label: "Em Aberto",    value: String(member.open),   bg: [255,237,213] as [number,number,number], txt: [154,52,18]  as [number,number,number] },
+      { label: "Eficiência",   value: `${member.eff}%`,      bg: [243,232,255] as [number,number,number], txt: [109,40,217] as [number,number,number] },
+      { label: "Horas Concl.", value: fmtH(member.hoursC),   bg: [219,234,254] as [number,number,number], txt: AGIL_PRIMARY },
     ];
     kpis.forEach(({ label, value, bg, txt }, i) => {
       const x = ML + i * kpiW;
       doc.setFillColor(...bg); doc.roundedRect(x, y, kpiW - 1.5, 15, 1.5, 1.5, "F");
-      doc.setTextColor(...MUTED); doc.setFontSize(6); doc.setFont("helvetica", "normal");
+      doc.setTextColor(...PDF.MUTED); doc.setFontSize(6); doc.setFont("helvetica", "normal");
       doc.text(label.toUpperCase(), x + (kpiW - 1.5) / 2, y + 5, { align: "center" });
       doc.setTextColor(...txt); doc.setFontSize(11); doc.setFont("helvetica", "bold");
       doc.text(value, x + (kpiW - 1.5) / 2, y + 13, { align: "center" });
     });
     y += 20;
 
-    // Tabela por HU — coluna Duração em "Xh Ymin"
-    const acts = memberMap.get(member.id) ?? [];
-    const huMap = new Map<string, { huCode: string; huTitle: string; rows: typeof acts; subtotalMin: number }>();
-    for (const row of acts) {
-      const key = row.hu !== "—" ? row.hu : "SEM-HU";
-      if (!huMap.has(key)) huMap.set(key, { huCode: row.hu, huTitle: row._huTitle || "", rows: [], subtotalMin: 0 });
-      const g = huMap.get(key)!;
-      g.rows.push(row);
-      g.subtotalMin += toMin(Number(row.horas));
-    }
-
-    const totalMin = acts.reduce((s: number, r: any) => s + toMin(Number(r.horas)), 0);
+    const dateGroups = groupByDataInicio(acts);
     const body: any[][] = [];
 
-    for (const [, g] of huMap) {
-      if (g.huCode !== "—") {
-        body.push([{
-          content: `${g.huCode}${g.huTitle ? "  —  " + g.huTitle : ""}`,
-          colSpan: 6,
-          styles: { fillColor: AGIL_LIGHT, textColor: AGIL_DARK, fontStyle: "bold", fontSize: 8 },
-        }]);
-      }
-      for (const r of g.rows) {
+    for (const group of dateGroups) {
+      const dateFmt = group.date ? fmtDatePDF(group.date) : "Sem data";
+
+      group.rows.forEach((r: any, ri: number) => {
+        const isDone    = !!r.status;
+        const statusTxt = isDone ? "Concluída" : "Em aberto";
+        const rowBg     = ri % 2 === 0
+          ? [255, 255, 255] as [number,number,number]
+          : PDF.LIGHT_BG;
+
         body.push([
-          r._code || "—",
-          trunc(r.titulo, 80),
-          r.status ? "Concluída" : "Em Progresso",
-          r.inicio ? fmtDatePDF(r.inicio) : "—",
-          r.fim    ? fmtDatePDF(r.fim)    : "—",
-          fmtH(Number(r.horas)),         // "Xh Ymin"
+          {
+            content: ri === 0 ? dateFmt : "",
+            styles: {
+              fontStyle: ri === 0 ? "bold" : "normal",
+              fontSize: ri === 0 ? 8 : 7.5,
+              textColor: ri === 0 ? PDF.DAY_DATE_TXT : PDF.MUTED,
+              fillColor: ri === 0 ? PDF.DAY_DATE_BG  : rowBg,
+              cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 2 },
+              valign: "middle",
+            },
+          },
+          {
+            content: r.titulo,
+            styles: {
+              fontStyle: "normal",
+              fontSize: 8,
+              fillColor: rowBg,
+              cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+            },
+          },
+          {
+            content: statusTxt,
+            styles: {
+              fontStyle: "normal",
+              fontSize: 7.5,
+              textColor: isDone ? PDF.DONE_TXT : PDF.OPEN_TXT,
+              fillColor: isDone ? PDF.DONE_BG  : PDF.OPEN_BG,
+              halign: "center",
+              cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+            },
+          },
+          {
+            content: fmtH(r.horas),
+            styles: {
+              fontStyle: "bold",
+              fontSize: 8.5,
+              textColor: AGIL_PRIMARY,
+              fillColor: rowBg,
+              halign: "right",
+              cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 4 },
+            },
+          },
         ]);
-      }
-      if (huMap.size > 1 || g.huCode !== "—") {
-        body.push([
-          { content: `SUBTOTAL ${g.huCode}`, colSpan: 5, styles: { fillColor: TOTAL_BG, textColor: MUTED,        fontStyle: "bold", fontSize: 8 } },
-          { content: formatMinutes(g.subtotalMin),     styles: { fillColor: TOTAL_BG, textColor: AGIL_PRIMARY, fontStyle: "bold", fontSize: 8 } },
-        ]);
-      }
+      });
+
+      body.push([
+        {
+          content: "TOTAL DO DIA",
+          colSpan: 3,
+          styles: {
+            fillColor: PDF.DAY_TOTAL_BG,
+            textColor: PDF.MUTED,
+            fontStyle: "bold",
+            fontSize: 7.5,
+            cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+          },
+        },
+        {
+          content: formatMinutes(group.totalMin),
+          styles: {
+            fillColor: PDF.DAY_TOTAL_BG,
+            textColor: AGIL_PRIMARY,
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "right",
+            cellPadding: { top: 3, bottom: 3, left: 2, right: 4 },
+          },
+        },
+      ]);
     }
 
     autoTable(doc, {
-      head: [["Código", "Título da Atividade", "Status", "Início", "Fim", "Duração"]],
+      head: [[
+        { content: "DATA INÍCIO",         styles: { halign: "left"   } },
+        { content: "DESCRIÇÃO ATIVIDADE", styles: { halign: "left"   } },
+        { content: "STATUS",              styles: { halign: "center" } },
+        { content: "HORAS",               styles: { halign: "right"  } },
+      ]],
       body,
       startY: y,
-      styles:             { fontSize: 8, cellPadding: 2.5, lineColor: BORDER, lineWidth: 0.1 },
-      headStyles:         { fillColor: HEAD_ROW, textColor: 255, fontStyle: "bold", fontSize: 8 },
-      alternateRowStyles: { fillColor: ALT_ROW },
+      styles: {
+        fontSize: 8,
+        cellPadding: 2.5,
+        lineColor: PDF.BORDER,
+        lineWidth: 0.15,
+        overflow: "linebreak",
+      },
+      headStyles: {
+        fillColor: PDF.HEAD_ROW,
+        textColor: 255,
+        fontStyle: "bold",
+        fontSize: 8,
+        cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+      },
       columnStyles: {
-        0: { cellWidth: 22 },
-        1: { cellWidth: 110 },
-        2: { cellWidth: 28 },
-        3: { cellWidth: 22 },
-        4: { cellWidth: 22 },
-        5: { cellWidth: 22, fontStyle: "bold", textColor: AGIL_PRIMARY, halign: "center" },
+        0: { cellWidth: COL.DATE,     textColor: PDF.DAY_DATE_TXT },
+        1: { cellWidth: COL.ACTIVITY },
+        2: { cellWidth: COL.STATUS,   halign: "center" },
+        3: { cellWidth: COL.HOURS,    halign: "right", fontStyle: "bold", textColor: AGIL_PRIMARY },
       },
       margin: { left: ML, right: MR },
-      tableLineColor: BORDER,
+      tableLineColor: PDF.BORDER,
       tableLineWidth: 0.15,
+      rowPageBreak: "avoid",
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 6;
+    const finalY = (doc as any).lastAutoTable.finalY + 8;
     const pageH  = doc.internal.pageSize.getHeight();
 
-    // Total geral
-    const summaryY = Math.min(finalY, pageH - 20);
+    const summaryY = Math.min(finalY, pageH - 22);
     doc.setFillColor(...AGIL_PRIMARY);
-    doc.roundedRect(ML, summaryY, CW, 11, 2, 2, "F");
+    doc.roundedRect(ML, summaryY, CW, 14, 2, 2, "F");
     doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont("helvetica", "bold");
     doc.text(
-      `Total: ${formatMinutes(totalMin)} lançadas  ·  ${acts.length} atividades`,
-      ML + 4, summaryY + 7.5,
+      `TOTAL GERAL DE HORAS: ${formatMinutes(totalMin)}`,
+      ML + 4, summaryY + 6,
     );
     doc.setFontSize(8); doc.setFont("helvetica", "normal");
     doc.text(
+      `TOTAL DE ATIVIDADES: ${acts.length}`,
+      ML + 4, summaryY + 12,
+    );
+    doc.text(
       `Cycle Time médio: ${member.cycleTime > 0 ? member.cycleTime + "d" : "—"}`,
-      ML + CW - 4, summaryY + 7.5, { align: "right" },
+      ML + CW - 4, summaryY + 9, { align: "right" },
     );
 
-    // Rodapé paginação
-    const total = (doc as any).internal.getNumberOfPages();
-    for (let i = 1; i <= total; i++) {
+    const totalPages = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
-      doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.setTextColor(...MUTED);
-      doc.text(`Página ${i} de ${total}`, W - MR, pageH - 6, { align: "right" });
-      doc.text("Documento gerado automaticamente pelo sistema — Sala Ágil", W / 2, pageH - 6, { align: "center" });
+      doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.setTextColor(...PDF.MUTED);
+      doc.text(`Página ${i} de ${totalPages}`, W - MR, pageH - 6, { align: "right" });
+      doc.text(
+        "Documento gerado automaticamente pelo sistema — Sala Ágil",
+        W / 2, pageH - 6, { align: "center" },
+      );
     }
   });
 
   return doc.output("blob");
 }
 
-// ─── Métricas por membro
-function buildMemberMetrics(
-  developers: Props["developers"],
-  filteredActivities: any[],
-) {
+function buildMemberMetrics(developers: Props["developers"], filteredActivities: any[]) {
   return developers.map((dev) => {
-    const acts      = filteredActivities.filter((a: any) => a.assignee_id === dev.id);
-    const closed    = acts.filter((a: any) => a.is_closed);
-    const hoursP    = acts.reduce((s: number, a: any) => s + Number(a.hours), 0);
-    const hoursC    = closed.reduce((s: number, a: any) => s + Number(a.hours), 0);
-    const bugs      = acts.filter((a: any) => a.activity_type === "bug");
+    const acts       = filteredActivities.filter((a: any) => a.assignee_id === dev.id);
+    const closed     = acts.filter((a: any) => a.is_closed);
+    const hoursP     = acts.reduce((s: number, a: any) => s + Number(a.hours), 0);
+    const hoursC     = closed.reduce((s: number, a: any) => s + Number(a.hours), 0);
+    const bugs       = acts.filter((a: any) => a.activity_type === "bug");
     const bugsClosed = bugs.filter((a: any) => a.is_closed);
-    const eff       = hoursP > 0 ? Math.round((hoursC / hoursP) * 100) : 0;
-    const cycleTime = (() => {
+    const eff        = hoursP > 0 ? Math.round((hoursC / hoursP) * 100) : 0;
+    const cycleTime  = (() => {
       const withDates = closed.filter((a: any) => a.start_date && (a.closed_at || a.end_date));
       if (!withDates.length) return 0;
       const total = withDates.reduce((s: number, a: any) => {
@@ -314,13 +460,21 @@ function buildMemberMetrics(
 
 export function RelatorioAtividades({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
   const [filters, setFilters] = useState<Record<string, string>>({
-    sprintId: "all", memberId: "all", type: "all", status: "all",
+    sprintId: "all",
+    memberId: "all",
+    type:     "all",
+    status:   "all",
+    dateFrom: "",
+    dateTo:   "",
   });
 
   const [exportingPDF, setExportingPDF] = useState(false);
   const [previewUrl,   setPreviewUrl]   = useState<string | null>(null);
   const [previewBlob,  setPreviewBlob]  = useState<Blob | null>(null);
   const [previewNome,  setPreviewNome]  = useState<string>("");
+
+  const periodReady = !!(filters.dateFrom && filters.dateTo);
+  const periodValid = !periodReady || filters.dateFrom <= filters.dateTo;
 
   const sprintOptions = [
     { value: "all", label: "Todas" },
@@ -331,25 +485,22 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     ...developers.map((d) => ({ value: d.id, label: d.name })),
   ];
   const typeOptions = [
-    { value: "all", label: "Todos" },
-    { value: "task",        label: "Tarefa" },
-    { value: "bug",         label: "Bug" },
+    { value: "all",         label: "Todos"    },
+    { value: "task",        label: "Tarefa"   },
+    { value: "bug",         label: "Bug"      },
     { value: "improvement", label: "Melhoria" },
-    { value: "feature",     label: "Feature" },
+    { value: "feature",     label: "Feature"  },
   ];
   const statusOptions = [
-    { value: "all",  label: "Todos" },
+    { value: "all",  label: "Todos"     },
     { value: "done", label: "Concluída" },
     { value: "open", label: "Em aberto" },
   ];
 
-  // Filtragem
   const filteredActivities = useMemo(() => {
     let acts = rawData.activities;
     if (filters.sprintId !== "all") {
-      const huIds = new Set(
-        rawData.hus.filter((h: any) => h.sprint_id === filters.sprintId).map((h: any) => h.id),
-      );
+      const huIds = new Set(rawData.hus.filter((h: any) => h.sprint_id === filters.sprintId).map((h: any) => h.id));
       acts = acts.filter((a: any) => huIds.has(a.hu_id));
     }
     if (filters.memberId !== "all") acts = acts.filter((a: any) => a.assignee_id === filters.memberId);
@@ -359,62 +510,32 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     return acts;
   }, [rawData, filters]);
 
-  // Métricas por membro
   const memberMetrics = useMemo(
     () => buildMemberMetrics(developers, filteredActivities),
     [filteredActivities, developers],
   );
 
-  // KPIs — somar em minutos
-  const totalActs    = filteredActivities.length;
-  const totalClosed  = filteredActivities.filter((a: any) => a.is_closed).length;
-  const totalMinP    = filteredActivities.reduce((s: number, a: any) => s + toMin(Number(a.hours)), 0);
-  const totalMinC    = filteredActivities.filter((a: any) => a.is_closed)
-                         .reduce((s: number, a: any) => s + toMin(Number(a.hours)), 0);
-  const avgEff       = memberMetrics.length > 0
+  const totalActs   = filteredActivities.length;
+  const totalClosed = filteredActivities.filter((a: any) => a.is_closed).length;
+  const totalMinP   = filteredActivities.reduce((s: number, a: any) => s + toMin(a.hours), 0);
+  const totalMinC   = filteredActivities.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + toMin(a.hours), 0);
+  const avgEff      = memberMetrics.length > 0
     ? Math.round(memberMetrics.reduce((s, m) => s + m.eff, 0) / memberMetrics.length)
     : 0;
 
   const kpis = [
-    {
-      label:  "Atividades",
-      value:  totalActs,
-      sub:    `${totalClosed} concluídas`,
-      icon:   <CheckCircle className="h-4 w-4" />,
-      status: totalClosed > 0 ? "good" : "neutral" as any,
-    },
-    {
-      label:  "Horas Concluídas",
-      value:  formatMinutes(totalMinC),
-      sub:    `de ${formatMinutes(totalMinP)} planejadas`,
-      icon:   <Clock className="h-4 w-4" />,
-      status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "warning" as any,
-    },
-    {
-      label:  "Eficiência Média",
-      value:  `${avgEff}%`,
-      sub:    "meta ≥ 80%",
-      icon:   <Zap className="h-4 w-4" />,
-      status: effStatus(avgEff),
-    },
-    {
-      label:  "Membros Ativos",
-      value:  memberMetrics.length,
-      sub:    `de ${developers.length} no time`,
-      icon:   <User className="h-4 w-4" />,
-      status: "neutral" as any,
-    },
+    { label: "Atividades",       value: totalActs,               sub: `${totalClosed} concluídas`,              icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
+    { label: "Horas Concluídas", value: formatMinutes(totalMinC), sub: `de ${formatMinutes(totalMinP)} planejadas`, icon: <Clock className="h-4 w-4" />,       status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "warning" as any },
+    { label: "Eficiência Média", value: `${avgEff}%`,            sub: "meta ≥ 80%",                              icon: <Zap className="h-4 w-4" />,         status: effStatus(avgEff) },
+    { label: "Membros Ativos",   value: memberMetrics.length,    sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
   ];
 
-  // Gráfico horas por membro
   const hoursBarData = memberMetrics.map((m) => ({
-    name:       m.name.split(" ")[0],
-    // Eixo Y mantém decimal para escala contínua
+    name:         m.name.split(" ")[0],
     "Concluídas": parseFloat(m.hoursC.toFixed(4)),
     Pendentes:    parseFloat(m.hoursPending.toFixed(4)),
-    // Labels legíveis
-    _labelC:   fmtH(m.hoursC),
-    _labelP:   fmtH(m.hoursPending),
+    _labelC:      fmtH(m.hoursC),
+    _labelP:      fmtH(m.hoursPending),
   }));
 
   const throughputData = useMemo(() => {
@@ -434,39 +555,34 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   }, [rawData, developers]);
 
   const radarData = memberMetrics.slice(0, 6).map((m) => ({
-    membro:           m.name.split(" ")[0],
-    Eficiência:       m.eff,
-    "Concluídas":     Math.min(100, Math.round((m.closed / Math.max(m.total, 1)) * 100)),
+    membro:            m.name.split(" ")[0],
+    Eficiência:        m.eff,
+    "Concluídas":      Math.min(100, Math.round((m.closed / Math.max(m.total, 1)) * 100)),
     "Bugs Resolvidos": m.bugs > 0 ? Math.round((m.bugsClosed / m.bugs) * 100) : 100,
   }));
 
-  // Tabela de atividades
   const tableData = useMemo(() => {
     return filteredActivities.map((a: any) => {
       const dev    = developers.find((d) => d.id === a.assignee_id);
       const hu     = rawData.hus.find((h: any) => h.id === a.hu_id);
       const sprint = hu ? rawData.sprints.find((s: any) => s.id === hu.sprint_id) : null;
       return {
-        membro:      dev?.name || "—",
+        membro:      dev?.name    || "—",
         titulo:      a.title,
         sprint:      sprint?.name || "—",
-        hu:          hu?.code || "—",
-        horas:       Number(a.hours) || 0,     // decimal interno
-        inicio:      a.start_date || "",
-        fim:         a.end_date   || "",
+        hu:          hu?.code     || "—",
+        horas:       a.hours,
+        lancamento:  lancamentoDate(a),
         status:      a.is_closed,
         _code:       a.code       || "",
         _huTitle:    hu?.title    || "",
         _role:       dev?.role    || "",
         _assigneeId: a.assignee_id,
-        _sprintStart: sprint?.start_date || "",
-        _sprintEnd:   sprint?.end_date   || "",
-        _sprintName:  sprint?.name       || "",
+        _sprintName: sprint?.name || "",
       };
     });
   }, [filteredActivities, developers, rawData]);
 
-  // CSV
   function handleExportCSV() {
     exportToCSV(
       tableData.map((r) => ({
@@ -475,18 +591,27 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         "Título da Atividade": r.titulo,
         Sprint:                r.sprint,
         HU:                    r.hu,
-        Duração:               fmtH(r.horas),   // "Xh Ymin" no CSV
-        Início:                r.inicio ? fmtDate(r.inicio) : "",
-        Fim:                   r.fim    ? fmtDate(r.fim)    : "",
+        "Data Lançamento":     r.lancamento ? fmtDate(r.lancamento) : "",
+        Duração:               fmtH(r.horas),
         Status:                r.status ? "Concluída" : "Em aberto",
       })),
       `atividades_${teamName}`,
     );
   }
 
-  // PDF preview
   async function handleExportPDF() {
-    if (memberMetrics.length === 0) { toast.error("Nenhum dado para gerar o relatório."); return; }
+    if (!periodReady) {
+      toast.error("Informe o período do relatório para continuar.");
+      return;
+    }
+    if (!periodValid) {
+      toast.error("A data inicial não pode ser maior que a data final.");
+      return;
+    }
+    if (memberMetrics.length === 0) {
+      toast.error("Nenhum dado para gerar o relatório.");
+      return;
+    }
     setExportingPDF(true);
     try {
       const selectedSprint = filters.sprintId !== "all"
@@ -494,11 +619,10 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         : null;
       const blob = await buildPDFBlob(
         memberMetrics, tableData, teamName, currentUserName,
-        selectedSprint?.name ?? "Todas as Sprints", filters, rawData.sprints,
+        selectedSprint?.name ?? "Todas as Sprints", filters,
       );
-      const url = URL.createObjectURL(blob);
       setPreviewBlob(blob);
-      setPreviewUrl(url);
+      setPreviewUrl(URL.createObjectURL(blob));
       setPreviewNome(teamName);
     } catch (err) {
       console.error(err);
@@ -527,26 +651,45 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     setPreviewBlob(null);
   }
 
+  function handleReset() {
+    setFilters({ sprintId: "all", memberId: "all", type: "all", status: "all", dateFrom: "", dateTo: "" });
+  }
+
+  const pdfDisabledReason = !periodReady
+    ? "Informe o período do relatório para continuar."
+    : !periodValid
+    ? "A data inicial não pode ser maior que a data final."
+    : undefined;
+
   const exportActions = (
     <div className="flex items-center gap-2">
       <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-1.5 h-8">
         <FileDown className="h-3.5 w-3.5" /> CSV
       </Button>
-      <Button
-        size="sm" variant="outline" onClick={handleExportPDF} disabled={exportingPDF}
-        className="gap-1.5 h-8 border-primary text-primary hover:bg-primary/5"
-      >
-        {exportingPDF
-          ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
-          : <Eye className="h-3.5 w-3.5" />}
-        {exportingPDF ? "Gerando…" : "Visualizar PDF"}
-      </Button>
+      <div title={pdfDisabledReason}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleExportPDF}
+          disabled={exportingPDF || !periodReady || !periodValid}
+          className={cn(
+            "gap-1.5 h-8",
+            periodReady && periodValid
+              ? "border-primary text-primary hover:bg-primary/5"
+              : "opacity-50 cursor-not-allowed",
+          )}
+        >
+          {exportingPDF
+            ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
+            : <Eye className="h-3.5 w-3.5" />}
+          {exportingPDF ? "Gerando…" : "Visualizar PDF"}
+        </Button>
+      </div>
     </div>
   );
 
   return (
     <>
-      {/* Modal de preview */}
       <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) handleClosePreview(); }}>
         <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
@@ -573,7 +716,6 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         </DialogContent>
       </Dialog>
 
-      {/* Layout do relatório */}
       <ReportLayout>
         <ReportPageHeader
           title="Atividades & Produtividade Individual"
@@ -593,8 +735,60 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           ]}
           values={filters}
           onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
-          onReset={() => setFilters({ sprintId: "all", memberId: "all", type: "all", status: "all" })}
+          onReset={handleReset}
         />
+
+        <div className="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <CalendarDays className="h-4 w-4 text-primary" />
+            Período do relatório
+            <span className="text-xs text-destructive font-semibold ml-0.5">*</span>
+          </div>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="dateFrom" className="text-xs text-muted-foreground">Data inicial</Label>
+              <Input
+                id="dateFrom"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
+                className={cn(
+                  "h-8 text-sm w-40",
+                  !periodValid && "border-destructive focus-visible:ring-destructive",
+                )}
+              />
+            </div>
+            <span className="text-muted-foreground pb-1.5">até</span>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="dateTo" className="text-xs text-muted-foreground">Data final</Label>
+              <Input
+                id="dateTo"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
+                className={cn(
+                  "h-8 text-sm w-40",
+                  !periodValid && "border-destructive focus-visible:ring-destructive",
+                )}
+              />
+            </div>
+          </div>
+          {!periodReady && (
+            <p className="text-xs text-muted-foreground italic self-end pb-1">
+              Informe o período do relatório para continuar.
+            </p>
+          )}
+          {periodReady && !periodValid && (
+            <p className="text-xs text-destructive font-medium self-end pb-1">
+              A data inicial não pode ser maior que a data final.
+            </p>
+          )}
+          {periodReady && periodValid && (
+            <p className="text-xs text-emerald-600 font-medium self-end pb-1">
+              Período válido — você já pode gerar o PDF.
+            </p>
+          )}
+        </div>
 
         <ReportKPISummary items={kpis} cols={4} />
 
@@ -670,19 +864,19 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
                   </div>
                 </div>
               ) },
-            { key: "total",  header: "Atividades",  align: "center", sortable: true },
-            { key: "closed", header: "Concluídas",  align: "center", sortable: true,
+            { key: "total",     header: "Atividades",  align: "center", sortable: true },
+            { key: "closed",    header: "Concluídas",  align: "center", sortable: true,
               render: (v) => <span className="font-semibold text-emerald-600">{v}</span> },
-            { key: "hoursC", header: "Horas Concl.", align: "center", sortable: true,
+            { key: "hoursC",    header: "Horas Concl.", align: "center", sortable: true,
               render: (v, row) => `${fmtH(v)} / ${fmtH(row.hoursP)}` },
-            { key: "eff",    header: "Eficiência",  align: "center", sortable: true,
+            { key: "eff",       header: "Eficiência",  align: "center", sortable: true,
               render: (v) => (
                 <Badge className={cn("text-[10px]",
                   v >= 80 ? "bg-emerald-500/15 text-emerald-600" :
-                  v >= 60 ? "bg-amber-400/15 text-amber-600" :
+                  v >= 60 ? "bg-amber-400/15 text-amber-600"     :
                             "bg-red-500/15 text-red-600")}>{v}%</Badge>
               ) },
-            { key: "bugs",   header: "Bugs", align: "center",
+            { key: "bugs",      header: "Bugs", align: "center",
               render: (v, row) => v > 0 ? (
                 <Badge variant="secondary" className="text-[10px] bg-red-50 text-red-600">
                   <Bug className="h-2.5 w-2.5 mr-0.5" />{row.bugsClosed}/{v}
@@ -694,25 +888,22 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         />
 
         <ReportDataTable
-          title="Detalhamento de Atividades"
+          title="Detalhamento por Data de Início"
           badge={tableData.length}
           data={tableData}
           rowKey={(_, i) => i}
           columns={[
-            { key: "_code",  header: "Código",
+            { key: "_code",      header: "Código",
               render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || "—"}</span> },
-            { key: "membro", header: "Membro",              sortable: true },
-            { key: "titulo", header: "Título da Atividade", sortable: true },
-            { key: "sprint", header: "Sprint",              sortable: true },
-            { key: "hu",     header: "HU", align: "center",
+            { key: "membro",     header: "Membro",              sortable: true },
+            { key: "hu",         header: "HU", align: "center",
               render: (v) => v !== "—" ? <span className="font-mono text-xs">{v}</span> : "—" },
-            { key: "horas",  header: "Duração", align: "center", sortable: true,
-              render: (v) => fmtH(v) },   // "Xh Ymin" na tabela
-            { key: "inicio", header: "Início", align: "center",
+            { key: "lancamento", header: "Data Início", align: "center",
               render: (v) => v ? fmtDate(v) : "—" },
-            { key: "fim",    header: "Fim",    align: "center",
-              render: (v) => v ? fmtDate(v) : "—" },
-            { key: "status", header: "Status", align: "center",
+            { key: "titulo",     header: "Descrição Atividade", sortable: true },
+            { key: "horas",      header: "Duração", align: "center", sortable: true,
+              render: (v) => <span className="font-semibold text-primary">{fmtH(v)}</span> },
+            { key: "status",     header: "Status", align: "center",
               render: (v) => v
                 ? <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600">Concluída</Badge>
                 : <Badge className="text-[10px] bg-amber-400/15 text-amber-600">Em aberto</Badge> },

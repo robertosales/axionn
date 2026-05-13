@@ -74,7 +74,7 @@ export function RetroPage() {
 
   const modelLabel = useMemo(() => (session ? getModel(session.model).label : ""), [session]);
 
-  // ─── Sem sprint ativa ──────────────────────────────────────────────────────
+  // ─── Sem sprint ativa ─────────────────────────────────────────────────────────────────
   if (!activeSprint) {
     return (
       <Card className="border-dashed">
@@ -96,7 +96,7 @@ export function RetroPage() {
     );
   }
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
+  // ─── Handlers ────────────────────────────────────────────────────────────────────────────────
   const handleAdvance = async () => {
     if (!session) return;
     const next = NEXT_PHASE[session.currentPhase];
@@ -144,7 +144,6 @@ export function RetroPage() {
       {/* Aba Sessão */}
       {view === "session" && (
         <>
-          {/* Sem sessão → Start screen */}
           {!session && (
             <RetroStartScreen
               canStart={canStart}
@@ -153,7 +152,6 @@ export function RetroPage() {
             />
           )}
 
-          {/* Sessão encerrada → ResultsView */}
           {session && session.status !== "active" && (
             <RetroResultsView
               session={session}
@@ -164,7 +162,6 @@ export function RetroPage() {
             />
           )}
 
-          {/* Sessão ativa */}
           {session && session.status === "active" && (
             <>
               <RetroPhaseHeader

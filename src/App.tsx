@@ -17,7 +17,7 @@ import SustentacaoPage from "./features/sustentacao/SustentacaoPage";
 import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector";
 import AdminDashboard from "./pages/AdminDashboard";
 import PlanningPokerPage from "./pages/PlanningPokerPage";
-import RetroPage from "./pages/RetroPage";
+import RetrospactivaPage from "./pages/RetrospactivaPage";
 
 const queryClient = new QueryClient();
 
@@ -118,7 +118,7 @@ const App = () => (
               />
               <Route
                 path="/sala-agil/retrospectiva"
-                element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetroPage /></ModuleGuard></ProtectedRoute>}
+                element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>}
               />
 
               {/* Sala Ágil — demais sub-rotas */}

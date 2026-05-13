@@ -2,18 +2,19 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminKpis } from "@/features/admin/hooks/useAdminKpis";
-import { SalaAgilKpis }      from "@/features/admin/components/SalaAgilKpis";
-import { SustentacaoKpis }   from "@/features/admin/components/SustentacaoKpis";
-import { ModuleQuickAccess } from "@/features/admin/components/ModuleQuickAccess";
-import { ComparativeChart }  from "@/features/admin/components/ComparativeChart";
-import { TeamDetailPanel }   from "@/features/admin/components/TeamDetailPanel";
-import { AdminTimesPage }    from "@/features/admin/pages/AdminTimesPage";
-import { AdminUsuariosPage } from "@/features/admin/pages/AdminUsuariosPage";
+import { SalaAgilKpis }        from "@/features/admin/components/SalaAgilKpis";
+import { SustentacaoKpis }     from "@/features/admin/components/SustentacaoKpis";
+import { ModuleQuickAccess }   from "@/features/admin/components/ModuleQuickAccess";
+import { ComparativeChart }    from "@/features/admin/components/ComparativeChart";
+import { TeamDetailPanel }     from "@/features/admin/components/TeamDetailPanel";
+import { AdminTimesPage }      from "@/features/admin/pages/AdminTimesPage";
+import { AdminUsuariosPage }   from "@/features/admin/pages/AdminUsuariosPage";
+import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3 } from "lucide-react";
+import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History } from "lucide-react";
 
 export default function AdminDashboard() {
   const { profile, signOut, teams } = useAuth();
@@ -56,18 +57,20 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
-
         {/* Saudação */}
         <div className="mb-6">
           <h1 className="text-xl font-bold">Olá, {profile?.display_name?.split(" ")[0] ?? "Admin"} 👋</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Visão consolidada de todos os módulos do Sistema AXION.</p>
         </div>
 
-        {/* Tabs principais */}
+        {/* Tabs */}
         <Tabs defaultValue="visao-geral">
           <TabsList className="mb-6">
             <TabsTrigger value="visao-geral" className="gap-1.5 text-xs">
               <BarChart3 className="h-3.5 w-3.5" /> Visão Geral
+            </TabsTrigger>
+            <TabsTrigger value="historico" className="gap-1.5 text-xs">
+              <History className="h-3.5 w-3.5" /> Histórico
             </TabsTrigger>
             <TabsTrigger value="times" className="gap-1.5 text-xs">
               <UsersRound className="h-3.5 w-3.5" /> Times
@@ -77,7 +80,6 @@ export default function AdminDashboard() {
             </TabsTrigger>
           </TabsList>
 
-          {/* ── Visão Geral ───────────────────────────────────────── */}
           <TabsContent value="visao-geral" className="space-y-8">
             {loading ? <Skeleton className="h-40 w-full rounded-xl" /> : <ModuleQuickAccess kpis={g} />}
             {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SalaAgilKpis kpis={g} sprintAtivo={sprintLabel} />}
@@ -86,12 +88,14 @@ export default function AdminDashboard() {
             {loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}
           </TabsContent>
 
-          {/* ── Times ─────────────────────────────────────────────── */}
+          <TabsContent value="historico">
+            <AdminHistoricoPage />
+          </TabsContent>
+
           <TabsContent value="times">
             <AdminTimesPage />
           </TabsContent>
 
-          {/* ── Usuários ──────────────────────────────────────────── */}
           <TabsContent value="usuarios">
             <AdminUsuariosPage />
           </TabsContent>

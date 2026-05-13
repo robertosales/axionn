@@ -21,41 +21,25 @@ import { CalendarView } from "@/components/CalendarView";
 import { PlanningPoker } from "@/components/PlanningPoker";
 import { RetroManager } from "@/components/RetroManager";
 import { ApfGeneratorPage } from "@/features/apf/components/ApfGeneratorPage";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { useOnboarding } from "@/hooks/useOnboarding";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── Seções válidas ────────────────────────────────────────────────────────────
-export const VALID_SECTIONS = [
-  "dashboard",
-  "backlog",
-  "board",
-  "planning-poker",
-  "retrospectiva",
-  "releases",
-  "relatorios",
-  "notificacoes",
-  "gerador-apf",
-  "metricas",
-  "historico",
-  "calendario",
-  "equipe",
-  "epicos",
-  "atividades",
-  "impedimentos",
-  "times",
-  "membros",
-  "perfis",
-  "fluxo",
-  "campos",
-  "automacoes",
+// ─── Seções válidas ──────────────────────────────────────────────────────────────────────────
+const VALID_SECTIONS = [
+  "dashboard", "backlog", "board", "planning-poker", "retrospectiva",
+  "releases", "relatorios", "notificacoes", "gerador-apf", "metricas",
+  "historico", "calendario", "equipe", "epicos", "atividades", "impedimentos",
+  "times", "membros", "perfis", "fluxo", "campos", "automacoes",
 ] as const;
 
 export type SectionKey = typeof VALID_SECTIONS[number];
 
-// ─── AccessDenied ─────────────────────────────────────────────────────────────
+// ─── AccessDenied ────────────────────────────────────────────────────────────────────────────
 function AccessDenied() {
   return (
     <div className="flex flex-col items-center justify-center py-24 space-y-3">
@@ -66,13 +50,13 @@ function AccessDenied() {
   );
 }
 
-// ─── SectionGuard ─────────────────────────────────────────────────────────────
+// ─── SectionGuard ────────────────────────────────────────────────────────────────────────────
 function SectionGuard({ permission, children }: { permission: string; children: React.ReactNode }) {
   const { hasPermission } = useAuth();
   return hasPermission(permission) ? <>{children}</> : <AccessDenied />;
 }
 
-// ─── Index ────────────────────────────────────────────────────────────────────
+// ─── Index ────────────────────────────────────────────────────────────────────────────────────
 const Index = () => {
   const { section } = useParams<{ section: string }>();
   const navigate = useNavigate();
@@ -81,6 +65,9 @@ const Index = () => {
   const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
+
+  // 8C — Onboarding
+  const { showWizard, completeOnboarding } = useOnboarding();
 
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
 
@@ -95,17 +82,13 @@ const Index = () => {
     }
   }, [loading, teams]);
 
-  // Redireciona seção inválida para dashboard
   useEffect(() => {
     if (section && !VALID_SECTIONS.includes(section as SectionKey)) {
       navigate("/sala-agil/dashboard", { replace: true });
     }
   }, [section]);
 
-  const handleNavigate = (key: string) => {
-    navigate(`/sala-agil/${key}`);
-  };
-
+  const handleNavigate = (key: string) => navigate(`/sala-agil/${key}`);
   const needsTeam = !currentTeamId && active !== "times";
 
   return (
@@ -114,22 +97,20 @@ const Index = () => {
         open={showTeamModal}
         teams={moduleTeams}
         moduleLabel="Sala Ágil"
-        onSelect={(id) => {
-          setCurrentTeamId(id);
-          setShowTeamModal(false);
-        }}
+        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
         onClose={() => setShowTeamModal(false)}
       />
 
+      {/* 8C — Onboarding Wizard */}
+      <OnboardingWizard open={showWizard && !loading} onComplete={completeOnboarding} />
+
       <div className="max-w-7xl mx-auto p-4 md:p-6">
-        {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-success" />
           </div>
         )}
 
-        {/* Sem time selecionado */}
         {!loading && needsTeam && (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <Building2 className="h-14 w-14 text-muted-foreground/30" />
@@ -142,109 +123,56 @@ const Index = () => {
           </div>
         )}
 
-        {/* Conteúdo principal */}
         {!loading && !needsTeam && (
           <>
-            {/* ── Sem restrição ────────────────────────────── */}
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
             {active === "planning-poker" && <PlanningPoker />}
             {active === "equipe" && <DeveloperManager />}
             {active === "calendario" && <CalendarView />}
             {active === "retrospectiva" && <RetroManager />}
             {active === "gerador-apf" && (
-              <SectionGuard permission="view_backlog">
-                <ApfGeneratorPage />
-              </SectionGuard>
+              <SectionGuard permission="view_backlog"><ApfGeneratorPage /></SectionGuard>
             )}
-
-            {/* ── Requer view_backlog ──────────────────────── */}
             {active === "backlog" && (
               <SectionGuard permission="view_backlog">
-                <div className="space-y-8">
-                  <SprintManager />
-                  <UserStoryManager />
-                </div>
+                <div className="space-y-8"><SprintManager /><UserStoryManager /></div>
               </SectionGuard>
             )}
             {active === "epicos" && (
-              <SectionGuard permission="view_backlog">
-                <EpicManager />
-              </SectionGuard>
+              <SectionGuard permission="view_backlog"><EpicManager /></SectionGuard>
             )}
-
-            {/* ── Requer view_kanban ───────────────────────── */}
             {active === "board" && (
-              <SectionGuard permission="view_kanban">
-                <KanbanBoard />
-              </SectionGuard>
+              <SectionGuard permission="view_kanban"><KanbanBoard /></SectionGuard>
             )}
-
-            {/* ── Requer manage_activities ─────────────────── */}
             {active === "atividades" && (
-              <SectionGuard permission="manage_activities">
-                <ActivityManager />
-              </SectionGuard>
+              <SectionGuard permission="manage_activities"><ActivityManager /></SectionGuard>
             )}
-
-            {/* ── Requer report_impediment ─────────────────── */}
             {active === "impedimentos" && (
-              <SectionGuard permission="report_impediment">
-                <ImpedimentList />
-              </SectionGuard>
+              <SectionGuard permission="report_impediment"><ImpedimentList /></SectionGuard>
             )}
-
-            {/* ── Requer view_dashboard ────────────────────── */}
             {active === "metricas" && (
-              <SectionGuard permission="view_dashboard">
-                <MetricsDashboard />
-              </SectionGuard>
+              <SectionGuard permission="view_dashboard"><MetricsDashboard /></SectionGuard>
             )}
             {active === "historico" && (
-              <SectionGuard permission="view_dashboard">
-                <AgileHistory />
-              </SectionGuard>
+              <SectionGuard permission="view_dashboard"><AgileHistory /></SectionGuard>
             )}
-
-            {/* ── Config — manage_teams ────────────────────── */}
             {active === "times" && (
-              <SectionGuard permission="manage_teams">
-                <TeamManager moduleFilter="sala_agil" />
-              </SectionGuard>
+              <SectionGuard permission="manage_teams"><TeamManager moduleFilter="sala_agil" /></SectionGuard>
             )}
-
-            {/* ── Config — manage_users ────────────────────── */}
             {active === "membros" && (
-              <SectionGuard permission="manage_users">
-                <TeamMembersManager />
-              </SectionGuard>
+              <SectionGuard permission="manage_users"><TeamMembersManager /></SectionGuard>
             )}
-
-            {/* ── Config — manage_roles ────────────────────── */}
             {active === "perfis" && (
-              <SectionGuard permission="manage_roles">
-                <UserRolesManager />
-              </SectionGuard>
+              <SectionGuard permission="manage_roles"><UserRolesManager /></SectionGuard>
             )}
-
-            {/* ── Config — manage_workflow ─────────────────── */}
             {active === "fluxo" && (
-              <SectionGuard permission="manage_workflow">
-                <WorkflowManager />
-              </SectionGuard>
+              <SectionGuard permission="manage_workflow"><WorkflowManager /></SectionGuard>
             )}
-
-            {/* ── Config — manage_custom_fields ────────────── */}
             {active === "campos" && (
-              <SectionGuard permission="manage_custom_fields">
-                <CustomFieldManager />
-              </SectionGuard>
+              <SectionGuard permission="manage_custom_fields"><CustomFieldManager /></SectionGuard>
             )}
-
-            {/* ── Config — manage_automations ──────────────── */}
             {active === "automacoes" && (
-              <SectionGuard permission="manage_automations">
-                <AutomationManager />
-              </SectionGuard>
+              <SectionGuard permission="manage_automations"><AutomationManager /></SectionGuard>
             )}
           </>
         )}

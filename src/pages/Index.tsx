@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import React, { useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { AgileHistory } from "@/components/AgileHistory";
 import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
 import { SprintManager } from "@/components/SprintManager";
@@ -26,8 +27,35 @@ import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── AccessDenied ─────────────────────────────────────────────────────────────
+// ─── Seções válidas ────────────────────────────────────────────────────────────
+export const VALID_SECTIONS = [
+  "dashboard",
+  "backlog",
+  "board",
+  "planning-poker",
+  "retrospectiva",
+  "releases",
+  "relatorios",
+  "notificacoes",
+  "gerador-apf",
+  "metricas",
+  "historico",
+  "calendario",
+  "equipe",
+  "epicos",
+  "atividades",
+  "impedimentos",
+  "times",
+  "membros",
+  "perfis",
+  "fluxo",
+  "campos",
+  "automacoes",
+] as const;
 
+export type SectionKey = typeof VALID_SECTIONS[number];
+
+// ─── AccessDenied ─────────────────────────────────────────────────────────────
 function AccessDenied() {
   return (
     <div className="flex flex-col items-center justify-center py-24 space-y-3">
@@ -39,19 +67,20 @@ function AccessDenied() {
 }
 
 // ─── SectionGuard ─────────────────────────────────────────────────────────────
-
 function SectionGuard({ permission, children }: { permission: string; children: React.ReactNode }) {
   const { hasPermission } = useAuth();
   return hasPermission(permission) ? <>{children}</> : <AccessDenied />;
 }
 
 // ─── Index ────────────────────────────────────────────────────────────────────
-
 const Index = () => {
-  const [active, setActive] = useState("dashboard");
+  const { section } = useParams<{ section: string }>();
+  const navigate = useNavigate();
+  const active = (VALID_SECTIONS.includes(section as SectionKey) ? section : "dashboard") as SectionKey;
+
   const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
-  const { activeSprint, userStories } = useSprint();
-  const [showTeamModal, setShowTeamModal] = useState(false);
+  const { activeSprint } = useSprint();
+  const [showTeamModal, setShowTeamModal] = React.useState(false);
 
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
 
@@ -66,10 +95,21 @@ const Index = () => {
     }
   }, [loading, teams]);
 
+  // Redireciona seção inválida para dashboard
+  useEffect(() => {
+    if (section && !VALID_SECTIONS.includes(section as SectionKey)) {
+      navigate("/sala-agil/dashboard", { replace: true });
+    }
+  }, [section]);
+
+  const handleNavigate = (key: string) => {
+    navigate(`/sala-agil/${key}`);
+  };
+
   const needsTeam = !currentTeamId && active !== "times";
 
   return (
-    <AppShell module="sala_agil" activeKey={active} onNavigate={setActive}>
+    <AppShell module="sala_agil" activeKey={active} onNavigate={handleNavigate}>
       <TeamSelectionModal
         open={showTeamModal}
         teams={moduleTeams}
@@ -95,7 +135,7 @@ const Index = () => {
             <Building2 className="h-14 w-14 text-muted-foreground/30" />
             <p className="text-lg text-muted-foreground font-medium">Selecione ou crie um time para começar</p>
             {hasPermission("manage_teams") && (
-              <Button onClick={() => setActive("times")} size="lg">
+              <Button onClick={() => handleNavigate("times")} size="lg">
                 <Building2 className="h-4 w-4 mr-2" /> Ir para Times
               </Button>
             )}
@@ -106,12 +146,11 @@ const Index = () => {
         {!loading && !needsTeam && (
           <>
             {/* ── Sem restrição ────────────────────────────── */}
-            {/* Fix 3: key inclui activeSprint?.id para forçar re-render ao trocar sprint ativo */}
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
-            {active === "planning" && <PlanningPoker />}
+            {active === "planning-poker" && <PlanningPoker />}
             {active === "equipe" && <DeveloperManager />}
             {active === "calendario" && <CalendarView />}
-            {active === "retro" && <RetroManager />}
+            {active === "retrospectiva" && <RetroManager />}
             {active === "gerador-apf" && (
               <SectionGuard permission="view_backlog">
                 <ApfGeneratorPage />

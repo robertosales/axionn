@@ -49,7 +49,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   if (!session) return <>{children}</>;
   if (isAdmin || profile?.module_access === "admin") return <Navigate to="/dashboard-admin" replace />;
   if (profile?.module_access === "sustentacao") return <Navigate to="/sustentacao" replace />;
-  return <Navigate to="/sala-agil" replace />;
+  return <Navigate to="/sala-agil/dashboard" replace />;
 }
 
 function ModuleRedirect() {
@@ -57,7 +57,7 @@ function ModuleRedirect() {
   if (loading) return null;
   if (isAdmin || profile?.module_access === "admin") return <Navigate to="/dashboard-admin" replace />;
   if (profile?.module_access === "sustentacao") return <Navigate to="/sustentacao" replace />;
-  return <Navigate to="/sala-agil" replace />;
+  return <Navigate to="/sala-agil/dashboard" replace />;
 }
 
 function ModuleGuard({ module, children }: { module: "sala_agil" | "sustentacao"; children: React.ReactNode }) {
@@ -131,9 +131,21 @@ const App = () => (
                 }
               />
 
-              {/* Sala Ágil */}
+              {/* Sala Ágil — rota base redireciona para /dashboard */}
               <Route
                 path="/sala-agil"
+                element={
+                  <ProtectedRoute>
+                    <ModuleGuard module="sala_agil">
+                      <Navigate to="/sala-agil/dashboard" replace />
+                    </ModuleGuard>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Sala Ágil — sub-rotas com deep-link */}
+              <Route
+                path="/sala-agil/:section"
                 element={
                   <ProtectedRoute>
                     <ModuleGuard module="sala_agil">

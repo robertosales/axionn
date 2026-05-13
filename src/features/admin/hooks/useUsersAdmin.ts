@@ -19,23 +19,39 @@ export interface UserAdmin {
 export function useUsersAdmin() {
   const [users, setUsers] = useState<UserAdmin[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const [{ data: profiles }, { data: roles }, { data: teams }] = await Promise.all([
-        supabase.from("profiles").select("id, user_id, display_name, email, module_access, team_id, must_change_password, is_active, created_at").order("created_at"),
+      const [profilesRes, rolesRes, teamsRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, user_id, display_name, email, module_access, team_id, must_change_password, is_active, created_at")
+          .order("created_at"),
         supabase.from("user_roles").select("user_id, role"),
         supabase.from("teams").select("id, name"),
       ]);
 
+      // Log de diagnóstico — remove após confirmar correção
+      if (profilesRes.error) {
+        console.error("[useUsersAdmin] Erro ao buscar profiles:", profilesRes.error);
+        setError(`Erro ao buscar usuários: ${profilesRes.error.message}`);
+        return;
+      }
+
+      const profiles = profilesRes.data || [];
+      const roles = rolesRes.data || [];
+      const teams = teamsRes.data || [];
+
       const adminSet = new Set(
-        (roles || []).filter((r: any) => r.role === "admin").map((r: any) => r.user_id)
+        roles.filter((r: any) => r.role === "admin").map((r: any) => r.user_id)
       );
       const teamMap: Record<string, string> = {};
-      (teams || []).forEach((t: any) => { teamMap[t.id] = t.name; });
+      teams.forEach((t: any) => { teamMap[t.id] = t.name; });
 
-      setUsers((profiles || []).map((p: any) => ({
+      setUsers(profiles.map((p: any) => ({
         id: p.id,
         user_id: p.user_id,
         display_name: p.display_name || "",
@@ -48,6 +64,9 @@ export function useUsersAdmin() {
         must_change_password: p.must_change_password ?? false,
         created_at: p.created_at,
       })));
+    } catch (err: any) {
+      console.error("[useUsersAdmin] Erro inesperado:", err);
+      setError("Erro inesperado ao carregar usuários.");
     } finally {
       setLoading(false);
     }
@@ -70,12 +89,10 @@ export function useUsersAdmin() {
 
   const toggleAdmin = async (userId: string, isAdmin: boolean) => {
     if (isAdmin) {
-      // Promover
       const { error } = await supabase.from("user_roles").upsert({ user_id: userId, role: "admin" });
       if (error) { toast.error("Erro ao promover usuário"); return false; }
       toast.success("Usuário promovido a admin");
     } else {
-      // Remover admin
       const { error } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", "admin");
       if (error) { toast.error("Erro ao remover papel admin"); return false; }
       toast.success("Papel admin removido");
@@ -108,7 +125,6 @@ export function useUsersAdmin() {
     module_access: string;
     team_id: string | null;
   }) => {
-    // Cria via Supabase Auth signup (admin usa service role em produção)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -116,7 +132,6 @@ export function useUsersAdmin() {
     });
     if (authError || !authData.user) { toast.error("Erro ao criar usuário: " + authError?.message); return false; }
 
-    // Atualiza profile com team_id, module_access e força troca de senha
     await supabase.from("profiles").update({
       display_name: data.display_name,
       module_access: data.module_access,
@@ -129,5 +144,5 @@ export function useUsersAdmin() {
     return true;
   };
 
-  return { users, loading, reload: load, update, toggleAdmin, toggleActive, resetPassword, createUser };
+  return { users, loading, error, reload: load, update, toggleAdmin, toggleActive, resetPassword, createUser };
 }

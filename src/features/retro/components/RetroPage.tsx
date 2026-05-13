@@ -97,7 +97,7 @@ export function RetroPage() {
   }
 
   // ─── Handlers ───────────────────────────────────────────────────────────────────────────────
-  // Wrapper: RetroStartScreen passa (model), createSession espera (sprintIdOverride?, model?)
+  // RetroStartScreen passa (model) → createSession espera (sprintIdOverride?, model?)
   const handleStart = async (model: RetroModelKey) => {
     await createSession(undefined, model);
   };
@@ -120,8 +120,24 @@ export function RetroPage() {
     toast.info("Sessão cancelada");
   };
 
+  // Handler para iniciar nova sessão a partir do ResultsView
+  // Se houver sessão ainda "open" no banco (ex: sessão corrompida),
+  // cancela primeiro e depois abre RetroStartScreen
+  const handleNewFromResults = async () => {
+    if (session) {
+      await cancel(); // remove do banco
+    }
+    await refresh();
+  };
+
   const nextPhase = session ? NEXT_PHASE[session.currentPhase] : null;
   const nextLabel = nextPhase && nextPhase !== "closed" ? PHASE_LABELS_SHORT[nextPhase] : null;
+
+  // ─── Determina o que renderizar ─────────────────────────────────────────────────────────
+  // sessão ativa = status "open" E fase diferente de "closed"
+  const isActiveSession = session?.status === "open" && session?.currentPhase !== "closed";
+  // sessão encerrada = existe mas não é ativa (status closed OU fase closed)
+  const isClosedSession = !!session && !isActiveSession;
 
   return (
     <div className="space-y-4">
@@ -149,6 +165,7 @@ export function RetroPage() {
       {/* Aba Sessão */}
       {view === "session" && (
         <>
+          {/* Sem sessão aberta → tela de início */}
           {!session && (
             <RetroStartScreen
               canStart={canStart}
@@ -157,20 +174,23 @@ export function RetroPage() {
             />
           )}
 
-          {session && session.status !== "active" && (
+          {/* Sessão encerrada ou corrompida → ResultsView com opções */}
+          {isClosedSession && (
             <RetroResultsView
-              session={session}
+              session={session!}
               cards={cards}
               actionItems={actionItems}
               profiles={profiles}
-              onNewSession={refresh}
+              onRefresh={refresh}
+              onNewSession={handleNewFromResults}
             />
           )}
 
-          {session && session.status === "active" && (
+          {/* Sessão ativa */}
+          {isActiveSession && (
             <>
               <RetroPhaseHeader
-                session={session}
+                session={session!}
                 participants={participants}
                 profiles={profiles}
                 isFacilitator={isFacilitator}
@@ -184,9 +204,9 @@ export function RetroPage() {
                 nextPhaseLabel={nextLabel}
               />
 
-              {session.currentPhase === "writing" && (
+              {session!.currentPhase === "writing" && (
                 <RetroWritingPhase
-                  model={session.model}
+                  model={session!.model}
                   cards={cards}
                   userId={user?.id ?? ""}
                   isFacilitator={isFacilitator}
@@ -197,17 +217,17 @@ export function RetroPage() {
                 />
               )}
 
-              {session.currentPhase === "reveal" && (
+              {session!.currentPhase === "reveal" && (
                 <RetroRevealPhase
-                  model={session.model}
+                  model={session!.model}
                   cards={cards}
                   profiles={profiles}
                 />
               )}
 
-              {session.currentPhase === "voting" && (
+              {session!.currentPhase === "voting" && (
                 <RetroVotingPhase
-                  model={session.model}
+                  model={session!.model}
                   cards={cards}
                   votes={votes}
                   profiles={profiles}
@@ -216,7 +236,7 @@ export function RetroPage() {
                 />
               )}
 
-              {session.currentPhase === "action_items" && (
+              {session!.currentPhase === "action_items" && (
                 <RetroActionPhase
                   actionItems={actionItems}
                   cards={cards}

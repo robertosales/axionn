@@ -1,6 +1,15 @@
 // src/features/retro/services/retro.service.ts
 import { supabase } from "@/integrations/supabase/client";
-import type { RetroCard, RetroParticipant, RetroPhase, RetroSession, RetroVote, RetroModelKey } from "../types/retro";
+import type {
+  RetroCard,
+  RetroParticipant,
+  RetroPhase,
+  RetroSession,
+  RetroVote,
+  RetroModelKey,
+  RetroActionItem,
+  ActionItemStatus,
+} from "../types/retro";
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 const mapSession = (r: any): RetroSession => ({
@@ -47,8 +56,22 @@ const mapParticipant = (r: any): RetroParticipant => ({
   lastSeenAt: r.last_seen_at,
 });
 
-// ─── Sessions ─────────────────────────────────────────────────────────────────
+const mapActionItem = (r: any): RetroActionItem => ({
+  id: r.id,
+  sessionId: r.session_id,
+  cardId: r.card_id ?? null,
+  title: r.title,
+  description: r.description ?? null,
+  ownerId: r.owner_id ?? null,
+  dueDate: r.due_date ?? null,
+  status: (r.status ?? "pending") as ActionItemStatus,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+
+// ─── Service ──────────────────────────────────────────────────────────────────
 export const retroService = {
+  // ─── Sessions ────────────────────────────────────────────────────────────────
   async getActiveSession(teamId: string, sprintId: string) {
     const { data, error } = await supabase
       .from("retro_sessions")
@@ -59,6 +82,28 @@ export const retroService = {
       .maybeSingle();
     if (error) throw error;
     return data ? mapSession(data) : null;
+  },
+
+  async listFinishedSessions(teamId: string) {
+    const { data, error } = await supabase
+      .from("retro_sessions")
+      .select("*")
+      .eq("team_id", teamId)
+      .eq("status", "finished")
+      .order("finished_at", { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    return (data || []).map(mapSession);
+  },
+
+  async getSessionById(sessionId: string) {
+    const { data, error } = await supabase
+      .from("retro_sessions")
+      .select("*")
+      .eq("id", sessionId)
+      .single();
+    if (error) throw error;
+    return mapSession(data);
   },
 
   async createSession(teamId: string, sprintId: string, model: RetroModelKey, userId: string) {
@@ -76,7 +121,6 @@ export const retroService = {
       .single();
     if (error) throw error;
 
-    // Cria o facilitador
     await supabase.from("retro_participants").insert({
       session_id: data.id,
       user_id: userId,
@@ -118,7 +162,7 @@ export const retroService = {
     ]);
   },
 
-  // ─── Cards ──────────────────────────────────────────────────────────────────
+  // ─── Cards ───────────────────────────────────────────────────────────────────
   async listCards(sessionId: string) {
     const { data, error } = await supabase
       .from("retro_cards")
@@ -155,7 +199,7 @@ export const retroService = {
     if (error) throw error;
   },
 
-  // ─── Votes ──────────────────────────────────────────────────────────────────
+  // ─── Votes ───────────────────────────────────────────────────────────────────
   async listVotes(sessionId: string) {
     const { data, error } = await supabase.from("retro_votes").select("*").eq("session_id", sessionId).limit(500);
     if (error) throw error;
@@ -173,21 +217,18 @@ export const retroService = {
 
     if (existing) {
       await supabase.from("retro_votes").delete().eq("id", existing.id);
-      // decrementa contador
       const { data: card } = await supabase.from("retro_cards").select("votes").eq("id", cardId).single();
-      const newVotes = Math.max(0, (card?.votes ?? 0) - 1);
-      await supabase.from("retro_cards").update({ votes: newVotes }).eq("id", cardId);
+      await supabase.from("retro_cards").update({ votes: Math.max(0, (card?.votes ?? 0) - 1) }).eq("id", cardId);
       return false;
     } else {
       await supabase.from("retro_votes").insert({ session_id: sessionId, card_id: cardId, user_id: userId });
       const { data: card } = await supabase.from("retro_cards").select("votes").eq("id", cardId).single();
-      const newVotes = (card?.votes ?? 0) + 1;
-      await supabase.from("retro_cards").update({ votes: newVotes }).eq("id", cardId);
+      await supabase.from("retro_cards").update({ votes: (card?.votes ?? 0) + 1 }).eq("id", cardId);
       return true;
     }
   },
 
-  // ─── Participants ───────────────────────────────────────────────────────────
+  // ─── Participants ─────────────────────────────────────────────────────────────
   async listParticipants(sessionId: string) {
     const { data, error } = await supabase.from("retro_participants").select("*").eq("session_id", sessionId).limit(100);
     if (error) throw error;
@@ -227,5 +268,77 @@ export const retroService = {
 
   async markOffline(sessionId: string, userId: string) {
     await supabase.from("retro_participants").update({ is_online: false }).eq("session_id", sessionId).eq("user_id", userId);
+  },
+
+  // ─── Action Items ─────────────────────────────────────────────────────────────
+  async listActionItems(sessionId: string) {
+    const { data, error } = await supabase
+      .from("retro_action_items")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data || []).map(mapActionItem);
+  },
+
+  async listActionItemsByTeam(teamId: string) {
+    const { data: sessions } = await supabase
+      .from("retro_sessions")
+      .select("id")
+      .eq("team_id", teamId)
+      .eq("status", "finished");
+    if (!sessions || sessions.length === 0) return [];
+    const sessionIds = sessions.map((s: any) => s.id);
+    const { data, error } = await supabase
+      .from("retro_action_items")
+      .select("*")
+      .in("session_id", sessionIds)
+      .order("due_date", { ascending: true, nullsFirst: false });
+    if (error) throw error;
+    return (data || []).map(mapActionItem);
+  },
+
+  async createActionItem(
+    sessionId: string,
+    payload: { title: string; description?: string; ownerId?: string; dueDate?: string; cardId?: string }
+  ) {
+    const { data, error } = await supabase
+      .from("retro_action_items")
+      .insert({
+        session_id: sessionId,
+        card_id: payload.cardId ?? null,
+        title: payload.title,
+        description: payload.description ?? null,
+        owner_id: payload.ownerId ?? null,
+        due_date: payload.dueDate ?? null,
+        status: "pending",
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return mapActionItem(data);
+  },
+
+  async updateActionItem(
+    actionId: string,
+    updates: Partial<{ title: string; description: string; ownerId: string; dueDate: string; status: ActionItemStatus }>
+  ) {
+    const { error } = await supabase
+      .from("retro_action_items")
+      .update({
+        ...(updates.title !== undefined && { title: updates.title }),
+        ...(updates.description !== undefined && { description: updates.description }),
+        ...(updates.ownerId !== undefined && { owner_id: updates.ownerId }),
+        ...(updates.dueDate !== undefined && { due_date: updates.dueDate }),
+        ...(updates.status !== undefined && { status: updates.status }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", actionId);
+    if (error) throw error;
+  },
+
+  async deleteActionItem(actionId: string) {
+    const { error } = await supabase.from("retro_action_items").delete().eq("id", actionId);
+    if (error) throw error;
   },
 };

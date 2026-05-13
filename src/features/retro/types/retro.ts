@@ -1,8 +1,9 @@
 // src/features/retro/types/retro.ts
 
-export type RetroPhase = "writing" | "reveal" | "voting" | "closed";
+export type RetroPhase = "writing" | "reveal" | "voting" | "action_items" | "closed";
 export type RetroStatus = "active" | "finished" | "cancelled";
 export type RetroModelKey = "4ls" | "start_stop_continue" | "mad_sad_glad" | "starfish" | "kpt";
+export type ActionItemStatus = "pending" | "in_progress" | "done" | "cancelled";
 
 export interface RetroColumn {
   key: string;
@@ -56,4 +57,17 @@ export interface RetroParticipant {
   isOnline: boolean;
   joinedAt: string;
   lastSeenAt: string;
+}
+
+export interface RetroActionItem {
+  id: string;
+  sessionId: string;
+  cardId: string | null;
+  title: string;
+  description: string | null;
+  ownerId: string | null;
+  dueDate: string | null;
+  status: ActionItemStatus;
+  createdAt: string;
+  updatedAt: string;
 }

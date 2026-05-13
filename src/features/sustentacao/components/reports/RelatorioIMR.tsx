@@ -16,6 +16,7 @@ import {
   ReportLegendBlock,
 } from "@/shared/components/reports";
 import type { KPIItem, TableColumn } from "@/shared/components/reports";
+import { ExportButton } from "@/components/dashboard/ExportButton";
 import { BarChart3 } from "lucide-react";
 
 function today()        { return new Date().toISOString().split("T")[0]; }
@@ -94,24 +95,51 @@ export function RelatorioIMR({ onBack }: Props) {
     { key: "incidencia", label: "Incidência",   render: (v) => <Badge variant="secondary" className="text-[10px] capitalize">{v}</Badge> },
   ];
 
-  const exportCSV = () => {
-    const cfg   = REPORT_CONFIGS.sustentacao_imr;
-    const lines = [cfg.titulo, `Gerado em: ${new Date().toLocaleString("pt-BR")}`, `Responsável: ${profile?.display_name || ""}`, ""];
-    lines.push("Indicador,Valor,Meta,Status,% Glosa");
-    indicators.forEach(ind => {
+  // ── getExportData: alimenta ExportButton (CSV, XLSX, PDF, Markdown)
+  const getExportData = () => {
+    const titulo = REPORT_CONFIGS.sustentacao_imr.titulo;
+    const geradoPor = profile?.display_name || "Sistema";
+    const now = new Date();
+    const docId = `RPT-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+
+    const indHeaders = ["Indicador", "Valor", "Meta", "Status", "% Glosa", "Detalhe"];
+    const indRows = indicators.map(ind => {
       const faixa  = getIndicadorFaixa(ind, ind.valor);
-      const status = faixa.cor === "green" ? "✅" : faixa.cor === "yellow" ? "⚠️" : "❌";
-      lines.push(`${ind.sigla} - ${ind.nome},${ind.sigla === "ISS" ? ind.valor.toFixed(1) : ind.valor.toFixed(1) + "%"},≥${ind.meta}${ind.unidade},${status},${faixa.glosa}%`);
+      const status = faixa.cor === "green" ? "✅ Meta atingida" : faixa.cor === "yellow" ? "⚠️ Abaixo da meta" : faixa.cor === "orange" ? "⚠️ Intermediário" : "❌ Glosa máxima";
+      return [
+        `${ind.sigla} — ${ind.nome}`,
+        ind.sigla === "ISS" ? ind.valor.toFixed(1) : `${ind.valor.toFixed(1)}%`,
+        `≥ ${ind.meta}${ind.unidade}`,
+        status,
+        `${faixa.glosa}%`,
+        ind.detail,
+      ];
     });
-    lines.push("", "Eventos de Glosa", "Código,Descrição,Ocorrências,Redutor Total,Incidência");
-    Object.entries(glosas.byEvento).forEach(([ev, data]) => {
+
+    const glosaHeaders = ["Código", "Descrição", "Ocorrências", "Redutor Total (%)", "Incidência"];
+    const glosaRows = Object.entries(glosas.byEvento).map(([ev, data]) => {
       const c = EVENTOS_CONFIG.find(e => e.codigo === ev);
-      lines.push(`${ev},"${c?.descricao || ""}",${data.count},${data.total.toFixed(2)}%,${c?.incidencia || ""}`);
+      return [ev, c?.descricao || "", data.count, `${data.total.toFixed(2)}%`, c?.incidencia || ""];
     });
-    lines.push("", `Glosa Integral Total: ${glosas.totalIntegral.toFixed(2)}%`, `Glosa Limitada Total: ${glosas.totalLimitada.toFixed(2)}%`);
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = "IMR_Grupo2.csv"; a.click(); URL.revokeObjectURL(url);
+
+    // Para ExportButton espera headers + rows únicos — concatenamos seções com separador
+    const headers = indHeaders;
+    const rows: (string | number)[][] = [
+      ...indRows,
+      [],
+      [`Glosa Integral Total: ${glosas.totalIntegral.toFixed(2)}%`, "", "", "", "", ""],
+      [`Glosa Limitada Total: ${glosas.totalLimitada.toFixed(2)}%`, "", "", "", "", ""],
+      [],
+      [`Eventos de Glosa`, "", "", "", "", ""],
+      glosaHeaders as (string | number)[],
+      ...glosaRows.map(r => r as (string | number)[]),
+    ];
+
+    return {
+      title: `${titulo} | ${periodoLabel} | ${docId} | Gerado por: ${geradoPor}`,
+      headers,
+      rows,
+    };
   };
 
   return (
@@ -123,7 +151,6 @@ export function RelatorioIMR({ onBack }: Props) {
           icon={<BarChart3 className="h-5 w-5" />}
           badge={periodoLabel}
           onBack={onBack}
-          onExportCSV={exportCSV}
         />
       }
       filters={
@@ -140,6 +167,9 @@ export function RelatorioIMR({ onBack }: Props) {
       kpis={<ReportKPISummary items={kpiItems} />}
       table={
         <div className="space-y-4">
+          <div className="flex justify-end print:hidden">
+            <ExportButton getData={getExportData} />
+          </div>
           {eventosData.length > 0 ? (
             <ReportDataTable titulo="Eventos de Glosa" columns={colsEventos} data={eventosData} rowKey={(r) => r.ev} />
           ) : (

@@ -26,6 +26,7 @@ import { UserStory } from "@/types/sprint";
 import { useSprint } from "@/contexts/SprintContext";
 import { formatPersonName, getInitials } from "@/lib/personName";
 import { getTotalHoursForHU } from "@/types/sprint";
+import { formatMinutes } from "@/lib/duration";
 
 const PRIORITY_COLORS: Record<string, string> = {
   baixa: "bg-slate-100 text-slate-600 border border-slate-300 dark:bg-slate-800 dark:text-slate-300",
@@ -115,8 +116,8 @@ export function HUPreviewSheet({ hu, open, onClose, onEdit }: Props) {
   }
 
   const hoursLabel = estimated
-    ? `${totalHours}h lançadas de ${estimated}h estimadas`
-    : `${totalHours}h lançadas`;
+    ? `${formatMinutes(Math.round(totalHours * 60))} lançadas de ${formatMinutes(Math.round(estimated * 60))} estimadas`
+    : `${formatMinutes(Math.round(totalHours * 60))} lançadas`;
 
   const completionPct = huActivities.length > 0
     ? Math.round((closed.length / huActivities.length) * 100)
@@ -349,7 +350,9 @@ export function HUPreviewSheet({ hu, open, onClose, onEdit }: Props) {
                         {a.title}
                       </span>
                       {a.hours != null && (
-                        <span className="shrink-0 font-semibold tabular-nums">{a.hours}h</span>
+                        <span className="shrink-0 font-semibold tabular-nums">
+                          {formatMinutes(Math.round(Number(a.hours) * 60))}
+                        </span>
                       )}
                     </div>
                   ))}

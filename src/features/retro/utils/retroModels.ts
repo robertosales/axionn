@@ -1,5 +1,5 @@
 // src/features/retro/utils/retroModels.ts
-import type { RetroColumn, RetroModelKey } from "../types/retro";
+import type { RetroColumn, RetroModelKey, RetroPhase } from "../types/retro";
 
 export const RETRO_MODELS: Record<RetroModelKey, { label: string; columns: RetroColumn[] }> = {
   "4ls": {
@@ -51,9 +51,12 @@ export function getModel(key: RetroModelKey) {
   return RETRO_MODELS[key] ?? RETRO_MODELS["4ls"];
 }
 
-export const RETRO_PHASE_LABELS: Record<string, string> = {
+export const RETRO_PHASE_LABELS: Record<RetroPhase, string> = {
   writing: "1. Escrita",
   reveal: "2. Revelação",
   voting: "3. Votação",
-  closed: "4. Encerrada",
+  action_items: "4. Action Items",
+  closed: "5. Encerrada",
 };
+
+export const RETRO_PHASE_ORDER: RetroPhase[] = ["writing", "reveal", "voting", "action_items", "closed"];

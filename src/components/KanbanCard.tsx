@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { formatPersonName, getInitials } from "@/lib/personName";
 import { getTotalHoursForHU } from "@/types/sprint";
+import { formatMinutes } from "@/lib/duration";
 
 interface Props {
   hu: UserStory;
@@ -91,7 +92,6 @@ export function KanbanCard({ hu, colHex }: Props) {
   const [impedimentOpen, setImpedimentOpen]   = useState(false);
   const [impedimentReason, setImpedimentReason] = useState("");
   const [impedimentStartedAt, setImpedimentStartedAt] = useState(todayISO);
-  // Novos estados para preview e edição
   const [previewOpen, setPreviewOpen]         = useState(false);
   const [editOpen, setEditOpen]               = useState(false);
 
@@ -116,8 +116,8 @@ export function KanbanCard({ hu, colHex }: Props) {
   const hColors        = hoursColor(launchedHours, estimatedHours);
 
   const hoursLabel = estimatedHours
-    ? `${launchedHours}h / ${estimatedHours}h`
-    : `${launchedHours}h lançadas`;
+    ? `${formatMinutes(Math.round(launchedHours * 60))} / ${formatMinutes(Math.round(estimatedHours * 60))}`
+    : `${formatMinutes(Math.round(launchedHours * 60))} lançadas`;
 
   const showHoursBadge = huActivities.length > 0;
   const overBudget     = estimatedHours && launchedHours > estimatedHours;
@@ -154,9 +154,7 @@ export function KanbanCard({ hu, colHex }: Props) {
           ref={setNodeRef}
           style={style}
           className="p-3 hover:shadow-md transition-shadow bg-card border group relative"
-          // Clique simples abre o preview (ignora drag)
           onClick={(e) => {
-            // Não abre preview se o clique foi em botões internos
             if ((e.target as HTMLElement).closest("button")) return;
             setPreviewOpen(true);
           }}
@@ -201,7 +199,9 @@ export function KanbanCard({ hu, colHex }: Props) {
                   <div key={a.id} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                     <span className="truncate flex-1">{a.title}</span>
                     <div className="flex items-center gap-1 shrink-0">
-                      {a.hours != null && <span>{a.hours}h</span>}
+                      {a.hours != null && (
+                        <span>{formatMinutes(Math.round(Number(a.hours) * 60))}</span>
+                      )}
                       {devInitials && <span className="font-semibold text-foreground/70">{devInitials}</span>}
                     </div>
                   </div>
@@ -225,7 +225,9 @@ export function KanbanCard({ hu, colHex }: Props) {
               </div>
             ) : (
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                {hu.estimatedHours != null && <span>{hu.estimatedHours}h est.</span>}
+                {hu.estimatedHours != null && (
+                  <span>{formatMinutes(Math.round(hu.estimatedHours * 60))} est.</span>
+                )}
               </div>
             )}
 
@@ -260,37 +262,26 @@ export function KanbanCard({ hu, colHex }: Props) {
 
       {/* ── Menu de contexto ───────────────────────────────────────────────── */}
       <ContextMenuContent className="w-56">
-        {/* Preview */}
         <ContextMenuItem onClick={() => setPreviewOpen(true)}>
           <Eye className="h-3.5 w-3.5 mr-2 text-primary" />
           Preview rápido
         </ContextMenuItem>
-
-        {/* Editar */}
         <ContextMenuItem onClick={() => setEditOpen(true)}>
           <Pencil className="h-3.5 w-3.5 mr-2" />
           Detalhar / Editar HU
         </ContextMenuItem>
-
         <ContextMenuSeparator />
-
-        {/* Ver/recolher tarefas */}
         {huActivities.length > 0 && (
           <ContextMenuItem onClick={() => setExpanded((v) => !v)}>
             <ListChecks className="h-3.5 w-3.5 mr-2" />
             {expanded ? "Recolher tarefas" : "Ver tarefas"}
           </ContextMenuItem>
         )}
-
-        {/* Adicionar tarefa */}
         <ContextMenuItem onClick={() => setQuickOpen(true)}>
           <Plus className="h-3.5 w-3.5 mr-2" />
           Adicionar tarefa
         </ContextMenuItem>
-
         <ContextMenuSeparator />
-
-        {/* Mover para */}
         <ContextMenuSub>
           <ContextMenuSubTrigger>
             <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />Mover para
@@ -308,16 +299,11 @@ export function KanbanCard({ hu, colHex }: Props) {
             ))}
           </ContextMenuSubContent>
         </ContextMenuSub>
-
         <ContextMenuSeparator />
-
-        {/* Copiar ID */}
         <ContextMenuItem onClick={handleCopyId}>
           <Copy className="h-3.5 w-3.5 mr-2" />
           Copiar ID da HU
         </ContextMenuItem>
-
-        {/* Reportar impedimento */}
         <ContextMenuItem onClick={() => { setImpedimentReason(""); setImpedimentStartedAt(todayISO()); setImpedimentOpen(true); }}>
           <AlertTriangle className="h-3.5 w-3.5 mr-2 text-amber-500" />
           Reportar impedimento
@@ -325,7 +311,6 @@ export function KanbanCard({ hu, colHex }: Props) {
       </ContextMenuContent>
     </ContextMenu>
 
-    {/* ── Preview rápido ───────────────────────────────────────────────────── */}
     <HUPreviewSheet
       hu={hu}
       open={previewOpen}
@@ -333,14 +318,12 @@ export function KanbanCard({ hu, colHex }: Props) {
       onEdit={() => { setPreviewOpen(false); setEditOpen(true); }}
     />
 
-    {/* ── Drawer de edição ─────────────────────────────────────────────────── */}
     <HUEditDrawer
       huId={hu.id}
       open={editOpen}
       onClose={() => setEditOpen(false)}
     />
 
-    {/* ── Dialog de impedimento ────────────────────────────────────────────── */}
     <AlertDialog open={impedimentOpen} onOpenChange={(o) => { if (!o) { setImpedimentOpen(false); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); } }}>
       <AlertDialogContent>
         <AlertDialogHeader>

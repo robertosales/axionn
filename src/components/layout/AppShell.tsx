@@ -103,16 +103,18 @@ const GROUP_LABELS: Record<NavItem["group"], string> = {
 };
 
 const NAV_SALA_AGIL: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/sala-agil", group: "main" },
-  { key: "board", label: "Board Kanban", icon: Kanban, path: "/sala-agil/board", group: "main" },
-  { key: "backlog", label: "Backlog", icon: ListTodo, path: "/sala-agil/backlog", group: "main" },
-  { key: "epicos", label: "Épicos", icon: Layers, path: "/sala-agil/epicos", group: "main" },
-  { key: "planning", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning", group: "main" },
-  { key: "calendario", label: "Calendário", icon: Calendar, path: "/sala-agil/calendario", group: "main" },
-  { key: "equipe", label: "Equipe", icon: Users, path: "/sala-agil/equipe", group: "main" },
-  { key: "atividades", label: "Atividades", icon: Activity, path: "/sala-agil/atividades", group: "main" },
-  { key: "impedimentos", label: "Impedimentos", icon: AlertTriangle, path: "/sala-agil/impedimentos", group: "main" },
-  { key: "retro", label: "Retrospectiva", icon: Repeat, path: "/sala-agil/retro", group: "main" },
+  { key: "dashboard",      label: "Dashboard",              icon: LayoutDashboard,  path: "/sala-agil",                  group: "main" },
+  { key: "board",          label: "Board Kanban",            icon: Kanban,           path: "/sala-agil/board",             group: "main" },
+  { key: "backlog",        label: "Backlog",                 icon: ListTodo,         path: "/sala-agil/backlog",           group: "main" },
+  { key: "epicos",         label: "Épicos",                  icon: Layers,           path: "/sala-agil/epicos",            group: "main" },
+  // ✅ fix: key e path alinhados com VALID_SECTIONS do Index.tsx
+  { key: "planning-poker", label: "Planning Poker",          icon: PlayingCardIcon,  path: "/sala-agil/planning-poker",   group: "main" },
+  { key: "calendario",     label: "Calendário",              icon: Calendar,         path: "/sala-agil/calendario",        group: "main" },
+  { key: "equipe",         label: "Equipe",                  icon: Users,            path: "/sala-agil/equipe",            group: "main" },
+  { key: "atividades",     label: "Atividades",              icon: Activity,         path: "/sala-agil/atividades",        group: "main" },
+  { key: "impedimentos",   label: "Impedimentos",            icon: AlertTriangle,    path: "/sala-agil/impedimentos",      group: "main" },
+  // ✅ fix: key e path alinhados com VALID_SECTIONS do Index.tsx
+  { key: "retrospectiva",  label: "Retrospectiva",           icon: Repeat,           path: "/sala-agil/retrospectiva",     group: "main" },
   {
     key: "gerador-apf",
     label: "Relatório de Evidências",
@@ -121,30 +123,30 @@ const NAV_SALA_AGIL: NavItem[] = [
     group: "main",
     roles: ["scrum_master", "analyst"],
   },
-  { key: "metricas", label: "Métricas", icon: BarChart3, path: "/sala-agil/metricas", group: "org" },
-  { key: "historico", label: "Histórico", icon: History, path: "/sala-agil/historico", group: "org" },
-  { key: "times", label: "Times", icon: Users, path: "/sala-agil/times", group: "config" },
-  { key: "membros", label: "Membros", icon: User, path: "/sala-agil/membros", group: "config" },
-  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sala-agil/perfis", group: "config" },
-  { key: "fluxo", label: "Fluxo", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
-  { key: "campos", label: "Campos Custom", icon: Settings, path: "/sala-agil/campos", group: "config" },
-  { key: "automacoes", label: "Automações", icon: Repeat, path: "/sala-agil/automacoes", group: "config" },
+  { key: "metricas",  label: "Métricas",  icon: BarChart3, path: "/sala-agil/metricas",  group: "org" },
+  { key: "historico", label: "Histórico", icon: History,   path: "/sala-agil/historico", group: "org" },
+  { key: "times",     label: "Times",         icon: Users,       path: "/sala-agil/times",     group: "config" },
+  { key: "membros",   label: "Membros",        icon: User,        path: "/sala-agil/membros",   group: "config" },
+  { key: "perfis",    label: "Perfis (RBAC)",  icon: ShieldCheck, path: "/sala-agil/perfis",    group: "config" },
+  { key: "fluxo",     label: "Fluxo",          icon: GitBranch,   path: "/sala-agil/fluxo",     group: "config" },
+  { key: "campos",    label: "Campos Custom",  icon: Settings,    path: "/sala-agil/campos",    group: "config" },
+  { key: "automacoes",label: "Automações",     icon: Repeat,      path: "/sala-agil/automacoes", group: "config" },
 ];
 
 const NAV_SUSTENTACAO: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/sustentacao", group: "main" },
-  { key: "board", label: "Board Kanban", icon: Kanban, path: "/sustentacao/board", group: "main" },
-  { key: "demandas", label: "Demandas", icon: ListTodo, path: "/sustentacao/demandas", group: "main" },
-  { key: "projetos", label: "Projetos", icon: Layers, path: "/sustentacao/projetos", group: "main" },
-  { key: "importacao", label: "Importação Excel", icon: Upload, path: "/sustentacao/importacao", group: "main" },
-  { key: "equipe", label: "Equipe", icon: Users, path: "/sustentacao/equipe", group: "main" },
-  { key: "fluxo", label: "Fluxo de Trabalho", icon: GitBranch, path: "/sustentacao/fluxo", group: "main" },
-  { key: "relatorios", label: "Relatórios", icon: FileText, path: "/sustentacao/relatorios", group: "org" },
-  { key: "times", label: "Times", icon: Users, path: "/sustentacao/times", group: "config" },
-  { key: "membros", label: "Membros", icon: User, path: "/sustentacao/membros", group: "config" },
-  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sustentacao/perfis", group: "config" },
-  { key: "campos", label: "Campos Custom", icon: Settings, path: "/sustentacao/campos", group: "config" },
-  { key: "automacoes", label: "Automações", icon: Repeat, path: "/sustentacao/automacoes", group: "config" },
+  { key: "dashboard",  label: "Dashboard",        icon: LayoutDashboard, path: "/sustentacao",              group: "main" },
+  { key: "board",      label: "Board Kanban",      icon: Kanban,          path: "/sustentacao/board",        group: "main" },
+  { key: "demandas",   label: "Demandas",          icon: ListTodo,        path: "/sustentacao/demandas",     group: "main" },
+  { key: "projetos",   label: "Projetos",          icon: Layers,          path: "/sustentacao/projetos",     group: "main" },
+  { key: "importacao", label: "Importação Excel",  icon: Upload,          path: "/sustentacao/importacao",   group: "main" },
+  { key: "equipe",     label: "Equipe",            icon: Users,           path: "/sustentacao/equipe",       group: "main" },
+  { key: "fluxo",      label: "Fluxo de Trabalho", icon: GitBranch,       path: "/sustentacao/fluxo",        group: "main" },
+  { key: "relatorios", label: "Relatórios",        icon: FileText,        path: "/sustentacao/relatorios",   group: "org" },
+  { key: "times",      label: "Times",             icon: Users,           path: "/sustentacao/times",        group: "config" },
+  { key: "membros",    label: "Membros",            icon: User,            path: "/sustentacao/membros",      group: "config" },
+  { key: "perfis",     label: "Perfis (RBAC)",      icon: ShieldCheck,     path: "/sustentacao/perfis",       group: "config" },
+  { key: "campos",     label: "Campos Custom",      icon: Settings,        path: "/sustentacao/campos",       group: "config" },
+  { key: "automacoes", label: "Automações",         icon: Repeat,          path: "/sustentacao/automacoes",   group: "config" },
 ];
 
 const ACCENT = {
@@ -370,9 +372,7 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
               <Zap className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">
-            Sala Ágil
-          </TooltipContent>
+          <TooltipContent side="right" className="text-xs">Sala Ágil</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -388,9 +388,7 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
               <Wrench className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">
-            Sustentação
-          </TooltipContent>
+          <TooltipContent side="right" className="text-xs">Sustentação</TooltipContent>
         </Tooltip>
       </div>
     );
@@ -424,7 +422,6 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
 }
 
 // ─── DarkModeToggle ───────────────────────────────────────────────────────────
-// Lê data-theme do DOM como fonte de verdade, com fallback para classList
 function getThemeIsDark(): boolean {
   const attr = document.documentElement.getAttribute("data-theme");
   if (attr === "dark") return true;
@@ -435,8 +432,6 @@ function getThemeIsDark(): boolean {
 function DarkModeToggle() {
   const [isDark, setIsDark] = useState(getThemeIsDark);
 
-  // Sincroniza com o DOM ao montar — garante que o ícone reflita o tema real,
-  // mesmo que o main.tsx ou ThemeToggle já tenha alterado data-theme antes desta montagem.
   useEffect(() => {
     const current = getThemeIsDark();
     setIsDark(current);
@@ -451,9 +446,7 @@ function DarkModeToggle() {
       root.classList.remove("dark");
       root.setAttribute("data-theme", "light");
     }
-    try {
-      sessionStorage.setItem("theme", isDark ? "dark" : "light");
-    } catch {}
+    try { sessionStorage.setItem("theme", isDark ? "dark" : "light"); } catch {}
   }, [isDark]);
 
   return (
@@ -584,7 +577,6 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             />
           )}
 
-          {/* Módulo switcher */}
           <div className="px-2 pt-2">
             {canSwitch ? (
               <ModuleSwitcher module={module} collapsed={collapsed} />
@@ -607,14 +599,12 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           </div>
 
-          {/* Time ativo */}
           <div className="px-2 mb-1">
             <TeamSwitcher module={module} collapsed={collapsed} />
           </div>
 
           <div className="h-px bg-border mx-2 mb-1" />
 
-          {/* Nav */}
           <SidebarNav module={module} activeKey={activeKey} collapsed={collapsed} onNavigate={onNavigate} />
 
           {/* Rodapé */}

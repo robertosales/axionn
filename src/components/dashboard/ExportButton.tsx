@@ -15,6 +15,16 @@ interface ExportData {
   title: string;
 }
 
+// Extrai metadados codificados no title: "Título | Período | Doc: RPT-xxx | Gerado por: Nome"
+function parseTitleMeta(title: string) {
+  const parts = title.split(" | ");
+  const rawTitle  = parts[0]?.trim() ?? title;
+  const periodo   = parts[1]?.trim() ?? "";
+  const docId     = parts.find(p => p.startsWith("RPT-"))?.trim() ?? "";
+  const geradoPor = parts.find(p => p.startsWith("Gerado por:"))?.replace("Gerado por:", "").trim() ?? "Sistema";
+  return { rawTitle, periodo, docId, geradoPor };
+}
+
 export function ExportButton({ getData }: { getData: () => ExportData }) {
   const [exporting, setExporting] = useState(false);
 
@@ -41,7 +51,13 @@ export function ExportButton({ getData }: { getData: () => ExportData }) {
       const XLSX = await import("xlsx");
       const { headers, rows, title } = getData();
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length, 12) }));
+      // largura automática por coluna
+      ws["!cols"] = headers.map((h, ci) => ({
+        wch: Math.min(
+          Math.max(h.length, ...rows.map(r => String(r[ci] ?? "").length), 10),
+          50
+        ),
+      }));
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Dados");
       XLSX.writeFile(wb, `${title}.xlsx`);
@@ -59,23 +75,56 @@ export function ExportButton({ getData }: { getData: () => ExportData }) {
       const { default: jsPDF } = await import("jspdf");
       const autoTable = (await import("jspdf-autotable")).default;
       const { headers, rows, title } = getData();
+      const { rawTitle, periodo, docId, geradoPor } = parseTitleMeta(title);
 
-      const doc = new jsPDF({ orientation: "landscape" });
-      doc.setFontSize(16);
-      doc.text(title, 14, 15);
-      doc.setFontSize(10);
-      doc.text(`Exportado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, 14, 22);
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const W  = doc.internal.pageSize.getWidth();
+      const now = new Date();
+      const dataHora = `${now.toLocaleDateString("pt-BR")} ${now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
 
+      // ── Cabeçalho padronizado (padrão feat/padroniza-cabecalho-pdf)
+      doc.setFillColor(245, 245, 245);
+      doc.rect(0, 0, W, 32, "F");
+
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 30, 30);
+      doc.text(rawTitle, 12, 10);
+
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 100, 100);
+
+      if (periodo) doc.text(`Período: ${periodo}`, 12, 17);
+      doc.text(`Gerado por: ${geradoPor}`, 12, 23);
+      doc.text(`Data: ${dataHora}`, 90, 23);
+      if (docId) doc.text(`Doc: ${docId}`, W - 12, 23, { align: "right" });
+
+      doc.setDrawColor(210, 210, 210);
+      doc.line(12, 30, W - 12, 30);
+
+      // ── Tabela de dados
       autoTable(doc, {
         head: [headers],
         body: rows.map((r) => r.map(String)),
-        startY: 28,
+        startY: 35,
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [245, 247, 250] },
+        margin: { left: 12, right: 12 },
       });
 
-      doc.save(`${title}.pdf`);
+      // ── Paginação
+      const total = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= total; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Página ${i} de ${total}`, W - 12, doc.internal.pageSize.getHeight() - 6, { align: "right" });
+      }
+
+      doc.save(`${rawTitle}.pdf`);
       toast.success("PDF exportado com sucesso!");
     } catch (err) {
       toast.error("Erro ao exportar PDF");
@@ -86,19 +135,22 @@ export function ExportButton({ getData }: { getData: () => ExportData }) {
 
   const exportMarkdown = () => {
     const { headers, rows, title } = getData();
+    const { rawTitle, periodo, geradoPor } = parseTitleMeta(title);
     const now = new Date();
 
-    let md = `# ${title}\n\n`;
+    let md = `# ${rawTitle}\n\n`;
+    if (periodo)   md += `**Período:** ${periodo}  \n`;
+    md += `**Gerado por:** ${geradoPor}  \n`;
     md += `**Data:** ${now.toLocaleDateString("pt-BR")} às ${now.toLocaleTimeString("pt-BR")}  \n\n`;
     md += `| ${headers.join(" | ")} |\n`;
     md += `| ${headers.map(() => "---").join(" | ")} |\n`;
     rows.forEach(row => {
-      md += `| ${row.map(c => String(c).replace(/\|/g, '\\|')).join(" | ")} |\n`;
+      md += `| ${row.map(c => String(c).replace(/\|/g, "\\|")).join(" | ")} |\n`;
     });
     md += `\n---\n*Total de registros: ${rows.length}*\n`;
 
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8;" });
-    downloadBlob(blob, `${title}.md`);
+    downloadBlob(blob, `${rawTitle}.md`);
     toast.success("Markdown exportado com sucesso!");
   };
 

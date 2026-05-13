@@ -2,20 +2,18 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
+// A Anon Key do Supabase é uma chave PÚBLICA por design.
+// Ela é segura no frontend pois o acesso aos dados é controlado pelo RLS (Row Level Security).
+// NUNCA use a Service Role Key aqui — ela sim é confidencial.
 const SUPABASE_URL =
   import.meta.env.APP_SUPABASE_URL ||
-  import.meta.env.VITE_SUPABASE_URL;
+  import.meta.env.VITE_SUPABASE_URL ||
+  "https://rgikyyazotqapaxijwui.supabase.co";
 
 const SUPABASE_PUBLISHABLE_KEY =
   import.meta.env.APP_SUPABASE_KEY ||
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error(
-    '[Supabase] As variáveis de ambiente APP_SUPABASE_URL e APP_SUPABASE_KEY são obrigatórias. ' +
-    'Verifique se estão configuradas no ambiente de deploy.'
-  );
-}
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnaWt5eWF6b3RxYXBheGlqd3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjM5NTIsImV4cCI6MjA4OTgzOTk1Mn0.ADQ3VDenVwNL3fgyNc2Fgu-Si66T7SHdG5se4Hvf5eg";
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

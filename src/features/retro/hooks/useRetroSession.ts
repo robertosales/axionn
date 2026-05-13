@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────────
 export type RetroPhase = "writing" | "voting" | "discussing" | "actions" | "closed";
 export type RetroColumnKey = "went_well" | "to_improve" | "action_items";
 export type RetroModel = "start_stop_continue" | "4ls" | "glad_sad_mad" | "classic";
@@ -39,8 +38,8 @@ export interface RetroSession {
   created_at:    string;
   finished_at:   string | null;
   cards:         RetroCard[];
-  participants:  string[]; // user_ids
-  myVotes:       string[]; // card_ids voted by current user
+  participants:  string[];
+  myVotes:       string[];
 }
 
 export interface RetroHistoryItem {
@@ -56,30 +55,36 @@ export interface RetroHistoryItem {
   toImprove:   number;
 }
 
-// ── Hook ────────────────────────────────────────────────────────────────────────
-export function useRetroSession(teamId: string) {
-  const { profile } = useAuth();
-  const userId = profile?.user_id ?? "";
+interface UseRetroSessionParams {
+  teamId:   string | null;
+  sprintId: string | null;
+  userId:   string | null;
+}
 
+// ── Hook ────────────────────────────────────────────────────────────────────────────
+export function useRetroSession({ teamId, sprintId, userId }: UseRetroSessionParams) {
   const [session,  setSession]  = useState<RetroSession | null>(null);
   const [history,  setHistory]  = useState<RetroHistoryItem[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [sprints,  setSprints]  = useState<{ id: string; name: string }[]>([]);
 
-  // ─ Carrega sprint list ────────────────────────────────────────────────────────
+  // ─ Carrega lista de sprints do time ───────────────────────────────────────────
   useEffect(() => {
     if (!teamId) return;
-    supabase.from("sprints").select("id, name").eq("team_id", teamId)
-      .order("created_at", { ascending: false }).limit(30)
+    supabase
+      .from("sprints")
+      .select("id, name")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false })
+      .limit(30)
       .then(({ data }) => setSprints((data ?? []) as { id: string; name: string }[]));
   }, [teamId]);
 
-  // ─ Carrega sessão aberta + histórico ────────────────────────────────────────
+  // ─ Carrega sessão aberta + histórico ───────────────────────────────────────
   const loadAll = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
     try {
-      // Sessão aberta
       const { data: sessions } = await supabase
         .from("retro_sessions")
         .select("*")
@@ -90,16 +95,16 @@ export function useRetroSession(teamId: string) {
 
       if (sessions && sessions.length > 0) {
         const s = sessions[0] as any;
-        // Busca cards, votos, participantes em paralelo
+        const uid = userId ?? "";
         const [cardsRes, votesRes, partRes, sprintRes] = await Promise.all([
           supabase.from("retro_cards").select("*").eq("session_id", s.id).order("created_at"),
-          supabase.from("retro_votes").select("card_id").eq("session_id", s.id).eq("user_id", userId),
+          supabase.from("retro_votes").select("card_id").eq("session_id", s.id).eq("user_id", uid),
           supabase.from("retro_participants").select("user_id").eq("session_id", s.id),
           supabase.from("sprints").select("name").eq("id", s.sprint_id).single(),
         ]);
         setSession({
           ...s,
-          sprint_name: sprintRes.data?.name ?? "",
+          sprint_name:  sprintRes.data?.name ?? "",
           cards:        (cardsRes.data ?? []) as RetroCard[],
           myVotes:      (votesRes.data ?? []).map((v: any) => v.card_id),
           participants: (partRes.data  ?? []).map((p: any) => p.user_id),
@@ -119,15 +124,12 @@ export function useRetroSession(teamId: string) {
       if (histSessions && histSessions.length > 0) {
         const ids = histSessions.map((h: any) => h.id);
         const sprintIds = [...new Set(histSessions.map((h: any) => h.sprint_id))];
-
-        const [allCards, allSprints] = await Promise.all([
+        const [allCards, allSprintsRes] = await Promise.all([
           supabase.from("retro_cards").select("id, session_id, column_key, is_action").in("session_id", ids),
           supabase.from("sprints").select("id, name").in("id", sprintIds),
         ]);
-
         const sprintMap: Record<string, string> = {};
-        (allSprints.data ?? []).forEach((sp: any) => { sprintMap[sp.id] = sp.name; });
-
+        (allSprintsRes.data ?? []).forEach((sp: any) => { sprintMap[sp.id] = sp.name; });
         setHistory(histSessions.map((h: any) => {
           const hCards = (allCards.data ?? []).filter((c: any) => c.session_id === h.id);
           return {
@@ -151,28 +153,28 @@ export function useRetroSession(teamId: string) {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Realtime — cards da sessão aberta
+  // Realtime
   useEffect(() => {
     if (!session?.id) return;
     const channel = supabase
       .channel(`retro-cards-${session.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "retro_cards", filter: `session_id=eq.${session.id}` },
-        () => loadAll())
-      .on("postgres_changes", { event: "*", schema: "public", table: "retro_votes",  filter: `session_id=eq.${session.id}` },
-        () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "retro_cards",       filter: `session_id=eq.${session.id}` }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "retro_votes",       filter: `session_id=eq.${session.id}` }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "retro_participants", filter: `session_id=eq.${session.id}` }, () => loadAll())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [session?.id, loadAll]);
 
-  // ─ CRUD ────────────────────────────────────────────────────────────────────────
-  const createSession = useCallback(async (sprintId: string, model: RetroModel = "classic") => {
-    if (!userId) return;
+  // ─ CRUD ──────────────────────────────────────────────────────────────────────────────
+  const createSession = useCallback(async (sprintIdOverride?: string, model: RetroModel = "classic") => {
+    if (!userId || !teamId) return;
+    const sid = sprintIdOverride ?? sprintId;
+    if (!sid) { toast.error("Nenhuma sprint ativa para criar retrospectiva"); return; }
     const { error } = await supabase.from("retro_sessions").insert({
-      team_id: teamId, sprint_id: sprintId, created_by: userId,
+      team_id: teamId, sprint_id: sid, created_by: userId,
       status: "open", current_phase: "writing", model,
     });
     if (error) { toast.error("Erro ao criar sessão"); return; }
-    // Registra facilitador
     const { data: newSession } = await supabase
       .from("retro_sessions").select("id").eq("team_id", teamId).eq("status", "open")
       .order("created_at", { ascending: false }).limit(1).single();
@@ -181,7 +183,7 @@ export function useRetroSession(teamId: string) {
     }
     toast.success("Sessão de retrospectiva criada!");
     await loadAll();
-  }, [teamId, userId, loadAll]);
+  }, [teamId, sprintId, userId, loadAll]);
 
   const joinSession = useCallback(async () => {
     if (!session || !userId) return;
@@ -190,7 +192,8 @@ export function useRetroSession(teamId: string) {
     if (!existing) {
       await supabase.from("retro_participants").insert({ session_id: session.id, user_id: userId });
     } else {
-      await supabase.from("retro_participants").update({ is_online: true, last_seen_at: new Date().toISOString() })
+      await supabase.from("retro_participants")
+        .update({ is_online: true, last_seen_at: new Date().toISOString() })
         .eq("session_id", session.id).eq("user_id", userId);
     }
     await loadAll();
@@ -219,12 +222,13 @@ export function useRetroSession(teamId: string) {
   const voteCard = useCallback(async (cardId: string) => {
     if (!session || !userId) return;
     const alreadyVoted = session.myVotes.includes(cardId);
+    const card = session.cards.find(c => c.id === cardId);
     if (alreadyVoted) {
       await supabase.from("retro_votes").delete().eq("card_id", cardId).eq("user_id", userId);
-      await supabase.from("retro_cards").update({ votes: Math.max(0, (session.cards.find(c => c.id === cardId)?.votes ?? 1) - 1) }).eq("id", cardId);
+      await supabase.from("retro_cards").update({ votes: Math.max(0, (card?.votes ?? 1) - 1) }).eq("id", cardId);
     } else {
       await supabase.from("retro_votes").insert({ session_id: session.id, card_id: cardId, user_id: userId });
-      await supabase.from("retro_cards").update({ votes: (session.cards.find(c => c.id === cardId)?.votes ?? 0) + 1 }).eq("id", cardId);
+      await supabase.from("retro_cards").update({ votes: (card?.votes ?? 0) + 1 }).eq("id", cardId);
     }
     await loadAll();
   }, [session, userId, loadAll]);

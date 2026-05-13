@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── Seções válidas ──────────────────────────────────────────────────────────────────────────
+// ─── Seções válidas ─────────────────────────────────────────────────────────────────────
 const VALID_SECTIONS = [
   "dashboard", "backlog", "board", "planning-poker", "retrospectiva",
   "releases", "relatorios", "notificacoes", "gerador-apf", "metricas",
@@ -39,7 +39,7 @@ const VALID_SECTIONS = [
 
 export type SectionKey = typeof VALID_SECTIONS[number];
 
-// ─── AccessDenied ────────────────────────────────────────────────────────────────────────────
+// ─── AccessDenied ─────────────────────────────────────────────────────────────────────────
 function AccessDenied() {
   return (
     <div className="flex flex-col items-center justify-center py-24 space-y-3">
@@ -50,23 +50,25 @@ function AccessDenied() {
   );
 }
 
-// ─── SectionGuard ────────────────────────────────────────────────────────────────────────────
+// ─── SectionGuard ────────────────────────────────────────────────────────────────────────
 function SectionGuard({ permission, children }: { permission: string; children: React.ReactNode }) {
   const { hasPermission } = useAuth();
   return hasPermission(permission) ? <>{children}</> : <AccessDenied />;
 }
 
-// ─── Index ────────────────────────────────────────────────────────────────────────────────────
+// ─── Index ───────────────────────────────────────────────────────────────────────────────────
 const Index = () => {
   const { section } = useParams<{ section: string }>();
   const navigate = useNavigate();
+
+  // FIX: só redireciona após auth carregar E section não estar na lista
+  // Antes o useEffect disparava antes do section ser resolvido pelo router
   const active = (VALID_SECTIONS.includes(section as SectionKey) ? section : "dashboard") as SectionKey;
 
-  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
+  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
 
-  // 8C — Onboarding
   const { showWizard, completeOnboarding } = useOnboarding();
 
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
@@ -82,14 +84,18 @@ const Index = () => {
     }
   }, [loading, teams]);
 
+  // FIX: aguarda auth carregar antes de redirecionar seção inválida
   useEffect(() => {
+    if (loading) return;
     if (section && !VALID_SECTIONS.includes(section as SectionKey)) {
       navigate("/sala-agil/dashboard", { replace: true });
     }
-  }, [section]);
+  }, [loading, section]);
 
   const handleNavigate = (key: string) => navigate(`/sala-agil/${key}`);
-  const needsTeam = !currentTeamId && active !== "times";
+
+  // FIX: admin não é bloqueado por needsTeam — tem acesso livre a todas as seções
+  const needsTeam = !isAdmin && !currentTeamId && active !== "times";
 
   return (
     <AppShell module="sala_agil" activeKey={active} onNavigate={handleNavigate}>
@@ -125,12 +131,12 @@ const Index = () => {
 
         {!loading && !needsTeam && (
           <>
-            {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
+            {active === "dashboard"      && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
             {active === "planning-poker" && <PlanningPoker />}
-            {active === "equipe" && <DeveloperManager />}
-            {active === "calendario" && <CalendarView />}
-            {active === "retrospectiva" && <RetroManager />}
-            {active === "gerador-apf" && (
+            {active === "equipe"         && <DeveloperManager />}
+            {active === "calendario"     && <CalendarView />}
+            {active === "retrospectiva"  && <RetroManager />}
+            {active === "gerador-apf"    && (
               <SectionGuard permission="view_backlog"><ApfGeneratorPage /></SectionGuard>
             )}
             {active === "backlog" && (
@@ -138,42 +144,18 @@ const Index = () => {
                 <div className="space-y-8"><SprintManager /><UserStoryManager /></div>
               </SectionGuard>
             )}
-            {active === "epicos" && (
-              <SectionGuard permission="view_backlog"><EpicManager /></SectionGuard>
-            )}
-            {active === "board" && (
-              <SectionGuard permission="view_kanban"><KanbanBoard /></SectionGuard>
-            )}
-            {active === "atividades" && (
-              <SectionGuard permission="manage_activities"><ActivityManager /></SectionGuard>
-            )}
-            {active === "impedimentos" && (
-              <SectionGuard permission="report_impediment"><ImpedimentList /></SectionGuard>
-            )}
-            {active === "metricas" && (
-              <SectionGuard permission="view_dashboard"><MetricsDashboard /></SectionGuard>
-            )}
-            {active === "historico" && (
-              <SectionGuard permission="view_dashboard"><AgileHistory /></SectionGuard>
-            )}
-            {active === "times" && (
-              <SectionGuard permission="manage_teams"><TeamManager moduleFilter="sala_agil" /></SectionGuard>
-            )}
-            {active === "membros" && (
-              <SectionGuard permission="manage_users"><TeamMembersManager /></SectionGuard>
-            )}
-            {active === "perfis" && (
-              <SectionGuard permission="manage_roles"><UserRolesManager /></SectionGuard>
-            )}
-            {active === "fluxo" && (
-              <SectionGuard permission="manage_workflow"><WorkflowManager /></SectionGuard>
-            )}
-            {active === "campos" && (
-              <SectionGuard permission="manage_custom_fields"><CustomFieldManager /></SectionGuard>
-            )}
-            {active === "automacoes" && (
-              <SectionGuard permission="manage_automations"><AutomationManager /></SectionGuard>
-            )}
+            {active === "epicos"       && <SectionGuard permission="view_backlog"><EpicManager /></SectionGuard>}
+            {active === "board"        && <SectionGuard permission="view_kanban"><KanbanBoard /></SectionGuard>}
+            {active === "atividades"   && <SectionGuard permission="manage_activities"><ActivityManager /></SectionGuard>}
+            {active === "impedimentos" && <SectionGuard permission="report_impediment"><ImpedimentList /></SectionGuard>}
+            {active === "metricas"     && <SectionGuard permission="view_dashboard"><MetricsDashboard /></SectionGuard>}
+            {active === "historico"    && <SectionGuard permission="view_dashboard"><AgileHistory /></SectionGuard>}
+            {active === "times"        && <SectionGuard permission="manage_teams"><TeamManager moduleFilter="sala_agil" /></SectionGuard>}
+            {active === "membros"      && <SectionGuard permission="manage_users"><TeamMembersManager /></SectionGuard>}
+            {active === "perfis"       && <SectionGuard permission="manage_roles"><UserRolesManager /></SectionGuard>}
+            {active === "fluxo"        && <SectionGuard permission="manage_workflow"><WorkflowManager /></SectionGuard>}
+            {active === "campos"       && <SectionGuard permission="manage_custom_fields"><CustomFieldManager /></SectionGuard>}
+            {active === "automacoes"   && <SectionGuard permission="manage_automations"><AutomationManager /></SectionGuard>}
           </>
         )}
       </div>

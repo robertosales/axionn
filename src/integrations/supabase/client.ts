@@ -2,26 +2,22 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// A Anon Key do Supabase é uma chave PÚBLICA por design.
-// Ela é segura no frontend pois o acesso aos dados é controlado pelo RLS (Row Level Security).
-// NUNCA use a Service Role Key aqui — ela sim é confidencial.
-//
-// Ordem de prioridade das variáveis de ambiente:
-// 1. APP_SUPABASE_URL / APP_SUPABASE_KEY  — usadas pelo Lovable em produção
-// 2. VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY — usadas em ambiente local (.env)
+// O Lovable expõe secrets com prefixo VITE_ para o frontend (via Vite).
+// Use VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY nos Secrets do Lovable.
+// APP_SUPABASE_* são mantidos como fallback para compatibilidade.
 const SUPABASE_URL =
-  import.meta.env.APP_SUPABASE_URL ||
-  import.meta.env.VITE_SUPABASE_URL;
+  import.meta.env.VITE_SUPABASE_URL ||
+  import.meta.env.APP_SUPABASE_URL;
 
 const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env.APP_SUPABASE_KEY ||
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.APP_SUPABASE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(
     '[Supabase] Variáveis de ambiente não encontradas.\n' +
-    'Em produção (Lovable): configure APP_SUPABASE_URL e APP_SUPABASE_KEY.\n' +
-    'Em desenvolvimento local: crie um arquivo .env com VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.'
+    'No Lovable: configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY nos Secrets.\n' +
+    'Localmente: crie .env com VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.'
   );
 }
 

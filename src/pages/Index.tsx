@@ -29,20 +29,42 @@ import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── Seções válidas ──────────────────────────────────────────────────────────
 const VALID_SECTIONS = [
-  "dashboard", "backlog", "board", "planning-poker", "retrospectiva",
-  "releases", "relatorios", "notificacoes", "gerador-apf", "metricas",
-  "historico", "calendario", "equipe", "epicos", "atividades", "impedimentos",
-  "times", "membros", "perfis", "fluxo", "campos", "automacoes",
+  "dashboard",
+  "backlog",
+  "board",
+  "planning-poker",
+  "retrospectiva",
+  "releases",
+  "relatorios",
+  "notificacoes",
+  "gerador-apf",
+  "metricas",
+  "historico",
+  "calendario",
+  "equipe",
+  "epicos",
+  "atividades",
+  "impedimentos",
+  "times",
+  "membros",
+  "perfis",
+  "fluxo",
+  "campos",
+  "automacoes",
 ] as const;
 
-export type SectionKey = typeof VALID_SECTIONS[number];
+export type SectionKey = (typeof VALID_SECTIONS)[number];
 
-// Seções que NUNCA exigem time selecionado (acesso universal)
 const TEAM_FREE_SECTIONS: SectionKey[] = [
-  "planning-poker", "retrospectiva", "times", "membros", "perfis",
-  "fluxo", "campos", "automacoes",
+  "planning-poker",
+  "retrospectiva",
+  "times",
+  "membros",
+  "perfis",
+  "fluxo",
+  "campos",
+  "automacoes",
 ];
 
 function AccessDenied() {
@@ -66,7 +88,7 @@ const Index = () => {
 
   const active = (VALID_SECTIONS.includes(section as SectionKey) ? section : "dashboard") as SectionKey;
 
-  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin, roles } = useAuth();
+  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
   const { showWizard, completeOnboarding } = useOnboarding();
@@ -84,7 +106,6 @@ const Index = () => {
     }
   }, [loading, teams]);
 
-  // Só redireciona seção inválida após auth carregar
   useEffect(() => {
     if (loading) return;
     if (section && !VALID_SECTIONS.includes(section as SectionKey)) {
@@ -94,10 +115,6 @@ const Index = () => {
 
   const handleNavigate = (key: string) => navigate(`/sala-agil/${key}`);
 
-  // FIX v2: não bloqueia se:
-  // 1. usuário é admin (isAdmin)
-  // 2. a seção está na lista de TEAM_FREE_SECTIONS (planning-poker, retrospectiva, etc)
-  // 3. ainda está carregando (evita flash de "selecione um time")
   const isTeamFreeSection = TEAM_FREE_SECTIONS.includes(active);
   const needsTeam = !loading && !isAdmin && !currentTeamId && !isTeamFreeSection;
 
@@ -107,7 +124,10 @@ const Index = () => {
         open={showTeamModal}
         teams={moduleTeams}
         moduleLabel="Sala Ágil"
-        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
+        onSelect={(id) => {
+          setCurrentTeamId(id);
+          setShowTeamModal(false);
+        }}
         onClose={() => setShowTeamModal(false)}
       />
 
@@ -134,29 +154,84 @@ const Index = () => {
 
         {!loading && !needsTeam && (
           <>
-            {active === "dashboard"      && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
+            {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
             {active === "planning-poker" && <PlanningPoker />}
-            {active === "equipe"         && <DeveloperManager />}
-            {active === "calendario"     && <CalendarView />}
-            {active === "retrospectiva"  && <RetroManager />}
-            {active === "gerador-apf"    && <SectionGuard permission="view_backlog"><ApfGeneratorPage /></SectionGuard>}
-            {active === "backlog"        && (
+            {active === "equipe" && <DeveloperManager />}
+            {active === "calendario" && <CalendarView />}
+            {active === "retrospectiva" && <RetroManager />}
+            {active === "gerador-apf" && (
               <SectionGuard permission="view_backlog">
-                <div className="space-y-8"><SprintManager /><UserStoryManager /></div>
+                <ApfGeneratorPage />
               </SectionGuard>
             )}
-            {active === "epicos"       && <SectionGuard permission="view_backlog"><EpicManager /></SectionGuard>}
-            {active === "board"        && <SectionGuard permission="view_kanban"><KanbanBoard /></SectionGuard>}
-            {active === "atividades"   && <SectionGuard permission="manage_activities"><ActivityManager /></SectionGuard>}
-            {active === "impedimentos" && <SectionGuard permission="report_impediment"><ImpedimentList /></SectionGuard>}
-            {active === "metricas"     && <SectionGuard permission="view_dashboard"><MetricsDashboard /></SectionGuard>}
-            {active === "historico"    && <SectionGuard permission="view_dashboard"><AgileHistory /></SectionGuard>}
-            {active === "times"        && <SectionGuard permission="manage_teams"><TeamManager moduleFilter="sala_agil" /></SectionGuard>}
-            {active === "membros"      && <SectionGuard permission="manage_users"><TeamMembersManager /></SectionGuard>}
-            {active === "perfis"       && <SectionGuard permission="manage_roles"><UserRolesManager /></SectionGuard>}
-            {active === "fluxo"        && <SectionGuard permission="manage_workflow"><WorkflowManager /></SectionGuard>}
-            {active === "campos"       && <SectionGuard permission="manage_custom_fields"><CustomFieldManager /></SectionGuard>}
-            {active === "automacoes"   && <SectionGuard permission="manage_automations"><AutomationManager /></SectionGuard>}
+            {active === "backlog" && (
+              <SectionGuard permission="view_backlog">
+                <div className="space-y-8">
+                  <SprintManager />
+                  <UserStoryManager />
+                </div>
+              </SectionGuard>
+            )}
+            {active === "epicos" && (
+              <SectionGuard permission="view_backlog">
+                <EpicManager />
+              </SectionGuard>
+            )}
+            {active === "board" && (
+              <SectionGuard permission="view_kanban">
+                <KanbanBoard />
+              </SectionGuard>
+            )}
+            {active === "atividades" && (
+              <SectionGuard permission="manage_activities">
+                <ActivityManager />
+              </SectionGuard>
+            )}
+            {active === "impedimentos" && (
+              <SectionGuard permission="report_impediment">
+                <ImpedimentList />
+              </SectionGuard>
+            )}
+            {active === "metricas" && (
+              <SectionGuard permission="view_dashboard">
+                <MetricsDashboard />
+              </SectionGuard>
+            )}
+            {active === "historico" && (
+              <SectionGuard permission="view_dashboard">
+                <AgileHistory />
+              </SectionGuard>
+            )}
+            {active === "times" && (
+              <SectionGuard permission="manage_teams">
+                <TeamManager moduleFilter="sala_agil" />
+              </SectionGuard>
+            )}
+            {active === "membros" && (
+              <SectionGuard permission="manage_users">
+                <TeamMembersManager />
+              </SectionGuard>
+            )}
+            {active === "perfis" && (
+              <SectionGuard permission="manage_roles">
+                <UserRolesManager />
+              </SectionGuard>
+            )}
+            {active === "fluxo" && (
+              <SectionGuard permission="manage_workflow">
+                <WorkflowManager />
+              </SectionGuard>
+            )}
+            {active === "campos" && (
+              <SectionGuard permission="manage_custom_fields">
+                <CustomFieldManager />
+              </SectionGuard>
+            )}
+            {active === "automacoes" && (
+              <SectionGuard permission="manage_automations">
+                <AutomationManager />
+              </SectionGuard>
+            )}
           </>
         )}
       </div>

@@ -2,17 +2,20 @@
  * sprintStatus.ts
  * Helper centralizado para derivar o status semântico de uma sprint.
  *
- * Regra de negócio (definida em 2026-05-14):
+ * Regras de negócio:
  * - Uma sprint SÓ é "encerrada" quando fechada manualmente via closeSprint().
- * - A data fim (end_date) é apenas um planejamento; ultrapassá-la NÃO encerra a sprint.
- * - Se is_active=true e hoje > end_date → sprint ATIVA MAS ATRASADA.
+ * - A data fim (end_date) é apenas planejamento; ultrapassá-la NÃO encerra a sprint.
+ * - Se is_active=true  e hoje > end_date  → sprint ATIVA MAS ATRASADA.
+ * - Se is_active=false e closed_at=null  e end_date FUTURA  → sprint AGUARDANDO INÍCIO.
+ * - Se is_active=false e closed_at=null  e end_date PASSADA → encerrada sem registro (histórico).
  */
 
 export type SprintStatusType =
-  | "ativa"           // is_active=true, dentro do prazo
-  | "ativa_atrasada"  // is_active=true, end_date já passou
-  | "encerrada"       // is_active=false, closed_at preenchido
-  | "encerrada_sem_registro"; // is_active=false, sem closed_at (histórico antigo)
+  | "ativa"                  // is_active=true, dentro do prazo
+  | "ativa_atrasada"         // is_active=true, end_date já passou
+  | "aguardando"             // is_active=false, closed_at=null, end_date futura (sprint planejada)
+  | "encerrada"              // is_active=false, closed_at preenchido
+  | "encerrada_sem_registro"; // is_active=false, closed_at=null, end_date passada (histórico antigo)
 
 export interface SprintStatusResult {
   status: SprintStatusType;
@@ -53,8 +56,7 @@ export function getSprintStatus(sprint: {
     if (endDate) {
       const end = new Date(endDate);
       end.setHours(0, 0, 0, 0);
-      const diffMs   = today.getTime() - end.getTime();
-      const diffDays = Math.floor(diffMs / 86_400_000);
+      const diffDays = Math.floor((today.getTime() - end.getTime()) / 86_400_000);
       if (diffDays > 0) {
         return {
           status: "ativa_atrasada",
@@ -74,7 +76,7 @@ export function getSprintStatus(sprint: {
     };
   }
 
-  // ── Sprint ENCERRADA ─────────────────────────────────────────────────────
+  // ── Sprint ENCERRADA (com registro manual) ───────────────────────────────
   if (closedAt) {
     const days = delayDays ?? 0;
     return {
@@ -86,7 +88,23 @@ export function getSprintStatus(sprint: {
     };
   }
 
-  // ── Sprint encerrada sem registro (histórico antigo) ─────────────────────
+  // ── Sprint AGUARDANDO INÍCIO (futura, ainda não ativada) ──────────────────
+  // Condição: is_active=false + closed_at=null + end_date no futuro
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    if (end > today) {
+      return {
+        status: "aguardando",
+        delayDays: 0,
+        label: "Aguardando",
+        emoji: "⏳",
+        colorClass: "bg-blue-500/15 border-blue-400/40 text-blue-600",
+      };
+    }
+  }
+
+  // ── Sprint encerrada sem registro (histórico antigo / end_date passada) ───
   return {
     status: "encerrada_sem_registro",
     delayDays: 0,

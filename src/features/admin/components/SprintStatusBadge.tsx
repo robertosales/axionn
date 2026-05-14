@@ -1,45 +1,49 @@
-/**
- * SprintStatusBadge
- * Badge reutilizável que exibe o status semântico de uma sprint.
- * Usa getSprintStatus() para derivar o estado correto.
- */
-import { getSprintStatus } from "@/utils/sprintStatus";
+// src/features/admin/components/SprintStatusBadge.tsx
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { getSprintStatus } from "@/utils/sprintStatus";
 
-interface Props {
+interface SprintStatusBadgeProps {
   sprint: {
-    is_active?: boolean;
     isActive?: boolean;
-    end_date?: string | null;
+    is_active?: boolean;
     endDate?: string | null;
-    closed_at?: string | null;
+    end_date?: string | null;
     closedAt?: string | null;
-    delay_days?: number | null;
+    closed_at?: string | null;
     delayDays?: number | null;
+    delay_days?: number | null;
   };
   className?: string;
-  /** Se true, exibe apenas o emoji sem o label textual */
-  compact?: boolean;
 }
 
-export function SprintStatusBadge({ sprint, className, compact = false }: Props) {
-  const result = getSprintStatus(sprint);
+/**
+ * Badge semântico de status de sprint.
+ * Usa getSprintStatus() como única fonte de verdade.
+ *
+ * Estados possíveis:
+ *  🟢 Ativa            — is_active=true, dentro do prazo
+ *  🔴 Ativa (Xd atraso)— is_active=true, passou da data
+ *  ⏳ Aguardando        — is_active=false, closed_at=null, end_date futura
+ *  🏁 Encerrada        — is_active=false, closed_at preenchido
+ *  ⚫ Encerrada        — is_active=false, closed_at=null, end_date passada (histórico)
+ */
+export function SprintStatusBadge({ sprint, className }: SprintStatusBadgeProps) {
+  if (!sprint) return null;
+
+  const { label, emoji, colorClass } = getSprintStatus(sprint);
 
   return (
-    <span
+    <Badge
+      variant="outline"
       className={cn(
-        "inline-flex items-center gap-1 h-6 px-2 rounded-full border text-[10px] font-semibold",
-        result.colorClass,
+        "text-[10px] font-semibold gap-1 px-2 py-0.5 whitespace-nowrap",
+        colorClass,
         className,
       )}
     >
-      <span>{result.emoji}</span>
-      {!compact && <span>{result.label}</span>}
-      {!compact && result.delayDays > 0 && result.status === "ativa_atrasada" && (
-        <span className="ml-0.5 font-bold">
-          +{result.delayDays}d
-        </span>
-      )}
-    </span>
+      <span>{emoji}</span>
+      <span>{label}</span>
+    </Badge>
   );
 }

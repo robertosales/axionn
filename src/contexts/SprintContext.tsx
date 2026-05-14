@@ -144,7 +144,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       setSprints((sprintRes.data || []).map((s: any) => ({
         id: s.id, name: s.name, startDate: s.start_date, endDate: s.end_date,
         goal: s.goal || "", isActive: s.is_active, createdAt: s.created_at,
-        // Novos campos do lifecycle
         closedAt:  s.closed_at  ?? null,
         delayDays: s.delay_days ?? null,
       })));
@@ -425,12 +424,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   /**
    * addSprint: Cria uma nova sprint SEM desativar as demais.
    * REGRA: encerramento de sprint é SEMPRE manual via closeSprint().
-   * A nova sprint é criada com is_active=false — o usuário deve
-   * ativá-la explicitamente via setActiveSprint() se necessário.
-   *
-   * CORREÇÃO: removida a linha que fazia UPDATE is_active=false em
-   * todas as sprints do time, que era a causa do bug de encerramento
-   * automático indevido.
+   * A nova sprint é criada com is_active=false.
    */
   const addSprint = async (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     if (!teamId) return;
@@ -440,7 +434,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       start_date: sprint.startDate,
       end_date: sprint.endDate,
       goal: sprint.goal,
-      is_active: false,   // nova sprint começa inativa; ativar via setActiveSprint
+      is_active: false,
       closed_at: null,
       delay_days: null,
     });
@@ -469,8 +463,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
    * closeSprint: Encerramento MANUAL e EXPLÍCITO da sprint.
    * - Marca is_active=false
    * - Registra closed_at = now()
-   * - Calcula e persiste delay_days = MAX(0, closed_at::date - end_date::date)
-   * Esta é a ÚNICA forma de encerrar uma sprint no sistema.
+   * - Calcula e persiste delay_days
    */
   const closeSprint = async (id: string) => {
     const sprint = sprints.find((s) => s.id === id);
@@ -496,12 +489,29 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
+  /**
+   * setActiveSprint: Ativa uma sprint específica.
+   *
+   * CORREÇÃO (2026-05-14): Antes fazia UPDATE is_active=false em TODAS as
+   * sprints do time, zerando inclusive sprints futuras (aguardando).
+   * Agora desativa APENAS a sprint que estava ativa no momento.
+   *
+   * IMPORTANTE: desativar via setActiveSprint NÃO encerra a sprint.
+   * O closed_at e delay_days só são preenchidos via closeSprint().
+   */
   const setActiveSprintFn = async (id: string) => {
     if (!teamId) return;
-    // Desativa todas as sprints do time antes de ativar a selecionada.
-    // Isso NÃO encerra sprints — apenas transfere o flag is_active.
-    // O closed_at e delay_days SÓ são preenchidos via closeSprint().
-    await supabase.from("sprints").update({ is_active: false }).eq("team_id", teamId);
+
+    // Desativa apenas a sprint atualmente ativa (se houver)
+    const currentActive = sprints.find((s) => s.isActive);
+    if (currentActive && currentActive.id !== id) {
+      await supabase
+        .from("sprints")
+        .update({ is_active: false })
+        .eq("id", currentActive.id);
+    }
+
+    // Ativa a sprint selecionada
     await supabase.from("sprints").update({ is_active: true }).eq("id", id);
     await refreshAll();
   };

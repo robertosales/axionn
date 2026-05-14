@@ -31,8 +31,17 @@ export function useFluxoAdmin(teamId: string) {
   const [colunas, setColunas] = useState<FluxoColuna[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // BUG FIX 1: limpa colunas imediatamente ao trocar de time
+  // evita que colunas do time anterior apareçam enquanto o novo carrega
+  useEffect(() => {
+    setColunas([]);
+  }, [teamId]);
+
   const load = useCallback(async () => {
-    if (!teamId) return;
+    if (!teamId) {
+      setColunas([]);
+      return;
+    }
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -40,10 +49,15 @@ export function useFluxoAdmin(teamId: string) {
         .select("*")
         .eq("team_id", teamId)
         .order("sort_order");
-      if (error) throw error;
+
+      if (error) {
+        // BUG FIX 2: exibe mensagem de erro real do Supabase (não silencia)
+        console.error("[useFluxoAdmin] load error:", error);
+        toast.error("Erro ao carregar fluxo: " + error.message);
+        return;
+      }
+
       setColunas((data ?? []) as FluxoColuna[]);
-    } catch {
-      toast.error("Erro ao carregar fluxo");
     } finally {
       setLoading(false);
     }
@@ -51,43 +65,99 @@ export function useFluxoAdmin(teamId: string) {
 
   useEffect(() => { load(); }, [load]);
 
-  const create = async (data: Omit<FluxoColuna, "id" | "team_id">) => {
-    const nextOrder = colunas.length > 0 ? Math.max(...colunas.map(c => c.sort_order)) + 1 : 0;
-    const { error } = await supabase.from("workflow_columns").insert({
-      ...data,
-      team_id: teamId,
-      sort_order: nextOrder,
-    });
-    if (error) { toast.error("Erro ao criar coluna: " + error.message); return false; }
+  const create = async (payload: Omit<FluxoColuna, "id" | "team_id">) => {
+    if (!teamId) {
+      toast.error("Nenhum time selecionado");
+      return false;
+    }
+
+    // Calcula sort_order baseado nas colunas já carregadas
+    const nextOrder =
+      colunas.length > 0
+        ? Math.max(...colunas.map(c => c.sort_order)) + 1
+        : 0;
+
+    const row = {
+      key:         payload.key,
+      label:       payload.label,
+      color_class: payload.color_class,
+      dot_color:   payload.dot_color,
+      hex:         payload.hex,
+      wip_limit:   payload.wip_limit ?? null,
+      team_id:     teamId,
+      sort_order:  nextOrder,
+    };
+
+    // BUG FIX 3: usa select() para obter o registro inserido e confirmar persistência
+    const { data: inserted, error } = await supabase
+      .from("workflow_columns")
+      .insert(row)
+      .select()
+      .single();
+
+    if (error || !inserted) {
+      console.error("[useFluxoAdmin] insert error:", error);
+      toast.error("Erro ao criar coluna: " + (error?.message ?? "Resposta vazia do banco"));
+      return false;
+    }
+
+    // Atualiza estado local imediatamente com o registro confirmado pelo banco
+    setColunas(prev => [...prev, inserted as FluxoColuna]);
     toast.success("Coluna criada com sucesso!");
+
+    // Recarrega para garantir ordem e dados frescos
     await load();
     return true;
   };
 
   const update = async (id: string, data: Partial<Omit<FluxoColuna, "id" | "team_id">>) => {
-    const { error } = await supabase.from("workflow_columns").update(data).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar coluna: " + error.message); return false; }
+    const { data: updated, error } = await supabase
+      .from("workflow_columns")
+      .update(data)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error || !updated) {
+      console.error("[useFluxoAdmin] update error:", error);
+      toast.error("Erro ao atualizar coluna: " + (error?.message ?? "Resposta vazia"));
+      return false;
+    }
+
     toast.success("Coluna atualizada!");
     await load();
     return true;
   };
 
   const remove = async (id: string) => {
-    // Verifica se há HUs usando esse status
     const col = colunas.find(c => c.id === id);
     if (col) {
-      const { count } = await supabase
+      const { count, error: countError } = await supabase
         .from("user_stories")
         .select("id", { count: "exact", head: true })
         .eq("team_id", teamId)
         .eq("status", col.key);
+
+      if (countError) {
+        console.error("[useFluxoAdmin] count error:", countError);
+      }
       if ((count ?? 0) > 0) {
         toast.error(`Não é possível excluir: ${count} HU(s) estão nessa coluna`);
         return false;
       }
     }
-    const { error } = await supabase.from("workflow_columns").delete().eq("id", id);
-    if (error) { toast.error("Erro ao excluir coluna"); return false; }
+
+    const { error } = await supabase
+      .from("workflow_columns")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("[useFluxoAdmin] delete error:", error);
+      toast.error("Erro ao excluir coluna: " + error.message);
+      return false;
+    }
+
     toast.success("Coluna excluída");
     await load();
     return true;
@@ -98,10 +168,14 @@ export function useFluxoAdmin(teamId: string) {
     if (idx <= 0) return;
     const prev = colunas[idx - 1];
     const curr = colunas[idx];
-    await Promise.all([
-      supabase.from("workflow_columns").update({ sort_order: prev.sort_order }).eq("id", curr.id),
-      supabase.from("workflow_columns").update({ sort_order: curr.sort_order }).eq("id", prev.id),
+    const [r1, r2] = await Promise.all([
+      supabase.from("workflow_columns").update({ sort_order: prev.sort_order }).eq("id", curr.id).select().single(),
+      supabase.from("workflow_columns").update({ sort_order: curr.sort_order }).eq("id", prev.id).select().single(),
     ]);
+    if (r1.error || r2.error) {
+      console.error("[useFluxoAdmin] moveUp error:", r1.error, r2.error);
+      toast.error("Erro ao reordenar colunas");
+    }
     await load();
   };
 
@@ -110,10 +184,14 @@ export function useFluxoAdmin(teamId: string) {
     if (idx < 0 || idx >= colunas.length - 1) return;
     const next = colunas[idx + 1];
     const curr = colunas[idx];
-    await Promise.all([
-      supabase.from("workflow_columns").update({ sort_order: next.sort_order }).eq("id", curr.id),
-      supabase.from("workflow_columns").update({ sort_order: curr.sort_order }).eq("id", next.id),
+    const [r1, r2] = await Promise.all([
+      supabase.from("workflow_columns").update({ sort_order: next.sort_order }).eq("id", curr.id).select().single(),
+      supabase.from("workflow_columns").update({ sort_order: curr.sort_order }).eq("id", next.id).select().single(),
     ]);
+    if (r1.error || r2.error) {
+      console.error("[useFluxoAdmin] moveDown error:", r1.error, r2.error);
+      toast.error("Erro ao reordenar colunas");
+    }
     await load();
   };
 

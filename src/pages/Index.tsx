@@ -6,7 +6,6 @@ import { SprintManager } from "@/components/SprintManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
 import { UserStoryManager } from "@/components/UserStoryManager";
 import { ActivityManager } from "@/components/ActivityManager";
-import { KanbanBoard } from "@/components/KanbanBoard";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { ImpedimentList } from "@/components/ImpedimentManager";
 import { EpicManager } from "@/components/EpicManager";
@@ -28,8 +27,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { KanbanPage } from "@/features/kanban/pages/KanbanPage";
 
-// ─── Seções válidas ──────────────────────────────────────────────────────────
+// ─── Seções válidas ────────────────────────────────────────────────────────────────────────────
 const VALID_SECTIONS = [
   "dashboard",
   "backlog",
@@ -57,7 +57,6 @@ const VALID_SECTIONS = [
 
 export type SectionKey = (typeof VALID_SECTIONS)[number];
 
-// Seções que NUNCA exigem time selecionado (acesso universal)
 const TEAM_FREE_SECTIONS: SectionKey[] = [
   "planning-poker",
   "retrospectiva",
@@ -108,7 +107,6 @@ const Index = () => {
     }
   }, [loading, teams]);
 
-  // Só redireciona seção inválida após auth carregar
   useEffect(() => {
     if (loading) return;
     if (section && !VALID_SECTIONS.includes(section as SectionKey)) {
@@ -118,10 +116,6 @@ const Index = () => {
 
   const handleNavigate = (key: string) => navigate(`/sala-agil/${key}`);
 
-  // FIX v2: não bloqueia se:
-  // 1. usuário é admin (isAdmin)
-  // 2. a seção está na lista de TEAM_FREE_SECTIONS (planning-poker, retrospectiva, etc)
-  // 3. ainda está carregando (evita flash de "selecione um time")
   const isTeamFreeSection = TEAM_FREE_SECTIONS.includes(active);
   const needsTeam = !loading && !isAdmin && !currentTeamId && !isTeamFreeSection;
 
@@ -186,7 +180,7 @@ const Index = () => {
             )}
             {active === "board" && (
               <SectionGuard permission="view_kanban">
-                <KanbanBoard />
+                <KanbanPage />
               </SectionGuard>
             )}
             {active === "atividades" && (

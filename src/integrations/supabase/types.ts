@@ -671,6 +671,39 @@ export type Database = {
           },
         ]
       }
+      demanda_hours_backup_20260511: {
+        Row: {
+          created_at: string | null
+          demanda_id: string | null
+          descricao: string | null
+          fase: string | null
+          horas: number | null
+          id: string | null
+          minutos: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          demanda_id?: string | null
+          descricao?: string | null
+          fase?: string | null
+          horas?: number | null
+          id?: string | null
+          minutos?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          demanda_id?: string | null
+          descricao?: string | null
+          fase?: string | null
+          horas?: number | null
+          id?: string | null
+          minutos?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       demanda_responsaveis: {
         Row: {
           created_at: string
@@ -1374,6 +1407,7 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          is_active: boolean
           module_access: string
           must_change_password: boolean
           updated_at: string
@@ -1385,6 +1419,7 @@ export type Database = {
           display_name?: string
           email?: string
           id?: string
+          is_active?: boolean
           module_access?: string
           must_change_password?: boolean
           updated_at?: string
@@ -1396,6 +1431,7 @@ export type Database = {
           display_name?: string
           email?: string
           id?: string
+          is_active?: boolean
           module_access?: string
           must_change_password?: boolean
           updated_at?: string
@@ -1492,6 +1528,60 @@ export type Database = {
           version?: string
         }
         Relationships: []
+      }
+      retro_action_items: {
+        Row: {
+          card_id: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          owner_id: string | null
+          session_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          card_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          owner_id?: string | null
+          session_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          owner_id?: string | null
+          session_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retro_action_items_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "retro_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retro_action_items_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "retro_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       retro_actions: {
         Row: {

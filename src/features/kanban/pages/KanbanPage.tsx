@@ -10,8 +10,11 @@ import { RefreshCw, Layers, FlagTriangleRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function KanbanPage() {
-  const { isAdmin, roles } = useAuth();
-  const canFinalizeSprint = isAdmin || roles.includes("scrum_master" as any);
+  // Todos vêem o Kanban. Só admin e scrum_master podem encerrar sprint.
+  const { isAdmin, profile } = useAuth();
+  const canFinalizeSprint = isAdmin
+    || (profile as any)?.role === "scrum_master"
+    || profile?.module_access === "admin";
 
   const {
     columns, filteredCards, cards, devs, epics, sprints,

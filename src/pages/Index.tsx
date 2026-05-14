@@ -6,6 +6,7 @@ import { SprintManager } from "@/components/SprintManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
 import { UserStoryManager } from "@/components/UserStoryManager";
 import { ActivityManager } from "@/components/ActivityManager";
+import { KanbanBoard } from "@/components/KanbanBoard";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { ImpedimentList } from "@/components/ImpedimentManager";
 import { EpicManager } from "@/components/EpicManager";
@@ -27,9 +28,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { KanbanPage } from "@/features/kanban/pages/KanbanPage";
 
-// ─── Seções válidas ────────────────────────────────────────────────────────────────────────────
 const VALID_SECTIONS = [
   "dashboard",
   "backlog",
@@ -89,7 +88,7 @@ const Index = () => {
 
   const active = (VALID_SECTIONS.includes(section as SectionKey) ? section : "dashboard") as SectionKey;
 
-  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin, roles } = useAuth();
+  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
   const { showWizard, completeOnboarding } = useOnboarding();
@@ -180,7 +179,7 @@ const Index = () => {
             )}
             {active === "board" && (
               <SectionGuard permission="view_kanban">
-                <KanbanPage />
+                <KanbanBoard />
               </SectionGuard>
             )}
             {active === "atividades" && (

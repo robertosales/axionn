@@ -98,9 +98,8 @@ function SprintProgressBar({
   const pct       = Math.round((elapsed / total) * 100);
   const daysLeft  = Math.max(0, differenceInDays(end, today));
 
-  // ✔ Usa isActive para decidir o badge — não compara datas
   const isClosed  = !sprint.isActive;
-  const isOverdue = sprint.isActive && today > end;   // ativa mas vencida
+  const isOverdue = sprint.isActive && today > end;
 
   const badgeLabel = isClosed
     ? "Encerrada"
@@ -227,7 +226,6 @@ export function DashboardHome() {
       {/* Sprint Progress */}
       {activeSprint && (
         <div className="grid grid-cols-1">
-          {/* Passa sprint completo — SprintProgressBar usa isActive, não compara datas */}
           <SprintProgressBar sprint={activeSprint as any} />
         </div>
       )}
@@ -306,17 +304,34 @@ export function DashboardHome() {
                 {recentHUs.map((hu) => {
                   const col = workflowColumns.find((c) => c.key === hu.status);
                   return (
-                    <li key={hu.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
-                      <span className={cn("shrink-0 h-2 w-2 rounded-full", PRIORITY_COLOR[hu.priority] || "bg-muted")} />
+                    <li
+                      key={hu.id}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40 transition-colors"
+                    >
+                      {/* Indicador de prioridade */}
+                      <span
+                        className={cn("shrink-0 h-1.5 w-1.5 rounded-full", PRIORITY_COLOR[hu.priority] || "bg-muted")}
+                      />
+
+                      {/* Título + código */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{hu.title}</p>
-                        <p className="text-xs text-muted-foreground">{hu.code} · {hu.storyPoints || 0}pts</p>
+                        <p className="text-sm font-medium truncate leading-snug">{hu.title}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {hu.code}
+                          {hu.storyPoints ? ` · ${hu.storyPoints}pts` : " · 0pts"}
+                        </p>
                       </div>
+
+                      {/* Badge de status — sem max-w, sem truncate, whitespace-nowrap */}
                       {col && (
                         <Badge
                           variant="outline"
-                          className="text-xs shrink-0 hidden sm:inline-flex max-w-[100px] truncate"
-                          style={{ borderColor: (col as any).hex || "#94a3b8", color: (col as any).hex || "#94a3b8" }}
+                          className="text-[11px] px-2 py-0.5 shrink-0 whitespace-nowrap font-normal hidden sm:inline-flex"
+                          style={{
+                            borderColor: (col as any).hex || "#94a3b8",
+                            color: (col as any).hex || "#94a3b8",
+                            backgroundColor: `${(col as any).hex || "#94a3b8"}14`,
+                          }}
                         >
                           {col.label}
                         </Badge>

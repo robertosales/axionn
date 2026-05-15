@@ -20,9 +20,9 @@ import {
   getColumnHex,
 } from "@/types/sprint";
 import { toast } from "sonner";
+import { calcDelayDays } from "@/utils/sprintStatus";
 
 // ─── Guard: converte qualquer valor para número decimal seguro ────────────────
-// Aceita: 4 | 4.0 | "4" | "4:00" | "1:30" | "0:45"
 function toDecimalHours(value: unknown): number {
   if (typeof value === "number" && !isNaN(value)) return value;
   const str = String(value ?? "").trim();
@@ -43,11 +43,9 @@ export interface AddImpedimentData {
   hasTicket: boolean;
   ticketUrl?: string;
   ticketId?: string;
-  /** Data em que o impedimento começou (yyyy-MM-dd). Opcional — se omitido usa a data atual. */
   startedAt?: string;
 }
 
-/** Target do impedimento: HU ou Sprint (pelo menos um deve estar preenchido) */
 export interface ImpedimentTarget {
   huId?: string;
   sprintId?: string;
@@ -83,6 +81,7 @@ interface SprintContextType {
   addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => Promise<void>;
   updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => Promise<void>;
   removeSprint: (id: string) => Promise<void>;
+  closeSprint: (id: string) => Promise<void>;
   setActiveSprint: (id: string) => Promise<void>;
   addEpic: (epic: Omit<Epic, "id" | "createdAt">) => Promise<void>;
   updateEpic: (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => Promise<void>;
@@ -145,6 +144,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       setSprints((sprintRes.data || []).map((s: any) => ({
         id: s.id, name: s.name, startDate: s.start_date, endDate: s.end_date,
         goal: s.goal || "", isActive: s.is_active, createdAt: s.created_at,
+        closedAt:  s.closed_at  ?? null,
+        delayDays: s.delay_days ?? null,
       })));
 
       setEpics((epicRes.data || []).map((e: any) => ({
@@ -357,9 +358,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (act.hours !== undefined) updateData.hours = toDecimalHours(act.hours);
     if (act.startDate !== undefined) {
       updateData.start_date = act.startDate;
-      if (!existing.isClosed) {
-        updateData.end_date = act.startDate;
-      }
+      if (!existing.isClosed) { updateData.end_date = act.startDate; }
     }
     const { error } = await supabase.from("activities").update(updateData).eq("id", id);
     if (error) { toast.error("Erro ao atualizar atividade"); return; }
@@ -371,9 +370,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const closeActivity = async (id: string) => {
     const today = new Date().toISOString().slice(0, 10);
     await supabase.from("activities").update({
-      is_closed: true,
-      closed_at: new Date().toISOString(),
-      end_date: today,
+      is_closed: true, closed_at: new Date().toISOString(), end_date: today,
     }).eq("id", id);
     await refreshAll();
     const act = activities.find((a) => a.id === id);
@@ -406,16 +403,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const sprintId = typeof target === "string" ? null   : (target.sprintId ?? null);
     if (!huId && !sprintId) { toast.error("Informe uma HU ou Sprint para o impedimento"); return; }
     const { error } = await supabase.from("impediments").insert({
-      team_id:    teamId,
-      hu_id:      huId,
-      sprint_id:  sprintId,
-      reason:     data.reason,
-      type:       data.type,
-      criticality: data.criticality,
-      has_ticket:  data.hasTicket,
-      ticket_url:  data.ticketUrl ?? null,
-      ticket_id:   data.ticketId  ?? null,
-      started_at:  data.startedAt ?? null,
+      team_id: teamId, hu_id: huId, sprint_id: sprintId,
+      reason: data.reason, type: data.type, criticality: data.criticality,
+      has_ticket: data.hasTicket, ticket_url: data.ticketUrl ?? null,
+      ticket_id: data.ticketId ?? null, started_at: data.startedAt ?? null,
     });
     if (error) { toast.error("Erro ao adicionar impedimento: " + error.message); return; }
     await refreshAll();
@@ -429,13 +420,28 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   // ── SPRINTS ───────────────────────────────────────────────────────────────
+
+  /**
+   * addSprint: Cria uma nova sprint SEM desativar as demais.
+   * REGRA: encerramento de sprint é SEMPRE manual via closeSprint().
+   * A nova sprint é criada com is_active=false.
+   */
   const addSprint = async (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     if (!teamId) return;
-    await supabase.from("sprints").update({ is_active: false }).eq("team_id", teamId);
-    const { error } = await supabase.from("sprints").insert({ team_id: teamId, name: sprint.name, start_date: sprint.startDate, end_date: sprint.endDate, goal: sprint.goal, is_active: true });
+    const { error } = await supabase.from("sprints").insert({
+      team_id: teamId,
+      name: sprint.name,
+      start_date: sprint.startDate,
+      end_date: sprint.endDate,
+      goal: sprint.goal,
+      is_active: false,
+      closed_at: null,
+      delay_days: null,
+    });
     if (error) { toast.error("Erro ao criar sprint"); return; }
     await refreshAll();
   };
+
   const updateSprint = async (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => {
     const updateData: any = {};
     if (sprint.name !== undefined) updateData.name = sprint.name;
@@ -447,10 +453,65 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (error) { toast.error("Erro ao atualizar sprint"); return; }
     await refreshAll();
   };
-  const removeSprint = async (id: string) => { await supabase.from("sprints").delete().eq("id", id); await refreshAll(); };
+
+  const removeSprint = async (id: string) => {
+    await supabase.from("sprints").delete().eq("id", id);
+    await refreshAll();
+  };
+
+  /**
+   * closeSprint: Encerramento MANUAL e EXPLÍCITO da sprint.
+   * - Marca is_active=false
+   * - Registra closed_at = now()
+   * - Calcula e persiste delay_days
+   */
+  const closeSprint = async (id: string) => {
+    const sprint = sprints.find((s) => s.id === id);
+    if (!sprint) { toast.error("Sprint não encontrada"); return; }
+
+    const closedAt  = new Date().toISOString();
+    const delayDays = calcDelayDays(sprint.endDate ?? null, closedAt);
+
+    const { error } = await supabase.from("sprints").update({
+      is_active:  false,
+      closed_at:  closedAt,
+      delay_days: delayDays,
+    }).eq("id", id);
+
+    if (error) { toast.error("Erro ao encerrar sprint: " + error.message); return; }
+
+    if (delayDays > 0) {
+      toast.warning(`⚠️ Sprint encerrada com ${delayDays} dia${delayDays > 1 ? "s" : ""} de atraso.`);
+    } else {
+      toast.success("✅ Sprint encerrada dentro do prazo!");
+    }
+
+    await refreshAll();
+  };
+
+  /**
+   * setActiveSprint: Ativa uma sprint específica.
+   *
+   * CORREÇÃO (2026-05-14): Antes fazia UPDATE is_active=false em TODAS as
+   * sprints do time, zerando inclusive sprints futuras (aguardando).
+   * Agora desativa APENAS a sprint que estava ativa no momento.
+   *
+   * IMPORTANTE: desativar via setActiveSprint NÃO encerra a sprint.
+   * O closed_at e delay_days só são preenchidos via closeSprint().
+   */
   const setActiveSprintFn = async (id: string) => {
     if (!teamId) return;
-    await supabase.from("sprints").update({ is_active: false }).eq("team_id", teamId);
+
+    // Desativa apenas a sprint atualmente ativa (se houver)
+    const currentActive = sprints.find((s) => s.isActive);
+    if (currentActive && currentActive.id !== id) {
+      await supabase
+        .from("sprints")
+        .update({ is_active: false })
+        .eq("id", currentActive.id);
+    }
+
+    // Ativa a sprint selecionada
     await supabase.from("sprints").update({ is_active: true }).eq("id", id);
     await refreshAll();
   };
@@ -556,94 +617,39 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
-  /**
-   * FIX: Usa upsert em vez de update puro.
-   * Colunas novas (criadas apenas no draft local) recebem INSERT.
-   * Colunas existentes recebem UPDATE via onConflict em (team_id, key).
-   * Colunas removidas do draft são deletadas do banco.
-   */
   const reorderWorkflowColumns = async (columns: WorkflowColumn[]) => {
     if (!teamId) return;
-
     const normalized = normalizeWorkflowColumns(columns);
-
-    // 1. Busca as keys que já existem no banco para este time
     const { data: existing, error: fetchErr } = await supabase
-      .from("workflow_columns")
-      .select("key")
-      .eq("team_id", teamId);
-
-    if (fetchErr) {
-      console.error("[reorderWorkflowColumns] fetch error:", fetchErr);
-      toast.error("Erro ao sincronizar fluxo: " + fetchErr.message);
-      return;
-    }
-
+      .from("workflow_columns").select("key").eq("team_id", teamId);
+    if (fetchErr) { toast.error("Erro ao sincronizar fluxo: " + fetchErr.message); return; }
     const existingKeys = new Set((existing ?? []).map((r: any) => r.key));
     const incomingKeys = new Set(normalized.map(c => c.key));
-
-    // 2. Separa em novas (INSERT) e existentes (UPDATE)
     const toInsert = normalized.filter(c => !existingKeys.has(c.key));
     const toUpdate = normalized.filter(c =>  existingKeys.has(c.key));
-
-    // 3. Deleta as colunas que foram removidas do draft (existem no banco mas não no novo fluxo)
     const toDelete = [...existingKeys].filter(k => !incomingKeys.has(k));
-
     const ops: Promise<any>[] = [];
-
-    // INSERT das novas
     if (toInsert.length > 0) {
-      const rows = toInsert.map((c, i) => ({
-        team_id:     teamId,
-        key:         c.key,
-        label:       c.label,
-        color_class: c.colorClass || "",
-        dot_color:   c.dotColor || "",
-        hex:         c.hex || null,
-        wip_limit:   (c as any).wipLimit ?? null,
-        sort_order:  normalized.indexOf(c),
+      const rows = toInsert.map((c) => ({
+        team_id: teamId, key: c.key, label: c.label,
+        color_class: c.colorClass || "", dot_color: c.dotColor || "",
+        hex: c.hex || null, wip_limit: (c as any).wipLimit ?? null,
+        sort_order: normalized.indexOf(c),
       }));
-      ops.push(
-        supabase.from("workflow_columns").insert(rows).then(({ error }) => {
-          if (error) console.error("[reorderWorkflowColumns] insert error:", error);
-        })
-      );
+      ops.push(supabase.from("workflow_columns").insert(rows).then(({ error }) => { if (error) console.error(error); }));
     }
-
-    // UPDATE dos existentes (sort_order + label + cores)
     for (const c of toUpdate) {
-      ops.push(
-        supabase.from("workflow_columns").update({
-          sort_order:  normalized.indexOf(c),
-          label:       c.label,
-          color_class: c.colorClass || "",
-          dot_color:   c.dotColor || "",
-          hex:         c.hex || null,
-          wip_limit:   (c as any).wipLimit ?? null,
-        }).eq("team_id", teamId).eq("key", c.key)
-        .then(({ error }) => {
-          if (error) console.error("[reorderWorkflowColumns] update error:", error);
-        })
-      );
+      ops.push(supabase.from("workflow_columns").update({
+        sort_order: normalized.indexOf(c), label: c.label,
+        color_class: c.colorClass || "", dot_color: c.dotColor || "",
+        hex: c.hex || null, wip_limit: (c as any).wipLimit ?? null,
+      }).eq("team_id", teamId).eq("key", c.key).then(({ error }) => { if (error) console.error(error); }));
     }
-
-    // DELETE das removidas
     for (const key of toDelete) {
-      ops.push(
-        supabase.from("workflow_columns").delete()
-          .eq("team_id", teamId).eq("key", key)
-          .then(({ error }) => {
-            if (error) console.error("[reorderWorkflowColumns] delete error:", error);
-          })
-      );
+      ops.push(supabase.from("workflow_columns").delete().eq("team_id", teamId).eq("key", key).then(({ error }) => { if (error) console.error(error); }));
     }
-
     await Promise.all(ops);
-
-    // Atualiza estado local com os dados normalizados
     setWorkflowColumnsState(normalized);
-
-    // Recarrega do banco para confirmar persistência real
     await refreshAll();
   };
 
@@ -655,7 +661,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       addUserStory, updateUserStory, removeUserStory, updateUserStoryStatus, reorderUserStories,
       addActivity, updateActivity, removeActivity, closeActivity, reopenActivity,
       addImpediment, addSprintImpediment, resolveImpediment,
-      addSprint, updateSprint, removeSprint, setActiveSprint: setActiveSprintFn,
+      addSprint, updateSprint, removeSprint, closeSprint, setActiveSprint: setActiveSprintFn,
       addEpic, updateEpic, removeEpic,
       addCustomField, updateCustomField, removeCustomField,
       addAutomationRule, updateAutomationRule, removeAutomationRule,

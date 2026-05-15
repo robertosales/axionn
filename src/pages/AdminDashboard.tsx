@@ -12,13 +12,12 @@ import { AdminTimesPage }      from "@/features/admin/pages/AdminTimesPage";
 import { AdminUsuariosPage }   from "@/features/admin/pages/AdminUsuariosPage";
 import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
 import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
-import { AdminFluxosPage }     from "@/features/admin/pages/AdminFluxosPage";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History, Gauge, GitBranch } from "lucide-react";
+import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History, Gauge } from "lucide-react";
 
 export default function AdminDashboard() {
   const { profile, signOut, teams } = useAuth();
@@ -88,9 +87,6 @@ export default function AdminDashboard() {
             <TabsTrigger value="times" className="gap-1.5 text-xs">
               <UsersRound className="h-3.5 w-3.5" /> Times
             </TabsTrigger>
-            <TabsTrigger value="fluxo" className="gap-1.5 text-xs">
-              <GitBranch className="h-3.5 w-3.5" /> Fluxo
-            </TabsTrigger>
             <TabsTrigger value="usuarios" className="gap-1.5 text-xs">
               <Users className="h-3.5 w-3.5" /> Usuários
             </TabsTrigger>
@@ -107,7 +103,6 @@ export default function AdminDashboard() {
           <TabsContent value="historico"><AdminHistoricoPage /></TabsContent>
           <TabsContent value="capacidade"><AdminCapacidadePage /></TabsContent>
           <TabsContent value="times"><AdminTimesPage /></TabsContent>
-          <TabsContent value="fluxo"><AdminFluxosPage /></TabsContent>
           <TabsContent value="usuarios"><AdminUsuariosPage /></TabsContent>
         </Tabs>
       </main>

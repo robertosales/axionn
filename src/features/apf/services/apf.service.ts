@@ -26,7 +26,63 @@ export interface ApfGeneration {
   output_filename: string | null;
   status: "pending" | "success" | "error";
   error_message: string | null;
+  pf_total?: number | null;
+  pf_breakdown?: Record<string, number> | null;
   created_at: string;
+}
+
+// ─── Extensões que podem ser lidas como texto puro ───
+const TEXT_EXTENSIONS = [".md", ".txt", ".csv", ".json", ".xml", ".html", ".htm"];
+
+function isTextFile(file: File): boolean {
+  const name = file.name.toLowerCase();
+  if (TEXT_EXTENSIONS.some((ext) => name.endsWith(ext))) return true;
+  if (file.type.startsWith("text/")) return true;
+  return false;
+}
+
+/**
+ * Converte um arquivo para a representação que a Edge Function espera:
+ * - Arquivos de texto: envia o conteúdo bruto (truncado em 50 KB)
+ * - Arquivos binários (xlsx, docx, pdf): envia base64 com prefixo data-URI
+ *   para que a Edge Function possa identificá-los e processar adequadamente.
+ */
+async function fileToPayload(file: File): Promise<{ name: string; content: string }> {
+  if (isTextFile(file)) {
+    try {
+      const text = await file.text();
+      const truncated = text.length > 50_000 ? text.slice(0, 50_000) + "\n[... conteúdo truncado ...]" : text;
+      return { name: file.name, content: truncated };
+    } catch {
+      return { name: file.name, content: `[Não foi possível ler ${file.name}]` };
+    }
+  }
+
+  // Binário → base64
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string; // data:<mime>;base64,<data>
+      resolve({ name: file.name, content: result });
+    };
+    reader.onerror = () => {
+      resolve({
+        name: file.name,
+        content: `[Arquivo binário não legível: ${file.name} — ${(file.size / 1024).toFixed(1)} KB]`,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Prepara todos os arquivos para envio à Edge Function.
+ * Exportado para uso no hook useApfGenerate.
+ */
+export async function prepareFilesForEdgeFunction(
+  files: File[],
+): Promise<Array<{ name: string; content: string }>> {
+  return Promise.all(files.map(fileToPayload));
 }
 
 export async function fetchTemplates(teamId: string): Promise<ApfTemplate[]> {
@@ -101,7 +157,10 @@ export async function toggleTemplateActive(id: string, isActive: boolean): Promi
   if (error) throw error;
 }
 
-export async function fetchGenerations(teamId: string, sprintId: string): Promise<(ApfGeneration & { template_name?: string })[]> {
+export async function fetchGenerations(
+  teamId: string,
+  sprintId: string,
+): Promise<(ApfGeneration & { template_name?: string })[]> {
   const { data, error } = await supabase
     .from("apf_generations")
     .select("*, apf_templates(name)")
@@ -136,19 +195,30 @@ export async function createGeneration(payload: {
 }
 
 /**
- * Invokes the `apf-generate` edge function. Encapsulates the Supabase call
- * so UI components don't depend on the supabase client directly.
+ * Invoca a Edge Function `apf-generate`.
+ * Passa generationId para que a função possa atualizar o registro após gerar.
  */
 export async function invokeApfGeneration(body: {
   prompt: string;
   provider: string;
   apiKey?: string;
   files: Array<{ name: string; content: string }>;
-}): Promise<{ docxBase64: string; markdown: string }> {
+  generationId?: string;
+}): Promise<{
+  docxBase64: string;
+  markdown: string;
+  pfTotal: number | null;
+  pfBreakdown: Record<string, number>;
+}> {
   const { data, error } = await supabase.functions.invoke("apf-generate", { body });
   if (error) throw new Error(error.message ?? "Erro ao chamar a IA");
   if (!data?.success || !data?.docxBase64) {
     throw new Error(data?.error ?? "A IA não retornou conteúdo");
   }
-  return { docxBase64: data.docxBase64, markdown: data.markdown ?? "" };
+  return {
+    docxBase64:  data.docxBase64,
+    markdown:    data.markdown ?? "",
+    pfTotal:     data.pfTotal   ?? null,
+    pfBreakdown: data.pfBreakdown ?? {},
+  };
 }

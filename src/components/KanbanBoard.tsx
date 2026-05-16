@@ -16,10 +16,12 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { KanbanCard } from "./KanbanCard";
 import { KanbanStatus } from "@/types/sprint";
 import { toast } from "sonner";
-import { ChevronRight, LayoutList } from "lucide-react";
+import { ChevronRight, LayoutList, FlagTriangleRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +36,7 @@ import { WorkflowColumn } from "@/types/sprint";
 import { KanbanFilterBar, KANBAN_FILTROS_DEFAULT } from "./KanbanFilterBar";
 import type { KanbanFiltros } from "./KanbanFilterBar";
 import { SprintImpedimentsBanner } from "./SprintImpedimentsBanner";
+import { supabase } from "@/integrations/supabase/client";
 
 const COLUMN_COLORS: Record<string, string> = {
   backlog:     "#6b7280",
@@ -42,6 +45,9 @@ const COLUMN_COLORS: Record<string, string> = {
   review:      "#8b5cf6",
   done:        "#10b981",
 };
+
+// Status considerados "concluídos" — HUs com esses status NÃO são movidas ao encerrar
+const DONE_STATUSES = ["pronto_para_publicacao"];
 
 function getColumnHex(col: WorkflowColumn): string {
   if (col.hex) return col.hex;
@@ -61,15 +67,59 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     sprints,
     updateUserStoryStatus,
     reorderUserStories,
+    refreshAll,
   } = useSprint() as any;
+
+  const { isAdmin, roles } = useAuth();
+  const canFinalizeSprint = isAdmin || roles.includes("scrum_master" as any);
+
+  // Sprint ativa do time
+  const activeSprint = useMemo(
+    () => (sprints ?? []).find((s: any) => s.isActive || s.is_active) ?? null,
+    [sprints],
+  );
+
+  // Inicializa filtros com a sprint ativa como padrão
+  const [filtros, setFiltros] = useState<KanbanFiltros>(() => ({
+    ...KANBAN_FILTROS_DEFAULT,
+    sprintId: "all", // será atualizado no useEffect abaixo
+  }));
+
+  // Quando as sprints carregarem, seleciona automaticamente a sprint ativa
+  useEffect(() => {
+    if (!activeSprint) return;
+    setFiltros(prev => {
+      // Só atualiza se ainda estiver em "all" (não sobrescreve seleção manual)
+      if (prev.sprintId === "all") {
+        return { ...prev, sprintId: activeSprint.id };
+      }
+      return prev;
+    });
+  }, [activeSprint?.id]);
 
   const canMove = true;
 
-  // Sprint ativa correspondente ao sprintId recebido (para o banner)
-  const currentSprint = useMemo(
-    () => (sprints ?? []).find((s: any) => s.id === sprintId) ?? null,
-    [sprints, sprintId],
+  // Sprint selecionada no filtro
+  const selectedSprint = useMemo(
+    () => (sprints ?? []).find((s: any) => s.id === filtros.sprintId) ?? null,
+    [sprints, filtros.sprintId],
   );
+
+  // Sprint para exibir no banner de impedimentos
+  const currentSprint = useMemo(
+    () => (sprints ?? []).find((s: any) => s.id === (sprintId ?? filtros.sprintId)) ?? selectedSprint,
+    [sprints, sprintId, filtros.sprintId, selectedSprint],
+  );
+
+  // Sprints que podem ser encerradas: ativas OU sem data de encerramento (is_active = false mas nunca foram fechadas formalmente)
+  const sprintFinalizavel = useMemo(() => {
+    if (!selectedSprint) return null;
+    const isAtiva = selectedSprint.isActive || selectedSprint.is_active;
+    // Considera encerrável se: está ativa, OU está inativa mas não tem end_date definida (sprint "fantasma")
+    const endDate = selectedSprint.endDate || selectedSprint.end_date;
+    const isGhost = !isAtiva && !endDate;
+    return (isAtiva || isGhost) ? selectedSprint : null;
+  }, [selectedSprint]);
 
   const [activeId, setActiveId]         = useState<string | null>(null);
   const [dragOverCol, setDragOverCol]   = useState<string | null>(null);
@@ -78,7 +128,10 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     new Set((workflowColumns ?? []).map((c: WorkflowColumn) => c.key)),
   );
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
-  const [filtros, setFiltros] = useState<KanbanFiltros>(KANBAN_FILTROS_DEFAULT);
+
+  // Estado do modal de encerramento
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [finalizing,   setFinalizing]   = useState(false);
 
   useEffect(() => {
     setLocalPositions((prev) => {
@@ -94,16 +147,18 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  // Base: filtra pelo sprint
-  const sprintBase = useMemo(() =>
-    sprintId ? userStories.filter((h: any) => h.sprintId === sprintId) : userStories,
-  [userStories, sprintId]);
+  // Filtra HUs: primeiro pela sprint selecionada, depois pelos demais filtros
+  const sprintBase = useMemo(() => {
+    if (filtros.sprintId === "all") {
+      return sprintId ? userStories.filter((h: any) => h.sprintId === sprintId) : userStories;
+    }
+    return userStories.filter(
+      (h: any) => (h.sprintId || h.sprint_id) === filtros.sprintId,
+    );
+  }, [userStories, sprintId, filtros.sprintId]);
 
-  // Aplica todos os filtros
   const sprintStories = useMemo(() => {
     let items = sprintBase;
-
-    // Busca textual
     if (filtros.search.trim()) {
       const q = filtros.search.trim().toLowerCase();
       items = items.filter((h: any) =>
@@ -111,8 +166,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         String(h.code  ?? "").toLowerCase().includes(q),
       );
     }
-
-    // Filtro de membros (múltipla seleção, mesmo padrão da Sustentação)
     if (filtros.membros.length > 0) {
       items = items.filter((h: any) =>
         filtros.membros.some((id) =>
@@ -121,21 +174,89 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         ),
       );
     }
-
     if (filtros.tipo !== "all")
       items = items.filter((h: any) => h.type === filtros.tipo);
-
     if (filtros.prioridade !== "all")
       items = items.filter((h: any) => h.priority === filtros.prioridade);
-
     if (filtros.status !== "all")
       items = items.filter((h: any) => h.status === filtros.status);
-
     return [...items].sort(
       (a: any, b: any) =>
         (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
     );
   }, [sprintBase, filtros, localPositions]);
+
+  // Resumo da sprint selecionada para exibir no modal
+  const sprintSummary = useMemo(() => {
+    if (!sprintFinalizavel) return null;
+    const allCards  = userStories.filter(
+      (h: any) => (h.sprintId || h.sprint_id) === sprintFinalizavel.id
+    );
+    const doneCards = allCards.filter((h: any) => DONE_STATUSES.includes(h.status ?? ""));
+    return {
+      total:      allCards.length,
+      done:       doneCards.length,
+      incomplete: allCards.length - doneCards.length,
+      rate:       allCards.length > 0 ? Math.round((doneCards.length / allCards.length) * 100) : 0,
+    };
+  }, [sprintFinalizavel, userStories]);
+
+  // Encerra a sprint selecionada e move HUs incompletas para o backlog
+  const handleFinalizeSprint = useCallback(async () => {
+    if (!sprintFinalizavel) return;
+    setFinalizing(true);
+    try {
+      // 1. Encerra a sprint
+      const { error: sprintErr } = await supabase
+        .from("sprints")
+        .update({ is_active: false, end_date: new Date().toISOString() })
+        .eq("id", sprintFinalizavel.id);
+      if (sprintErr) throw sprintErr;
+
+      // 2. Busca HUs incompletas da sprint
+      const { data: incompleteHUs, error: fetchErr } = await supabase
+        .from("user_stories")
+        .select("id")
+        .eq("sprint_id", sprintFinalizavel.id)
+        .not("status", "in", `(${DONE_STATUSES.map(s => `"${s}"`).join(",")})`);
+      if (fetchErr) throw fetchErr;
+
+      // 3. Move HUs incompletas para o backlog (sem sprint) e salva historico
+      if (incompleteHUs && incompleteHUs.length > 0) {
+        const ids = incompleteHUs.map((h: any) => h.id);
+        const { error: updateErr } = await supabase
+          .from("user_stories")
+          .update({
+            sprint_id:          null,
+            previous_sprint_id: sprintFinalizavel.id,
+          })
+          .in("id", ids);
+        if (updateErr) throw updateErr;
+      }
+
+      const incomplete = incompleteHUs?.length ?? 0;
+      toast.success(
+        `Sprint "${sprintFinalizavel.name}" encerrada! ` +
+        (incomplete > 0
+          ? `${incomplete} HU${incomplete > 1 ? "s" : ""} devolvida${incomplete > 1 ? "s" : ""} ao backlog.`
+          : "Todas as HUs foram concluídas! 🎉")
+      );
+      setFinalizeOpen(false);
+
+      // Volta filtro para sprint ativa (se houver) ou todas
+      const newActive = (sprints ?? []).find(
+        (s: any) => (s.isActive || s.is_active) && s.id !== sprintFinalizavel.id
+      );
+      setFiltros(prev => ({ ...prev, sprintId: newActive?.id ?? "all" }));
+
+      await refreshAll();
+    } catch (err: any) {
+      console.error("[KanbanBoard] erro ao encerrar sprint:", err);
+      toast.error("Erro ao encerrar sprint: " + (err?.message ?? "tente novamente"));
+    } finally {
+      setFinalizing(false);
+    }
+  }, [sprintFinalizavel, sprints, refreshAll]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(String(event.active.id));
@@ -221,14 +342,38 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         </div>
       )}
 
+      {/* ── Botão Finalizar Sprint (admin/scrum_master + sprint encerrável selecionada) ── */}
+      {canFinalizeSprint && sprintFinalizavel && (
+        <div className="flex items-center justify-end gap-2 mb-3">
+          {!(sprintFinalizavel.isActive || sprintFinalizavel.is_active) && (
+            <span className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-2 py-1 rounded-md">
+              ⚠️ Sprint não encerrada formalmente
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/30"
+            onClick={() => setFinalizeOpen(true)}
+          >
+            <FlagTriangleRight className="h-3.5 w-3.5" />
+            {sprintFinalizavel.isActive || sprintFinalizavel.is_active
+              ? "Finalizar Sprint"
+              : "Encerrar Sprint Pendente"
+            }
+          </Button>
+        </div>
+      )}
+
       {/* ── Filter Bar ── */}
       <div className="rounded-xl border border-border/60 bg-card px-4 py-3 mb-4">
         <KanbanFilterBar
           filtros={filtros}
           onChange={setFiltros}
-          stories={sprintBase}
+          stories={userStories}
           developers={developers ?? []}
           workflowColumns={workflowColumns ?? []}
+          sprints={sprints ?? []}
           totalFiltrado={sprintStories.length}
           currentUserId={currentUserId}
         />
@@ -342,6 +487,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         </DragOverlay>
       </DndContext>
 
+      {/* ── Modal mover card ── */}
       <AlertDialog open={!!confirmMove} onOpenChange={(o) => !o && setConfirmMove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -354,6 +500,68 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmMove}>Confirmar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Modal Finalizar Sprint ── */}
+      <AlertDialog open={finalizeOpen} onOpenChange={(o) => { if (!finalizing) setFinalizeOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <FlagTriangleRight className="h-5 w-5 text-amber-500" />
+              {sprintFinalizavel?.isActive || sprintFinalizavel?.is_active
+                ? "Encerrar Sprint"
+                : "Encerrar Sprint Pendente"
+              }
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                {sprintFinalizavel && (
+                  <p>Você está prestes a encerrar a sprint <strong>"{sprintFinalizavel.name}"</strong>.</p>
+                )}
+                {!(sprintFinalizavel?.isActive || sprintFinalizavel?.is_active) && (
+                  <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-2 rounded-lg">
+                    ⚠️ Esta sprint não foi encerrada formalmente. Encerrá-la agora irá marcar a data de término como hoje e mover as HUs incompletas para o backlog.
+                  </p>
+                )}
+                {sprintSummary && (
+                  <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Total de HUs:</span>
+                      <strong>{sprintSummary.total}</strong>
+                    </div>
+                    <div className="flex justify-between text-xs text-emerald-600">
+                      <span>Concluídas (pronto para publicação):</span>
+                      <strong>{sprintSummary.done}</strong>
+                    </div>
+                    <div className="flex justify-between text-xs text-amber-600">
+                      <span>Incompletas (voltam ao backlog):</span>
+                      <strong>{sprintSummary.incomplete}</strong>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Taxa de conclusão:</span>
+                      <strong>{sprintSummary.rate}%</strong>
+                    </div>
+                  </div>
+                )}
+                {sprintSummary && sprintSummary.incomplete > 0 && (
+                  <p className="text-xs text-muted-foreground rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-2">
+                    ⚠️ As <strong>{sprintSummary.incomplete} HU{sprintSummary.incomplete > 1 ? "s" : ""} incompleta{sprintSummary.incomplete > 1 ? "s" : ""}</strong> serão devolvidas ao backlog sem sprint associada, mantendo épico e histórico de qual sprint vieram.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={finalizing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={finalizing}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+              onClick={(e) => { e.preventDefault(); handleFinalizeSprint(); }}
+            >
+              {finalizing ? "Encerrando..." : "Confirmar Encerramento"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

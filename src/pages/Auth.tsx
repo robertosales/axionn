@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Mail, Lock, User, Clock } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { APP_TAGLINE } from "@/lib/constants";
 import { AxionLogo } from "@/components/AxionLogo";
 
 const Auth = () => {
@@ -58,12 +58,13 @@ const Auth = () => {
   const handleGoogleLogin = async () => {
     setLoading(true);
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+      redirect_uri: `${window.location.origin}/auth/callback`,
     });
     if (result.error) {
       toast.error("Erro ao fazer login com Google");
+      setLoading(false);
     }
-    setLoading(false);
+    // Não resetamos loading pois o browser será redirecionado
   };
 
   const handleForgotPassword = async () => {
@@ -93,8 +94,6 @@ const Auth = () => {
           <CardDescription>{APP_TAGLINE}</CardDescription>
         </CardHeader>
         <CardContent>
-
-          {/* Banner de sessão expirada por inatividade */}
           {idleTimeout && (
             <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
               <Clock className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />

@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { AppRole, Permission, getPermissionsForRoles } from "@/hooks/usePermissions";
@@ -45,7 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
   const [teams, setTeams] = useState<{ id: string; name: string; module: string }[]>([]);
 
+  // ref para evitar que refreshTeams capture currentTeamId stale no closure
+  const currentTeamIdRef = useRef<string | null>(null);
+
   const setCurrentTeamId = (id: string | null) => {
+    currentTeamIdRef.current = id;
     setCurrentTeamIdState(id);
     if (id) {
       localStorage.setItem("selectedTeamId", id);
@@ -70,17 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchRoles = async (userId: string) => {
     try {
       const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-
       const userRoles = data?.map((r: any) => r.role as AppRole) ?? [];
       setRoles(userRoles);
-
       const admin = userRoles.includes("admin");
       setIsAdmin(admin);
-
-      // ✅ Agora busca permissões do banco — era síncrono antes
       const perms = await getPermissionsForRoles(userRoles);
       setPermissions(perms);
-
       return admin;
     } catch (err) {
       console.error("Error fetching roles:", err);
@@ -93,10 +92,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.from("teams").select("id, name, module");
       const teamList = (data || []) as { id: string; name: string; module: string }[];
       setTeams(teamList);
-      if (teamList.length > 0 && !currentTeamId) {
+      // usa a ref para evitar loop: não depende do estado currentTeamId do closure
+      if (teamList.length > 0 && !currentTeamIdRef.current) {
         const savedTeamId = localStorage.getItem("selectedTeamId");
         const validSaved = savedTeamId && teamList.some((t) => t.id === savedTeamId);
-        const initialTeam = validSaved ? savedTeamId : teamList[0].id;
+        const initialTeam = validSaved ? savedTeamId! : teamList[0].id;
         setCurrentTeamId(initialTeam);
       }
     } catch (err) {

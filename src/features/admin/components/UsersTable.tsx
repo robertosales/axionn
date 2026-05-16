@@ -21,7 +21,7 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
         <TableRow>
           <TableHead>Nome</TableHead>
           <TableHead>E-mail</TableHead>
-          <TableHead>Time</TableHead>
+          <TableHead>Times</TableHead>
           <TableHead>Módulo</TableHead>
           <TableHead className="text-center">Admin</TableHead>
           <TableHead className="text-center">Ativo</TableHead>
@@ -30,28 +30,55 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
       </TableHeader>
       <TableBody>
         {users.length === 0 && (
-          <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum usuário encontrado.</TableCell></TableRow>
+          <TableRow>
+            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+              Nenhum usuário encontrado.
+            </TableCell>
+          </TableRow>
         )}
         {users.map(u => (
           <TableRow key={u.id} className={!u.is_active ? "opacity-50" : ""}>
             <TableCell className="font-medium">
               <div className="flex items-center gap-1.5">
                 {u.display_name}
-                {u.must_change_password && <Badge variant="outline" className="text-[9px] border-orange-400 text-orange-500">troca senha</Badge>}
+                {u.must_change_password && (
+                  <Badge variant="outline" className="text-[9px] border-orange-400 text-orange-500">
+                    troca senha
+                  </Badge>
+                )}
               </div>
             </TableCell>
+
             <TableCell className="text-xs text-muted-foreground">{u.email}</TableCell>
+
+            {/* Times — suporta múltiplos via team_members */}
             <TableCell>
-              {u.team_name
-                ? <span className="text-xs">{u.team_name}</span>
-                : <span className="text-xs text-muted-foreground italic">sem time</span>}
+              {u.teams.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {u.teams.map(t => (
+                    <Badge key={t.id} variant="outline" className="text-[10px] font-normal">
+                      {t.name}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground italic">sem time</span>
+              )}
             </TableCell>
+
             <TableCell>
-              <Badge variant={u.module_access === "sala_agil" ? "default" : u.module_access === "admin" ? "destructive" : "secondary"} className="gap-1 text-[10px]">
-                {u.module_access === "sala_agil" ? <Zap className="h-3 w-3" /> : u.module_access === "sustentacao" ? <Shield className="h-3 w-3" /> : null}
-                {u.module_access === "sala_agil" ? "Sala Ágil" : u.module_access === "sustentacao" ? "Sustentação" : "Admin"}
+              <Badge
+                variant={u.module_access === "sala_agil" ? "default" : u.module_access === "admin" ? "destructive" : "secondary"}
+                className="gap-1 text-[10px]"
+              >
+                {u.module_access === "sala_agil"   ? <Zap    className="h-3 w-3" /> : null}
+                {u.module_access === "sustentacao" ? <Shield className="h-3 w-3" /> : null}
+                {u.module_access === "sala_agil"   ? "Sala Ágil"
+                  : u.module_access === "sustentacao" ? "Sustentação"
+                  : "Admin"}
               </Badge>
             </TableCell>
+
             <TableCell className="text-center">
               <Switch
                 checked={u.is_admin}
@@ -59,6 +86,7 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
                 className="scale-75"
               />
             </TableCell>
+
             <TableCell className="text-center">
               <Switch
                 checked={u.is_active}
@@ -66,6 +94,7 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
                 className="scale-75"
               />
             </TableCell>
+
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -82,7 +111,9 @@ export function UsersTable({ users, onEdit, onToggleAdmin, onToggleActive, onRes
                     <KeyRound className="h-3.5 w-3.5" /> Resetar senha
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onToggleAdmin(u.user_id, !u.is_admin)} className="gap-2">
-                    {u.is_admin ? <ShieldOff className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                    {u.is_admin
+                      ? <ShieldOff className="h-3.5 w-3.5" />
+                      : <ShieldCheck className="h-3.5 w-3.5" />}
                     {u.is_admin ? "Remover admin" : "Promover a admin"}
                   </DropdownMenuItem>
                 </DropdownMenuContent>

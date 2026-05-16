@@ -7,11 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calculator, FileText, ChevronRight, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Calculator, FileText, ChevronRight, AlertCircle, CheckCircle2, Download } from "lucide-react";
 import { getSizeByPoints } from "@/lib/sizeReference";
+import { getGenerationDownloadUrl } from "@/features/apf/services/apf.service";
 import { toast } from "sonner";
 
-// Fator de conversão APF → Story Points (1 PF ≈ 0.5 SP por default)
 const DEFAULT_PF_TO_SP = 0.5;
 
 interface ApfPokerReferenceProps {
@@ -29,8 +29,9 @@ interface ApfEntry {
   templateName: string;
   generatedAt: string;
   pfTotal: number | null;
-  spEstimate: number | null;
+  pfBreakdown: Record<string, number> | null;
   outputFilename: string;
+  storagePath: string | null;
 }
 
 export function ApfPokerReference({
@@ -52,7 +53,9 @@ export function ApfPokerReference({
     setLoading(true);
     supabase
       .from("apf_generations")
-      .select("id, sprint_id, template_id, output_filename, created_at, sprints(name), apf_templates(name)")
+      .select(
+        "id, sprint_id, template_id, output_filename, storage_path, pf_total, pf_breakdown, created_at, sprints(name), apf_templates(name)"
+      )
       .eq("team_id", currentTeamId)
       .eq("sprint_id", activeSprint.id)
       .eq("status", "success")
@@ -66,9 +69,10 @@ export function ApfPokerReference({
               sprintName: d.sprints?.name ?? "",
               templateName: d.apf_templates?.name ?? "Sem template",
               generatedAt: new Date(d.created_at).toLocaleDateString("pt-BR"),
-              pfTotal: null,
-              spEstimate: null,
-              outputFilename: d.output_filename,
+              pfTotal: d.pf_total ?? null,
+              pfBreakdown: d.pf_breakdown ?? null,
+              outputFilename: d.output_filename ?? "Evidencia_APF.docx",
+              storagePath: d.storage_path ?? null,
             }))
           );
         }
@@ -79,8 +83,9 @@ export function ApfPokerReference({
 
   const computedSp = (pfTotal: number) => Math.max(1, Math.round(pfTotal * conversionFactor));
 
-  const handleApply = (entry: ApfEntry, manualSp?: number) => {
-    const sp = manualSp ?? (entry.pfTotal ? computedSp(entry.pfTotal) : 1);
+  const handleApply = (entry: ApfEntry) => {
+    const pf = entry.pfTotal ?? 0;
+    const sp = pf > 0 ? computedSp(pf) : 1;
     const size = getSizeByPoints(sp);
     if (!size) {
       toast.error("Não foi possível mapear o SP para um tamanho. Ajuste o fator de conversão.");
@@ -89,6 +94,23 @@ export function ApfPokerReference({
     onApplyEstimate(size.key, size.hours, sp, `APF: ${entry.templateName} (${entry.generatedAt})`);
     toast.success(`Estimativa APF aplicada: ${size.key} — ${size.hours}h (${sp} SP)`);
     onClose();
+  };
+
+  const handleDownload = async (entry: ApfEntry) => {
+    if (!entry.storagePath) {
+      toast.error("Arquivo não disponível no Storage para esta geração.");
+      return;
+    }
+    try {
+      const url = await getGenerationDownloadUrl(entry.storagePath);
+      if (!url) throw new Error("URL não gerada");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = entry.outputFilename;
+      a.click();
+    } catch {
+      toast.error("Erro ao gerar link de download. Tente novamente.");
+    }
   };
 
   return (
@@ -123,7 +145,9 @@ export function ApfPokerReference({
             <span className="text-xs text-muted-foreground">SP por Ponto de Função</span>
           </div>
           <p className="text-[10px] text-muted-foreground">
-            Ex.: 10 PF × {conversionFactor} = {Math.round(10 * conversionFactor)} SP → {getSizeByPoints(Math.round(10 * conversionFactor))?.key ?? "?"}  ({getSizeByPoints(Math.round(10 * conversionFactor))?.hours ?? "?"}h)
+            Ex.: 10 PF × {conversionFactor} = {Math.round(10 * conversionFactor)} SP
+            → {getSizeByPoints(Math.round(10 * conversionFactor))?.key ?? "?"}
+            &nbsp;({getSizeByPoints(Math.round(10 * conversionFactor))?.hours ?? "?"}h)
           </p>
         </div>
 
@@ -151,13 +175,13 @@ export function ApfPokerReference({
                 {entries.length} geração(es) APF nesta sprint
               </p>
               {entries.map((entry) => {
-                const sp = entry.pfTotal ? computedSp(entry.pfTotal) : null;
+                const pf = entry.pfTotal;
+                const sp = pf != null && pf > 0 ? computedSp(pf) : null;
                 const size = sp ? getSizeByPoints(sp) : null;
+                const canApply = pf != null && pf > 0;
+
                 return (
-                  <div
-                    key={entry.id}
-                    className="rounded-lg border bg-card p-3 space-y-2"
-                  >
+                  <div key={entry.id} className="rounded-lg border bg-card p-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5">
@@ -168,17 +192,30 @@ export function ApfPokerReference({
                           Gerado em {entry.generatedAt} · {entry.outputFilename}
                         </p>
                       </div>
-                      {size && (
-                        <Badge className="bg-primary/10 text-primary border border-primary/20 text-xs font-bold shrink-0">
-                          {size.key}
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {size && (
+                          <Badge className="bg-primary/10 text-primary border border-primary/20 text-xs font-bold">
+                            {size.key}
+                          </Badge>
+                        )}
+                        {entry.storagePath && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            title="Baixar documento"
+                            onClick={() => handleDownload(entry)}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
 
-                    {entry.pfTotal !== null ? (
+                    {pf != null ? (
                       <div className="flex items-center gap-3 text-xs">
                         <span className="text-muted-foreground">PF Total:</span>
-                        <span className="font-semibold">{entry.pfTotal}</span>
+                        <span className="font-semibold">{pf}</span>
                         <ChevronRight className="h-3 w-3 text-muted-foreground" />
                         <span className="text-muted-foreground">{sp} SP</span>
                         {size && (
@@ -189,8 +226,8 @@ export function ApfPokerReference({
                         )}
                       </div>
                     ) : (
-                      <p className="text-[10px] text-muted-foreground italic">
-                        PF não extraído automaticamente — informe manualmente abaixo
+                      <p className="text-[10px] text-amber-600 italic">
+                        PF não extraído — gere novamente com o baseline para obter o valor automático.
                       </p>
                     )}
 
@@ -198,11 +235,12 @@ export function ApfPokerReference({
                       size="sm"
                       className="w-full gap-1.5 text-xs h-7"
                       onClick={() => handleApply(entry)}
-                      disabled={!size && entry.pfTotal === null}
+                      disabled={!canApply}
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      Usar como referência
-                      {size ? ` — ${size.key} (${size.hours}h)` : ""}
+                      {canApply
+                        ? `Usar como referência — ${size?.key ?? "?"} (${size?.hours ?? "?"}h)`
+                        : "Nenhum PF disponível para esta geração"}
                     </Button>
                   </div>
                 );

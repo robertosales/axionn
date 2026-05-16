@@ -85,9 +85,9 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
-                      <SelectItem value="sala_agil">Sala Ágil</SelectItem>
-                      <SelectItem value="sustentacao">Sustentação</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="sala_agil">⚡ Sala Ágil</SelectItem>
+                      <SelectItem value="sustentacao">🛡 Sustentação</SelectItem>
+                      <SelectItem value="admin">Ambos os módulos</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -97,7 +97,7 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
             <FormField control={form.control} name="team_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Time</FormLabel>
+                  <FormLabel>Time principal</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Selecione um time" /></SelectTrigger></FormControl>
                     <SelectContent>

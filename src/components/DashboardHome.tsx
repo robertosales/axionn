@@ -22,10 +22,10 @@ import {
   Activity,
   UserPlus,
 } from "lucide-react";
-import { differenceInDays, format, isAfter, parseISO } from "date-fns";
+import { differenceInDays, format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
+// ── KPI Card ────────────────────────────────────────────────────────────────────
 interface KpiCardProps {
   label: string;
   value: string | number;
@@ -40,37 +40,24 @@ interface KpiCardProps {
 }
 
 function KpiCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  iconClass,
-  borderClass,
-  progress,
-  progressClass,
-  trend,
-  trendLabel,
+  label, value, sub, icon: Icon, iconClass, borderClass,
+  progress, progressClass, trend, trendLabel,
 }: KpiCardProps) {
   return (
     <Card className={cn("relative overflow-hidden border-l-4", borderClass || "border-l-border")}>
       <CardContent className="pt-4 pb-4 px-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">
-              {label}
-            </p>
-            {/* text-2xl em vez de text-4xl — evita estouro em telas menores */}
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">{label}</p>
             <p className="mt-1 text-2xl font-bold tabular-nums leading-none truncate">{value}</p>
             {sub && <p className="mt-1.5 text-xs text-muted-foreground truncate">{sub}</p>}
             {trendLabel && (
-              <p
-                className={cn(
-                  "mt-1 text-xs font-semibold truncate",
-                  trend === "up" && "text-green-600 dark:text-green-400",
-                  trend === "down" && "text-red-500 dark:text-red-400",
-                  trend === "neutral" && "text-muted-foreground",
-                )}
-              >
+              <p className={cn(
+                "mt-1 text-xs font-semibold truncate",
+                trend === "up"      && "text-green-600 dark:text-green-400",
+                trend === "down"    && "text-red-500 dark:text-red-400",
+                trend === "neutral" && "text-muted-foreground",
+              )}>
                 {trendLabel}
               </p>
             )}
@@ -89,20 +76,43 @@ function KpiCard({
   );
 }
 
-// ── Sprint Progress Bar ───────────────────────────────────────────────────────
+// ── Sprint Progress Bar ───────────────────────────────────────────────────────────
 function SprintProgressBar({
   sprint,
 }: {
-  sprint: { startDate: string; endDate: string; name: string; goal?: string };
+  sprint: {
+    name: string;
+    goal?: string | null;
+    startDate: string;
+    endDate: string;
+    isActive: boolean;
+    closedAt?: string | null;
+    delayDays?: number | null;
+  };
 }) {
-  const today = new Date();
-  const start = parseISO(sprint.startDate);
-  const end = parseISO(sprint.endDate);
-  const total = differenceInDays(end, start) || 1;
-  const elapsed = Math.max(0, Math.min(total, differenceInDays(today, start)));
-  const pct = Math.round((elapsed / total) * 100);
-  const daysLeft = Math.max(0, differenceInDays(end, today));
-  const isOver = isAfter(today, end);
+  const today     = new Date();
+  const start     = parseISO(sprint.startDate);
+  const end       = parseISO(sprint.endDate);
+  const total     = differenceInDays(end, start) || 1;
+  const elapsed   = Math.max(0, Math.min(total, differenceInDays(today, start)));
+  const pct       = Math.round((elapsed / total) * 100);
+  const daysLeft  = Math.max(0, differenceInDays(end, today));
+
+  // ✔ Usa isActive para decidir o badge — não compara datas
+  const isClosed  = !sprint.isActive;
+  const isOverdue = sprint.isActive && today > end;   // ativa mas vencida
+
+  const badgeLabel = isClosed
+    ? "Encerrada"
+    : isOverdue
+      ? `+${differenceInDays(today, end)}d atraso`
+      : `${daysLeft}d restantes`;
+
+  const badgeVariant: "destructive" | "secondary" | "outline" = isClosed
+    ? "secondary"
+    : isOverdue
+      ? "destructive"
+      : "secondary";
 
   return (
     <Card className="col-span-full border-l-4 border-l-primary overflow-hidden">
@@ -112,11 +122,8 @@ function SprintProgressBar({
           <CardTitle className="text-sm font-semibold truncate flex-1 min-w-0">
             {sprint.name}
           </CardTitle>
-          <Badge
-            variant={isOver ? "destructive" : "secondary"}
-            className="text-xs shrink-0 whitespace-nowrap"
-          >
-            {isOver ? "Encerrado" : `${daysLeft}d restantes`}
+          <Badge variant={badgeVariant} className="text-xs shrink-0 whitespace-nowrap">
+            {badgeLabel}
           </Badge>
         </div>
         <div className="flex items-center justify-between gap-x-4 gap-y-1 flex-wrap mt-1">
@@ -134,22 +141,25 @@ function SprintProgressBar({
         )}
         <Progress value={pct} className="h-2.5" />
         <p className="mt-2 text-xs text-muted-foreground">
-          Dia {elapsed} de {total} — sprint {pct >= 100 ? "concluído" : "em andamento"}
+          {isClosed
+            ? `Encerrada em ${sprint.closedAt ? format(parseISO(sprint.closedAt), "dd/MM/yyyy") : format(end, "dd/MM/yyyy")}`
+            : `Dia ${elapsed} de ${total} — sprint ${pct >= 100 ? "no prazo final" : "em andamento"}`
+          }
         </p>
       </CardContent>
     </Card>
   );
 }
 
-// ── Priority colors ───────────────────────────────────────────────────────────
+// ── Priority colors ───────────────────────────────────────────────────────────────
 const PRIORITY_COLOR: Record<string, string> = {
   critical: "bg-red-500",
-  high: "bg-orange-400",
-  medium: "bg-yellow-400",
-  low: "bg-green-400",
+  high:     "bg-orange-400",
+  medium:   "bg-yellow-400",
+  low:      "bg-green-400",
 };
 
-// ── Detecta a coluna "concluído" de forma robusta ─────────────────────────────
+// ── Detecta a coluna "concluído" de forma robusta ────────────────────────────────────
 const DONE_KEYS = ["done", "concluido", "concluída", "finalizado", "finalizada", "entregue"];
 
 function resolveDoneKey(columns: { key: string }[]): string | undefined {
@@ -157,7 +167,7 @@ function resolveDoneKey(columns: { key: string }[]): string | undefined {
   return byName?.key ?? columns[columns.length - 1]?.key;
 }
 
-// ── Main Component ─────────────────────────────────────────────────────────────
+// ── Main Component ──────────────────────────────────────────────────────────────────
 export function DashboardHome() {
   const { userStories, activities, developers, activeSprint, sprints, workflowColumns } = useSprint();
   const { profile } = useAuth();
@@ -166,29 +176,21 @@ export function DashboardHome() {
     ? userStories.filter((h) => h.sprintId === activeSprint.id)
     : userStories;
 
-  const doneColKey = resolveDoneKey(workflowColumns);
-  const doneHUs = sprintHUs.filter((h) => h.status === doneColKey);
-
-  const openHUs = [...sprintHUs.filter((h) => h.status !== doneColKey)].sort((a, b) => {
+  const doneColKey   = resolveDoneKey(workflowColumns);
+  const doneHUs      = sprintHUs.filter((h) => h.status === doneColKey);
+  const openHUs      = [...sprintHUs.filter((h) => h.status !== doneColKey)].sort((a, b) => {
     const posA = workflowColumns.findIndex((c) => c.key === a.status);
     const posB = workflowColumns.findIndex((c) => c.key === b.status);
-    const pa = posA === -1 ? -Infinity : posA;
-    const pb = posB === -1 ? -Infinity : posB;
-    return pb - pa;
+    return (posB === -1 ? -Infinity : posB) - (posA === -1 ? -Infinity : posA);
   });
-
-  const bugHUs = sprintHUs.filter((h) => h.status === "bug");
-  const blockedHUs = sprintHUs.filter(
-    (h) => h.impediments && h.impediments.some((i: any) => !i.resolvedAt)
-  );
-
-  const totalPoints = sprintHUs.reduce((s, h) => s + (h.storyPoints || 0), 0);
-  const donePoints = doneHUs.reduce((s, h) => s + (h.storyPoints || 0), 0);
+  const bugHUs       = sprintHUs.filter((h) => h.status === "bug");
+  const blockedHUs   = sprintHUs.filter((h) => h.impediments?.some((i: any) => !i.resolvedAt));
+  const totalPoints  = sprintHUs.reduce((s, h) => s + (h.storyPoints || 0), 0);
+  const donePoints   = doneHUs.reduce((s, h) => s + (h.storyPoints || 0), 0);
   const completionPct = totalPoints > 0 ? Math.round((donePoints / totalPoints) * 100) : 0;
-
-  const openActs = activities.filter((a) => !a.isClosed);
-  const totalHours = activities.reduce((s, a) => s + (a.hours || 0), 0);
-  const recentHUs = openHUs.slice(0, 5);
+  const openActs     = activities.filter((a) => !a.isClosed);
+  const totalHours   = activities.reduce((s, a) => s + (a.hours || 0), 0);
+  const recentHUs    = openHUs.slice(0, 5);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -197,15 +199,10 @@ export function DashboardHome() {
     return "Boa noite";
   };
 
-  const displayName =
-    profile?.display_name ||
-    profile?.full_name ||
-    profile?.email?.split("@")[0] ||
-    "Dev";
-  const firstName = displayName.split(" ")[0];
+  const displayName = profile?.display_name || profile?.full_name || profile?.email?.split("@")[0] || "Dev";
+  const firstName   = displayName.split(" ")[0];
 
   return (
-    /* w-full + overflow-x-hidden evitam que o conteúdo ultrapasse a área visível */
     <div className="flex flex-col gap-5 px-4 sm:px-6 py-6 w-full overflow-x-hidden">
 
       {/* Header */}
@@ -217,8 +214,8 @@ export function DashboardHome() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5 truncate">
             {activeSprint
-              ? `Sprint ativo: ${activeSprint.name}`
-              : "Nenhum sprint ativo — crie um na aba Sprints"}
+              ? `Sprint ativa: ${activeSprint.name}`
+              : "Nenhuma sprint ativa — crie uma na aba Sprints"}
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
@@ -230,11 +227,12 @@ export function DashboardHome() {
       {/* Sprint Progress */}
       {activeSprint && (
         <div className="grid grid-cols-1">
-          <SprintProgressBar sprint={activeSprint} />
+          {/* Passa sprint completo — SprintProgressBar usa isActive, não compara datas */}
+          <SprintProgressBar sprint={activeSprint as any} />
         </div>
       )}
 
-      {/* KPI Grid — 1 col mobile, 2 col sm, 4 col md+ */}
+      {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
           label="HUs Concluídas"
@@ -308,30 +306,17 @@ export function DashboardHome() {
                 {recentHUs.map((hu) => {
                   const col = workflowColumns.find((c) => c.key === hu.status);
                   return (
-                    <li
-                      key={hu.id}
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
-                    >
-                      <span
-                        className={cn(
-                          "shrink-0 h-2 w-2 rounded-full",
-                          PRIORITY_COLOR[hu.priority] || "bg-muted"
-                        )}
-                      />
+                    <li key={hu.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+                      <span className={cn("shrink-0 h-2 w-2 rounded-full", PRIORITY_COLOR[hu.priority] || "bg-muted")} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{hu.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {hu.code} · {hu.storyPoints || 0}pts
-                        </p>
+                        <p className="text-xs text-muted-foreground">{hu.code} · {hu.storyPoints || 0}pts</p>
                       </div>
                       {col && (
                         <Badge
                           variant="outline"
                           className="text-xs shrink-0 hidden sm:inline-flex max-w-[100px] truncate"
-                          style={{
-                            borderColor: (col as any).hex || "#94a3b8",
-                            color: (col as any).hex || "#94a3b8",
-                          }}
+                          style={{ borderColor: (col as any).hex || "#94a3b8", color: (col as any).hex || "#94a3b8" }}
                         >
                           {col.label}
                         </Badge>
@@ -356,13 +341,8 @@ export function DashboardHome() {
               <div className="flex flex-col items-center justify-center py-6 px-5 gap-3 text-muted-foreground">
                 <Users className="h-6 w-6" />
                 <p className="text-xs text-center">Nenhum dev cadastrado neste time.</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs"
-                  onClick={() => {
-                    document.querySelector<HTMLElement>('[data-tab="members"]')?.click();
-                  }}
+                <Button variant="outline" size="sm" className="w-full text-xs"
+                  onClick={() => { document.querySelector<HTMLElement>('[data-tab="members"]')?.click(); }}
                 >
                   <UserPlus className="h-3.5 w-3.5 mr-1.5" />
                   Adicionar membro
@@ -371,9 +351,7 @@ export function DashboardHome() {
             ) : (
               <ul className="divide-y divide-border">
                 {developers.slice(0, 6).map((dev) => {
-                  const myActs = activities.filter(
-                    (a) => a.assigneeId === dev.id && !a.isClosed
-                  ).length;
+                  const myActs = activities.filter((a) => a.assigneeId === dev.id && !a.isClosed).length;
                   return (
                     <li key={dev.id} className="flex items-center gap-3 px-4 py-2.5">
                       <div className="shrink-0 h-7 w-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
@@ -384,9 +362,7 @@ export function DashboardHome() {
                         <p className="text-xs text-muted-foreground truncate">{dev.role}</p>
                       </div>
                       {myActs > 0 && (
-                        <Badge variant="secondary" className="text-xs tabular-nums shrink-0">
-                          {myActs}
-                        </Badge>
+                        <Badge variant="secondary" className="text-xs tabular-nums shrink-0">{myActs}</Badge>
                       )}
                     </li>
                   );
@@ -402,7 +378,7 @@ export function DashboardHome() {
         <KpiCard
           label="Total de Sprints"
           value={sprints.length}
-          sub={`${sprints.filter((s) => s.isActive).length} ativo`}
+          sub={`${sprints.filter((s) => s.isActive).length} ativa`}
           icon={Zap}
           iconClass="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
           borderClass="border-l-violet-400"

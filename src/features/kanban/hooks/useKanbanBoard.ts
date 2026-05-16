@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth }  from "@/contexts/AuthContext";
 import { toast }    from "sonner";
 
-// ── Types ───────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────────────
 export interface KanbanColumn {
   id:          string;
   key:         string;
@@ -56,7 +56,7 @@ export function useKanbanBoard() {
   const [epics,    setEpics]    = useState<{ id: string; name: string; color: string }[]>([]);
   const [sprints,  setSprints]  = useState<{ id: string; name: string }[]>([]);
   const [loading,  setLoading]  = useState(true);
-  const [dragging, setDragging] = useState<string | null>(null); // cardId
+  const [dragging, setDragging] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<KanbanFilters>({
     assigneeId: "all", priority: "all", epicId: "all", sprintId: "active", swimlane: false,
@@ -110,12 +110,10 @@ export function useKanbanBoard() {
     return () => { supabase.removeChannel(ch); };
   }, [teamId, load]);
 
-  // ─ Mover card (drag & drop) ────────────────────────────────────────────
   const moveCard = useCallback(async (cardId: string, newStatus: string) => {
     const card = cards.find(c => c.id === cardId);
     if (!card || card.status === newStatus) return;
 
-    // Checa WIP limit
     const col = columns.find(c => c.key === newStatus);
     if (col?.wip_limit) {
       const currentWip = cards.filter(c => c.status === newStatus).length;
@@ -125,20 +123,17 @@ export function useKanbanBoard() {
       }
     }
 
-    // Otimista
     setCards(prev => prev.map(c => c.id === cardId ? { ...c, status: newStatus, is_blocked: BLOCKED_STATUSES.includes(newStatus) } : c));
 
     const { error } = await supabase.from("user_stories").update({ status: newStatus }).eq("id", cardId);
     if (error) { toast.error("Erro ao mover card"); await load(); }
   }, [cards, columns, load]);
 
-  // ─ WIP limit ────────────────────────────────────────────────────────────────
   const updateWipLimit = useCallback(async (colId: string, limit: number | null) => {
     await supabase.from("workflow_columns").update({ wip_limit: limit }).eq("id", colId);
     setColumns(prev => prev.map(c => c.id === colId ? { ...c, wip_limit: limit } : c));
   }, []);
 
-  // ─ Filtros aplicados ─────────────────────────────────────────────────────────
   const filteredCards = useMemo(() => {
     const activeSprint = (sprints as any[]).find((s: any) => s.is_active);
     return cards.filter(c => {
@@ -154,14 +149,12 @@ export function useKanbanBoard() {
     });
   }, [cards, filters, sprints]);
 
-  // WIP counts por coluna
   const wipCounts = useMemo(() => {
     const m: Record<string, number> = {};
     filteredCards.forEach(c => { m[c.status] = (m[c.status] ?? 0) + 1; });
     return m;
   }, [filteredCards]);
 
-  // Swimlane: devs com cards
   const swimlaneDevs = useMemo(() => {
     if (!filters.swimlane) return [];
     const ids = [...new Set(filteredCards.map(c => c.assignee_id ?? "__unassigned__"))];
@@ -172,7 +165,7 @@ export function useKanbanBoard() {
   }, [filteredCards, devs, filters.swimlane]);
 
   return {
-    columns, filteredCards, devs, epics, sprints,
+    columns, cards, filteredCards, devs, epics, sprints,
     loading, filters, setFilters,
     dragging, setDragging,
     moveCard, updateWipLimit,

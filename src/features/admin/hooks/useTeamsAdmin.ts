@@ -26,14 +26,14 @@ export function useTeamsAdmin() {
 
       const teamList = (teamsData || []) as TeamAdmin[];
 
-      // Conta membros por time via profiles
-      const { data: profilesData } = await supabase
-        .from("profiles")
+      // Conta membros por time via team_members (tabela correta de associação)
+      const { data: membersData } = await supabase
+        .from("team_members")
         .select("team_id");
 
       const countMap: Record<string, number> = {};
-      (profilesData || []).forEach((p: any) => {
-        if (p.team_id) countMap[p.team_id] = (countMap[p.team_id] ?? 0) + 1;
+      (membersData || []).forEach((m: any) => {
+        if (m.team_id) countMap[m.team_id] = (countMap[m.team_id] ?? 0) + 1;
       });
 
       setTeams(teamList.map(t => ({ ...t, memberCount: countMap[t.id] ?? 0 })));

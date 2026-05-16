@@ -10,6 +10,7 @@ import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAl
 // Pages
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
+import AuthCallback from "./pages/AuthCallback.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import ForcePasswordChange from "./pages/ForcePasswordChange.tsx";
@@ -88,13 +89,18 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <AuthProvider>
-        <SprintProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+      <BrowserRouter>
+        <AuthProvider>
+          <SprintProvider>
+            <Toaster />
+            <Sonner />
             <Routes>
+              {/* Rota pública de auth */}
               <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+
+              {/* ✅ Callback OAuth */}
+              <Route path="/auth/callback" element={<AuthCallback />} />
+
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
               <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
@@ -111,7 +117,7 @@ const App = () => (
                 element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}
               />
 
-              {/* Rotas dedicadas — bypass total do Index.tsx */}
+              {/* Rotas dedicadas */}
               <Route
                 path="/sala-agil/planning-poker"
                 element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>}
@@ -135,9 +141,9 @@ const App = () => (
 
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
-        </SprintProvider>
-      </AuthProvider>
+          </SprintProvider>
+        </AuthProvider>
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );

@@ -1,11 +1,10 @@
 /**
  * KanbanFilterBar — Filtro visual do Kanban Ágil.
- * Usa KanbanResponsavelFilter (mesmo componente da Sustentação) para o filtro de membros
- * com avatares: Todos AB FF FS DS EF TA ES RF GT LN RS PP
- * Inclui visões salvas, filter chips com contagem e contador de demandas.
+ * Inclui seletor de sprint com badge de sprint ativa, visões salvas,
+ * filter chips com contagem e contador de demandas.
  */
 import { useState, useMemo } from "react";
-import { X, BookmarkPlus, ChevronDown, SlidersHorizontal, Search } from "lucide-react";
+import { X, BookmarkPlus, ChevronDown, SlidersHorizontal, Search, CalendarDays } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -20,6 +19,13 @@ import {
 import { KanbanResponsavelFilter } from "@/shared/components/common/KanbanResponsavelFilter";
 import type { ResponsavelFilterItem } from "@/shared/components/common/KanbanResponsavelFilter";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +35,7 @@ export interface KanbanFiltros {
   prioridade: string;  // "all" | priority
   status: string;      // "all" | column key
   search: string;      // texto livre
+  sprintId: string;    // "all" | sprint UUID
 }
 
 export const KANBAN_FILTROS_DEFAULT: KanbanFiltros = {
@@ -37,6 +44,7 @@ export const KANBAN_FILTROS_DEFAULT: KanbanFiltros = {
   prioridade: "all",
   status: "all",
   search: "",
+  sprintId: "all",
 };
 
 export interface KanbanViewSalva {
@@ -82,6 +90,7 @@ export function KanbanFilterBar({
   stories,
   developers,
   workflowColumns,
+  sprints,
   totalFiltrado,
   currentUserId,
 }: {
@@ -90,6 +99,7 @@ export function KanbanFilterBar({
   stories: any[];
   developers: any[];
   workflowColumns: any[];
+  sprints: any[];
   totalFiltrado: number;
   currentUserId?: string;
 }) {
@@ -99,7 +109,54 @@ export function KanbanFilterBar({
   const [saveLabel, setSaveLabel] = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
 
-  // ── Monta lista de responsáveis para o KanbanResponsavelFilter ──
+  // ── Sprint ativa do time ──
+  const activeSprint = useMemo(
+    () => (sprints ?? []).find((s: any) => s.isActive || s.is_active) ?? null,
+    [sprints],
+  );
+
+  // ── Contagem de HUs por sprint ──
+  const huCountBySprint = useMemo(() => {
+    const counts: Record<string, number> = {};
+    stories.forEach((h: any) => {
+      const sid = h.sprintId || h.sprint_id;
+      if (sid) counts[sid] = (counts[sid] ?? 0) + 1;
+    });
+    return counts;
+  }, [stories]);
+
+  // ── Sprints ordenadas: ativa primeiro, depois mais recentes ──
+  const sprintsSorted = useMemo(() => {
+    return [...(sprints ?? [])].sort((a: any, b: any) => {
+      const aActive = a.isActive || a.is_active;
+      const bActive = b.isActive || b.is_active;
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+      return new Date(b.startDate || b.start_date || 0).getTime() -
+             new Date(a.startDate || a.start_date || 0).getTime();
+    });
+  }, [sprints]);
+
+  // ── Sprint selecionada ──
+  const selectedSprint = useMemo(
+    () => (sprints ?? []).find((s: any) => s.id === filtros.sprintId) ?? null,
+    [sprints, filtros.sprintId],
+  );
+
+  // ── Label completo da opção selecionada (para dimensionar o trigger) ──
+  const selectedLabel = useMemo(() => {
+    if (filtros.sprintId === "all") return "📋 Todas as sprints";
+    const s = selectedSprint;
+    if (!s) return "";
+    const isActive = s.isActive || s.is_active;
+    const count    = huCountBySprint[s.id] ?? 0;
+    const emoji    = isActive ? "🟢" : "⚫";
+    const ativa    = isActive ? " • Ativa" : "";
+    const hus      = count > 0 ? ` • ${count} HU${count !== 1 ? "s" : ""}` : "";
+    return `${emoji} ${s.name}${ativa}${hus}`;
+  }, [filtros.sprintId, selectedSprint, huCountBySprint]);
+
+  // ── Monta lista de responsáveis ──
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const idsComStory = new Set<string>();
     stories.forEach((h: any) => {
@@ -145,7 +202,8 @@ export function KanbanFilterBar({
     filtros.tipo !== "all" ||
     filtros.prioridade !== "all" ||
     filtros.status !== "all" ||
-    filtros.search !== "";
+    filtros.search !== "" ||
+    filtros.sprintId !== "all";
 
   function clearChip(key: string) {
     setActiveViewId(null);
@@ -153,16 +211,16 @@ export function KanbanFilterBar({
   }
   function clearAll() {
     setActiveViewId(null);
-    onChange(KANBAN_FILTROS_DEFAULT);
+    onChange({ ...KANBAN_FILTROS_DEFAULT, sprintId: activeSprint?.id ?? "all" });
   }
   function applyView(view: KanbanViewSalva) {
     if (view.id === "meus" && currentUserId) {
       setActiveViewId(view.id);
-      onChange({ ...KANBAN_FILTROS_DEFAULT, membros: [currentUserId] });
+      onChange({ ...KANBAN_FILTROS_DEFAULT, membros: [currentUserId], sprintId: filtros.sprintId });
       return;
     }
     setActiveViewId(view.id);
-    onChange(view.filtros);
+    onChange({ ...view.filtros, sprintId: filtros.sprintId });
   }
   function saveCurrentView() {
     if (!saveLabel.trim()) return;
@@ -207,6 +265,76 @@ export function KanbanFilterBar({
 
   return (
     <div className="flex flex-col gap-2.5">
+
+      {/* ── Linha 0: Seletor de Sprint ── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Sprint</span>
+
+        <Select
+          value={filtros.sprintId}
+          onValueChange={(val) => {
+            setActiveViewId(null);
+            onChange({ ...filtros, sprintId: val });
+          }}
+        >
+          {/*
+            w-auto + min-w-[12rem]: o trigger cresce com o texto,
+            respeitando um mínimo legível e sem cortar nomes longos.
+          */}
+          <SelectTrigger className="h-8 text-xs w-auto min-w-[12rem] border-border/60 pr-8">
+            <span className="whitespace-nowrap text-xs">{selectedLabel}</span>
+          </SelectTrigger>
+
+          <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
+            {/* Opção: todas as sprints */}
+            <SelectItem value="all">
+              <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                <span>📋</span>
+                <span>Todas as sprints</span>
+              </span>
+            </SelectItem>
+
+            {/* Opções por sprint */}
+            {sprintsSorted.map((s: any) => {
+              const isActive = s.isActive || s.is_active;
+              const count    = huCountBySprint[s.id] ?? 0;
+              return (
+                <SelectItem key={s.id} value={s.id}>
+                  <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                    <span>{isActive ? "🟢" : "⚫"}</span>
+                    <span>{s.name}</span>
+                    {isActive && (
+                      <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-400/20 text-amber-600 uppercase tracking-wide">
+                        Ativa
+                      </span>
+                    )}
+                    {count > 0 && (
+                      <span className="text-[9px] font-mono text-muted-foreground">
+                        {count} HU{count !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </span>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+
+        {/* Badge sprint em andamento */}
+        {selectedSprint && (selectedSprint.isActive || selectedSprint.is_active) && (
+          <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-600 text-[10px] font-semibold">
+            🏃 Sprint em andamento
+          </span>
+        )}
+
+        {/* Badge sprint encerrada */}
+        {selectedSprint && !selectedSprint.isActive && !selectedSprint.is_active && (
+          <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-slate-400/15 border border-slate-400/40 text-slate-500 text-[10px] font-medium">
+            🏁 Encerrada
+          </span>
+        )}
+      </div>
 
       {/* ── Linha 1: Visões salvas ── */}
       <div className="flex items-center gap-1.5 flex-wrap">

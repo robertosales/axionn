@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { useAdminKpis } from "../useAdminKpis";
+
+const waitFor = async (assertion: () => void) => {
+  for (let i = 0; i < 20; i++) {
+    try { assertion(); return; } catch (error) {
+      if (i === 19) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+};
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 const TEAM_A = { id: "team-a", name: "Time Alpha", module: "sala_agil" };

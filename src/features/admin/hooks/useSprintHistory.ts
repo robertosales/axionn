@@ -13,6 +13,7 @@ export interface DevStat {
 }
 
 export interface SprintMetrics {
+  id:              string;
   sprintId:        string;
   sprintName:      string;
   teamId:          string;
@@ -31,6 +32,7 @@ export interface SprintMetrics {
   impedimentos:    number;
   devStats:        DevStat[];
   durationWarning?: boolean;
+  delayDays?: number;
 }
 
 export type PeriodoFiltro = "3m" | "6m" | "12m" | "all";
@@ -138,6 +140,7 @@ export function useSprintHistory() {
 
       const enrichedMetrics: SprintMetrics[] = (result.metrics ?? []).map(row => ({
         ...row,
+        id:              row.sprintId,
         teamName:        teamMap[row.teamId]?.name ?? row.teamId,
         totalHUs:        Number(row.totalHUs),
         husConcluidadas: Number(row.husConcluidadas),
@@ -147,6 +150,7 @@ export function useSprintHistory() {
         horasRealizadas: Number(row.horasRealizadas),
         desvioHoras:     Number(row.desvioHoras),
         impedimentos:    Number(row.impedimentos),
+        delayDays:       0,
         durationWarning: Number(row.durationDays) < 0,
         devStats:        (row.devStats ?? []).map(d => ({
           ...d,

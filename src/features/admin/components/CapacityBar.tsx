@@ -11,6 +11,7 @@ const BAR_COLOR: Record<CapacityStatus, string> = {
   warning:    "bg-orange-400",
   overloaded: "bg-destructive",
   idle:       "bg-muted-foreground/30",
+  unknown:    "bg-muted-foreground/50",
 };
 
 const STATUS_LABEL: Record<CapacityStatus, string> = {
@@ -18,6 +19,7 @@ const STATUS_LABEL: Record<CapacityStatus, string> = {
   warning:    "Atenção",
   overloaded: "Sobrecarregado",
   idle:       "Ocioso",
+  unknown:    "Sem estimativa",
 };
 
 const STATUS_TEXT: Record<CapacityStatus, string> = {
@@ -25,6 +27,7 @@ const STATUS_TEXT: Record<CapacityStatus, string> = {
   warning:    "text-orange-500",
   overloaded: "text-destructive",
   idle:       "text-muted-foreground",
+  unknown:    "text-muted-foreground",
 };
 
 export function CapacityBar({ pct, status, showLabel = true }: Props) {

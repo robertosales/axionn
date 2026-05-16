@@ -628,7 +628,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const toInsert = normalized.filter(c => !existingKeys.has(c.key));
     const toUpdate = normalized.filter(c =>  existingKeys.has(c.key));
     const toDelete = [...existingKeys].filter(k => !incomingKeys.has(k));
-    const ops: Promise<any>[] = [];
+    const ops: PromiseLike<any>[] = [];
     if (toInsert.length > 0) {
       const rows = toInsert.map((c) => ({
         team_id: teamId, key: c.key, label: c.label,

@@ -67,6 +67,7 @@ export const IMPEDIMENT_TYPE_LABELS: Record<ImpedimentType, { label: string; col
 export interface Impediment {
   id: string;
   huId?: string;
+  sprintId?: string;
   reason: string;
   criticality: ImpedimentCriticality;
   type?: ImpedimentType | null;

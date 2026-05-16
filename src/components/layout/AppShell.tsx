@@ -107,19 +107,11 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "board",          label: "Board Kanban",            icon: Kanban,           path: "/sala-agil/board",             group: "main" },
   { key: "backlog",        label: "Backlog",                 icon: ListTodo,         path: "/sala-agil/backlog",           group: "main" },
   { key: "epicos",         label: "Épicos",                  icon: Layers,           path: "/sala-agil/epicos",            group: "main" },
-<<<<<<< HEAD
-  // ✅ fix: key e path alinhados com VALID_SECTIONS do Index.tsx
-=======
->>>>>>> origin/develop
   { key: "planning-poker", label: "Planning Poker",          icon: PlayingCardIcon,  path: "/sala-agil/planning-poker",   group: "main" },
   { key: "calendario",     label: "Calendário",              icon: Calendar,         path: "/sala-agil/calendario",        group: "main" },
   { key: "equipe",         label: "Equipe",                  icon: Users,            path: "/sala-agil/equipe",            group: "main" },
   { key: "atividades",     label: "Atividades",              icon: Activity,         path: "/sala-agil/atividades",        group: "main" },
   { key: "impedimentos",   label: "Impedimentos",            icon: AlertTriangle,    path: "/sala-agil/impedimentos",      group: "main" },
-<<<<<<< HEAD
-  // ✅ fix: key e path alinhados com VALID_SECTIONS do Index.tsx
-=======
->>>>>>> origin/develop
   { key: "retrospectiva",  label: "Retrospectiva",           icon: Repeat,           path: "/sala-agil/retrospectiva",     group: "main" },
   {
     key: "gerador-apf",
@@ -583,11 +575,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             />
           )}
 
-<<<<<<< HEAD
-          <div className="px-2 pt-2">
-=======
           <div className="px-2 pt-2 shrink-0">
->>>>>>> origin/develop
             {canSwitch ? (
               <ModuleSwitcher module={module} collapsed={collapsed} />
             ) : (
@@ -609,11 +597,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           </div>
 
-<<<<<<< HEAD
-          <div className="px-2 mb-1">
-=======
           <div className="px-2 mb-1 shrink-0">
->>>>>>> origin/develop
             <TeamSwitcher module={module} collapsed={collapsed} />
           </div>
 

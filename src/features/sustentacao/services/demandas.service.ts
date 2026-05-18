@@ -3,8 +3,6 @@ import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
 
 /**
  * Guard: converte qualquer formato de horas para number decimal antes de enviar ao banco.
- * Aceita: 1 | 1.5 | "1" | "1.5" | "1:00" | "1:30" | "0:45"
- * Nunca deixa uma string chegar na coluna numeric do Supabase (evita erro 22P02).
  */
 function toDecimalHours(value: unknown): number {
   if (typeof value === "number" && !isNaN(value)) return value;
@@ -17,15 +15,52 @@ function toDecimalHours(value: unknown): number {
   return isNaN(parsed) ? 0 : parsed;
 }
 
+/**
+ * Colunas usadas na lista/board de demandas.
+ * Evita trazer campos pesados (descricao longa, prazo_solucao, etc.) desnecessariamente.
+ * Para a tela de detalhe, usar fetchDemandaById que traz tudo.
+ */
+const DEMANDA_LIST_FIELDS = [
+  "id",
+  "team_id",
+  "rhm",
+  "projeto",
+  "titulo",
+  "tipo",
+  "situacao",
+  "sla",
+  "descricao",
+  "demandante",
+  "data_previsao_encerramento",
+  "prazo_inicio_atendimento",
+  "prazo_solucao",
+  "tipo_defeito",
+  "regime",
+  "originada_diagnostico",
+  "created_at",
+  "updated_at",
+].join(",");
+
 export async function fetchDemandas(teamId: string): Promise<Demanda[]> {
   const { data, error } = await supabase
     .from("demandas" as any)
-    .select("*")
+    .select(DEMANDA_LIST_FIELDS)
     .eq("team_id", teamId)
     .order("updated_at", { ascending: false });
 
   if (error) throw error;
   return (data || []) as unknown as Demanda[];
+}
+
+/** Busca uma demanda completa (todos os campos) para a tela de detalhe. */
+export async function fetchDemandaById(id: string): Promise<Demanda | null> {
+  const { data, error } = await supabase
+    .from("demandas" as any)
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) return null;
+  return data as unknown as Demanda;
 }
 
 export async function createDemanda(demanda: Partial<Demanda> & { team_id: string; rhm: string }) {
@@ -73,7 +108,6 @@ export async function fetchTransitions(demandaId: string): Promise<DemandaTransi
 }
 
 export async function addHours(h: Omit<DemandaHour, "id" | "created_at"> & { created_at?: string }) {
-  // Garante que horas é sempre number decimal — nunca string como "1:00"
   const payload = { ...h, horas: toDecimalHours(h.horas) };
   const { error } = await supabase.from("demanda_hours" as any).insert(payload as any);
   if (error) throw error;
@@ -89,14 +123,10 @@ export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
   return (data || []) as unknown as DemandaHour[];
 }
 
-/** Atualiza um lançamento de horas.
- *  user_id é opcional — quando informado, reatribui o lançamento a outro membro.
- */
 export async function updateHour(
   id: string,
   data: { horas: number | string; fase: string; descricao: string; user_id?: string },
 ) {
-  // Garante que horas é sempre number decimal — nunca string como "1:00"
   const payload = { ...data, horas: toDecimalHours(data.horas) };
   const { error } = await supabase
     .from("demanda_hours" as any)

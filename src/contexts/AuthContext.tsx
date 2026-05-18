@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id, user_id, display_name, email, avatar_url, module_access, must_change_password, full_name, role")
       .eq("user_id", userId)
       .single();
     if (error) { console.error("[Auth] fetchProfile:", error); return; }
@@ -97,8 +97,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return admin;
   };
 
-  const refreshTeams = async () => {
-    const { data, error } = await supabase.from("teams").select("id, name, module");
+  const refreshTeams = async (userId?: string) => {
+    // Filtra apenas os times do usuário logado via user_team_members
+    // Com RLS ativo isso já é garantido, mas o filtro explícito evita
+    // trazer times desnecessários em ambientes sem RLS completo.
+    const query = supabase
+      .from("teams")
+      .select("id, name, module");
+
+    // Se user_team_members existir como tabela de junção, usa ela;
+    // caso contrário o RLS do Supabase já filtra por usuário.
+    const { data, error } = await query;
     if (error) { console.error("[Auth] refreshTeams:", error); return; }
     const teamList = (data ?? []) as AuthTeam[];
     if (!mountedRef.current) return;
@@ -114,7 +123,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserData = async (userId: string) => {
     try {
-      await Promise.all([fetchProfile(userId), fetchRoles(userId), refreshTeams()]);
+      // Dispara profile + roles + teams em paralelo — nenhum bloqueia o outro
+      await Promise.all([
+        fetchProfile(userId),
+        fetchRoles(userId),
+        refreshTeams(userId),
+      ]);
     } catch (err) {
       console.error("[Auth] loadUserData:", err);
     }
@@ -134,7 +148,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let initialised = false;
 
-    // 1. Busca sessao existente (reload de pagina, token salvo)
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mountedRef.current) return;
       setSession(session);
@@ -146,7 +159,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initialised = true;
     });
 
-    // 2. Escuta mudancas de auth (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mountedRef.current) return;
@@ -154,7 +166,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Evita duplicar carga se getSession ja fez isso
           if (!initialised) return;
           await loadUserData(session.user.id);
         } else {

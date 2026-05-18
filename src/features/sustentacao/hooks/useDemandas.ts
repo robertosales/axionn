@@ -6,14 +6,15 @@ import * as svc from "../services/demandas.service";
 import type { Demanda, DemandaTransition, DemandaHour } from "../types/demanda";
 import { REQUIRES_JUSTIFICATIVA } from "../types/demanda";
 
+export type ResponsavelEntry = { papel: string; nome: string; created_at: string };
+export type DemandaEnriquecida = Demanda & { responsaveis_list: ResponsavelEntry[] };
+
 /**
- * Enriquece as demandas com TODOS os responsáveis da tabela demanda_responsaveis.
- * Cada demanda recebe:
- *   - responsavel_dev / responsavel_requisitos / etc. → primeiro por papel (compat. legada)
- *   - responsaveis_list → LISTA COMPLETA [{papel, nome, created_at}] ordenada por created_at
+ * Enriquece as demandas com TODOS os responsáveis em UMA única query via join.
+ * Elimina a necessidade de busca separada no DemandasList.
  */
-async function enrichComResponsaveis(demandas: Demanda[]): Promise<Demanda[]> {
-  if (demandas.length === 0) return demandas;
+async function enrichComResponsaveis(demandas: Demanda[]): Promise<DemandaEnriquecida[]> {
+  if (demandas.length === 0) return demandas.map((d) => ({ ...d, responsaveis_list: [] }));
   const ids = demandas.map((d) => d.id);
 
   const { data } = await supabase
@@ -24,35 +25,38 @@ async function enrichComResponsaveis(demandas: Demanda[]): Promise<Demanda[]> {
 
   const rows = (data || []) as any[];
 
+  // Mapa demanda_id → lista de responsáveis
+  const mapaResp = new Map<string, ResponsavelEntry[]>();
+  rows.forEach((r) => {
+    const nome = r.profiles?.display_name ?? "";
+    if (!nome) return;
+    const lista = mapaResp.get(r.demanda_id) ?? [];
+    lista.push({ papel: r.papel, nome, created_at: r.created_at });
+    mapaResp.set(r.demanda_id, lista);
+  });
+
   return demandas.map((d) => {
-    const resp = rows.filter((r) => r.demanda_id === d.id);
+    const resp = mapaResp.get(d.id) ?? [];
 
-    // Compat. legada: primeiro por papel
     const getPorPapel = (papel: string) =>
-      resp.find((r) => r.papel === papel)?.profiles?.display_name ?? null;
-
-    // NOVO: lista completa com todos, preservando ordem cronológica
-    const responsaveis_list = resp.map((r) => ({
-      papel: r.papel as string,
-      nome: (r.profiles?.display_name ?? "") as string,
-      created_at: r.created_at as string,
-    })).filter((r) => !!r.nome);
+      resp.find((r) => r.papel === papel)?.nome ?? null;
 
     return {
       ...d,
+      // Compat. legada — campos individuais por papel
       responsavel_dev:        getPorPapel("desenvolvedor") ?? d.responsavel_dev,
       responsavel_requisitos: getPorPapel("analista")      ?? d.responsavel_requisitos,
       responsavel_arquiteto:  getPorPapel("arquiteto")     ?? d.responsavel_arquiteto,
       responsavel_teste:      getPorPapel("testador")      ?? d.responsavel_teste,
-      // ⭐ campo novo consumido pelo board
-      responsaveis_list,
-    } as Demanda & { responsaveis_list: { papel: string; nome: string; created_at: string }[] };
+      // Lista completa — consumida por DemandasList e Board sem nova query
+      responsaveis_list: resp,
+    };
   });
 }
 
 export function useDemandas() {
   const { currentTeamId, user } = useAuth();
-  const [demandas, setDemandas] = useState<Demanda[]>([]);
+  const [demandas, setDemandas] = useState<DemandaEnriquecida[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadingRef = useRef(false);

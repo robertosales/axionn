@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -19,15 +19,16 @@ import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useDemandas } from "../hooks/useDemandas";
+import type { ResponsavelEntry } from "../hooks/useDemandas";
 import { toast } from "sonner";
 import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
 import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
-import { getTipoLabel, TIPOS_DEMANDA_IMR } from "../types/imr";
-import { fetchResponsaveisWithPapelByDemandaIds } from "../services/profiles.service";
+import { getTipoLabel } from "../types/imr";
 import { cn } from "@/lib/utils";
 
+// Mapa situação → papel esperado do responsável
 const SITUACAO_PAPEL_MAP: Record<string, string> = {
   fila_atendimento: "analista",
   planejamento_elaboracao: "analista",
@@ -41,9 +42,18 @@ const SITUACAO_PAPEL_MAP: Record<string, string> = {
 };
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
-const fetchResponsaveisBatch = fetchResponsaveisWithPapelByDemandaIds;
 
 type ViewMode = "cards" | "table";
+
+/** Extrai o responsável ativo de uma lista já enriquecida pelo useDemandas — sem nova query. */
+function getResponsavelFromList(situacao: string, lista: ResponsavelEntry[]): string | null {
+  const papelEsperado = SITUACAO_PAPEL_MAP[situacao];
+  return (
+    lista.find((r) => r.papel === papelEsperado)?.nome ??
+    lista[0]?.nome ??
+    null
+  );
+}
 
 export function DemandasList() {
   const { demandas, loading, error, create, update, moveTo, remove, reload } = useDemandas();
@@ -59,24 +69,9 @@ export function DemandasList() {
   const [pageSize, setPageSize] = useState(20);
   const debouncedSearch = useDebounce(search, 300);
 
-  const [responsaveisMap, setResponsaveisMap] = useState<Map<string, { papel: string; display_name: string }[]>>(
-    new Map(),
-  );
-
-  useEffect(() => {
-    if (!demandas.length) return;
-    fetchResponsaveisBatch(demandas.map((d) => d.id)).then(setResponsaveisMap);
-  }, [demandas]);
-
-  function getResponsavel(d: Demanda): string | null {
-    const papelEsperado = SITUACAO_PAPEL_MAP[d.situacao];
-    const lista = responsaveisMap.get(d.id) || [];
-    return lista.find((r) => r.papel === papelEsperado)?.display_name || lista[0]?.display_name || null;
-  }
-
-  const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
   // Tipos únicos presentes nas demandas carregadas (para o filtro)
   const tiposUnicos = useMemo(() => [...new Set(demandas.map((d) => d.tipo))], [demandas]);
+  const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
 
   const filtered = useMemo(
     () =>
@@ -117,7 +112,6 @@ export function DemandasList() {
     }
   }
 
-  // ── Detail view ──────────────────────────────────────────────────────────────
   if (selected) {
     const current = demandas.find((d) => d.id === selected.id) || selected;
     return (
@@ -150,7 +144,7 @@ export function DemandasList() {
 
   return (
     <div className="space-y-4">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Demandas</h2>
@@ -163,7 +157,7 @@ export function DemandasList() {
         </Button>
       </div>
 
-      {/* ── Filtros ─────────────────────────────────────────────────────── */}
+      {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -200,15 +194,15 @@ export function DemandasList() {
         </div>
       </div>
 
-      {/* ── Conteúdo ────────────────────────────────────────────────────── */}
+      {/* Conteúdo */}
       {filtered.length === 0 ? (
         <EmptyState icon={ListTodo} title="Nenhuma demanda encontrada" />
       ) : (
         <>
           {viewMode === "cards" ? (
-            <CardView items={paginatedItems} getResponsavel={getResponsavel} onSelect={(d) => openDemanda(d)} onDelete={handleDelete} onEdit={handleEdit} onNovaAtividade={(d) => openDemanda(d, "horas")} />
+            <CardView items={paginatedItems} onSelect={(d) => openDemanda(d)} onDelete={handleDelete} onEdit={handleEdit} onNovaAtividade={(d) => openDemanda(d, "horas")} />
           ) : (
-            <TableView items={paginatedItems} getResponsavel={getResponsavel} onSelect={(d) => openDemanda(d)} onDelete={handleDelete} onEdit={handleEdit} onNovaAtividade={(d) => openDemanda(d, "horas")} />
+            <TableView items={paginatedItems} onSelect={(d) => openDemanda(d)} onDelete={handleDelete} onEdit={handleEdit} onNovaAtividade={(d) => openDemanda(d, "horas")} />
           )}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -223,17 +217,13 @@ export function DemandasList() {
         </>
       )}
 
-      {/* Form criação */}
       <DemandaForm open={showForm} onClose={() => setShowForm(false)} onSubmit={(d) => create(d as any)} />
-
-      {/* Form edição */}
       <DemandaForm
         open={!!editTarget}
         demanda={editTarget}
         onClose={() => setEditTarget(null)}
         onSubmit={handleEditSubmit}
       />
-
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
@@ -245,10 +235,9 @@ export function DemandasList() {
 
 // ─── CardView ─────────────────────────────────────────────────────────────────
 function CardView({
-  items, getResponsavel, onSelect, onDelete, onEdit, onNovaAtividade,
+  items, onSelect, onDelete, onEdit, onNovaAtividade,
 }: {
-  items: Demanda[];
-  getResponsavel: (d: Demanda) => string | null;
+  items: any[];
   onSelect: (d: Demanda) => void;
   onDelete: (d: Demanda) => void;
   onEdit: (d: Demanda) => void;
@@ -258,7 +247,7 @@ function CardView({
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
       {items.map((d) => {
         const titulo = d.titulo || d.descricao;
-        const responsavel = getResponsavel(d);
+        const responsavel = getResponsavelFromList(d.situacao, d.responsaveis_list ?? []);
         return (
           <div key={d.id} onClick={() => onSelect(d)}
             className="group relative flex flex-col gap-3 p-4 rounded-xl border bg-card hover:border-amber-400/50 hover:shadow-md transition-all cursor-pointer">
@@ -313,10 +302,9 @@ function CardView({
 
 // ─── TableView ────────────────────────────────────────────────────────────────
 function TableView({
-  items, getResponsavel, onSelect, onDelete, onEdit, onNovaAtividade,
+  items, onSelect, onDelete, onEdit, onNovaAtividade,
 }: {
-  items: Demanda[];
-  getResponsavel: (d: Demanda) => string | null;
+  items: any[];
   onSelect: (d: Demanda) => void;
   onDelete: (d: Demanda) => void;
   onEdit: (d: Demanda) => void;
@@ -339,7 +327,7 @@ function TableView({
         <TableBody>
           {items.map((d) => {
             const titulo = d.titulo || d.descricao;
-            const responsavel = getResponsavel(d);
+            const responsavel = getResponsavelFromList(d.situacao, d.responsaveis_list ?? []);
             return (
               <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => onSelect(d)}>
                 <TableCell><span className="font-mono font-bold text-amber-500 text-sm">{d.rhm}</span></TableCell>

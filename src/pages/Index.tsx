@@ -89,8 +89,6 @@ const Index = () => {
   const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
-  const { showWizard, completeOnboarding } = useOnboarding();
-
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
 
   useEffect(() => {

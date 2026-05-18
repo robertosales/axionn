@@ -36,6 +36,7 @@ export type { Demanda };
 
 export const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
 
+// Colunas padrão usadas como fallback quando workflowColumns não for passado
 export const FLOWPRINCIPAL = [
   "fila_atendimento",
   "planejamento_elaboracao",
@@ -78,6 +79,7 @@ const PAPEL_LABELS: Record<string, string> = {
   gestor:        "Gestor",
 };
 
+// ── Labels explícitas dos tipos conhecidos (com acentuação correta) ─────────────
 const TIPO_LABELS: Record<string, string> = {
   corretiva:              "Corretiva",
   evolutiva:              "Evolutiva",
@@ -93,6 +95,7 @@ const TIPO_LABELS: Record<string, string> = {
   demanda:                "Demanda",
 };
 
+// Paleta de cores por tipo (ciclicamente reutilizada para tipos não mapeados)
 const TIPO_COLORS: Record<string, { bg: string; text: string }> = {
   corretiva:              { bg: "rgba(239,68,68,0.12)",   text: "#ef4444" },
   evolutiva:              { bg: "rgba(16,185,129,0.12)",  text: "#10b981" },
@@ -108,16 +111,22 @@ const TIPO_COLORS: Record<string, { bg: string; text: string }> = {
   demanda:                { bg: "rgba(100,116,139,0.12)", text: "#64748b" },
 };
 
+// Fallback universal: converte qualquer snake_case em "Title Case" legível
 function tipoSnakeToLabel(tipo: string): string {
   if (!tipo) return "";
   if (TIPO_LABELS[tipo]) return TIPO_LABELS[tipo];
-  return tipo.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return tipo
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 function tipoGetStyle(tipo: string): { bg: string; text: string } {
-  return TIPO_COLORS[tipo] ?? { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
+  if (TIPO_COLORS[tipo]) return TIPO_COLORS[tipo];
+  return { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
 }
 
+// Interface para coluna de workflow dinâmica
 export interface WorkflowColumn {
   key: string;
   label: string;
@@ -144,6 +153,7 @@ type RespItem = { papel: string; nome: string; created_at: string };
 
 function getResponsaveisList(demanda: Demanda): RespItem[] {
   const lista = (demanda as any).responsaveis_list as RespItem[] | undefined;
+
   if (lista && lista.length > 0) {
     const seen = new Set<string>();
     return lista.filter((r) => {
@@ -152,6 +162,7 @@ function getResponsaveisList(demanda: Demanda): RespItem[] {
       return true;
     });
   }
+
   const campos: [string, string | null | undefined][] = [
     ["desenvolvedor",  demanda.responsavel_dev],
     ["analista",       demanda.responsavel_requisitos],
@@ -163,6 +174,7 @@ function getResponsaveisList(demanda: Demanda): RespItem[] {
     .map(([papel, nome]) => ({ papel, nome: nome!, created_at: "" }));
 }
 
+// ── Avatar individual ────────────────────────────────────────────────
 function ResponsavelAvatar({
   nome, papel, size = "sm", highlight = false,
 }: { nome: string; papel: string; size?: "sm" | "md"; highlight?: boolean }) {
@@ -193,6 +205,7 @@ function ResponsavelAvatar({
   );
 }
 
+// ── Grupo responsáveis expand/collapse ─────────────────────────────
 function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -288,20 +301,28 @@ function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
   );
 }
 
+// ── Multi-select de projetos ────────────────────────────────────────
 function ProjetoMultiSelect({
-  projetos, selected, onChange,
+  projetos,
+  selected,
+  onChange,
 }: {
   projetos: string[];
   selected: string[];
   onChange: (v: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const toggle = (p: string) =>
+
+  const toggle = (p: string) => {
     onChange(selected.includes(p) ? selected.filter((s) => s !== p) : [...selected, p]);
+  };
+
   const label =
-    selected.length === 0 ? "Todos os projetos"
-    : selected.length === 1 ? selected[0]
-    : `${selected.length} projetos`;
+    selected.length === 0
+      ? "Todos os projetos"
+      : selected.length === 1
+        ? selected[0]
+        : `${selected.length} projetos`;
 
   return (
     <div className="relative">
@@ -344,25 +365,21 @@ function ProjetoMultiSelect({
           ))}
         </div>
       )}
-      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
+      {open && (
+        <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+      )}
     </div>
   );
 }
 
-// ── Card da demanda — recebe colLabels e colColors dinâmicos ────────
+// ── Card da demanda ──────────────────────────────────────────────────
 function DemandaCard({
-  demanda, accentHex, visibleCols, currentIndex,
-  colLabels, colColors,
-  onClick, onMove, onNovaAtividade,
+  demanda, accentHex, visibleCols, currentIndex, onClick, onMove, onNovaAtividade,
 }: {
   demanda: Demanda;
   accentHex: string;
   visibleCols: string[];
   currentIndex: number;
-  /** Mapa dinâmico key → label legível (inclui rótulos do banco) */
-  colLabels: Record<string, string>;
-  /** Mapa dinâmico key → hex color */
-  colColors: Record<string, string>;
   onClick?: () => void;
   onMove?: (targetKey: string) => void;
   onNovaAtividade?: () => void;
@@ -453,7 +470,6 @@ function DemandaCard({
           </div>
         </div>
       </ContextMenuTrigger>
-
       <ContextMenuContent className="w-56">
         <ContextMenuItem onClick={onClick}>Abrir detalhes</ContextMenuItem>
         {onNovaAtividade && (
@@ -465,7 +481,6 @@ function DemandaCard({
         {onMove && (
           <>
             <ContextMenuSeparator />
-            {/* Avançar para (colunas à direita) */}
             {colsDepois.length > 0 && (
               <ContextMenuSub>
                 <ContextMenuSubTrigger>
@@ -475,14 +490,13 @@ function DemandaCard({
                   {colsDepois.map((key) => (
                     <ContextMenuItem key={key} onClick={() => onMove(key)}>
                       <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
-                        style={{ background: colColors[key] ?? "#6b7280" }} />
-                      {colLabels[key] ?? key}
+                        style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
+                      {WORKFLOWLABELS[key] ?? key}
                     </ContextMenuItem>
                   ))}
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
-            {/* Regredir para (colunas à esquerda, ordem reversa) */}
             {colsAntes.length > 0 && (
               <ContextMenuSub>
                 <ContextMenuSubTrigger>
@@ -492,14 +506,13 @@ function DemandaCard({
                   {[...colsAntes].reverse().map((key) => (
                     <ContextMenuItem key={key} onClick={() => onMove(key)}>
                       <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
-                        style={{ background: colColors[key] ?? "#6b7280" }} />
-                      {colLabels[key] ?? key}
+                        style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
+                      {WORKFLOWLABELS[key] ?? key}
                     </ContextMenuItem>
                   ))}
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
-            {/* Mover para (lista completa) */}
             <ContextMenuSub>
               <ContextMenuSubTrigger>
                 <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />Mover para
@@ -508,11 +521,9 @@ function DemandaCard({
                 {visibleCols.map((key) => (
                   <ContextMenuItem key={key} disabled={key === demanda.situacao} onClick={() => onMove(key)}>
                     <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
-                      style={{ background: colColors[key] ?? "#6b7280" }} />
-                    {colLabels[key] ?? key}
-                    {key === demanda.situacao && (
-                      <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>
-                    )}
+                      style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
+                    {WORKFLOWLABELS[key] ?? key}
+                    {key === demanda.situacao && <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>}
                   </ContextMenuItem>
                 ))}
               </ContextMenuSubContent>
@@ -524,9 +535,7 @@ function DemandaCard({
   );
 }
 
-function CollapsedCol({ label, count, accentHex, onClick }: {
-  label: string; count: number; accentHex: string; onClick: () => void;
-}) {
+function CollapsedCol({ label, count, accentHex, onClick }: { label: string; count: number; accentHex: string; onClick: () => void }) {
   return (
     <div onClick={onClick}
       className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
@@ -544,19 +553,12 @@ function CollapsedCol({ label, count, accentHex, onClick }: {
   );
 }
 
-// ── ExpandedCol — repassa colLabels e colColors para cada DemandaCard ─
-function ExpandedCol({
-  label, colKey, demandas, accentHex, visibleCols,
-  colLabels, colColors,
-  onCollapse, onCardClick, onAdd, onMove, onNovaAtividade,
-}: {
+function ExpandedCol({ label, colKey, demandas, accentHex, visibleCols, onCollapse, onCardClick, onAdd, onMove, onNovaAtividade }: {
   label: string;
   colKey: string;
   demandas: Demanda[];
   accentHex: string;
   visibleCols: string[];
-  colLabels: Record<string, string>;
-  colColors: Record<string, string>;
   onCollapse: () => void;
   onCardClick?: (d: Demanda) => void;
   onAdd?: () => void;
@@ -572,9 +574,7 @@ function ExpandedCol({
         <button onClick={onCollapse} className="p-0.5 rounded hover:bg-muted transition-colors">
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
-        <span className="flex-1 text-[12px] font-bold tracking-wide uppercase truncate" style={{ color: accentHex }}>
-          {label}
-        </span>
+        <span className="flex-1 text-[12px] font-bold tracking-wide uppercase truncate" style={{ color: accentHex }}>{label}</span>
         <span className="text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1.5 flex items-center justify-center"
           style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}>
           {demandas.length}
@@ -598,8 +598,6 @@ function ExpandedCol({
               accentHex={accentHex}
               visibleCols={visibleCols}
               currentIndex={currentIndex}
-              colLabels={colLabels}
-              colColors={colColors}
               onClick={() => onCardClick?.(d)}
               onMove={onMove ? (targetKey) => onMove(d, targetKey) : undefined}
               onNovaAtividade={onNovaAtividade ? () => onNovaAtividade(d) : undefined}
@@ -641,7 +639,6 @@ export function SustentacaoBoard({
     return [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
   }, [workflowColumns]);
 
-  // colLabels: mapa dinâmico que inclui rótulos do banco (workflow do time)
   const colLabels = useMemo<Record<string, string>>(() => {
     const base: Record<string, string> = { ...WORKFLOWLABELS };
     if (workflowColumns) {
@@ -650,7 +647,6 @@ export function SustentacaoBoard({
     return base;
   }, [workflowColumns]);
 
-  // colColors: mapa dinâmico que inclui cores personalizadas do banco
   const colColors = useMemo<Record<string, string>>(() => {
     const base: Record<string, string> = {};
     Object.entries(COLUMN_COLORS).forEach(([k, v]) => { base[k] = v.hex; });
@@ -718,7 +714,6 @@ export function SustentacaoBoard({
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* Barra de filtros */}
       <div className="flex items-center gap-3 px-1 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -759,17 +754,13 @@ export function SustentacaoBoard({
           {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
         </Badge>
       </div>
-
-      {/* Board de colunas */}
       <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
         {visibleCols.map((key) => {
           const label = colLabels[key] ?? key;
           const hex   = colColors[key] ?? "#94a3b8";
           const items = byStatus[key] ?? [];
           if (collapsed.has(key)) {
-            return (
-              <CollapsedCol key={key} label={label} count={items.length} accentHex={hex} onClick={() => toggle(key)} />
-            );
+            return <CollapsedCol key={key} label={label} count={items.length} accentHex={hex} onClick={() => toggle(key)} />;
           }
           return (
             <ExpandedCol
@@ -779,8 +770,6 @@ export function SustentacaoBoard({
               demandas={items}
               accentHex={hex}
               visibleCols={visibleCols}
-              colLabels={colLabels}
-              colColors={colColors}
               onCollapse={() => toggle(key)}
               onCardClick={(d) => onSelectDemanda?.(d)}
               onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}

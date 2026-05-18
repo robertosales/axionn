@@ -21,8 +21,6 @@ import { CalendarView } from "@/components/CalendarView";
 import { PlanningPoker } from "@/components/PlanningPoker";
 import { RetroManager } from "@/components/RetroManager";
 import { ApfGeneratorPage } from "@/features/apf/components/ApfGeneratorPage";
-import { OnboardingWizard } from "@/components/OnboardingWizard";
-import { useOnboarding } from "@/hooks/useOnboarding";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -91,8 +89,6 @@ const Index = () => {
   const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
-  const { showWizard, completeOnboarding } = useOnboarding();
-
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
 
   useEffect(() => {

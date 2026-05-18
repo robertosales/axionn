@@ -104,7 +104,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onComplete(); }}>
-      <DialogContent className="max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="max-w-2xl w-[calc(100vw-2rem)]" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <div className="flex items-center gap-1.5 mb-4">
             {STEPS.map((s, i) => (
@@ -135,16 +135,10 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
           </div>
         </DialogHeader>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            {!isLast && (
-              <Button variant="ghost" size="sm" className="text-muted-foreground gap-1 text-xs" onClick={onComplete}>
-                <SkipForward className="h-3.5 w-3.5" /> Pular tutorial
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
+        {/* Footer custom (não usa DialogFooter para controlar layout em 2 linhas) */}
+        <div className="flex flex-col gap-3 pt-2">
+          {/* Linha 1 — navegação principal */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {!isFirst && (
               <Button variant="outline" size="sm" onClick={handleBack} className="gap-1">
                 <ChevronLeft className="h-4 w-4" /> Anterior
@@ -170,7 +164,21 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
               )}
             </Button>
           </div>
-        </DialogFooter>
+
+          {/* Linha 2 — pular tutorial, à esquerda */}
+          {!isLast && (
+            <div className="flex items-center justify-start pt-1 border-t border-border/60">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground gap-1 text-xs"
+                onClick={onComplete}
+              >
+                <SkipForward className="h-3.5 w-3.5" /> Pular tutorial
+              </Button>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

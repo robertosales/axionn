@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SprintProvider } from "@/contexts/SprintContext";
 import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAlert";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { useOnboarding } from "@/hooks/useOnboarding";
 
 // Pages
 import Index from "./pages/Index.tsx";
@@ -24,6 +26,7 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, refreshProfile } = useAuth();
+  const { showWizard, completeOnboarding } = useOnboarding();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -42,6 +45,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <SessionTimeoutAlert />
+      {/* Tutorial global — aparece em qualquer rota autenticada,
+          independentemente do método de login (email/senha ou Google OAuth) */}
+      <OnboardingWizard open={showWizard} onComplete={completeOnboarding} />
     </>
   );
 }

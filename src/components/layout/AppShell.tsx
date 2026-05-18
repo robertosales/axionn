@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { getInitials, formatPersonName } from "@/lib/personName";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
+import { APP_VERSION, APP_BUILD_DATE } from "@/lib/constants";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -650,6 +651,9 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Versão atual do sistema — atualizado em src/lib/constants.ts a cada publicação */}
+            <VersionBadge collapsed={collapsed} />
           </div>
         </aside>
 
@@ -661,5 +665,29 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
         </div>
       </div>
     </TooltipProvider>
+  );
+}
+
+/* ─── Versão do sistema ───────────────────────────────────────────────────── */
+function VersionBadge({ collapsed }: { collapsed: boolean }) {
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="mt-2 flex items-center justify-center text-[9px] font-mono text-muted-foreground/60 select-none">
+            v{APP_VERSION}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          Versão {APP_VERSION} · {APP_BUILD_DATE}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+  return (
+    <div className="mt-2 px-2 flex items-center justify-between text-[10px] font-mono text-muted-foreground/60 select-none">
+      <span>v{APP_VERSION}</span>
+      <span className="text-muted-foreground/40">{APP_BUILD_DATE}</span>
+    </div>
   );
 }

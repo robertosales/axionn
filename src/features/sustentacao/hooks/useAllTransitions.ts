@@ -12,18 +12,12 @@ export function useAllTransitions() {
     if (!currentTeamId) return;
     setLoading(true);
     try {
-      // Get all demanda IDs for this team first
-      const { data: demandas } = await supabase
-        .from("demandas" as any)
-        .select("id")
-        .eq("team_id", currentTeamId);
-      const ids = ((demandas || []) as any[]).map(d => d.id);
-      if (ids.length === 0) { setTransitions([]); setLoading(false); return; }
-
+      // OTIMIZAÇÃO: 1 única query usando inner join para filtrar por team_id
+      // (evita o round-trip extra para buscar IDs de demandas antes)
       const { data } = await supabase
         .from("demanda_transitions" as any)
-        .select("*")
-        .in("demanda_id", ids)
+        .select("*, demandas!inner(team_id)")
+        .eq("demandas.team_id", currentTeamId)
         .order("created_at", { ascending: true });
       setTransitions((data || []) as unknown as DemandaTransition[]);
     } catch {
@@ -46,17 +40,11 @@ export function useAllHours() {
     if (!currentTeamId) return;
     setLoading(true);
     try {
-      const { data: demandas } = await supabase
-        .from("demandas" as any)
-        .select("id")
-        .eq("team_id", currentTeamId);
-      const ids = ((demandas || []) as any[]).map(d => d.id);
-      if (ids.length === 0) { setHours([]); setLoading(false); return; }
-
+      // OTIMIZAÇÃO: 1 única query com inner join (evita N+1 / round-trip extra)
       const { data } = await supabase
         .from("demanda_hours" as any)
-        .select("*")
-        .in("demanda_id", ids)
+        .select("*, demandas!inner(team_id)")
+        .eq("demandas.team_id", currentTeamId)
         .order("created_at", { ascending: true });
       setHours((data || []) as unknown as DemandaHour[]);
     } catch {

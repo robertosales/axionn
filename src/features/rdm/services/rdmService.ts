@@ -10,7 +10,7 @@ import type {
   RdmDeploymentTask, RdmDeploymentTaskInsert, RdmDeploymentTaskUpdate,
 } from "../types/rdm";
 
-// ── RDMs ─────────────────────────────────────────────────────────────────────
+// ── RDMs ───────────────────────────────────────────────────────────────────
 export async function listRdms(teamId: string): Promise<Rdm[]> {
   const { data, error } = await supabase
     .from("rdms").select("*")
@@ -65,7 +65,7 @@ export async function deleteRdm(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── Checklist ─────────────────────────────────────────────────────────────────
+// ── Checklist ───────────────────────────────────────────────────────────────────
 export async function listChecklistItems(rdmId: string): Promise<RdmChecklistItem[]> {
   const { data, error } = await supabase
     .from("rdm_checklist_items").select("*")
@@ -84,7 +84,7 @@ export async function updateChecklistItem(
   if (error) throw error;
 }
 
-// ── Go/No-Go ──────────────────────────────────────────────────────────────────
+// ── Go/No-Go ───────────────────────────────────────────────────────────────────
 export async function listGoNogo(rdmId: string): Promise<RdmGoNogo[]> {
   const { data, error } = await supabase
     .from("rdm_gonogo").select("*")
@@ -100,7 +100,7 @@ export async function upsertGoNogo(payload: RdmGoNogoInsert): Promise<void> {
   if (error) throw error;
 }
 
-// ── Participantes ─────────────────────────────────────────────────────────────
+// ── Participantes ──────────────────────────────────────────────────────────────────
 export async function listParticipantes(rdmId: string): Promise<RdmParticipante[]> {
   const { data, error } = await supabase
     .from("rdm_participantes").select("*").eq("rdm_id", rdmId);
@@ -118,7 +118,7 @@ export async function removeParticipante(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── Sprint Items (legado) ─────────────────────────────────────────────────────
+// ── Sprint Items (legado) ─────────────────────────────────────────────────────────────
 export async function listSprintItems(rdmId: string): Promise<RdmSprintItem[]> {
   const { data, error } = await supabase
     .from("rdm_sprint_items").select("*").eq("rdm_id", rdmId);
@@ -136,7 +136,7 @@ export async function removeSprintItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── RDM Sprints ───────────────────────────────────────────────────────────────
+// ── RDM Sprints ──────────────────────────────────────────────────────────────────
 export async function listRdmSprints(rdmId: string): Promise<RdmSprint[]> {
   const { data, error } = await supabase
     .from("rdm_sprints").select("*, redmines:rdm_sprint_redmines(*)")
@@ -166,12 +166,27 @@ export async function deleteRdmSprint(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── RDM Sprint Redmines ───────────────────────────────────────────────────────
-export async function addRdmSprintRedmine(payload: RdmSprintRedmineInsert): Promise<RdmSprintRedmine> {
+// ── RDM Sprint Redmines ────────────────────────────────────────────────────────────────
+export async function addRdmSprintRedmine(
+  payload: RdmSprintRedmineInsert
+): Promise<RdmSprintRedmine> {
   const { data, error } = await supabase
-    .from("rdm_sprint_redmines").insert(payload).select().single();
+    .from("rdm_sprint_redmines")
+    .insert(payload)
+    .select()
+    .single();
   if (error) throw error;
-  return data as RdmSprintRedmine;
+  // FIX: cast seguro com fallback para campos com default no banco
+  // O Supabase pode omitir updated_at/created_at no retorno imediato do INSERT
+  const now = new Date().toISOString();
+  return {
+    id:            (data as any).id,
+    rdm_sprint_id: (data as any).rdm_sprint_id,
+    numero:        (data as any).numero,
+    descricao:     (data as any).descricao ?? null,
+    created_at:    (data as any).created_at ?? now,
+    updated_at:    (data as any).updated_at ?? now,
+  } satisfies RdmSprintRedmine;
 }
 
 export async function updateRdmSprintRedmine(
@@ -189,7 +204,7 @@ export async function deleteRdmSprintRedmine(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── Deployment Tasks ─────────────────────────────────────────────────────────
+// ── Deployment Tasks ────────────────────────────────────────────────────────────────
 export async function listDeploymentTasks(rdmId: string): Promise<RdmDeploymentTask[]> {
   const { data, error } = await supabase
     .from("rdm_deployment_tasks")
@@ -229,7 +244,7 @@ export async function deleteDeploymentTask(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── Dashboard KPIs ────────────────────────────────────────────────────────────
+// ── Dashboard KPIs ──────────────────────────────────────────────────────────────────
 export async function getDashboardKpis(
   teamId?: string, inicio?: string, fim?: string
 ): Promise<Record<string, unknown>> {

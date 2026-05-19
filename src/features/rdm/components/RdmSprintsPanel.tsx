@@ -15,7 +15,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn }       from "@/lib/utils";
 import { useRdmSprints } from "../hooks/useRdmSprints";
 import type { RdmSprint } from "../types/rdm";
 import { toast } from "sonner";
@@ -45,8 +44,6 @@ export function RdmSprintsPanel({ rdmId }: Props) {
   // Redmine form
   const [editingRedmine, setEditingRedmine] = useState<EditingRedmine | null>(null);
   const [savingRedmine, setSavingRedmine]   = useState(false);
-  // Controla sucesso separado de loading para evitar race condition de desmontagem
-  const [redmineSaved, setRedmineSaved]     = useState(false);
 
   // Expanded
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -63,7 +60,7 @@ export function RdmSprintsPanel({ rdmId }: Props) {
   const confirmSprint = sprints.find((s) => s.id === confirmSprintId);
 
   // ── helpers ──────────────────────────────────────────────────────────────
-const openNewSprintForm = () => {
+  const openNewSprintForm = () => {
     setEditingSprintId(null);
     setSprintNome("");
     setShowSprintForm(true);
@@ -119,8 +116,6 @@ const openNewSprintForm = () => {
   const handleSaveRedmine = async () => {
     if (!editingRedmine || !editingRedmine.numero.trim()) return;
     setSavingRedmine(true);
-    setRedmineSaved(false);
-    let success = false;
     try {
       if (editingRedmine.redmineId) {
         await updateRedmine(editingRedmine.sprintId, editingRedmine.redmineId, {
@@ -135,17 +130,13 @@ const openNewSprintForm = () => {
         });
         toast.success("Redmine adicionado.");
       }
-      success = true;
     } catch (e: any) {
       toast.error("Erro ao salvar Redmine: " + (e?.message ?? ""));
     } finally {
-      // FIX: setSavingRedmine(false) SEMPRE antes de setEditingRedmine(null)
-      // Evita que a desmontagem do formulário inline interrompa o reset do
-      // estado loading no React 18 Strict Mode, causando trava permanente.
+      // FIX: reset de loading e fechamento do form SEMPRE no finally
+      // Garante que a tela nao trava mesmo que setSprints lance erro interno
       setSavingRedmine(false);
-      if (success) {
-        setEditingRedmine(null);
-      }
+      setEditingRedmine(null);
     }
   };
 
@@ -178,11 +169,7 @@ const openNewSprintForm = () => {
             : `${sprints.length} sprint(s) vinculada(s)`}
         </p>
         {!showSprintForm && (
-          <Button
-            size="sm" variant="outline"
-            className="gap-1.5 h-8 text-xs"
-            onClick={openNewSprintForm}
-          >
+          <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={openNewSprintForm}>
             <Plus className="h-3.5 w-3.5" /> Vincular Sprint
           </Button>
         )}
@@ -203,20 +190,10 @@ const openNewSprintForm = () => {
               onKeyDown={(e) => { if (e.key === "Enter") handleSaveSprint(); }}
               autoFocus
             />
-            <Button
-              size="sm" className="h-8 px-3"
-              onClick={handleSaveSprint}
-              disabled={savingSprint || !sprintNome.trim()}
-            >
-              {savingSprint
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <Check className="h-3.5 w-3.5" />}
+            <Button size="sm" className="h-8 px-3" onClick={handleSaveSprint} disabled={savingSprint || !sprintNome.trim()}>
+              {savingSprint ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             </Button>
-            <Button
-              size="sm" variant="ghost" className="h-8 px-3"
-              onClick={closeSprintForm}
-              disabled={savingSprint}
-            >
+            <Button size="sm" variant="ghost" className="h-8 px-3" onClick={closeSprintForm} disabled={savingSprint}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -228,11 +205,7 @@ const openNewSprintForm = () => {
         <div className="flex flex-col items-center justify-center py-10 text-muted-foreground space-y-3">
           <GitBranch className="h-8 w-8 opacity-30" />
           <p className="text-sm">Vincule sprints para controlar os Redmines relacionados.</p>
-          <Button
-            size="sm" variant="outline"
-            className="gap-1.5"
-            onClick={openNewSprintForm}
-          >
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={openNewSprintForm}>
             <Plus className="h-3.5 w-3.5" /> Vincular Nova Sprint
           </Button>
         </div>
@@ -246,8 +219,7 @@ const openNewSprintForm = () => {
           const isEditingThis = editingRedmine?.sprintId === sprint.id && !editingRedmine?.redmineId;
 
           return (
-            <div key={sprint.id}
-              className="rounded-lg border border-border bg-card overflow-hidden">
+            <div key={sprint.id} className="rounded-lg border border-border bg-card overflow-hidden">
 
               {/* Sprint header */}
               <div className="flex items-center gap-2 px-4 py-3">
@@ -259,9 +231,7 @@ const openNewSprintForm = () => {
                     ? <ChevronUp   className="h-4 w-4 text-muted-foreground shrink-0" />
                     : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
                   <GitBranch className="h-4 w-4 text-primary shrink-0" />
-                  <span className="text-sm font-semibold text-foreground truncate">
-                    {sprint.nome}
-                  </span>
+                  <span className="text-sm font-semibold text-foreground truncate">{sprint.nome}</span>
                   {redmines.length > 0 && (
                     <Badge variant="secondary" className="text-[10px] h-4 ml-1">
                       {redmines.length} redmine{redmines.length !== 1 ? "s" : ""}
@@ -269,15 +239,10 @@ const openNewSprintForm = () => {
                   )}
                 </button>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
-                    title="Editar sprint"
-                    onClick={() => handleEditSprint(sprint)}>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Editar sprint" onClick={() => handleEditSprint(sprint)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="sm" variant="ghost"
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                    title="Remover sprint"
-                    onClick={() => setConfirmSprintId(sprint.id)}>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" title="Remover sprint" onClick={() => setConfirmSprintId(sprint.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -293,17 +258,12 @@ const openNewSprintForm = () => {
                         const isEditingRedmine = editingRedmine?.redmineId === r.id;
                         if (isEditingRedmine) {
                           return (
-                            <div key={r.id}
-                              className="flex items-center gap-1.5 bg-primary/10 border border-primary/30 rounded-lg px-2 py-1">
+                            <div key={r.id} className="flex items-center gap-1.5 bg-primary/10 border border-primary/30 rounded-lg px-2 py-1">
                               <Hash className="h-3 w-3 text-primary shrink-0" />
                               <input
                                 className="bg-transparent border-none outline-none text-xs w-20 text-foreground"
                                 value={editingRedmine.numero}
-                                onChange={(e) =>
-                                  setEditingRedmine((prev) =>
-                                    prev ? { ...prev, numero: e.target.value } : prev
-                                  )
-                                }
+                                onChange={(e) => setEditingRedmine((prev) => prev ? { ...prev, numero: e.target.value } : prev)}
                                 onKeyDown={(e) => e.key === "Enter" && handleSaveRedmine()}
                                 autoFocus
                               />
@@ -311,52 +271,28 @@ const openNewSprintForm = () => {
                                 className="bg-transparent border-none outline-none text-xs w-28 text-muted-foreground"
                                 placeholder="descrição"
                                 value={editingRedmine.descricao}
-                                onChange={(e) =>
-                                  setEditingRedmine((prev) =>
-                                    prev ? { ...prev, descricao: e.target.value } : prev
-                                  )
-                                }
+                                onChange={(e) => setEditingRedmine((prev) => prev ? { ...prev, descricao: e.target.value } : prev)}
                                 onKeyDown={(e) => e.key === "Enter" && handleSaveRedmine()}
                               />
-                              <button
-                                onClick={handleSaveRedmine}
-                                disabled={savingRedmine}
-                                className="text-emerald-500 hover:text-emerald-400"
-                              >
-                                {savingRedmine
-                                  ? <Loader2 className="h-3 w-3 animate-spin" />
-                                  : <Check className="h-3 w-3" />}
+                              <button onClick={handleSaveRedmine} disabled={savingRedmine} className="text-emerald-500 hover:text-emerald-400">
+                                {savingRedmine ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                               </button>
-                              <button
-                                onClick={() => setEditingRedmine(null)}
-                                className="text-muted-foreground hover:text-foreground"
-                              >
+                              <button onClick={() => setEditingRedmine(null)} className="text-muted-foreground hover:text-foreground">
                                 <X className="h-3 w-3" />
                               </button>
                             </div>
                           );
                         }
-
                         return (
-                          <div key={r.id}
-                            className="group flex items-center gap-1 bg-muted border border-border rounded-lg px-2 py-1">
+                          <div key={r.id} className="group flex items-center gap-1 bg-muted border border-border rounded-lg px-2 py-1">
                             <Hash className="h-3 w-3 text-muted-foreground shrink-0" />
-                            <span className="text-xs font-mono font-medium text-foreground">
-                              {r.numero}
-                            </span>
+                            <span className="text-xs font-mono font-medium text-foreground">{r.numero}</span>
                             {r.descricao && (
-                              <span className="text-xs text-muted-foreground ml-1 max-w-[120px] truncate">
-                                {r.descricao}
-                              </span>
+                              <span className="text-xs text-muted-foreground ml-1 max-w-[120px] truncate">{r.descricao}</span>
                             )}
                             <button
                               className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
-                              onClick={() =>
-                                setEditingRedmine({
-                                  sprintId: sprint.id, redmineId: r.id,
-                                  numero: r.numero, descricao: r.descricao ?? "",
-                                })
-                              }
+                              onClick={() => setEditingRedmine({ sprintId: sprint.id, redmineId: r.id, numero: r.numero, descricao: r.descricao ?? "" })}
                             >
                               <Pencil className="h-2.5 w-2.5" />
                             </button>
@@ -379,11 +315,7 @@ const openNewSprintForm = () => {
                       <Input
                         placeholder="Número (ex: 12345)"
                         value={editingRedmine?.numero ?? ""}
-                        onChange={(e) =>
-                          setEditingRedmine((prev) =>
-                            prev ? { ...prev, numero: e.target.value } : prev
-                          )
-                        }
+                        onChange={(e) => setEditingRedmine((prev) => prev ? { ...prev, numero: e.target.value } : prev)}
                         className="h-7 text-xs w-32"
                         onKeyDown={(e) => e.key === "Enter" && handleSaveRedmine()}
                         autoFocus
@@ -391,28 +323,14 @@ const openNewSprintForm = () => {
                       <Input
                         placeholder="Descrição (opcional)"
                         value={editingRedmine?.descricao ?? ""}
-                        onChange={(e) =>
-                          setEditingRedmine((prev) =>
-                            prev ? { ...prev, descricao: e.target.value } : prev
-                          )
-                        }
+                        onChange={(e) => setEditingRedmine((prev) => prev ? { ...prev, descricao: e.target.value } : prev)}
                         className="h-7 text-xs flex-1"
                         onKeyDown={(e) => e.key === "Enter" && handleSaveRedmine()}
                       />
-                      <Button
-                        size="sm" className="h-7 px-2"
-                        onClick={handleSaveRedmine}
-                        disabled={savingRedmine}
-                      >
-                        {savingRedmine
-                          ? <Loader2 className="h-3 w-3 animate-spin" />
-                          : <Check className="h-3 w-3" />}
+                      <Button size="sm" className="h-7 px-2" onClick={handleSaveRedmine} disabled={savingRedmine}>
+                        {savingRedmine ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                       </Button>
-                      <Button
-                        size="sm" variant="ghost" className="h-7 px-2"
-                        onClick={() => setEditingRedmine(null)}
-                        disabled={savingRedmine}
-                      >
+                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditingRedmine(null)} disabled={savingRedmine}>
                         <X className="h-3 w-3" />
                       </Button>
                     </div>
@@ -420,12 +338,7 @@ const openNewSprintForm = () => {
                     <Button
                       size="sm" variant="ghost"
                       className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1.5 px-2"
-                      onClick={() =>
-                        setEditingRedmine({
-                          sprintId: sprint.id, redmineId: null,
-                          numero: "", descricao: "",
-                        })
-                      }
+                      onClick={() => setEditingRedmine({ sprintId: sprint.id, redmineId: null, numero: "", descricao: "" })}
                     >
                       <Plus className="h-3 w-3" /> Adicionar Redmine
                     </Button>
@@ -438,10 +351,7 @@ const openNewSprintForm = () => {
       </div>
 
       {/* AlertDialog — confirmar remoção de sprint */}
-      <AlertDialog
-        open={!!confirmSprintId}
-        onOpenChange={(o) => !o && !deletingSprint && setConfirmSprintId(null)}
-      >
+      <AlertDialog open={!!confirmSprintId} onOpenChange={(o) => !o && !deletingSprint && setConfirmSprintId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">

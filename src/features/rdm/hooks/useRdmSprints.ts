@@ -9,9 +9,9 @@ import type {
 } from "../types/rdm";
 
 export function useRdmSprints(rdmId: string | null) {
-  const [sprints, setSprints]   = useState<RdmSprint[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [sprints, setSprints] = useState<RdmSprint[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!rdmId) return;
@@ -30,7 +30,6 @@ export function useRdmSprints(rdmId: string | null) {
 
   // ── Sprint CRUD ──────────────────────────────────────────────────────────
   const addSprint = useCallback(async (payload: Omit<RdmSprintInsert, "rdm_id">) => {
-    // FIX: lança erro explícito em vez de silent return para o catch do painel capturar
     if (!rdmId) throw new Error("rdmId ausente — não é possível vincular sprint.");
     const created = await addRdmSprint({ ...payload, rdm_id: rdmId });
     setSprints((prev) => [...prev, { ...created, redmines: [] }]);
@@ -52,15 +51,12 @@ export function useRdmSprints(rdmId: string | null) {
   const addRedmine = useCallback(async (
     rdmSprintId: string, payload: Omit<RdmSprintRedmineInsert, "rdm_sprint_id">
   ) => {
-    const created = await addRdmSprintRedmine({ ...payload, rdm_sprint_id: rdmSprintId });
-    setSprints((prev) =>
-      prev.map((s) =>
-        s.id === rdmSprintId
-          ? { ...s, redmines: [...(s.redmines ?? []), created] }
-          : s
-      )
-    );
-  }, []);
+    // Salva no banco
+    await addRdmSprintRedmine({ ...payload, rdm_sprint_id: rdmSprintId });
+    // FIX: reload completo do Supabase para evitar race condition de cast
+    // do objeto retornado pelo INSERT (campos com default podem vir ausentes)
+    await listRdmSprints(rdmId!).then(setSprints);
+  }, [rdmId]);
 
   const updateRedmine = useCallback(async (
     rdmSprintId: string, redmineId: string, updates: RdmSprintRedmineUpdate

@@ -2,8 +2,6 @@ import { useState, useEffect } from "react";
 import { AppShell }            from "@/components/layout/AppShell";
 import { useAuth }             from "@/contexts/AuthContext";
 import { TeamSelectionModal }  from "@/shared/components/common/TeamSelectionModal";
-import { Building2 }           from "lucide-react";
-import { Button }              from "@/components/ui/button";
 import { toast }               from "sonner";
 import { useRdms }             from "./hooks/useRdms";
 import { RdmList }             from "./components/RdmList";
@@ -14,6 +12,7 @@ import { RdmChecklistTemplatesPage } from "./components/RdmChecklistTemplatesPag
 import { TeamManager }         from "@/components/TeamManager";
 import { TeamMembersManager }  from "@/components/TeamMembersManager";
 import { UserRolesManager }    from "@/components/UserRolesManager";
+import { Button }              from "@/components/ui/button";
 import type { Rdm, RdmUpdate } from "./types/rdm";
 
 export default function RdmPage() {
@@ -23,62 +22,43 @@ export default function RdmPage() {
     currentTeamId,
     setCurrentTeamId,
     teams,
-    hasPermission,
-    profile,
   } = useAuth();
   const [showTeamModal, setShowTeamModal] = useState(false);
 
+  // Times do módulo RDM (opcional — se não houver, continua sem bloquear)
   const moduleTeams = teams.filter((t) => t.module === "rdm");
 
   useEffect(() => {
-    if (authLoading || moduleTeams.length === 0) return;
-    const currentIsValid =
-      currentTeamId && moduleTeams.some((t) => t.id === currentTeamId);
+    if (authLoading) return;
+    // Se já tem um time válido ou não há times RDM, não faz nada
+    if (!moduleTeams.length) return;
+    const currentIsValid = currentTeamId && moduleTeams.some((t) => t.id === currentTeamId);
     if (currentIsValid) return;
     if (moduleTeams.length === 1) {
       setCurrentTeamId(moduleTeams[0].id);
     } else {
       setShowTeamModal(true);
     }
-  }, [authLoading, teams]);
-
-  const needsTeam = !currentTeamId && active !== "times";
+  }, [authLoading, teams]); // eslint-disable-line
 
   return (
     <AppShell module="rdm" activeKey={active} onNavigate={setActive}>
-      <TeamSelectionModal
-        open={showTeamModal}
-        teams={moduleTeams}
-        moduleLabel="RDM"
-        onSelect={(id) => {
-          setCurrentTeamId(id);
-          setShowTeamModal(false);
-        }}
-        onClose={() => setShowTeamModal(false)}
-      />
+      {moduleTeams.length > 1 && (
+        <TeamSelectionModal
+          open={showTeamModal}
+          teams={moduleTeams}
+          moduleLabel="RDM"
+          onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
+          onClose={() => setShowTeamModal(false)}
+        />
+      )}
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
-        {authLoading && (
+        {authLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500" />
           </div>
-        )}
-
-        {!authLoading && needsTeam && (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <Building2 className="h-14 w-14 text-muted-foreground/30" />
-            <p className="text-lg text-muted-foreground font-medium">
-              Selecione ou crie um time para começar
-            </p>
-            {hasPermission("manage_teams") && (
-              <Button onClick={() => setActive("times")} size="lg">
-                <Building2 className="h-4 w-4 mr-2" /> Ir para Times
-              </Button>
-            )}
-          </div>
-        )}
-
-        {!authLoading && !needsTeam && (
+        ) : (
           <RdmSection active={active} setActive={setActive} />
         )}
       </div>
@@ -94,7 +74,7 @@ function RdmSection({
   setActive: (v: string) => void;
 }) {
   const { rdms, loading, create, update, load } = useRdms();
-  const { profile } = useAuth();
+  const { profile, currentTeamId } = useAuth();
   const [selected, setSelected] = useState<Rdm | null>(null);
   const [showForm, setShowForm] = useState(false);
 
@@ -157,8 +137,12 @@ function RdmSection({
     case "gonogo":
       return (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-3">
-          <p className="text-sm">Selecione uma RDM na aba <strong>RDMs</strong> para acessar o Go/No-Go.</p>
-          <Button variant="outline" size="sm" onClick={() => setActive("rdms")}>Ir para RDMs</Button>
+          <p className="text-sm">
+            Selecione uma RDM na aba <strong>RDMs</strong> para acessar o Go/No-Go.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => setActive("rdms")}>
+            Ir para RDMs
+          </Button>
         </div>
       );
 

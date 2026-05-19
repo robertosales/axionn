@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   ArrowLeft, Calendar, Clock, Boxes, AlertTriangle,
   RefreshCw, Users, CheckSquare, ThumbsUp, History,
+  Pencil, GitBranch,
 } from "lucide-react";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
@@ -11,12 +12,15 @@ import {
   RDM_STATUS, RDM_STATUS_LABELS,
   RDM_TIPO_LABELS, RDM_AMBIENTE_LABELS,
 } from "../types/rdm";
-import { RdmStatusBadge }       from "./RdmStatusBadge";
-import { RdmRiscoBadge }        from "./RdmRiscoBadge";
-import { RdmChecklistPanel }    from "./RdmChecklistPanel";
-import { RdmGoNogoPanel }       from "./RdmGoNogoPanel";
+import { RdmStatusBadge }        from "./RdmStatusBadge";
+import { RdmRiscoBadge }         from "./RdmRiscoBadge";
+import { RdmChecklistPanel }     from "./RdmChecklistPanel";
+import { RdmGoNogoPanel }        from "./RdmGoNogoPanel";
 import { RdmParticipantesPanel } from "./RdmParticipantesPanel";
-import { RdmAuditLogPanel }     from "./RdmAuditLogPanel";
+import { RdmAuditLogPanel }      from "./RdmAuditLogPanel";
+import { RdmSprintsPanel }       from "./RdmSprintsPanel";
+import { RdmForm }               from "./RdmForm";
+import { useAuth }               from "@/contexts/AuthContext";
 
 interface Props {
   rdm:      Rdm;
@@ -25,18 +29,30 @@ interface Props {
 }
 
 export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
-  const [updating, setUpdating] = useState(false);
+  const { profile, isAdmin } = useAuth();
+  const [updating, setUpdating]     = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [localRdm, setLocalRdm]     = useState<Rdm>(rdm);
+
+  const canEdit = isAdmin || localRdm.criado_por === profile?.id;
 
   const handleStatusChange = async (newStatus: string) => {
     setUpdating(true);
     try {
-      await onUpdate(rdm.id, { status: newStatus });
+      await onUpdate(localRdm.id, { status: newStatus });
+      setLocalRdm((prev) => ({ ...prev, status: newStatus }));
     } finally {
       setUpdating(false);
     }
   };
 
-  const nextStatuses = RDM_STATUS.filter((s) => s !== rdm.status);
+  const handleEdit = async (values: Omit<any, "id" | "codigo" | "updated_at" | "team_id" | "criado_por">) => {
+    await onUpdate(localRdm.id, values);
+    setLocalRdm((prev) => ({ ...prev, ...values }));
+    setShowEditForm(false);
+  };
+
+  const nextStatuses = RDM_STATUS.filter((s) => s !== localRdm.status);
 
   return (
     <div className="space-y-5">
@@ -46,44 +62,51 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Button>
         <div className="flex-1 min-w-0">
-          {rdm.codigo && (
-            <p className="text-[10px] font-mono text-muted-foreground">{rdm.codigo}</p>
+          {localRdm.codigo && (
+            <p className="text-[10px] font-mono text-muted-foreground">{localRdm.codigo}</p>
           )}
-          <h2 className="text-lg font-bold text-foreground truncate">{rdm.nome}</h2>
+          <h2 className="text-lg font-bold text-foreground truncate">{localRdm.nome}</h2>
         </div>
-        <RdmStatusBadge status={rdm.status} />
+        <div className="flex items-center gap-2 shrink-0">
+          <RdmStatusBadge status={localRdm.status} />
+          {canEdit && (
+            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs"
+              onClick={() => setShowEditForm(true)}>
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Meta linha */}
       <div className="flex flex-wrap gap-3">
         <Badge variant="outline" className="gap-1.5 text-xs">
-          <Boxes className="h-3 w-3" />
-          {rdm.sistema_modulo}
+          <Boxes className="h-3 w-3" />{localRdm.sistema_modulo}
         </Badge>
         <Badge variant="outline" className="gap-1.5 text-xs">
           <Calendar className="h-3 w-3" />
-          {new Date(rdm.data_implantacao).toLocaleDateString("pt-BR")}
+          {new Date(localRdm.data_implantacao).toLocaleDateString("pt-BR")}
         </Badge>
         <Badge variant="outline" className="gap-1.5 text-xs">
           <Clock className="h-3 w-3" />
-          {rdm.hora_inicio} → {rdm.hora_fim_prevista}
+          {localRdm.hora_inicio} → {localRdm.hora_fim_prevista}
         </Badge>
         <Badge variant="outline" className="gap-1.5 text-xs">
-          {RDM_TIPO_LABELS[rdm.tipo_mudanca as keyof typeof RDM_TIPO_LABELS] ?? rdm.tipo_mudanca}
+          {RDM_TIPO_LABELS[localRdm.tipo_mudanca as keyof typeof RDM_TIPO_LABELS] ?? localRdm.tipo_mudanca}
         </Badge>
         <Badge variant="outline" className="gap-1.5 text-xs">
-          {RDM_AMBIENTE_LABELS[rdm.ambiente as keyof typeof RDM_AMBIENTE_LABELS] ?? rdm.ambiente}
+          {RDM_AMBIENTE_LABELS[localRdm.ambiente as keyof typeof RDM_AMBIENTE_LABELS] ?? localRdm.ambiente}
         </Badge>
-        <RdmRiscoBadge risco={rdm.risco} />
-        {rdm.downtime_previsto && (
+        <RdmRiscoBadge risco={localRdm.risco} />
+        {localRdm.downtime_previsto && (
           <Badge variant="destructive" className="gap-1 text-xs">
             <AlertTriangle className="h-3 w-3" /> Downtime
           </Badge>
         )}
-        {rdm.rollback_previsto && (
+        {localRdm.rollback_previsto && (
           <Badge variant="outline" className="gap-1 text-xs">
             <RefreshCw className="h-3 w-3" />
-            Rollback{rdm.tempo_rollback_minutos ? ` ${rdm.tempo_rollback_minutos}min` : ""}
+            Rollback{localRdm.tempo_rollback_minutos ? ` ${localRdm.tempo_rollback_minutos}min` : ""}
           </Badge>
         )}
       </div>
@@ -91,14 +114,14 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
       {/* Objetivo */}
       <div className="rounded-lg border border-border bg-muted/30 p-4">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Objetivo</p>
-        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{rdm.objetivo}</p>
+        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{localRdm.objetivo}</p>
       </div>
 
       {/* Observações */}
-      {rdm.observacoes && (
+      {localRdm.observacoes && (
         <div className="rounded-lg border border-border bg-muted/30 p-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Observações</p>
-          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{rdm.observacoes}</p>
+          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{localRdm.observacoes}</p>
         </div>
       )}
 
@@ -106,24 +129,21 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground font-medium">Mover para:</span>
         {nextStatuses.map((s) => (
-          <Button
-            key={s}
-            variant="outline"
-            size="sm"
-            disabled={updating}
-            onClick={() => handleStatusChange(s)}
-            className="text-xs h-7"
-          >
+          <Button key={s} variant="outline" size="sm" disabled={updating}
+            onClick={() => handleStatusChange(s)} className="text-xs h-7">
             {RDM_STATUS_LABELS[s]}
           </Button>
         ))}
       </div>
 
-      {/* Abas — agora todas implementadas */}
+      {/* Abas */}
       <Tabs defaultValue="checklist">
-        <TabsList className="h-8">
+        <TabsList className="h-8 flex-wrap">
           <TabsTrigger value="checklist" className="text-xs gap-1.5">
             <CheckSquare className="h-3.5 w-3.5" /> Checklist
+          </TabsTrigger>
+          <TabsTrigger value="sprints" className="text-xs gap-1.5">
+            <GitBranch className="h-3.5 w-3.5" /> Sprints & Redmines
           </TabsTrigger>
           <TabsTrigger value="gonogo" className="text-xs gap-1.5">
             <ThumbsUp className="h-3.5 w-3.5" /> Go/No-Go
@@ -137,21 +157,33 @@ export function RdmDetail({ rdm, onBack, onUpdate }: Props) {
         </TabsList>
 
         <TabsContent value="checklist" className="mt-4">
-          <RdmChecklistPanel rdmId={rdm.id} />
+          <RdmChecklistPanel rdmId={localRdm.id} />
+        </TabsContent>
+
+        <TabsContent value="sprints" className="mt-4">
+          <RdmSprintsPanel rdmId={localRdm.id} />
         </TabsContent>
 
         <TabsContent value="gonogo" className="mt-4">
-          <RdmGoNogoPanel rdmId={rdm.id} />
+          <RdmGoNogoPanel rdmId={localRdm.id} />
         </TabsContent>
 
         <TabsContent value="participantes" className="mt-4">
-          <RdmParticipantesPanel rdmId={rdm.id} />
+          <RdmParticipantesPanel rdmId={localRdm.id} />
         </TabsContent>
 
         <TabsContent value="historico" className="mt-4">
-          <RdmAuditLogPanel rdmId={rdm.id} />
+          <RdmAuditLogPanel rdmId={localRdm.id} />
         </TabsContent>
       </Tabs>
+
+      {/* Modal de edição */}
+      <RdmForm
+        open={showEditForm}
+        onClose={() => setShowEditForm(false)}
+        onSubmit={handleEdit}
+        rdm={localRdm}
+      />
     </div>
   );
 }

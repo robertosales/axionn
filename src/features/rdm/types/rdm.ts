@@ -1,6 +1,6 @@
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
-// ── Row types (leitura) ──────────────────────────────────────────────────────
+// ── Row types ────────────────────────────────────────────────────────────────
 export type Rdm                  = Tables<"rdms">;
 export type RdmSprintItem        = Tables<"rdm_sprint_items">;
 export type RdmParticipante      = Tables<"rdm_participantes">;
@@ -9,19 +9,43 @@ export type RdmChecklistItem     = Tables<"rdm_checklist_items">;
 export type RdmGoNogo            = Tables<"rdm_gonogo">;
 export type RdmAuditLog          = Tables<"rdm_audit_log">;
 
-// ── Insert types (criação) ──────────────────────────────────────────────────
+// ── Novas tabelas (rdm_sprints / rdm_sprint_redmines) ────────────────────────
+export interface RdmSprint {
+  id:         string;
+  rdm_id:     string;
+  sprint_id:  string | null;
+  nome:       string;
+  created_at: string;
+  updated_at: string;
+  redmines?:  RdmSprintRedmine[];
+}
+
+export interface RdmSprintRedmine {
+  id:             string;
+  rdm_sprint_id:  string;
+  numero:         string;
+  descricao:      string | null;
+  created_at:     string;
+  updated_at:     string;
+}
+
+export type RdmSprintInsert    = Omit<RdmSprint,    "id" | "created_at" | "updated_at" | "redmines">;
+export type RdmSprintUpdate    = Partial<Pick<RdmSprint,    "nome" | "sprint_id">>;
+export type RdmSprintRedmineInsert = Omit<RdmSprintRedmine, "id" | "created_at" | "updated_at">;
+export type RdmSprintRedmineUpdate = Partial<Pick<RdmSprintRedmine, "numero" | "descricao">>;
+
+// ── Insert types ─────────────────────────────────────────────────────────────
 export type RdmInsert                  = TablesInsert<"rdms">;
 export type RdmSprintItemInsert        = TablesInsert<"rdm_sprint_items">;
 export type RdmParticipanteInsert      = TablesInsert<"rdm_participantes">;
 export type RdmChecklistItemInsert     = TablesInsert<"rdm_checklist_items">;
 export type RdmGoNogoInsert            = TablesInsert<"rdm_gonogo">;
 
-// ── Update types (edição) ───────────────────────────────────────────────────
+// ── Update types ─────────────────────────────────────────────────────────────
 export type RdmUpdate              = TablesUpdate<"rdms">;
 export type RdmChecklistItemUpdate = TablesUpdate<"rdm_checklist_items">;
 
-// ── STATUS ─────────────────────────────────────────────────────────────────
-// Valores exatos do CHECK CONSTRAINT: rdms_status_check
+// ── STATUS ───────────────────────────────────────────────────────────────────
 export const RDM_STATUS = [
   "rascunho",
   "em_aprovacao",
@@ -53,13 +77,8 @@ export const RDM_STATUS_COLORS: Record<RdmStatus, string> = {
   cancelada:          "bg-red-500/15 text-red-400 border-red-500/20",
 };
 
-// ── TIPO DE MUDANÇA ────────────────────────────────────────────────────────
-// Valores exatos do CHECK CONSTRAINT: rdms_tipo_mudanca_check
-export const RDM_TIPO_MUDANCA = [
-  "evolutiva",
-  "corretiva",
-  "emergencial",
-] as const;
+// ── TIPO DE MUDANÇA ──────────────────────────────────────────────────────────
+export const RDM_TIPO_MUDANCA = ["evolutiva", "corretiva", "emergencial"] as const;
 export type RdmTipoMudanca = (typeof RDM_TIPO_MUDANCA)[number];
 
 export const RDM_TIPO_LABELS: Record<RdmTipoMudanca, string> = {
@@ -68,8 +87,7 @@ export const RDM_TIPO_LABELS: Record<RdmTipoMudanca, string> = {
   emergencial: "Emergencial",
 };
 
-// ── RISCO ──────────────────────────────────────────────────────────────────
-// Valores exatos do CHECK CONSTRAINT: rdms_risco_check
+// ── RISCO ────────────────────────────────────────────────────────────────────
 export const RDM_RISCO = ["baixo", "medio", "alto"] as const;
 export type RdmRisco = (typeof RDM_RISCO)[number];
 
@@ -85,7 +103,7 @@ export const RDM_RISCO_COLORS: Record<RdmRisco, string> = {
   alto:  "bg-red-500/15 text-red-400 border-red-500/20",
 };
 
-// ── AMBIENTE ───────────────────────────────────────────────────────────────
+// ── AMBIENTE ─────────────────────────────────────────────────────────────────
 export const RDM_AMBIENTE = ["producao", "homologacao", "desenvolvimento"] as const;
 export type RdmAmbiente = (typeof RDM_AMBIENTE)[number];
 
@@ -95,13 +113,9 @@ export const RDM_AMBIENTE_LABELS: Record<RdmAmbiente, string> = {
   desenvolvimento: "Desenvolvimento",
 };
 
-// ── GO/NO-GO PAPEIS ────────────────────────────────────────────────────────
+// ── GO/NO-GO ─────────────────────────────────────────────────────────────────
 export const RDM_GONOGO_PAPEL = [
-  "gestor_ti",
-  "gestor_negocio",
-  "arquiteto",
-  "qa_lead",
-  "scrum_master",
+  "gestor_ti", "gestor_negocio", "arquiteto", "qa_lead", "scrum_master",
 ] as const;
 export type RdmGoNogoPapel = (typeof RDM_GONOGO_PAPEL)[number];
 
@@ -113,7 +127,7 @@ export const RDM_GONOGO_PAPEL_LABELS: Record<RdmGoNogoPapel, string> = {
   scrum_master:   "Scrum Master",
 };
 
-// ── CHECKLIST STATUS ───────────────────────────────────────────────────────
+// ── CHECKLIST STATUS ─────────────────────────────────────────────────────────
 export const RDM_CHECKLIST_STATUS = ["pendente", "em_andamento", "concluido", "nao_aplicavel"] as const;
 export type RdmChecklistStatus = (typeof RDM_CHECKLIST_STATUS)[number];
 
@@ -124,7 +138,7 @@ export const RDM_CHECKLIST_STATUS_LABELS: Record<RdmChecklistStatus, string> = {
   nao_aplicavel: "N/A",
 };
 
-// ── Tipo enriquecido (JOIN com profiles) ───────────────────────────────────
+// ── Tipo enriquecido ─────────────────────────────────────────────────────────
 export interface RdmComParticipantes extends Rdm {
   participantes?: (RdmParticipante & { profile?: { display_name: string; email: string } | null })[];
   gonogo?:        RdmGoNogo[];

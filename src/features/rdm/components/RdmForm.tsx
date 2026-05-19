@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -23,15 +23,15 @@ import {
   RDM_RISCO,        RDM_RISCO_LABELS,
   RDM_AMBIENTE,     RDM_AMBIENTE_LABELS,
 } from "../types/rdm";
-import type { RdmInsert } from "../types/rdm";
+import type { Rdm, RdmInsert } from "../types/rdm";
 
 const schema = z.object({
   nome:                    z.string().min(3, "Mínimo 3 caracteres"),
   objetivo:               z.string().min(10, "Descreva o objetivo (mín. 10 caracteres)"),
   sistema_modulo:         z.string().min(2, "Informe o sistema/módulo"),
-  tipo_mudanca:           z.enum(RDM_TIPO_MUDANCA),   // evolutiva | corretiva | emergencial
-  risco:                  z.enum(RDM_RISCO),           // baixo | medio | alto
-  ambiente:               z.enum(RDM_AMBIENTE),        // producao | homologacao | desenvolvimento
+  tipo_mudanca:           z.enum(RDM_TIPO_MUDANCA),
+  risco:                  z.enum(RDM_RISCO),
+  ambiente:               z.enum(RDM_AMBIENTE),
   data_implantacao:       z.string().min(1, "Informe a data"),
   hora_inicio:            z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:MM"),
   hora_fim_prevista:      z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:MM"),
@@ -48,10 +48,12 @@ interface Props {
   onClose:  () => void;
   onSubmit: (values: Omit<RdmInsert, "id" | "codigo" | "updated_at" | "team_id" | "criado_por">) => Promise<void>;
   loading?: boolean;
+  rdm?:     Rdm;   // se informado, modo edição
 }
 
-export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
+export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
   const [submitting, setSubmitting] = useState(false);
+  const isEdit = !!rdm;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -59,7 +61,7 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
       nome:                    "",
       objetivo:               "",
       sistema_modulo:         "",
-      tipo_mudanca:           "evolutiva",   // default alinhado ao banco
+      tipo_mudanca:           "evolutiva",
       risco:                  "baixo",
       ambiente:               "producao",
       data_implantacao:       "",
@@ -72,6 +74,30 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
     },
   });
 
+  // Popula o form ao abrir em modo edição
+  useEffect(() => {
+    if (open && rdm) {
+      form.reset({
+        nome:                    rdm.nome,
+        objetivo:               rdm.objetivo,
+        sistema_modulo:         rdm.sistema_modulo,
+        tipo_mudanca:           rdm.tipo_mudanca as any,
+        risco:                  rdm.risco as any,
+        ambiente:               rdm.ambiente as any,
+        data_implantacao:       rdm.data_implantacao ?? "",
+        hora_inicio:            (rdm.hora_inicio ?? "22:00").slice(0, 5),
+        hora_fim_prevista:      (rdm.hora_fim_prevista ?? "23:00").slice(0, 5),
+        downtime_previsto:      rdm.downtime_previsto ?? false,
+        rollback_previsto:      rdm.rollback_previsto ?? true,
+        tempo_rollback_minutos: rdm.tempo_rollback_minutos ?? null,
+        observacoes:            rdm.observacoes ?? "",
+      });
+    }
+    if (open && !rdm) {
+      form.reset();
+    }
+  }, [open, rdm]); // eslint-disable-line
+
   const handleSubmit = async (values: FormValues) => {
     setSubmitting(true);
     try {
@@ -79,9 +105,9 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
         ...values,
         tempo_rollback_minutos: values.tempo_rollback_minutos ?? null,
         observacoes:            values.observacoes || null,
-        status:                 "rascunho",
+        ...(isEdit ? {} : { status: "rascunho" }),
       } as any);
-      form.reset();
+      if (!isEdit) form.reset();
       onClose();
     } finally {
       setSubmitting(false);
@@ -92,7 +118,9 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nova Requisição de Mudança (RDM)</DialogTitle>
+          <DialogTitle>
+            {isEdit ? `Editar RDM — ${rdm?.codigo ?? ""}` : "Nova Requisição de Mudança (RDM)"}
+          </DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -147,7 +175,6 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
                   </FormItem>
                 )}
               />
-
               <FormField control={form.control} name="risco"
                 render={({ field }) => (
                   <FormItem>
@@ -164,7 +191,6 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
                   </FormItem>
                 )}
               />
-
               <FormField control={form.control} name="ambiente"
                 render={({ field }) => (
                   <FormItem>
@@ -237,8 +263,7 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
                 <FormItem>
                   <FormLabel>Tempo de Rollback (minutos)</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number" min={0} placeholder="Ex.: 30"
+                    <Input type="number" min={0} placeholder="Ex.: 30"
                       {...field}
                       value={field.value ?? ""}
                       onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
@@ -254,7 +279,8 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
                 <FormItem>
                   <FormLabel>Observações</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Informações adicionais, dependências, riscos específicos…" className="resize-none" rows={3} {...field} />
+                    <Textarea placeholder="Informações adicionais, dependências, riscos específicos…"
+                      className="resize-none" rows={3} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -264,7 +290,7 @@ export function RdmForm({ open, onClose, onSubmit, loading }: Props) {
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancelar</Button>
               <Button type="submit" disabled={submitting || loading}>
-                {submitting ? "Criando…" : "Criar RDM"}
+                {submitting ? (isEdit ? "Salvando…" : "Criando…") : (isEdit ? "Salvar alterações" : "Criar RDM")}
               </Button>
             </DialogFooter>
           </form>

@@ -5,13 +5,14 @@ import type {
   RdmGoNogo, RdmGoNogoInsert,
   RdmParticipante, RdmParticipanteInsert,
   RdmSprintItem, RdmSprintItemInsert,
+  RdmSprint, RdmSprintInsert, RdmSprintUpdate,
+  RdmSprintRedmine, RdmSprintRedmineInsert, RdmSprintRedmineUpdate,
 } from "../types/rdm";
 
-// ── RDMs ────────────────────────────────────────────────────────────────────
+// ── RDMs ─────────────────────────────────────────────────────────────────────
 export async function listRdms(teamId: string): Promise<Rdm[]> {
   const { data, error } = await supabase
-    .from("rdms")
-    .select("*")
+    .from("rdms").select("*")
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -20,10 +21,7 @@ export async function listRdms(teamId: string): Promise<Rdm[]> {
 
 export async function getRdm(id: string): Promise<Rdm | null> {
   const { data, error } = await supabase
-    .from("rdms")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+    .from("rdms").select("*").eq("id", id).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -66,20 +64,17 @@ export async function deleteRdm(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── Checklist ────────────────────────────────────────────────────────────────
+// ── Checklist ─────────────────────────────────────────────────────────────────
 export async function listChecklistItems(rdmId: string): Promise<RdmChecklistItem[]> {
   const { data, error } = await supabase
-    .from("rdm_checklist_items")
-    .select("*")
-    .eq("rdm_id", rdmId)
-    .order("ordem");
+    .from("rdm_checklist_items").select("*")
+    .eq("rdm_id", rdmId).order("ordem");
   if (error) throw error;
   return data ?? [];
 }
 
 export async function updateChecklistItem(
-  id: string,
-  updates: RdmChecklistItemUpdate
+  id: string, updates: RdmChecklistItemUpdate
 ): Promise<void> {
   const { error } = await supabase
     .from("rdm_checklist_items")
@@ -88,13 +83,11 @@ export async function updateChecklistItem(
   if (error) throw error;
 }
 
-// ── Go/No-Go ─────────────────────────────────────────────────────────────────
+// ── Go/No-Go ──────────────────────────────────────────────────────────────────
 export async function listGoNogo(rdmId: string): Promise<RdmGoNogo[]> {
   const { data, error } = await supabase
-    .from("rdm_gonogo")
-    .select("*")
-    .eq("rdm_id", rdmId)
-    .order("created_at");
+    .from("rdm_gonogo").select("*")
+    .eq("rdm_id", rdmId).order("created_at");
   if (error) throw error;
   return data ?? [];
 }
@@ -109,9 +102,7 @@ export async function upsertGoNogo(payload: RdmGoNogoInsert): Promise<void> {
 // ── Participantes ─────────────────────────────────────────────────────────────
 export async function listParticipantes(rdmId: string): Promise<RdmParticipante[]> {
   const { data, error } = await supabase
-    .from("rdm_participantes")
-    .select("*")
-    .eq("rdm_id", rdmId);
+    .from("rdm_participantes").select("*").eq("rdm_id", rdmId);
   if (error) throw error;
   return data ?? [];
 }
@@ -126,12 +117,10 @@ export async function removeParticipante(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── Sprint Items ──────────────────────────────────────────────────────────────
+// ── Sprint Items (legado) ─────────────────────────────────────────────────────
 export async function listSprintItems(rdmId: string): Promise<RdmSprintItem[]> {
   const { data, error } = await supabase
-    .from("rdm_sprint_items")
-    .select("*")
-    .eq("rdm_id", rdmId);
+    .from("rdm_sprint_items").select("*").eq("rdm_id", rdmId);
   if (error) throw error;
   return data ?? [];
 }
@@ -146,11 +135,62 @@ export async function removeSprintItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ── RDM Sprints (nova feature) ────────────────────────────────────────────────
+export async function listRdmSprints(rdmId: string): Promise<RdmSprint[]> {
+  const { data, error } = await supabase
+    .from("rdm_sprints").select("*, redmines:rdm_sprint_redmines(*)")
+    .eq("rdm_id", rdmId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as RdmSprint[];
+}
+
+export async function addRdmSprint(payload: RdmSprintInsert): Promise<RdmSprint> {
+  const { data, error } = await supabase
+    .from("rdm_sprints").insert(payload).select().single();
+  if (error) throw error;
+  return data as RdmSprint;
+}
+
+export async function updateRdmSprint(id: string, updates: RdmSprintUpdate): Promise<void> {
+  const { error } = await supabase
+    .from("rdm_sprints")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteRdmSprint(id: string): Promise<void> {
+  const { error } = await supabase.from("rdm_sprints").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ── RDM Sprint Redmines ───────────────────────────────────────────────────────
+export async function addRdmSprintRedmine(payload: RdmSprintRedmineInsert): Promise<RdmSprintRedmine> {
+  const { data, error } = await supabase
+    .from("rdm_sprint_redmines").insert(payload).select().single();
+  if (error) throw error;
+  return data as RdmSprintRedmine;
+}
+
+export async function updateRdmSprintRedmine(
+  id: string, updates: RdmSprintRedmineUpdate
+): Promise<void> {
+  const { error } = await supabase
+    .from("rdm_sprint_redmines")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteRdmSprintRedmine(id: string): Promise<void> {
+  const { error } = await supabase.from("rdm_sprint_redmines").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ── Dashboard KPIs ────────────────────────────────────────────────────────────
 export async function getDashboardKpis(
-  teamId?: string,
-  inicio?: string,
-  fim?: string
+  teamId?: string, inicio?: string, fim?: string
 ): Promise<Record<string, unknown>> {
   const { data, error } = await supabase.rpc("fn_rdm_dashboard_kpis", {
     p_team_id: teamId ?? null,

@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  listParticipantes,
-  addParticipante,
-  removeParticipante,
-} from "../services/rdmService";
-import type { RdmParticipante, RdmParticipanteInsert } from "../types/rdm";
+import { supabase } from "@/integrations/supabase/client";
+
+// Schema real: rdm_participantes { id, rdm_id, profile_id, papel, created_at }
+export interface RdmParticipanteRow {
+  id:         string;
+  rdm_id:     string;
+  profile_id: string;
+  papel:      string;
+  created_at: string;
+}
 
 export function useRdmParticipantes(rdmId: string | null) {
-  const [participantes, setParticipantes] = useState<RdmParticipante[]>([]);
+  const [participantes, setParticipantes] = useState<RdmParticipanteRow[]>([]);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
 
@@ -16,8 +20,13 @@ export function useRdmParticipantes(rdmId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const data = await listParticipantes(rdmId);
-      setParticipantes(data);
+      const { data, error: err } = await supabase
+        .from("rdm_participantes")
+        .select("id, rdm_id, profile_id, papel, created_at")
+        .eq("rdm_id", rdmId)
+        .order("created_at");
+      if (err) throw err;
+      setParticipantes(data ?? []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao carregar participantes");
     } finally {
@@ -28,20 +37,24 @@ export function useRdmParticipantes(rdmId: string | null) {
   useEffect(() => { load(); }, [load]);
 
   const add = useCallback(
-    async (payload: RdmParticipanteInsert) => {
-      await addParticipante(payload);
+    async (payload: { rdm_id: string; profile_id: string; papel: string }) => {
+      const { error: err } = await supabase
+        .from("rdm_participantes")
+        .insert(payload);
+      if (err) throw err;
       await load();
     },
     [load]
   );
 
-  const remove = useCallback(
-    async (id: string) => {
-      await removeParticipante(id);
-      setParticipantes((prev) => prev.filter((p) => p.id !== id));
-    },
-    []
-  );
+  const remove = useCallback(async (id: string) => {
+    const { error: err } = await supabase
+      .from("rdm_participantes")
+      .delete()
+      .eq("id", id);
+    if (err) throw err;
+    setParticipantes((prev) => prev.filter((p) => p.id !== id));
+  }, []);
 
   return { participantes, loading, error, load, add, remove };
 }

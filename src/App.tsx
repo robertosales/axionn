@@ -56,7 +56,6 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   if (loading) return null;
   if (!session) return <>{children}</>;
   if (isAdmin || profile?.module_access === "admin") return <Navigate to="/dashboard-admin" replace />;
-  // Usa hasModuleAccess (nova tabela) com fallback no module_access legado
   if (hasModuleAccess("rdm") && !hasModuleAccess("sala_agil") && !hasModuleAccess("sustentacao"))
     return <Navigate to="/rdm" replace />;
   if (hasModuleAccess("sustentacao") && !hasModuleAccess("sala_agil"))
@@ -75,7 +74,6 @@ function ModuleRedirect() {
   return <Navigate to="/sala-agil/dashboard" replace />;
 }
 
-// ATUALIZADO: usa hasModuleAccess() da nova tabela com fallback automático
 function ModuleGuard({
   module,
   children,
@@ -104,52 +102,62 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// ✅ AppRoutes fica DENTRO do AuthProvider para que todos os hooks
+//    que dependem de useAuth() (incluindo SprintProvider) já tenham
+//    o contexto disponível na árvore.
+function AppRoutes() {
+  return (
+    <SprintProvider>
+      <Toaster />
+      <Sonner />
+      <Routes>
+        <Route path="/auth"          element={<AuthRoute><Auth /></AuthRoute>} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/"             element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
+        <Route path="/modulos"      element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
+
+        <Route
+          path="/dashboard-admin"
+          element={<ProtectedRoute><AdminGuard><AdminDashboard /></AdminGuard></ProtectedRoute>}
+        />
+        <Route
+          path="/sala-agil"
+          element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}
+        />
+        <Route
+          path="/sala-agil/planning-poker"
+          element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>}
+        />
+        <Route
+          path="/sala-agil/retrospectiva"
+          element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>}
+        />
+        <Route
+          path="/sala-agil/:section"
+          element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>}
+        />
+        <Route
+          path="/sustentacao/*"
+          element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>}
+        />
+        <Route
+          path="/rdm/*"
+          element={<ProtectedRoute><ModuleGuard module="rdm"><RdmPage /></ModuleGuard></ProtectedRoute>}
+        />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </SprintProvider>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
+        {/* AuthProvider envolve tudo — SprintProvider fica dentro via AppRoutes */}
         <AuthProvider>
-          <SprintProvider>
-            <Toaster />
-            <Sonner />
-            <Routes>
-              <Route path="/auth"          element={<AuthRoute><Auth /></AuthRoute>} />
-              <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/"             element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
-              <Route path="/modulos"      element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
-
-              <Route
-                path="/dashboard-admin"
-                element={<ProtectedRoute><AdminGuard><AdminDashboard /></AdminGuard></ProtectedRoute>}
-              />
-              <Route
-                path="/sala-agil"
-                element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}
-              />
-              <Route
-                path="/sala-agil/planning-poker"
-                element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>}
-              />
-              <Route
-                path="/sala-agil/retrospectiva"
-                element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>}
-              />
-              <Route
-                path="/sala-agil/:section"
-                element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>}
-              />
-              <Route
-                path="/sustentacao/*"
-                element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>}
-              />
-              <Route
-                path="/rdm/*"
-                element={<ProtectedRoute><ModuleGuard module="rdm"><RdmPage /></ModuleGuard></ProtectedRoute>}
-              />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </SprintProvider>
+          <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -30,7 +30,8 @@ export function useRdmSprints(rdmId: string | null) {
 
   // ── Sprint CRUD ──────────────────────────────────────────────────────────
   const addSprint = useCallback(async (payload: Omit<RdmSprintInsert, "rdm_id">) => {
-    if (!rdmId) return;
+    // FIX: lança erro explícito em vez de silent return para o catch do painel capturar
+    if (!rdmId) throw new Error("rdmId ausente — não é possível vincular sprint.");
     const created = await addRdmSprint({ ...payload, rdm_id: rdmId });
     setSprints((prev) => [...prev, { ...created, redmines: [] }]);
   }, [rdmId]);

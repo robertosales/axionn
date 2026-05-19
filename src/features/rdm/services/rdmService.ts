@@ -7,6 +7,7 @@ import type {
   RdmSprintItem, RdmSprintItemInsert,
   RdmSprint, RdmSprintInsert, RdmSprintUpdate,
   RdmSprintRedmine, RdmSprintRedmineInsert, RdmSprintRedmineUpdate,
+  RdmDeploymentTask, RdmDeploymentTaskInsert, RdmDeploymentTaskUpdate,
 } from "../types/rdm";
 
 // ── RDMs ─────────────────────────────────────────────────────────────────────
@@ -135,7 +136,7 @@ export async function removeSprintItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ── RDM Sprints (nova feature) ────────────────────────────────────────────────
+// ── RDM Sprints ───────────────────────────────────────────────────────────────
 export async function listRdmSprints(rdmId: string): Promise<RdmSprint[]> {
   const { data, error } = await supabase
     .from("rdm_sprints").select("*, redmines:rdm_sprint_redmines(*)")
@@ -185,6 +186,46 @@ export async function updateRdmSprintRedmine(
 
 export async function deleteRdmSprintRedmine(id: string): Promise<void> {
   const { error } = await supabase.from("rdm_sprint_redmines").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ── Deployment Tasks ─────────────────────────────────────────────────────────
+export async function listDeploymentTasks(rdmId: string): Promise<RdmDeploymentTask[]> {
+  const { data, error } = await supabase
+    .from("rdm_deployment_tasks")
+    .select("*")
+    .eq("rdm_id", rdmId)
+    .order("categoria")
+    .order("ordem");
+  if (error) throw error;
+  return (data ?? []) as RdmDeploymentTask[];
+}
+
+export async function addDeploymentTask(
+  payload: RdmDeploymentTaskInsert
+): Promise<RdmDeploymentTask> {
+  const { data, error } = await supabase
+    .from("rdm_deployment_tasks")
+    .insert(payload)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as RdmDeploymentTask;
+}
+
+export async function updateDeploymentTask(
+  id: string, updates: RdmDeploymentTaskUpdate
+): Promise<void> {
+  const { error } = await supabase
+    .from("rdm_deployment_tasks")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteDeploymentTask(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("rdm_deployment_tasks").delete().eq("id", id);
   if (error) throw error;
 }
 

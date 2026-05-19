@@ -23,6 +23,14 @@ import {
 import { RdmStatusBadge } from "./RdmStatusBadge";
 import { RdmRiscoBadge }  from "./RdmRiscoBadge";
 
+// Formata data "YYYY-MM-DD" sem bug de timezone (UTC→local)
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const [year, month, day] = dateStr.split("-");
+  return new Date(Number(year), Number(month) - 1, Number(day))
+    .toLocaleDateString("pt-BR");
+}
+
 interface Props {
   rdms:      Rdm[];
   loading:   boolean;
@@ -152,7 +160,7 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
               className="relative flex flex-col rounded-xl border border-border bg-card
                 hover:border-primary/30 hover:bg-card/80 transition-all shadow-sm group"
             >
-              {/* Área clicavel — abre detalhes */}
+              {/* Área clicável — abre detalhes */}
               <button
                 className="flex-1 text-left p-4 space-y-3"
                 onClick={() => onSelect(rdm)}
@@ -180,7 +188,7 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     <Calendar className="h-3.5 w-3.5 shrink-0" />
                     <span>
-                      {new Date(rdm.data_implantacao).toLocaleDateString("pt-BR")} &middot;
+                      {formatDate(rdm.data_implantacao)} &middot;
                       {" "}{rdm.hora_inicio} → {rdm.hora_fim_prevista}
                     </span>
                   </div>
@@ -198,7 +206,7 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
                 </div>
               </button>
 
-              {/* Rodapé — botão excluir sempre visível (canto inferior esquerdo) */}
+              {/* Rodapé — botão excluir */}
               {canDelete(rdm) && (
                 <div className="px-4 pb-3 pt-0">
                   <button
@@ -217,7 +225,7 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
         </div>
       )}
 
-      {/* Dialog de confirmação */}
+      {/* Dialog de confirmação de exclusão */}
       <AlertDialog open={!!confirmId} onOpenChange={(o) => !o && !deleting && setConfirmId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

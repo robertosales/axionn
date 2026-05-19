@@ -13,22 +13,28 @@ import {
 import { Input }    from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button }   from "@/components/ui/button";
+import { Badge }    from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label }  from "@/components/ui/label";
+import { Zap }    from "lucide-react";
 import {
   RDM_TIPO_MUDANCA, RDM_TIPO_LABELS,
   RDM_RISCO,        RDM_RISCO_LABELS,
   RDM_AMBIENTE,     RDM_AMBIENTE_LABELS,
 } from "../types/rdm";
 import type { Rdm, RdmInsert } from "../types/rdm";
+import { useTeams }           from "../hooks/useTeams";
+import { useSprintsByTeam }   from "../hooks/useSprintsByTeam";
 
 const schema = z.object({
   nome:                    z.string().min(3, "Mínimo 3 caracteres"),
   objetivo:               z.string().min(10, "Descreva o objetivo (mín. 10 caracteres)"),
   sistema_modulo:         z.string().min(2, "Informe o sistema/módulo"),
+  team_id:                z.string().uuid("Selecione um time"),
+  sprint_id:              z.string().uuid("Selecione uma sprint").nullable().optional(),
   tipo_mudanca:           z.enum(RDM_TIPO_MUDANCA),
   risco:                  z.enum(RDM_RISCO),
   ambiente:               z.enum(RDM_AMBIENTE),
@@ -46,14 +52,16 @@ type FormValues = z.infer<typeof schema>;
 interface Props {
   open:     boolean;
   onClose:  () => void;
-  onSubmit: (values: Omit<RdmInsert, "id" | "codigo" | "updated_at" | "team_id" | "criado_por">) => Promise<void>;
+  onSubmit: (values: Omit<RdmInsert, "id" | "codigo" | "updated_at" | "criado_por">) => Promise<void>;
   loading?: boolean;
-  rdm?:     Rdm;   // se informado, modo edição
+  rdm?:     Rdm;
 }
 
 export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const isEdit = !!rdm;
+
+  const { teams, loading: loadingTeams } = useTeams();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -61,6 +69,8 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
       nome:                    "",
       objetivo:               "",
       sistema_modulo:         "",
+      team_id:                "",
+      sprint_id:              null,
       tipo_mudanca:           "evolutiva",
       risco:                  "baixo",
       ambiente:               "producao",
@@ -74,13 +84,18 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
     },
   });
 
-  // Popula o form ao abrir em modo edição
+  const selectedTeamId = form.watch("team_id");
+  const { sprints, sprintAtiva, loading: loadingSprints } = useSprintsByTeam(selectedTeamId || null);
+
+  // Popula form ao abrir
   useEffect(() => {
     if (open && rdm) {
       form.reset({
         nome:                    rdm.nome,
         objetivo:               rdm.objetivo,
         sistema_modulo:         rdm.sistema_modulo,
+        team_id:                rdm.team_id ?? "",
+        sprint_id:              rdm.sprint_id ?? null,
         tipo_mudanca:           rdm.tipo_mudanca as any,
         risco:                  rdm.risco as any,
         ambiente:               rdm.ambiente as any,
@@ -93,10 +108,19 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
         observacoes:            rdm.observacoes ?? "",
       });
     }
-    if (open && !rdm) {
-      form.reset();
-    }
+    if (open && !rdm) form.reset();
   }, [open, rdm]); // eslint-disable-line
+
+  // Ao trocar o time (criação), pré-seleciona sprint ativa
+  useEffect(() => {
+    if (!isEdit && sprintAtiva) {
+      form.setValue("sprint_id", sprintAtiva.id);
+    }
+    if (!isEdit && !sprintAtiva && sprints.length > 0) {
+      // nenhuma ativa: limpa a seleção para o usuário escolher manualmente
+      form.setValue("sprint_id", null);
+    }
+  }, [sprintAtiva, sprints, isEdit]); // eslint-disable-line
 
   const handleSubmit = async (values: FormValues) => {
     setSubmitting(true);
@@ -105,6 +129,7 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
         ...values,
         tempo_rollback_minutos: values.tempo_rollback_minutos ?? null,
         observacoes:            values.observacoes || null,
+        sprint_id:              values.sprint_id ?? null,
         ...(isEdit ? {} : { status: "rascunho" }),
       } as any);
       if (!isEdit) form.reset();
@@ -158,6 +183,81 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
               )}
             />
 
+            {/* ── Time + Sprint ────────────────────────────── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+              <FormField control={form.control} name="team_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time *</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={loadingTeams}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={loadingTeams ? "Carregando…" : "Selecione um time…"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {teams.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField control={form.control} name="sprint_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sprint</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === "__none" ? null : v)}
+                      value={field.value ?? "__none"}
+                      disabled={!selectedTeamId || loadingSprints}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              !selectedTeamId
+                                ? "Selecione um time primeiro"
+                                : loadingSprints
+                                  ? "Carregando sprints…"
+                                  : "Selecione uma sprint…"
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none">
+                          <span className="text-muted-foreground">Sem sprint vinculada</span>
+                        </SelectItem>
+                        {sprints.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            <span className="flex items-center gap-2">
+                              {s.name}
+                              {s.is_active && (
+                                <Badge className="h-4 text-[10px] gap-0.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                                  <Zap className="h-2.5 w-2.5" /> Ativa
+                                </Badge>
+                              )}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* ── Tipo / Risco / Ambiente ──────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <FormField control={form.control} name="tipo_mudanca"
                 render={({ field }) => (
@@ -209,6 +309,7 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
               />
             </div>
 
+            {/* ── Datas e horários ─────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <FormField control={form.control} name="data_implantacao"
                 render={({ field }) => (
@@ -239,6 +340,7 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
               />
             </div>
 
+            {/* ── Switches ─────────────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField control={form.control} name="downtime_previsto"
                 render={({ field }) => (
@@ -279,8 +381,10 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
                 <FormItem>
                   <FormLabel>Observações</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Informações adicionais, dependências, riscos específicos…"
-                      className="resize-none" rows={3} {...field} />
+                    <Textarea
+                      placeholder="Informações adicionais, dependências, riscos específicos…"
+                      className="resize-none" rows={3} {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -290,7 +394,9 @@ export function RdmForm({ open, onClose, onSubmit, loading, rdm }: Props) {
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancelar</Button>
               <Button type="submit" disabled={submitting || loading}>
-                {submitting ? (isEdit ? "Salvando…" : "Criando…") : (isEdit ? "Salvar alterações" : "Criar RDM")}
+                {submitting
+                  ? (isEdit ? "Salvando…" : "Criando…")
+                  : (isEdit ? "Salvar alterações" : "Criar RDM")}
               </Button>
             </DialogFooter>
           </form>

@@ -9,7 +9,7 @@ export type RdmChecklistItem     = Tables<"rdm_checklist_items">;
 export type RdmGoNogo            = Tables<"rdm_gonogo">;
 export type RdmAuditLog          = Tables<"rdm_audit_log">;
 
-// ── Novas tabelas (rdm_sprints / rdm_sprint_redmines) ────────────────────────
+// ── RDM Sprints (tabela não gerada no types.ts) ──────────────────────────────
 export interface RdmSprint {
   id:         string;
   rdm_id:     string;
@@ -29,10 +29,56 @@ export interface RdmSprintRedmine {
   updated_at:     string;
 }
 
-export type RdmSprintInsert    = Omit<RdmSprint,    "id" | "created_at" | "updated_at" | "redmines">;
-export type RdmSprintUpdate    = Partial<Pick<RdmSprint,    "nome" | "sprint_id">>;
-export type RdmSprintRedmineInsert = Omit<RdmSprintRedmine, "id" | "created_at" | "updated_at">;
-export type RdmSprintRedmineUpdate = Partial<Pick<RdmSprintRedmine, "numero" | "descricao">>;
+export type RdmSprintInsert           = Omit<RdmSprint,    "id" | "created_at" | "updated_at" | "redmines">;
+export type RdmSprintUpdate           = Partial<Pick<RdmSprint,    "nome" | "sprint_id">>;
+export type RdmSprintRedmineInsert    = Omit<RdmSprintRedmine, "id" | "created_at" | "updated_at">;
+export type RdmSprintRedmineUpdate    = Partial<Pick<RdmSprintRedmine, "numero" | "descricao">>;
+
+// ── RDM Deployment Tasks (tabela não gerada no types.ts) ─────────────────────
+export interface RdmDeploymentTask {
+  id:             string;
+  rdm_id:         string;
+  categoria:      RdmDeploymentTaskCategoria;
+  titulo:         string;
+  descricao:      string | null;
+  responsavel_id: string | null;
+  status:         RdmDeploymentTaskStatus;
+  concluido_em:   string | null;
+  ordem:          number;
+  created_at:     string;
+  updated_at:     string;
+}
+
+export type RdmDeploymentTaskInsert = Omit<RdmDeploymentTask, "id" | "created_at" | "updated_at">;
+export type RdmDeploymentTaskUpdate = Partial<Omit<RdmDeploymentTask, "id" | "rdm_id" | "created_at" | "updated_at">>;
+
+export const RDM_DEPLOYMENT_TASK_STATUS = [
+  "pendente",
+  "em_andamento",
+  "concluido",
+  "bloqueado",
+] as const;
+export type RdmDeploymentTaskStatus = (typeof RDM_DEPLOYMENT_TASK_STATUS)[number];
+
+export const RDM_DEPLOYMENT_TASK_STATUS_LABELS: Record<RdmDeploymentTaskStatus, string> = {
+  pendente:     "Pendente",
+  em_andamento: "Em Andamento",
+  concluido:    "Concluído",
+  bloqueado:    "Bloqueado",
+};
+
+export const RDM_DEPLOYMENT_TASK_CATEGORIA = [
+  "pre_implantacao",
+  "execucao",
+  "pos_implantacao",
+] as const;
+export type RdmDeploymentTaskCategoria = (typeof RDM_DEPLOYMENT_TASK_CATEGORIA)[number];
+
+export const RDM_DEPLOYMENT_TASK_CATEGORIA_LABELS: Record<RdmDeploymentTaskCategoria, string> = {
+  pre_implantacao:  "Pré-Implantação",
+  execucao:         "Execução",
+  pos_implantacao:  "Pós-Implantação",
+};
 
 // ── Insert types ─────────────────────────────────────────────────────────────
 export type RdmInsert                  = TablesInsert<"rdms">;
@@ -45,7 +91,7 @@ export type RdmGoNogoInsert            = TablesInsert<"rdm_gonogo">;
 export type RdmUpdate              = TablesUpdate<"rdms">;
 export type RdmChecklistItemUpdate = TablesUpdate<"rdm_checklist_items">;
 
-// ── STATUS ───────────────────────────────────────────────────────────────────
+// ── STATUS (alinhado com CHECK do banco) ─────────────────────────────────────
 export const RDM_STATUS = [
   "rascunho",
   "em_aprovacao",

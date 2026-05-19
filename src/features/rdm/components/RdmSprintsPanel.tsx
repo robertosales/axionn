@@ -5,6 +5,16 @@ import {
 import { Button }   from "@/components/ui/button";
 import { Input }    from "@/components/ui/input";
 import { Badge }    from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn }       from "@/lib/utils";
 import { useRdmSprints } from "../hooks/useRdmSprints";
 import type { RdmSprint } from "../types/rdm";
@@ -32,6 +42,11 @@ export function RdmSprintsPanel({ rdmId }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) =>
     setExpanded((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+
+  // Confirm delete sprint (AlertDialog — substitui confirm() nativo)
+  const [confirmSprintId, setConfirmSprintId] = useState<string | null>(null);
+  const [deletingSprint, setDeletingSprint]   = useState(false);
+  const confirmSprint = sprints.find((s) => s.id === confirmSprintId);
 
   // ── Sprint handlers ────────────────────────────────────────────────────
   const handleSaveSprint = async () => {
@@ -61,13 +76,17 @@ export function RdmSprintsPanel({ rdmId }: Props) {
     setShowSprintForm(true);
   };
 
-  const handleRemoveSprint = async (id: string) => {
-    if (!confirm("Remover esta sprint e todos os Redmines vinculados?")) return;
+  const handleConfirmRemoveSprint = async () => {
+    if (!confirmSprintId) return;
+    setDeletingSprint(true);
     try {
-      await removeSprint(id);
+      await removeSprint(confirmSprintId);
       toast.success("Sprint removida.");
     } catch (e: any) {
       toast.error("Erro: " + (e?.message ?? ""));
+    } finally {
+      setDeletingSprint(false);
+      setConfirmSprintId(null);
     }
   };
 
@@ -156,7 +175,7 @@ export function RdmSprintsPanel({ rdmId }: Props) {
         </div>
       )}
 
-      {/* Lista de sprints */}
+      {/* Lista de sprints — estado vazio */}
       {sprints.length === 0 && !showSprintForm && (
         <div className="flex flex-col items-center justify-center py-10 text-muted-foreground space-y-2">
           <GitBranch className="h-8 w-8 opacity-30" />
@@ -200,7 +219,7 @@ export function RdmSprintsPanel({ rdmId }: Props) {
                   <Button size="sm" variant="ghost"
                     className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                     title="Remover sprint"
-                    onClick={() => handleRemoveSprint(sprint.id)}>
+                    onClick={() => setConfirmSprintId(sprint.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -311,6 +330,38 @@ export function RdmSprintsPanel({ rdmId }: Props) {
           );
         })}
       </div>
+
+      {/* AlertDialog — confirmar remoção de sprint */}
+      <AlertDialog
+        open={!!confirmSprintId}
+        onOpenChange={(o) => !o && !deletingSprint && setConfirmSprintId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-4 w-4" /> Remover Sprint
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover{" "}
+              <span className="font-semibold text-foreground">{confirmSprint?.nome}</span>?
+              <br />
+              <span className="text-xs text-muted-foreground mt-1 block">
+                Todos os Redmines vinculados a esta sprint também serão removidos.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingSprint}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmRemoveSprint}
+              disabled={deletingSprint}
+              className="bg-destructive hover:bg-destructive/90 text-white"
+            >
+              {deletingSprint ? "Removendo…" : "Confirmar remoção"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

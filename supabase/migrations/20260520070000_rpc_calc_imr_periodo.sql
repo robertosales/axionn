@@ -1,120 +1,99 @@
 -- ============================================================
--- RPC: calc_imr_periodo  (fix v2)
+-- RPC: calc_imr_periodo  (fix v3 - SQL puro, sem PL/pgSQL)
 -- IAP, IQS, ICT, ISS, Glosas, E8 Alerts no banco.
+-- SQL puro nao usa dollar-quoting, funciona no Supabase SQL Editor.
 -- ============================================================
 
-DO $setup$
-BEGIN
-
-  CREATE OR REPLACE FUNCTION calc_imr_periodo(
-    p_team_id   UUID,
-    p_inicio    TIMESTAMPTZ,
-    p_fim       TIMESTAMPTZ,
-    p_e8_alerta INT DEFAULT 45,
-    p_e8_glosa  INT DEFAULT 60
-  )
-  RETURNS JSONB
-  LANGUAGE plpgsql
-  STABLE
-  SECURITY DEFINER
-  SET search_path = public
-  AS $body$
-  DECLARE
-    v_now TIMESTAMPTZ := NOW();
-    v_qdtot      INT     := 0;
-    v_qdap       INT     := 0;
-    v_iap        NUMERIC := 0;
-    v_qde        INT     := 0;
-    v_qdr        INT     := 0;
-    v_iqs        NUMERIC := 0;
-    v_ict_sum    NUMERIC := 0;
-    v_ict_count  INT     := 0;
-    v_ict        NUMERIC := 0;
-    v_iss_sum    NUMERIC := 0;
-    v_iss_count  INT     := 0;
-    v_iss        NUMERIC := 0;
-    v_g_integral NUMERIC := 0;
-    v_g_limitada NUMERIC := 0;
-    v_g_byevt    JSONB;
-    v_e8         JSONB;
-  BEGIN
-
-    -- IAP
+CREATE OR REPLACE FUNCTION calc_imr_periodo(
+  p_team_id   UUID,
+  p_inicio    TIMESTAMPTZ,
+  p_fim       TIMESTAMPTZ,
+  p_e8_alerta INT DEFAULT 45,
+  p_e8_glosa  INT DEFAULT 60
+)
+RETURNS JSONB
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+RETURN (
+  WITH
+  base AS (
+    SELECT * FROM demandas WHERE team_id = p_team_id
+  ),
+  periodo AS (
+    SELECT * FROM base WHERE created_at BETWEEN p_inicio AND p_fim
+  ),
+  -- IAP
+  iap_calc AS (
     SELECT
-      COUNT(*) FILTER (WHERE d.data_previsao_encerramento IS NOT NULL AND d.created_at BETWEEN p_inicio AND p_fim),
+      COUNT(*) FILTER (WHERE data_previsao_encerramento IS NOT NULL)                              AS qdtot,
       COUNT(*) FILTER (
-        WHERE d.data_previsao_encerramento IS NOT NULL
-          AND d.created_at BETWEEN p_inicio AND p_fim
-          AND LOWER(d.situacao) = 'ag_aceite_final'
-          AND d.aceite_data IS NOT NULL
-          AND d.aceite_data::TIMESTAMPTZ <= d.data_previsao_encerramento::TIMESTAMPTZ
-      )
-    INTO v_qdtot, v_qdap
-    FROM demandas d WHERE d.team_id = p_team_id;
-    v_iap := CASE WHEN v_qdtot > 0 THEN ROUND((v_qdap::NUMERIC / v_qdtot) * 100, 2) ELSE 0 END;
-
-    -- IQS
+        WHERE data_previsao_encerramento IS NOT NULL
+          AND LOWER(situacao) = 'ag_aceite_final'
+          AND aceite_data IS NOT NULL
+          AND aceite_data::TIMESTAMPTZ <= data_previsao_encerramento::TIMESTAMPTZ
+      )                                                                                           AS qdap
+    FROM periodo
+  ),
+  -- IQS
+  iqs_calc AS (
     SELECT
       COUNT(*) FILTER (
-        WHERE LOWER(d.situacao) IN ('hom_ag_homologacao','hom_homologada','fila_producao','ag_aceite_final')
-          AND d.created_at BETWEEN p_inicio AND p_fim
-      ),
+        WHERE LOWER(situacao) IN ('hom_ag_homologacao','hom_homologada','fila_producao','ag_aceite_final')
+      )                                                                                           AS qde,
       COUNT(*) FILTER (
-        WHERE LOWER(d.situacao) IN ('hom_ag_homologacao','hom_homologada','fila_producao','ag_aceite_final')
-          AND d.created_at BETWEEN p_inicio AND p_fim
-          AND COALESCE(d.contador_rejeicoes, 0) > 0
-      )
-    INTO v_qde, v_qdr
-    FROM demandas d WHERE d.team_id = p_team_id;
-    v_iqs := CASE WHEN v_qde > 0 THEN ROUND((1 - v_qdr::NUMERIC / v_qde) * 100, 2) ELSE 0 END;
-
-    -- ICT
-    SELECT COALESCE(SUM(d.cobertura_testes), 0), COUNT(*)
-    INTO v_ict_sum, v_ict_count
-    FROM demandas d
-    WHERE d.team_id = p_team_id
-      AND LOWER(d.situacao) = 'ag_aceite_final'
-      AND d.cobertura_testes IS NOT NULL
-      AND d.created_at BETWEEN p_inicio AND p_fim;
-    v_ict := CASE WHEN v_ict_count > 0 THEN ROUND(v_ict_sum / v_ict_count, 2) ELSE 0 END;
-
-    -- ISS
-    SELECT COALESCE(SUM(d.nota_satisfacao), 0), COUNT(*)
-    INTO v_iss_sum, v_iss_count
-    FROM demandas d
-    WHERE d.team_id = p_team_id
-      AND LOWER(d.situacao) = 'ag_aceite_final'
-      AND d.nota_satisfacao IS NOT NULL
-      AND d.created_at BETWEEN p_inicio AND p_fim;
-    v_iss := CASE WHEN v_iss_count > 0 THEN ROUND(v_iss_sum / v_iss_count, 2) ELSE 0 END;
-
-    -- Glosas totais
+        WHERE LOWER(situacao) IN ('hom_ag_homologacao','hom_homologada','fila_producao','ag_aceite_final')
+          AND COALESCE(contador_rejeicoes, 0) > 0
+      )                                                                                           AS qdr
+    FROM periodo
+  ),
+  -- ICT
+  ict_calc AS (
     SELECT
-      COALESCE(SUM(e.redutor) FILTER (WHERE e.incidencia = 'integral'), 0),
-      COALESCE(SUM(e.redutor) FILTER (WHERE e.incidencia <> 'integral'), 0)
-    INTO v_g_integral, v_g_limitada
+      COALESCE(AVG(cobertura_testes), 0) AS valor,
+      COUNT(*)                            AS total
+    FROM periodo
+    WHERE LOWER(situacao) = 'ag_aceite_final'
+      AND cobertura_testes IS NOT NULL
+  ),
+  -- ISS
+  iss_calc AS (
+    SELECT
+      COALESCE(AVG(nota_satisfacao), 0)   AS valor,
+      COUNT(*)                             AS total
+    FROM periodo
+    WHERE LOWER(situacao) = 'ag_aceite_final'
+      AND nota_satisfacao IS NOT NULL
+  ),
+  -- Glosas totais
+  glosa_totais AS (
+    SELECT
+      COALESCE(SUM(e.redutor) FILTER (WHERE e.incidencia = 'integral'), 0) AS integral,
+      COALESCE(SUM(e.redutor) FILTER (WHERE e.incidencia <> 'integral'), 0) AS limitada
     FROM demanda_eventos e
-    JOIN demandas d ON d.id = e.demanda_id
-    WHERE d.team_id = p_team_id AND e.created_at BETWEEN p_inicio AND p_fim;
-
-    -- Glosas por evento
+    JOIN base b ON b.id = e.demanda_id
+    WHERE e.created_at BETWEEN p_inicio AND p_fim
+  ),
+  -- Glosas por tipo_evento
+  glosa_byevt AS (
     SELECT COALESCE(
       jsonb_object_agg(
         sub.tipo_evento,
         jsonb_build_object('count', sub.cnt, 'total', ROUND(sub.tot::NUMERIC, 4))
       ),
       jsonb_build_object()
-    )
-    INTO v_g_byevt
+    ) AS byevento
     FROM (
       SELECT e.tipo_evento, COUNT(*) AS cnt, SUM(e.redutor) AS tot
       FROM demanda_eventos e
-      JOIN demandas d ON d.id = e.demanda_id
-      WHERE d.team_id = p_team_id AND e.created_at BETWEEN p_inicio AND p_fim
+      JOIN base b ON b.id = e.demanda_id
+      WHERE e.created_at BETWEEN p_inicio AND p_fim
       GROUP BY e.tipo_evento
-    ) sub;
-
-    -- E8 Alerts
+    ) sub
+  ),
+  -- E8 Alerts
+  e8_calc AS (
     SELECT COALESCE(
       jsonb_agg(
         jsonb_build_object(
@@ -124,41 +103,51 @@ BEGIN
           'projeto',    d.projeto,
           'situacao',   d.situacao,
           'prazo',      d.data_previsao_encerramento,
-          'diasAtraso', EXTRACT(DAY FROM (v_now - d.data_previsao_encerramento::TIMESTAMPTZ))::INT,
-          'tipo', CASE
-            WHEN EXTRACT(DAY FROM (v_now - d.data_previsao_encerramento::TIMESTAMPTZ)) >= p_e8_glosa
-            THEN 'glosa' ELSE 'alerta' END
+          'diasAtraso', EXTRACT(DAY FROM (NOW() - d.data_previsao_encerramento::TIMESTAMPTZ))::INT,
+          'tipo',       CASE
+                          WHEN EXTRACT(DAY FROM (NOW() - d.data_previsao_encerramento::TIMESTAMPTZ)) >= p_e8_glosa
+                          THEN 'glosa' ELSE 'alerta'
+                        END
         )
-        ORDER BY EXTRACT(DAY FROM (v_now - d.data_previsao_encerramento::TIMESTAMPTZ)) DESC
+        ORDER BY EXTRACT(DAY FROM (NOW() - d.data_previsao_encerramento::TIMESTAMPTZ)) DESC
       ),
       jsonb_build_array()
-    )
-    INTO v_e8
-    FROM demandas d
-    WHERE d.team_id = p_team_id
-      AND LOWER(d.situacao) NOT IN ('ag_aceite_final','cancelada')
+    ) AS alerts
+    FROM base d
+    WHERE LOWER(d.situacao) NOT IN ('ag_aceite_final','cancelada')
       AND d.data_previsao_encerramento IS NOT NULL
-      AND d.data_previsao_encerramento::TIMESTAMPTZ < v_now
-      AND EXTRACT(DAY FROM (v_now - d.data_previsao_encerramento::TIMESTAMPTZ)) >= p_e8_alerta;
-
-    RETURN jsonb_build_object(
-      'iap',    jsonb_build_object('valor', v_iap,  'qdap', v_qdap, 'qdtot', v_qdtot),
-      'iqs',    jsonb_build_object('valor', v_iqs,  'qdr',  v_qdr,  'qde',   v_qde),
-      'ict',    jsonb_build_object('valor', v_ict,  'total', v_ict_count),
-      'iss',    jsonb_build_object('valor', v_iss,  'total', v_iss_count),
-      'glosas', jsonb_build_object(
-                  'totalIntegral', ROUND(v_g_integral::NUMERIC, 4),
-                  'totalLimitada', ROUND(v_g_limitada::NUMERIC, 4),
-                  'byEvento',      v_g_byevt
-                ),
-      'e8Alerts', v_e8
-    );
-
-  END;
-  $body$;
-
-END;
-$setup$;
+      AND d.data_previsao_encerramento::TIMESTAMPTZ < NOW()
+      AND EXTRACT(DAY FROM (NOW() - d.data_previsao_encerramento::TIMESTAMPTZ)) >= p_e8_alerta
+  )
+  SELECT jsonb_build_object(
+    'iap', jsonb_build_object(
+      'valor', CASE WHEN i.qdtot > 0 THEN ROUND((i.qdap::NUMERIC / i.qdtot) * 100, 2) ELSE 0 END,
+      'qdap',  i.qdap,
+      'qdtot', i.qdtot
+    ),
+    'iqs', jsonb_build_object(
+      'valor', CASE WHEN q.qde > 0 THEN ROUND((1 - q.qdr::NUMERIC / q.qde) * 100, 2) ELSE 0 END,
+      'qdr',   q.qdr,
+      'qde',   q.qde
+    ),
+    'ict', jsonb_build_object(
+      'valor', ROUND(c.valor::NUMERIC, 2),
+      'total', c.total
+    ),
+    'iss', jsonb_build_object(
+      'valor', ROUND(s.valor::NUMERIC, 2),
+      'total', s.total
+    ),
+    'glosas', jsonb_build_object(
+      'totalIntegral', ROUND(g.integral::NUMERIC, 4),
+      'totalLimitada', ROUND(g.limitada::NUMERIC, 4),
+      'byEvento',      ge.byevento
+    ),
+    'e8Alerts', e8.alerts
+  )
+  FROM iap_calc i, iqs_calc q, ict_calc c, iss_calc s,
+       glosa_totais g, glosa_byevt ge, e8_calc e8
+);
 
 REVOKE ALL ON FUNCTION calc_imr_periodo(UUID, TIMESTAMPTZ, TIMESTAMPTZ, INT, INT) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION calc_imr_periodo(UUID, TIMESTAMPTZ, TIMESTAMPTZ, INT, INT) TO authenticated;

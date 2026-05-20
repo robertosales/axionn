@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -22,8 +23,6 @@ import { ModuleSelector } from "./features/sustentacao/components/ModuleSelector
 import AdminDashboard   from "./pages/AdminDashboard";
 import PlanningPokerPage   from "./pages/PlanningPokerPage";
 import RetrospactivaPage   from "./pages/RetrospactivaPage";
-
-const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, refreshProfile } = useAuth();

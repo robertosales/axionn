@@ -16,6 +16,7 @@ create index if not exists idx_user_module_roles_module  on public.user_module_r
 alter table public.user_module_roles enable row level security;
 
 -- Admins veem tudo
+drop policy if exists "umr_admin_all" on public.user_module_roles;
 create policy "umr_admin_all"
   on public.user_module_roles
   for all
@@ -28,6 +29,7 @@ create policy "umr_admin_all"
   );
 
 -- Usuarios veem somente o proprio registro
+drop policy if exists "umr_self_select" on public.user_module_roles;
 create policy "umr_self_select"
   on public.user_module_roles
   for select

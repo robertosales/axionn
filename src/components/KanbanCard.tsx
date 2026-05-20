@@ -62,13 +62,6 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/**
- * Retorna as classes de cor do badge de horas baseado na relação lançado/estimado.
- * Verde  → lançado <  estimado
- * Azul   → lançado == estimado
- * Âmbar  → lançado entre 100% e 120% do estimado
- * Vermelho → lançado > 120% do estimado
- */
 function hoursColor(
   launched: number,
   estimated: number | null | undefined,
@@ -87,13 +80,23 @@ export function KanbanCard({ hu, colHex }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: hu.id });
   const { developers, epics, activities, workflowColumns, updateUserStoryStatus, addImpediment } = useSprint() as any;
 
-  const [quickOpen, setQuickOpen]             = useState(false);
-  const [expanded, setExpanded]               = useState(false);
-  const [impedimentOpen, setImpedimentOpen]   = useState(false);
-  const [impedimentReason, setImpedimentReason] = useState("");
+  // ── #10: Lazy mount — dialogs só montados quando abertos pela primeira vez ──
+  const [quickOpen,       setQuickOpen]       = useState(false);
+  const [quickMounted,    setQuickMounted]    = useState(false);
+  const [previewOpen,     setPreviewOpen]     = useState(false);
+  const [previewMounted,  setPreviewMounted]  = useState(false);
+  const [editOpen,        setEditOpen]        = useState(false);
+  const [editMounted,     setEditMounted]     = useState(false);
+  const [impedimentOpen,  setImpedimentOpen]  = useState(false);
+
+  function openQuick()   { setQuickMounted(true);   setQuickOpen(true); }
+  function openPreview() { setPreviewMounted(true);  setPreviewOpen(true); }
+  function openEdit()    { setEditMounted(true);     setEditOpen(true); }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const [expanded,            setExpanded]            = useState(false);
+  const [impedimentReason,    setImpedimentReason]    = useState("");
   const [impedimentStartedAt, setImpedimentStartedAt] = useState(todayISO);
-  const [previewOpen, setPreviewOpen]         = useState(false);
-  const [editOpen, setEditOpen]               = useState(false);
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -110,7 +113,6 @@ export function KanbanCard({ hu, colHex }: Props) {
   const initials      = assignee?.name ? getInitials(assignee.name) : "?";
   const avatarBg      = assignee?.name ? getAvatarColor(assignee.name) : "#6b7280";
 
-  // ── Horas: lançadas vs estimadas ──────────────────────────────────────────
   const launchedHours  = getTotalHoursForHU(activities, hu.id);
   const estimatedHours = hu.estimatedHours ?? null;
   const hColors        = hoursColor(launchedHours, estimatedHours);
@@ -121,7 +123,6 @@ export function KanbanCard({ hu, colHex }: Props) {
 
   const showHoursBadge = huActivities.length > 0;
   const overBudget     = estimatedHours && launchedHours > estimatedHours;
-  // ─────────────────────────────────────────────────────────────────────────
 
   async function handleConfirmImpediment() {
     const reason = impedimentReason.trim();
@@ -156,11 +157,11 @@ export function KanbanCard({ hu, colHex }: Props) {
           className="p-3 hover:shadow-md transition-shadow bg-card border group relative"
           onClick={(e) => {
             if ((e.target as HTMLElement).closest("button")) return;
-            setPreviewOpen(true);
+            openPreview();
           }}
         >
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
-            {/* Linha superior: código + bug + prioridade */}
+            {/* Código + bug + prioridade */}
             <div className="flex items-start justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-[10px] font-mono text-muted-foreground">{hu.code}</span>
@@ -210,10 +211,8 @@ export function KanbanCard({ hu, colHex }: Props) {
             </div>
           )}
 
-          {/* ── Rodapé do card ────────────────────────────────────────────── */}
+          {/* Rodapé */}
           <div className="flex items-center justify-between mt-2 gap-1">
-
-            {/* Badge horas realizadas vs estimadas */}
             {showHoursBadge ? (
               <div className={`flex items-center gap-1 rounded px-1.5 py-0.5 border text-[10px] font-medium
                 ${hColors.text} ${hColors.bg} ${hColors.border}`}>
@@ -231,12 +230,11 @@ export function KanbanCard({ hu, colHex }: Props) {
               </div>
             )}
 
-            {/* Botões de ação + avatar */}
             <div className="flex items-center gap-1">
               <Button
                 type="button" variant="ghost" size="icon"
                 className="h-5 w-5 opacity-60 hover:opacity-100"
-                onClick={(e) => { e.stopPropagation(); setQuickOpen(true); }}
+                onClick={(e) => { e.stopPropagation(); openQuick(); }}
                 title="Adicionar atividade"
               >
                 <Plus className="h-3 w-3" />
@@ -260,13 +258,13 @@ export function KanbanCard({ hu, colHex }: Props) {
         </Card>
       </ContextMenuTrigger>
 
-      {/* ── Menu de contexto ───────────────────────────────────────────────── */}
+      {/* Context menu */}
       <ContextMenuContent className="w-56">
-        <ContextMenuItem onClick={() => setPreviewOpen(true)}>
+        <ContextMenuItem onClick={openPreview}>
           <Eye className="h-3.5 w-3.5 mr-2 text-primary" />
           Preview rápido
         </ContextMenuItem>
-        <ContextMenuItem onClick={() => setEditOpen(true)}>
+        <ContextMenuItem onClick={openEdit}>
           <Pencil className="h-3.5 w-3.5 mr-2" />
           Detalhar / Editar HU
         </ContextMenuItem>
@@ -277,7 +275,7 @@ export function KanbanCard({ hu, colHex }: Props) {
             {expanded ? "Recolher tarefas" : "Ver tarefas"}
           </ContextMenuItem>
         )}
-        <ContextMenuItem onClick={() => setQuickOpen(true)}>
+        <ContextMenuItem onClick={openQuick}>
           <Plus className="h-3.5 w-3.5 mr-2" />
           Adicionar tarefa
         </ContextMenuItem>
@@ -311,18 +309,24 @@ export function KanbanCard({ hu, colHex }: Props) {
       </ContextMenuContent>
     </ContextMenu>
 
-    <HUPreviewSheet
-      hu={hu}
-      open={previewOpen}
-      onClose={() => setPreviewOpen(false)}
-      onEdit={() => { setPreviewOpen(false); setEditOpen(true); }}
-    />
+    {/* ── #10: Lazy mount — só renderiza após primeira abertura ─────────── */}
+    {previewMounted && (
+      <HUPreviewSheet
+        hu={hu}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        onEdit={() => { setPreviewOpen(false); openEdit(); }}
+      />
+    )}
 
-    <HUEditDrawer
-      huId={hu.id}
-      open={editOpen}
-      onClose={() => setEditOpen(false)}
-    />
+    {editMounted && (
+      <HUEditDrawer
+        huId={hu.id}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+      />
+    )}
+    {/* ─────────────────────────────────────────────────────────────────── */}
 
     <AlertDialog open={impedimentOpen} onOpenChange={(o) => { if (!o) { setImpedimentOpen(false); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); } }}>
       <AlertDialogContent>
@@ -370,7 +374,10 @@ export function KanbanCard({ hu, colHex }: Props) {
       </AlertDialogContent>
     </AlertDialog>
 
-    {quickOpen && <QuickActivityDialog open={quickOpen} onClose={() => setQuickOpen(false)} huId={hu.id} />}
+    {/* QuickActivity também em lazy mount */}
+    {quickMounted && (
+      <QuickActivityDialog open={quickOpen} onClose={() => setQuickOpen(false)} huId={hu.id} />
+    )}
     </>
   );
 }

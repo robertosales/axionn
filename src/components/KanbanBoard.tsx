@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -39,7 +39,7 @@ import type { KanbanFiltros } from "./KanbanFilterBar";
 import { SprintImpedimentsBanner } from "./SprintImpedimentsBanner";
 import { supabase } from "@/integrations/supabase/client";
 
-// ─── Chaves de sessionStorage ─────────────────────────────────────────────────
+// ─── Chaves de sessionStorage ─────────────────────────────────────────────────────────────────────
 const SS_FILTROS_KEY   = "kanban_board_filtros";
 const SS_EXPANDED_KEY  = "kanban_board_expanded_cols";
 
@@ -53,6 +53,13 @@ function loadFiltros(): KanbanFiltros | null {
 
 function saveFiltros(f: KanbanFiltros) {
   try { sessionStorage.setItem(SS_FILTROS_KEY, JSON.stringify(f)); } catch {}
+}
+
+function clearKanbanSession() {
+  try {
+    sessionStorage.removeItem(SS_FILTROS_KEY);
+    sessionStorage.removeItem(SS_EXPANDED_KEY);
+  } catch {}
 }
 
 function loadExpandedCols(allKeys: string[]): Set<string> {
@@ -94,9 +101,7 @@ function getColumnHex(col: WorkflowColumn): string {
   return COLUMN_COLORS[col.key] ?? "#6b7280";
 }
 
-// ─── DroppableColumn memoizado ────────────────────────────────────────────────
-// React.memo evita re-montar o droppable do DnD a cada render do KanbanBoard
-// quando apenas outras colunas ou estado não-relacionado mudam.
+// ─── DroppableColumn memoizado ────────────────────────────────────────────────────────────
 const DroppableColumn = React.memo(function DroppableColumn({
   colKey,
   colHex,
@@ -159,7 +164,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     refreshAll,
   } = useSprint() as any;
 
-  const { isAdmin, roles } = useAuth();
+  const { isAdmin, roles, currentTeamId } = useAuth();
   const canFinalizeSprint = isAdmin || roles.includes("scrum_master" as any);
 
   const activeSprint = useMemo(
@@ -167,18 +172,38 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     [sprints],
   );
 
-  // ── #4: Filtros persistidos em sessionStorage ─────────────────────────────
+  // ── Reset filtros ao trocar de time (limpa sessionStorage contaminado) ───────────
+  const prevTeamIdRef = useRef<string | null>(null);
+
   const [filtros, setFiltros] = useState<KanbanFiltros>(() => {
     const saved = loadFiltros();
     if (saved) return saved;
     return { ...KANBAN_FILTROS_DEFAULT, sprintId: "all" };
   });
 
+  useEffect(() => {
+    // Na primeira montagem registra o time sem resetar
+    if (prevTeamIdRef.current === null) {
+      prevTeamIdRef.current = currentTeamId;
+      return;
+    }
+    // Time mudou: limpa sessionStorage e volta para "all"
+    if (prevTeamIdRef.current !== currentTeamId) {
+      prevTeamIdRef.current = currentTeamId;
+      clearKanbanSession();
+      const fresh = { ...KANBAN_FILTROS_DEFAULT, sprintId: "all" };
+      setFiltros(fresh);
+      setExpandedCols(new Set(allColKeys));
+    }
+  }, [currentTeamId]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const handleFiltrosChange = useCallback((next: KanbanFiltros) => {
     setFiltros(next);
     saveFiltros(next);
   }, []);
 
+  // Só ativa o filtro de sprint ativa se o usuário ainda está em "all"
   useEffect(() => {
     if (!activeSprint) return;
     setFiltros((prev) => {
@@ -190,7 +215,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       return prev;
     });
   }, [activeSprint?.id]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const canMove = true;
 
@@ -215,7 +239,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
   const [activeId, setActiveId]       = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
-  // ── #5: Colunas expandidas persistidas em sessionStorage ─────────────────
   const allColKeys = useMemo(
     () => (workflowColumns ?? []).map((c: WorkflowColumn) => c.key),
     [workflowColumns],
@@ -233,7 +256,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     });
   }, [allColKeys.join(",")]);
 
-  // #11: useCallback para estabilizar referência enviada aos filhos
   const toggleCol = useCallback((key: string) => {
     setExpandedCols((prev) => {
       const next = new Set(prev);
@@ -243,7 +265,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       return next;
     });
   }, [allColKeys]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
   const [finalizeOpen, setFinalizeOpen]     = useState(false);
@@ -265,6 +286,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
 
   const sprintBase = useMemo(() => {
     if (filtros.sprintId === "all") {
+      // Mostra todas as HUs do time (sem filtro de sprint)
       return sprintId ? userStories.filter((h: any) => h.sprintId === sprintId) : userStories;
     }
     return userStories.filter(
@@ -301,7 +323,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     );
   }, [sprintBase, filtros, localPositions]);
 
-  // #11: Pré-agrupa cards por coluna — elimina N .filter() inline no render
   const colItemsMap = useMemo(() => {
     const map: Record<string, any[]> = {};
     (workflowColumns ?? []).forEach((col: WorkflowColumn) => {
@@ -310,7 +331,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     return map;
   }, [workflowColumns, sprintStories]);
 
-  // #11: Pré-calcula cores por coluna — elimina N getColumnHex() inline no render
   const colHexMap = useMemo(() => {
     const map: Record<string, string> = {};
     (workflowColumns ?? []).forEach((col: WorkflowColumn) => {
@@ -603,7 +623,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
                 )}
                 {!(sprintFinalizavel?.isActive || sprintFinalizavel?.is_active) && (
                   <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-2 rounded-lg">
-                    ⚠️ Esta sprint não foi encerrada formalmente. Encerá-la agora irá marcar a data de término como hoje e mover as HUs incompletas para o backlog.
+                    ⚠️ Esta sprint não foi encerrada formalmente. Encírá-la agora irá marcar a data de término como hoje e mover as HUs incompletas para o backlog.
                   </p>
                 )}
                 {sprintSummary && (

@@ -93,6 +93,9 @@ const Index = () => {
 
   useEffect(() => {
     if (loading || moduleTeams.length === 0) return;
+    // Verifica se o time atual pertence ao módulo sala_agil
+    // currentTeamId nas deps garante que o guard reexecuta quando
+    // AuthContext resolve o boot com currentTeamId=null
     const currentIsValid = currentTeamId && moduleTeams.some((t) => t.id === currentTeamId);
     if (currentIsValid) return;
     if (moduleTeams.length === 1) {
@@ -100,7 +103,7 @@ const Index = () => {
     } else {
       setShowTeamModal(true);
     }
-  }, [loading, teams]);
+  }, [loading, teams, currentTeamId]); // eslint-disable-line
 
   useEffect(() => {
     if (loading) return;

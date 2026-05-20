@@ -59,7 +59,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   path: string;
-  group: "main" | "org" | "config";
+  group: "sprints" | "cerimonias" | "operacoes" | "org" | "config";
   roles?: string[];
 }
 
@@ -100,62 +100,70 @@ function PlayingCardIcon({ className }: { className?: string }) {
   );
 }
 
+// Grupos da Sala Ágil divididos semanticamente
 const GROUP_LABELS: Record<NavItem["group"], string> = {
-  main: "PRINCIPAL",
-  org: "RELATÓRIOS",
-  config: "CONFIGURAÇÕES",
+  sprints:    "Sprints",
+  cerimonias: "Cerimônias",
+  operacoes:  "Operações",
+  org:        "Relatórios",
+  config:     "Configurações",
 };
 
 const NAV_SALA_AGIL: NavItem[] = [
-  { key: "dashboard",      label: "Dashboard",              icon: LayoutDashboard,  path: "/sala-agil",                  group: "main" },
-  { key: "board",          label: "Board Kanban",            icon: Kanban,           path: "/sala-agil/board",             group: "main" },
-  { key: "backlog",        label: "Backlog",                 icon: ListTodo,         path: "/sala-agil/backlog",           group: "main" },
-  { key: "epicos",         label: "Épicos",                  icon: Layers,           path: "/sala-agil/epicos",            group: "main" },
-  { key: "planning-poker", label: "Planning Poker",          icon: PlayingCardIcon,  path: "/sala-agil/planning-poker",   group: "main" },
-  { key: "calendario",     label: "Calendário",              icon: Calendar,         path: "/sala-agil/calendario",        group: "main" },
-  { key: "equipe",         label: "Equipe",                  icon: Users,            path: "/sala-agil/equipe",            group: "main" },
-  { key: "atividades",     label: "Atividades",              icon: Activity,         path: "/sala-agil/atividades",        group: "main" },
-  { key: "impedimentos",   label: "Impedimentos",            icon: AlertTriangle,    path: "/sala-agil/impedimentos",      group: "main" },
-  { key: "retrospectiva",  label: "Retrospectiva",           icon: Repeat,           path: "/sala-agil/retrospectiva",     group: "main" },
+  // Sprints
+  { key: "dashboard", label: "Dashboard",     icon: LayoutDashboard, path: "/sala-agil",              group: "sprints" },
+  { key: "board",     label: "Board Kanban",   icon: Kanban,          path: "/sala-agil/board",        group: "sprints" },
+  { key: "backlog",   label: "Backlog",         icon: ListTodo,        path: "/sala-agil/backlog",      group: "sprints" },
+  { key: "epicos",    label: "Épicos",           icon: Layers,          path: "/sala-agil/epicos",       group: "sprints" },
+  // Cerimônias
+  { key: "planning-poker", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning-poker", group: "cerimonias" },
+  { key: "retrospectiva",  label: "Retrospectiva",  icon: Repeat,          path: "/sala-agil/retrospectiva",  group: "cerimonias" },
+  { key: "impedimentos",   label: "Impedimentos",   icon: AlertTriangle,   path: "/sala-agil/impedimentos",   group: "cerimonias" },
+  // Operações
+  { key: "calendario", label: "Calendário", icon: Calendar,  path: "/sala-agil/calendario", group: "operacoes" },
+  { key: "equipe",     label: "Equipe",     icon: Users,     path: "/sala-agil/equipe",     group: "operacoes" },
+  { key: "atividades", label: "Atividades", icon: Activity,  path: "/sala-agil/atividades", group: "operacoes" },
+  // Relatórios
+  { key: "metricas",    label: "Métricas",               icon: BarChart3, path: "/sala-agil/metricas",    group: "org" },
+  { key: "historico",   label: "Histórico",               icon: History,   path: "/sala-agil/historico",   group: "org" },
   {
     key: "gerador-apf",
     label: "Relatório de Evidências",
     icon: FileText,
     path: "/sala-agil/gerador-apf",
-    group: "main",
+    group: "org",
     roles: ["scrum_master", "analyst"],
   },
-  { key: "metricas",  label: "Métricas",  icon: BarChart3, path: "/sala-agil/metricas",  group: "org" },
-  { key: "historico", label: "Histórico", icon: History,   path: "/sala-agil/historico", group: "org" },
-  { key: "times",      label: "Times",         icon: Users,       path: "/sala-agil/times",     group: "config" },
-  { key: "membros",    label: "Membros",        icon: User,        path: "/sala-agil/membros",   group: "config" },
-  { key: "perfis",     label: "Perfis (RBAC)",  icon: ShieldCheck, path: "/sala-agil/perfis",    group: "config" },
-  { key: "fluxo",      label: "Fluxo",          icon: GitBranch,   path: "/sala-agil/fluxo",     group: "config" },
-  { key: "campos",     label: "Campos Custom",  icon: Settings,    path: "/sala-agil/campos",    group: "config" },
+  // Configurações
+  { key: "times",      label: "Times",         icon: Users,       path: "/sala-agil/times",      group: "config" },
+  { key: "membros",    label: "Membros",        icon: User,        path: "/sala-agil/membros",    group: "config" },
+  { key: "perfis",     label: "Perfis (RBAC)",  icon: ShieldCheck, path: "/sala-agil/perfis",     group: "config" },
+  { key: "fluxo",      label: "Fluxo",          icon: GitBranch,   path: "/sala-agil/fluxo",      group: "config" },
+  { key: "campos",     label: "Campos Custom",  icon: Settings,    path: "/sala-agil/campos",     group: "config" },
   { key: "automacoes", label: "Automações",     icon: Repeat,      path: "/sala-agil/automacoes", group: "config" },
 ];
 
 const NAV_SUSTENTACAO: NavItem[] = [
-  { key: "dashboard",  label: "Dashboard",        icon: LayoutDashboard, path: "/sustentacao",              group: "main" },
-  { key: "board",      label: "Board Kanban",      icon: Kanban,          path: "/sustentacao/board",        group: "main" },
-  { key: "demandas",   label: "Demandas",          icon: ListTodo,        path: "/sustentacao/demandas",     group: "main" },
-  { key: "projetos",   label: "Projetos",          icon: Layers,          path: "/sustentacao/projetos",     group: "main" },
-  { key: "importacao", label: "Importação Excel",  icon: Upload,          path: "/sustentacao/importacao",   group: "main" },
-  { key: "equipe",     label: "Equipe",            icon: Users,           path: "/sustentacao/equipe",       group: "main" },
-  { key: "fluxo",      label: "Fluxo de Trabalho", icon: GitBranch,       path: "/sustentacao/fluxo",        group: "main" },
-  { key: "relatorios", label: "Relatórios",        icon: FileText,        path: "/sustentacao/relatorios",   group: "org" },
-  { key: "times",      label: "Times",             icon: Users,           path: "/sustentacao/times",        group: "config" },
-  { key: "membros",    label: "Membros",            icon: User,            path: "/sustentacao/membros",      group: "config" },
-  { key: "perfis",     label: "Perfis (RBAC)",      icon: ShieldCheck,     path: "/sustentacao/perfis",       group: "config" },
-  { key: "campos",     label: "Campos Custom",      icon: Settings,        path: "/sustentacao/campos",       group: "config" },
-  { key: "automacoes", label: "Automações",         icon: Repeat,          path: "/sustentacao/automacoes",   group: "config" },
+  { key: "dashboard",  label: "Dashboard",        icon: LayoutDashboard, path: "/sustentacao",            group: "sprints" },
+  { key: "board",      label: "Board Kanban",      icon: Kanban,          path: "/sustentacao/board",      group: "sprints" },
+  { key: "demandas",   label: "Demandas",          icon: ListTodo,        path: "/sustentacao/demandas",   group: "sprints" },
+  { key: "projetos",   label: "Projetos",          icon: Layers,          path: "/sustentacao/projetos",   group: "sprints" },
+  { key: "importacao", label: "Importação Excel",  icon: Upload,          path: "/sustentacao/importacao", group: "operacoes" },
+  { key: "equipe",     label: "Equipe",            icon: Users,           path: "/sustentacao/equipe",     group: "operacoes" },
+  { key: "fluxo",      label: "Fluxo de Trabalho", icon: GitBranch,       path: "/sustentacao/fluxo",      group: "operacoes" },
+  { key: "relatorios", label: "Relatórios",        icon: FileText,        path: "/sustentacao/relatorios", group: "org" },
+  { key: "times",      label: "Times",             icon: Users,           path: "/sustentacao/times",      group: "config" },
+  { key: "membros",    label: "Membros",            icon: User,            path: "/sustentacao/membros",    group: "config" },
+  { key: "perfis",     label: "Perfis (RBAC)",      icon: ShieldCheck,     path: "/sustentacao/perfis",     group: "config" },
+  { key: "campos",     label: "Campos Custom",      icon: Settings,        path: "/sustentacao/campos",     group: "config" },
+  { key: "automacoes", label: "Automações",         icon: Repeat,          path: "/sustentacao/automacoes", group: "config" },
 ];
 
 const NAV_RDM: NavItem[] = [
-  { key: "dashboard", label: "Dashboard",    icon: LayoutDashboard, path: "/rdm",           group: "main" },
-  { key: "rdms",      label: "RDMs",         icon: ClipboardList,   path: "/rdm/rdms",      group: "main" },
-  { key: "checklist", label: "Checklists",   icon: CheckSquare,     path: "/rdm/checklist", group: "main" },
-  { key: "gonogo",    label: "Go/No-Go",     icon: ArrowLeftRight,  path: "/rdm/gonogo",    group: "main" },
+  { key: "dashboard", label: "Dashboard",    icon: LayoutDashboard, path: "/rdm",           group: "sprints" },
+  { key: "rdms",      label: "RDMs",         icon: ClipboardList,   path: "/rdm/rdms",      group: "sprints" },
+  { key: "checklist", label: "Checklists",   icon: CheckSquare,     path: "/rdm/checklist", group: "sprints" },
+  { key: "gonogo",    label: "Go/No-Go",     icon: ArrowLeftRight,  path: "/rdm/gonogo",    group: "sprints" },
   { key: "times",     label: "Times",        icon: Users,           path: "/rdm/times",     group: "config" },
   { key: "membros",   label: "Membros",       icon: User,            path: "/rdm/membros",   group: "config" },
   { key: "perfis",    label: "Perfis (RBAC)", icon: ShieldCheck,     path: "/rdm/perfis",    group: "config" },
@@ -195,11 +203,34 @@ const ACCENT = {
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const { teams, currentTeamId, setCurrentTeamId } = useAuth();
 
-  // teams agora vem de team_modules (N:N) — filtro simples por module funciona
   const moduleTeams = teams.filter((t) => t.module === module);
   const activeTeam  = moduleTeams.find((t) => t.id === currentTeamId);
 
-  if (moduleTeams.length <= 1) return null;
+  // Espaço sempre reservado — label estática se 1 time, dropdown se 2+
+  if (moduleTeams.length <= 1) {
+    if (collapsed) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="w-full flex items-center justify-center p-2">
+              <Building2 className="h-4 w-4 text-muted-foreground/50" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-xs">
+            {activeTeam?.name ?? "Time"}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+    return (
+      <div className="w-full flex items-center gap-2 px-3 py-1.5">
+        <Building2 className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+        <span className="text-[11px] text-muted-foreground/50 truncate">
+          {activeTeam?.name ?? "Sem time"}
+        </span>
+      </div>
+    );
+  }
 
   if (collapsed) {
     return (
@@ -346,19 +377,28 @@ function SidebarNav({
       : module === "sustentacao"
         ? NAV_SUSTENTACAO
         : NAV_RDM;
+
   const filteredItems = items.filter((item) => {
     if (!item.roles) return true;
     return item.roles.some((r) => hasPermission(r as any));
   });
-  const groups = (["main", "org", "config"] as const)
-    .map((g) => ({ group: g, items: filteredItems.filter((i) => i.group === g) }))
-    .filter((g) => g.items.length > 0);
+
+  const groupOrder = (["sprints", "cerimonias", "operacoes", "org", "config"] as const).filter(
+    (g) => filteredItems.some((i) => i.group === g),
+  );
+
+  const groups = groupOrder.map((g) => ({
+    group: g,
+    items: filteredItems.filter((i) => i.group === g),
+  }));
+
   const isItemActive = (item: NavItem) => {
     if (activeKey) return item.key === activeKey;
     const roots = ["/sala-agil", "/sustentacao", "/rdm"];
     if (roots.includes(item.path)) return location.pathname === item.path;
     return location.pathname.startsWith(item.path);
   };
+
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-3 scrollbar-none min-h-0">
       {groups.map(({ group, items: groupItems }) => (
@@ -368,7 +408,7 @@ function SidebarNav({
               {GROUP_LABELS[group]}
             </p>
           )}
-          {collapsed && group !== "main" && <div className="h-px bg-border mx-1 my-1" />}
+          {collapsed && group !== "sprints" && <div className="h-px bg-border mx-1 my-1" />}
           <div className={cn("space-y-0.5", collapsed && "flex flex-col items-center")}>
             {groupItems.map((item) => (
               <NavItemButton
@@ -387,7 +427,7 @@ function SidebarNav({
   );
 }
 
-// ─── ModuleSwitcher ───────────────────────────────────────────────────────────
+// ─── ModuleSwitcher — tabs com borda ativa ────────────────────────────────────
 function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const navigate = useNavigate();
   const modules: { key: ActiveModule; path: string; shortLabel: string }[] = [
@@ -410,7 +450,7 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
                   className={cn(
                     "flex w-full items-center justify-center rounded-lg p-2 transition-all",
                     module === key
-                      ? `bg-[${acc.hex}]/20 ${acc.textCls}`
+                      ? `${acc.textCls}`
                       : "text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent",
                   )}
                   style={module === key ? { backgroundColor: acc.hexAlpha(0.2) } : {}}
@@ -426,24 +466,32 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
     );
   }
 
+  // Tabs com borda colorida na aba ativa
   return (
-    <div className="mx-2 mb-2 flex items-center gap-1 rounded-xl bg-sidebar-accent p-1 border border-border">
+    <div className="mx-2 mb-0 flex items-end border-b border-border">
       {modules.map(({ key, path, shortLabel }) => {
         const acc = ACCENT[key];
         const Icon = acc.icon;
+        const isActive = module === key;
         return (
           <button
             key={key}
             onClick={() => navigate(path)}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all",
-              module === key
-                ? `${acc.textCls} shadow-sm`
-                : "text-sidebar-foreground/40 hover:text-sidebar-foreground",
+              "flex flex-1 items-center justify-center gap-1.5 px-2 py-2 text-[11px] font-semibold transition-all relative",
+              isActive
+                ? `${acc.textCls}`
+                : "text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-t-md",
             )}
-            style={module === key ? { backgroundColor: acc.hexAlpha(0.3) } : {}}
           >
-            <Icon className="h-3 w-3" /> {shortLabel}
+            <Icon className="h-3 w-3 shrink-0" />
+            {shortLabel}
+            {isActive && (
+              <span
+                className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full"
+                style={{ backgroundColor: acc.hex }}
+              />
+            )}
           </button>
         );
       })}
@@ -571,7 +619,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           )}
           style={{ boxShadow: "1px 0 0 hsl(var(--border)), 4px 0 24px rgba(0,0,0,0.15)" }}
         >
-          {/* Logo */}
+          {/* Logo + collapse button */}
           <div
             className={cn(
               "flex items-center h-12 shrink-0 px-3 border-b border-border",
@@ -579,58 +627,64 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           >
             {collapsed ? (
-              <AxionLogo size={22} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setCollapsed(false)}
+                    aria-label="Expandir sidebar"
+                    className="flex items-center justify-center rounded-md text-muted-foreground/40
+                      hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                  >
+                    <PanelLeftOpen className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-xs">Expandir</TooltipContent>
+              </Tooltip>
             ) : (
-              <div className="flex items-center gap-2.5 min-w-0">
-                <AxionLogo size={22} />
-                <div className="min-w-0">
-                  <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">Axion</p>
-                  <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-none mt-0.5">
-                    {accent.label}
-                  </p>
+              <>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <AxionLogo size={22} />
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-bold text-foreground tracking-tight leading-none">Axion</p>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-widest leading-none mt-0.5">
+                      {accent.label}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
-            {!collapsed && (
-              <button
-                onClick={() => setCollapsed(true)}
-                aria-label="Recolher sidebar"
-                className="flex h-6 w-6 items-center justify-center rounded-md shrink-0
-                  text-muted-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-              >
-                <PanelLeftClose className="h-3.5 w-3.5" />
-              </button>
+                <button
+                  onClick={() => setCollapsed(true)}
+                  aria-label="Recolher sidebar"
+                  className="flex h-6 w-6 items-center justify-center rounded-md shrink-0
+                    text-muted-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                >
+                  <PanelLeftClose className="h-3.5 w-3.5" />
+                </button>
+              </>
             )}
           </div>
 
-          {collapsed && (
-            <button
-              onClick={() => setCollapsed(false)}
-              aria-label="Expandir sidebar"
-              className="absolute top-3 left-3 flex h-6 w-6 items-center justify-center
-                rounded-md text-muted-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors z-10"
-            />
+          {/* Module Switcher — tabs com borda ativa */}
+          {canSwitch && (
+            <div className="shrink-0">
+              <ModuleSwitcher module={module} collapsed={collapsed} />
+            </div>
           )}
 
-          <div className="px-2 pt-2 shrink-0">
-            {canSwitch ? (
-              <ModuleSwitcher module={module} collapsed={collapsed} />
-            ) : (
-              <div
-                className={cn(
-                  "flex items-center rounded-xl px-3 py-2 text-[12px] font-semibold mb-2",
-                  collapsed ? "justify-center px-0" : "gap-2",
-                  accent.bgCls,
-                  accent.textCls,
-                )}
-              >
-                <accent.icon className="h-3.5 w-3.5 shrink-0" />
-                {!collapsed && accent.label}
-              </div>
-            )}
-          </div>
+          {!canSwitch && !collapsed && (
+            <div
+              className={cn(
+                "mx-2 mt-2 flex items-center rounded-xl px-3 py-2 text-[12px] font-semibold gap-2",
+                accent.bgCls,
+                accent.textCls,
+              )}
+            >
+              <accent.icon className="h-3.5 w-3.5 shrink-0" />
+              {accent.label}
+            </div>
+          )}
 
-          <div className="px-2 mb-1 shrink-0">
+          {/* Team Switcher — espaço sempre reservado */}
+          <div className="px-2 mt-1 shrink-0">
             <TeamSwitcher module={module} collapsed={collapsed} />
           </div>
 

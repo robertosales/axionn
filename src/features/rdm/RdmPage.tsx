@@ -20,7 +20,8 @@ export default function RdmPage() {
   const { loading: authLoading, currentTeamId, setCurrentTeamId, teams } = useAuth();
   const [showTeamModal, setShowTeamModal] = useState(false);
 
-  const moduleTeams = teams.filter((t) => t.module === "rdm");
+  // RDM é transversal: aceita qualquer time do usuário (sala_agil ou sustentacao)
+  const moduleTeams = teams;
 
   useEffect(() => {
     if (authLoading) return;
@@ -144,7 +145,7 @@ function RdmSection({
         </div>
       );
 
-    case "times":   return <TeamManager moduleFilter="rdm" />;
+    case "times":   return <TeamManager />;
     case "membros": return <TeamMembersManager />;
     case "perfis":  return <UserRolesManager />;
     default:        return <RdmDashboard rdms={rdms} />;

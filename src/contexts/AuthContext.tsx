@@ -38,7 +38,6 @@ interface AuthContextType {
   roles:             AppRole[];
   hasPermission:     (permission: Permission) => boolean;
   refreshProfile:    () => Promise<void>;
-  // NOVO: helpers de módulo ─────────────────────────────────────
   moduleRoles:       UserModuleRole[];
   hasModuleAccess:   (module: string) => boolean;
   getModuleRole:     (module: string) => string | null;
@@ -102,7 +101,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return admin;
   };
 
-  // NOVO: carrega user_module_roles com fallback para module_access legado
   const fetchModuleRoles = async (userId: string, profileData?: Profile) => {
     const { data, error } = await supabase
       .from("user_module_roles")
@@ -110,7 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("user_id", userId);
 
     if (error || !data || data.length === 0) {
-      // Fallback: sintetiza do campo legado
       const moduleAccess = profileData?.module_access || "sala_agil";
       const fallback: UserModuleRole[] =
         moduleAccess === "admin"
@@ -127,12 +124,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setModuleRoles(data.map((r: any) => ({ module: r.module, role_name: r.role_name })));
   };
 
+  // ─── refreshTeams via team_modules (N:N) ──────────────────────────────────
+  // Cada linha de team_modules gera um AuthTeam { id, name, module }.
+  // Um mesmo time pode aparecer múltiplas vezes — uma por módulo associado.
+  // Isso permite que TeamSwitcher filtre por module sem gambiarras.
   const refreshTeams = async () => {
-    const { data, error } = await supabase.from("teams").select("id, name, module");
+    const { data, error } = await supabase
+      .from("team_modules")
+      .select("module, team:team_id(id, name)");
+
     if (error) { console.error("[Auth] refreshTeams:", error); return; }
-    const teamList = (data ?? []) as AuthTeam[];
+
+    const teamList: AuthTeam[] = (data ?? []).flatMap((row: any) => {
+      if (!row.team) return [];
+      return [{ id: row.team.id, name: row.team.name, module: row.module }];
+    });
+
     if (!mountedRef.current) return;
     setTeams(teamList);
+
     if (teamList.length > 0 && !currentTeamIdRef.current) {
       const saved = localStorage.getItem("selectedTeamId");
       const valid = saved && teamList.some(t => t.id === saved);
@@ -142,19 +152,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = (permission: Permission) => isAdmin || permissions.has(permission);
 
-  // NOVO: verifica acesso a módulo considerando admin e nova tabela
   const hasModuleAccess = (module: string): boolean => {
     if (isAdmin) return true;
     return moduleRoles.some(mr => mr.module === module);
   };
 
-  // NOVO: retorna o role do usuário em um módulo específico
   const getModuleRole = (module: string): string | null =>
     moduleRoles.find(mr => mr.module === module)?.role_name ?? null;
 
   const loadUserData = async (userId: string) => {
     try {
-      // Busca profile primeiro para ter module_access no fallback
       const { data: profileData } = await supabase
         .from("profiles").select("*").eq("user_id", userId).single();
       if (profileData && mountedRef.current) setProfile(profileData as Profile);
@@ -226,7 +233,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currentTeam: teams.find((t) => t.id === currentTeamId) ?? null,
       setCurrentTeamId, teams, refreshTeams,
       roles, hasPermission, refreshProfile,
-      // NOVO
       moduleRoles, hasModuleAccess, getModuleRole,
     }}>
       {children}

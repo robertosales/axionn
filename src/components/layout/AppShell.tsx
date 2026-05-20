@@ -107,22 +107,16 @@ const GROUP_LABELS: Record<NavItem["group"], string> = {
 };
 
 const NAV_SALA_AGIL: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/sala-agil", group: "main" },
-  { key: "board", label: "Board Kanban", icon: Kanban, path: "/sala-agil/board", group: "main" },
-  { key: "backlog", label: "Backlog", icon: ListTodo, path: "/sala-agil/backlog", group: "main" },
-  { key: "epicos", label: "Épicos", icon: Layers, path: "/sala-agil/epicos", group: "main" },
-  {
-    key: "planning-poker",
-    label: "Planning Poker",
-    icon: PlayingCardIcon,
-    path: "/sala-agil/planning-poker",
-    group: "main",
-  },
-  { key: "calendario", label: "Calendário", icon: Calendar, path: "/sala-agil/calendario", group: "main" },
-  { key: "equipe", label: "Equipe", icon: Users, path: "/sala-agil/equipe", group: "main" },
-  { key: "atividades", label: "Atividades", icon: Activity, path: "/sala-agil/atividades", group: "main" },
-  { key: "impedimentos", label: "Impedimentos", icon: AlertTriangle, path: "/sala-agil/impedimentos", group: "main" },
-  { key: "retrospectiva", label: "Retrospectiva", icon: Repeat, path: "/sala-agil/retrospectiva", group: "main" },
+  { key: "dashboard",      label: "Dashboard",              icon: LayoutDashboard,  path: "/sala-agil",                  group: "main" },
+  { key: "board",          label: "Board Kanban",            icon: Kanban,           path: "/sala-agil/board",             group: "main" },
+  { key: "backlog",        label: "Backlog",                 icon: ListTodo,         path: "/sala-agil/backlog",           group: "main" },
+  { key: "epicos",         label: "Épicos",                  icon: Layers,           path: "/sala-agil/epicos",            group: "main" },
+  { key: "planning-poker", label: "Planning Poker",          icon: PlayingCardIcon,  path: "/sala-agil/planning-poker",   group: "main" },
+  { key: "calendario",     label: "Calendário",              icon: Calendar,         path: "/sala-agil/calendario",        group: "main" },
+  { key: "equipe",         label: "Equipe",                  icon: Users,            path: "/sala-agil/equipe",            group: "main" },
+  { key: "atividades",     label: "Atividades",              icon: Activity,         path: "/sala-agil/atividades",        group: "main" },
+  { key: "impedimentos",   label: "Impedimentos",            icon: AlertTriangle,    path: "/sala-agil/impedimentos",      group: "main" },
+  { key: "retrospectiva",  label: "Retrospectiva",           icon: Repeat,           path: "/sala-agil/retrospectiva",     group: "main" },
   {
     key: "gerador-apf",
     label: "Relatório de Evidências",
@@ -131,40 +125,40 @@ const NAV_SALA_AGIL: NavItem[] = [
     group: "main",
     roles: ["scrum_master", "analyst"],
   },
-  { key: "metricas", label: "Métricas", icon: BarChart3, path: "/sala-agil/metricas", group: "org" },
-  { key: "historico", label: "Histórico", icon: History, path: "/sala-agil/historico", group: "org" },
-  { key: "times", label: "Times", icon: Users, path: "/sala-agil/times", group: "config" },
-  { key: "membros", label: "Membros", icon: User, path: "/sala-agil/membros", group: "config" },
-  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sala-agil/perfis", group: "config" },
-  { key: "fluxo", label: "Fluxo", icon: GitBranch, path: "/sala-agil/fluxo", group: "config" },
-  { key: "campos", label: "Campos Custom", icon: Settings, path: "/sala-agil/campos", group: "config" },
-  { key: "automacoes", label: "Automações", icon: Repeat, path: "/sala-agil/automacoes", group: "config" },
+  { key: "metricas",  label: "Métricas",  icon: BarChart3, path: "/sala-agil/metricas",  group: "org" },
+  { key: "historico", label: "Histórico", icon: History,   path: "/sala-agil/historico", group: "org" },
+  { key: "times",      label: "Times",         icon: Users,       path: "/sala-agil/times",     group: "config" },
+  { key: "membros",    label: "Membros",        icon: User,        path: "/sala-agil/membros",   group: "config" },
+  { key: "perfis",     label: "Perfis (RBAC)",  icon: ShieldCheck, path: "/sala-agil/perfis",    group: "config" },
+  { key: "fluxo",      label: "Fluxo",          icon: GitBranch,   path: "/sala-agil/fluxo",     group: "config" },
+  { key: "campos",     label: "Campos Custom",  icon: Settings,    path: "/sala-agil/campos",    group: "config" },
+  { key: "automacoes", label: "Automações",     icon: Repeat,      path: "/sala-agil/automacoes", group: "config" },
 ];
 
 const NAV_SUSTENTACAO: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/sustentacao", group: "main" },
-  { key: "board", label: "Board Kanban", icon: Kanban, path: "/sustentacao/board", group: "main" },
-  { key: "demandas", label: "Demandas", icon: ListTodo, path: "/sustentacao/demandas", group: "main" },
-  { key: "projetos", label: "Projetos", icon: Layers, path: "/sustentacao/projetos", group: "main" },
-  { key: "importacao", label: "Importação Excel", icon: Upload, path: "/sustentacao/importacao", group: "main" },
-  { key: "equipe", label: "Equipe", icon: Users, path: "/sustentacao/equipe", group: "main" },
-  { key: "fluxo", label: "Fluxo de Trabalho", icon: GitBranch, path: "/sustentacao/fluxo", group: "main" },
-  { key: "relatorios", label: "Relatórios", icon: FileText, path: "/sustentacao/relatorios", group: "org" },
-  { key: "times", label: "Times", icon: Users, path: "/sustentacao/times", group: "config" },
-  { key: "membros", label: "Membros", icon: User, path: "/sustentacao/membros", group: "config" },
-  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/sustentacao/perfis", group: "config" },
-  { key: "campos", label: "Campos Custom", icon: Settings, path: "/sustentacao/campos", group: "config" },
-  { key: "automacoes", label: "Automações", icon: Repeat, path: "/sustentacao/automacoes", group: "config" },
+  { key: "dashboard",  label: "Dashboard",        icon: LayoutDashboard, path: "/sustentacao",              group: "main" },
+  { key: "board",      label: "Board Kanban",      icon: Kanban,          path: "/sustentacao/board",        group: "main" },
+  { key: "demandas",   label: "Demandas",          icon: ListTodo,        path: "/sustentacao/demandas",     group: "main" },
+  { key: "projetos",   label: "Projetos",          icon: Layers,          path: "/sustentacao/projetos",     group: "main" },
+  { key: "importacao", label: "Importação Excel",  icon: Upload,          path: "/sustentacao/importacao",   group: "main" },
+  { key: "equipe",     label: "Equipe",            icon: Users,           path: "/sustentacao/equipe",       group: "main" },
+  { key: "fluxo",      label: "Fluxo de Trabalho", icon: GitBranch,       path: "/sustentacao/fluxo",        group: "main" },
+  { key: "relatorios", label: "Relatórios",        icon: FileText,        path: "/sustentacao/relatorios",   group: "org" },
+  { key: "times",      label: "Times",             icon: Users,           path: "/sustentacao/times",        group: "config" },
+  { key: "membros",    label: "Membros",            icon: User,            path: "/sustentacao/membros",      group: "config" },
+  { key: "perfis",     label: "Perfis (RBAC)",      icon: ShieldCheck,     path: "/sustentacao/perfis",       group: "config" },
+  { key: "campos",     label: "Campos Custom",      icon: Settings,        path: "/sustentacao/campos",       group: "config" },
+  { key: "automacoes", label: "Automações",         icon: Repeat,          path: "/sustentacao/automacoes",   group: "config" },
 ];
 
 const NAV_RDM: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/rdm", group: "main" },
-  { key: "rdms", label: "RDMs", icon: ClipboardList, path: "/rdm/rdms", group: "main" },
-  { key: "checklist", label: "Checklists", icon: CheckSquare, path: "/rdm/checklist", group: "main" },
-  { key: "gonogo", label: "Go/No-Go", icon: ArrowLeftRight, path: "/rdm/gonogo", group: "main" },
-  { key: "times", label: "Times", icon: Users, path: "/rdm/times", group: "config" },
-  { key: "membros", label: "Membros", icon: User, path: "/rdm/membros", group: "config" },
-  { key: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, path: "/rdm/perfis", group: "config" },
+  { key: "dashboard", label: "Dashboard",    icon: LayoutDashboard, path: "/rdm",           group: "main" },
+  { key: "rdms",      label: "RDMs",         icon: ClipboardList,   path: "/rdm/rdms",      group: "main" },
+  { key: "checklist", label: "Checklists",   icon: CheckSquare,     path: "/rdm/checklist", group: "main" },
+  { key: "gonogo",    label: "Go/No-Go",     icon: ArrowLeftRight,  path: "/rdm/gonogo",    group: "main" },
+  { key: "times",     label: "Times",        icon: Users,           path: "/rdm/times",     group: "config" },
+  { key: "membros",   label: "Membros",       icon: User,            path: "/rdm/membros",   group: "config" },
+  { key: "perfis",    label: "Perfis (RBAC)", icon: ShieldCheck,     path: "/rdm/perfis",    group: "config" },
 ];
 
 const ACCENT = {
@@ -201,12 +195,9 @@ const ACCENT = {
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const { teams, currentTeamId, setCurrentTeamId } = useAuth();
 
-  // RDM não possui times próprios no banco (module = "rdm").
-  // Como solução de curto prazo, exibe todos os times disponíveis.
-  // TODO: migrar para tabela team_modules (N:N) para suporte multi-módulo por time.
-  const moduleTeams = module === "rdm" ? teams : teams.filter((t) => t.module === module);
-
-  const activeTeam = moduleTeams.find((t) => t.id === currentTeamId);
+  // teams agora vem de team_modules (N:N) — filtro simples por module funciona
+  const moduleTeams = teams.filter((t) => t.module === module);
+  const activeTeam  = moduleTeams.find((t) => t.id === currentTeamId);
 
   if (moduleTeams.length <= 1) return null;
 
@@ -349,7 +340,12 @@ function SidebarNav({
 }) {
   const location = useLocation();
   const { hasPermission } = useAuth();
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
+  const items =
+    module === "sala_agil"
+      ? NAV_SALA_AGIL
+      : module === "sustentacao"
+        ? NAV_SUSTENTACAO
+        : NAV_RDM;
   const filteredItems = items.filter((item) => {
     if (!item.roles) return true;
     return item.roles.some((r) => hasPermission(r as any));
@@ -395,9 +391,9 @@ function SidebarNav({
 function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const navigate = useNavigate();
   const modules: { key: ActiveModule; path: string; shortLabel: string }[] = [
-    { key: "sala_agil", path: "/sala-agil", shortLabel: "Ágil" },
+    { key: "sala_agil",   path: "/sala-agil",  shortLabel: "Ágil" },
     { key: "sustentacao", path: "/sustentacao", shortLabel: "Sust." },
-    { key: "rdm", path: "/rdm", shortLabel: "RDM" },
+    { key: "rdm",         path: "/rdm",         shortLabel: "RDM" },
   ];
 
   if (collapsed) {
@@ -422,9 +418,7 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
                   <Icon className="h-3.5 w-3.5" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right" className="text-xs">
-                {acc.label}
-              </TooltipContent>
+              <TooltipContent side="right" className="text-xs">{acc.label}</TooltipContent>
             </Tooltip>
           );
         })}
@@ -443,7 +437,9 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
             onClick={() => navigate(path)}
             className={cn(
               "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-all",
-              module === key ? `${acc.textCls} shadow-sm` : "text-sidebar-foreground/40 hover:text-sidebar-foreground",
+              module === key
+                ? `${acc.textCls} shadow-sm`
+                : "text-sidebar-foreground/40 hover:text-sidebar-foreground",
             )}
             style={module === key ? { backgroundColor: acc.hexAlpha(0.3) } : {}}
           >
@@ -480,9 +476,7 @@ function DarkModeToggle() {
       root.classList.remove("dark");
       root.setAttribute("data-theme", "light");
     }
-    try {
-      sessionStorage.setItem("theme", isDark ? "dark" : "light");
-    } catch {}
+    try { sessionStorage.setItem("theme", isDark ? "dark" : "light"); } catch {}
   }, [isDark]);
 
   return (
@@ -507,7 +501,12 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
+  const items =
+    module === "sala_agil"
+      ? NAV_SALA_AGIL
+      : module === "sustentacao"
+        ? NAV_SUSTENTACAO
+        : NAV_RDM;
   const activeItem = activeKey
     ? items.find((i) => i.key === activeKey)
     : items.find((i) => {
@@ -520,7 +519,9 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   return (
     <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-sidebar border-b border-border overflow-hidden">
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">{accent.label}</span>
+        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">
+          {accent.label}
+        </span>
         <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
         <div className="flex items-center gap-2 min-w-0">
           {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}

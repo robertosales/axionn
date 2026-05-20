@@ -22,7 +22,6 @@ import {
 import { toast } from "sonner";
 import { calcDelayDays } from "@/utils/sprintStatus";
 
-// ─── Guard: converte qualquer valor para número decimal seguro ────────────────
 function toDecimalHours(value: unknown): number {
   if (typeof value === "number" && !isNaN(value)) return value;
   const str = String(value ?? "").trim();
@@ -184,6 +183,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         assigneeId: h.assignee_id || null, position: h.position ?? 0,
         impediments: impData.filter((imp: any) => imp.hu_id === h.id).map(mapImp),
         customFields: h.custom_fields || {}, createdAt: h.created_at,
+        // #3: status_changed_at — lido do banco se existir
+        statusChangedAt: h.status_changed_at ?? null,
       })));
 
       setActivities((actRes.data || []).map((a: any) => ({
@@ -310,16 +311,55 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   const removeUserStory = async (id: string) => { await supabase.from("user_stories").delete().eq("id", id); await refreshAll(); };
 
+  // ── #12: updateUserStoryStatus com optimistic update ─────────────────────
   const updateUserStoryStatus = async (id: string, status: KanbanStatus) => {
     const hu = userStories.find((h) => h.id === id);
-    if (hu) {
-      const oldStatus = hu.status;
-      const lastPosition = userStories.filter((h) => h.status === status).reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
-      await supabase.from("user_stories").update({ status, position: lastPosition }).eq("id", id);
+    if (!hu) return;
+
+    const oldStatus = hu.status;
+    if (oldStatus === status) return;
+
+    const now = new Date().toISOString();
+    const lastPosition = userStories
+      .filter((h) => h.status === status)
+      .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
+
+    // Optimistic: aplica no estado local imediatamente
+    setUserStories((prev) =>
+      prev.map((h) =>
+        h.id === id
+          ? { ...h, status, position: lastPosition, statusChangedAt: now } as any
+          : h,
+      ),
+    );
+
+    try {
+      const updatePayload: any = { status, position: lastPosition };
+      // Grava status_changed_at se a coluna existir (não falha se não existir)
+      try { updatePayload.status_changed_at = now; } catch {}
+
+      const { error } = await supabase
+        .from("user_stories")
+        .update(updatePayload)
+        .eq("id", id);
+
+      if (error) throw error;
+
       if (oldStatus !== status) await runAutomations(id, oldStatus, status);
-      await refreshAll();
+
+      // Refresh silencioso em background para sincronizar position e campos do servidor
+      refreshAll().catch(() => {});
+    } catch (err: any) {
+      // Reverte o estado em caso de erro
+      setUserStories((prev) =>
+        prev.map((h) =>
+          h.id === id ? { ...h, status: oldStatus } as any : h,
+        ),
+      );
+      toast.error("Erro ao mover card: " + (err?.message ?? "tente novamente"));
     }
   };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const reorderUserStories = async (updates: { id: string; position: number }[]) => {
     setUserStories((prev) => prev.map((hu) => { const upd = updates.find((u) => u.id === hu.id); return upd ? { ...hu, position: upd.position } : hu; }));
@@ -420,23 +460,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   };
 
   // ── SPRINTS ───────────────────────────────────────────────────────────────
-
-  /**
-   * addSprint: Cria uma nova sprint SEM desativar as demais.
-   * REGRA: encerramento de sprint é SEMPRE manual via closeSprint().
-   * A nova sprint é criada com is_active=false.
-   */
   const addSprint = async (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     if (!teamId) return;
     const { error } = await supabase.from("sprints").insert({
-      team_id: teamId,
-      name: sprint.name,
-      start_date: sprint.startDate,
-      end_date: sprint.endDate,
-      goal: sprint.goal,
-      is_active: false,
-      closed_at: null,
-      delay_days: null,
+      team_id: teamId, name: sprint.name, start_date: sprint.startDate,
+      end_date: sprint.endDate, goal: sprint.goal, is_active: false,
+      closed_at: null, delay_days: null,
     });
     if (error) { toast.error("Erro ao criar sprint"); return; }
     await refreshAll();
@@ -454,64 +483,31 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     await refreshAll();
   };
 
-  const removeSprint = async (id: string) => {
-    await supabase.from("sprints").delete().eq("id", id);
-    await refreshAll();
-  };
+  const removeSprint = async (id: string) => { await supabase.from("sprints").delete().eq("id", id); await refreshAll(); };
 
-  /**
-   * closeSprint: Encerramento MANUAL e EXPLÍCITO da sprint.
-   * - Marca is_active=false
-   * - Registra closed_at = now()
-   * - Calcula e persiste delay_days
-   */
   const closeSprint = async (id: string) => {
     const sprint = sprints.find((s) => s.id === id);
     if (!sprint) { toast.error("Sprint não encontrada"); return; }
-
     const closedAt  = new Date().toISOString();
     const delayDays = calcDelayDays(sprint.endDate ?? null, closedAt);
-
     const { error } = await supabase.from("sprints").update({
-      is_active:  false,
-      closed_at:  closedAt,
-      delay_days: delayDays,
+      is_active: false, closed_at: closedAt, delay_days: delayDays,
     }).eq("id", id);
-
     if (error) { toast.error("Erro ao encerrar sprint: " + error.message); return; }
-
     if (delayDays > 0) {
       toast.warning(`⚠️ Sprint encerrada com ${delayDays} dia${delayDays > 1 ? "s" : ""} de atraso.`);
     } else {
       toast.success("✅ Sprint encerrada dentro do prazo!");
     }
-
     await refreshAll();
   };
 
-  /**
-   * setActiveSprint: Ativa uma sprint específica.
-   *
-   * CORREÇÃO (2026-05-14): Antes fazia UPDATE is_active=false em TODAS as
-   * sprints do time, zerando inclusive sprints futuras (aguardando).
-   * Agora desativa APENAS a sprint que estava ativa no momento.
-   *
-   * IMPORTANTE: desativar via setActiveSprint NÃO encerra a sprint.
-   * O closed_at e delay_days só são preenchidos via closeSprint().
-   */
   const setActiveSprintFn = async (id: string) => {
     if (!teamId) return;
-
-    // Desativa apenas a sprint atualmente ativa (se houver)
     const currentActive = sprints.find((s) => s.isActive);
     if (currentActive && currentActive.id !== id) {
-      await supabase
-        .from("sprints")
-        .update({ is_active: false })
-        .eq("id", currentActive.id);
+      await supabase.from("sprints").update({ is_active: false }).eq("id", currentActive.id);
     }
-
-    // Ativa a sprint selecionada
     await supabase.from("sprints").update({ is_active: true }).eq("id", id);
     await refreshAll();
   };

@@ -71,6 +71,7 @@ export function ActivityManager() {
     userStories,
     developers,
     activeSprint,
+    sprints,
     loading,
   } = useSprint();
   const { currentTeamId, hasPermission } = useAuth();
@@ -97,30 +98,55 @@ export function ActivityManager() {
   const debouncedSearch = useDebounce(searchFilter);
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const hasFilters = searchFilter !== "" || typeFilter !== "all" || statusFilter !== "all";
+  // "all" = todas as sprints | "active" = sprint ativa | <id> = sprint específica
+  const [sprintFilter, setSprintFilter] = useState("all");
+
+  const hasFilters = searchFilter !== "" || typeFilter !== "all" || statusFilter !== "all" || sprintFilter !== "all";
   const clearFilters = () => {
     setSearchFilter("");
     setTypeFilter("all");
     setStatusFilter("all");
+    setSprintFilter("all");
   };
 
-  const sprintStories = activeSprint ? userStories.filter((hu) => hu.sprintId === activeSprint.id) : [];
+  // HUs disponíveis para o formulário: todas do time (não só da sprint ativa)
+  const allTeamStories = userStories;
+
+  // HUs para exibição de acordo com filtro de sprint
+  const visibleStories = useMemo(() => {
+    if (sprintFilter === "all") return allTeamStories;
+    if (sprintFilter === "active") {
+      return activeSprint
+        ? allTeamStories.filter((hu) => hu.sprintId === activeSprint.id)
+        : [];
+    }
+    return allTeamStories.filter((hu) => hu.sprintId === sprintFilter);
+  }, [allTeamStories, activeSprint, sprintFilter]);
 
   const filteredActivities = useMemo(() => {
-    let acts = activeSprint ? activities.filter((a) => sprintStories.some((hu) => hu.id === a.huId)) : [];
+    // Base: todas as atividades do time
+    let acts = activities;
+
+    // Filtro de sprint: restringe pelas HUs da sprint selecionada
+    if (sprintFilter !== "all") {
+      const visibleHuIds = new Set(visibleStories.map((hu) => hu.id));
+      acts = acts.filter((a) => visibleHuIds.has(a.huId));
+    }
+
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       acts = acts.filter((a) => a.title.toLowerCase().includes(q));
     }
     if (typeFilter !== "all") acts = acts.filter((a) => a.activityType === typeFilter);
-    if (statusFilter === "open") acts = acts.filter((a) => !a.isClosed);
-    if (statusFilter === "closed") acts = acts.filter((a) => a.isClosed);
+    if (statusFilter === "open")   acts = acts.filter((a) => !a.isClosed);
+    if (statusFilter === "closed") acts = acts.filter((a) =>  a.isClosed);
+
     // Abertas primeiro; dentro de cada grupo, data decrescente
     return [...acts].sort((a, b) => {
       if (a.isClosed !== b.isClosed) return a.isClosed ? 1 : -1;
       return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
     });
-  }, [activities, activeSprint, sprintStories, debouncedSearch, typeFilter, statusFilter]);
+  }, [activities, visibleStories, sprintFilter, debouncedSearch, typeFilter, statusFilter]);
 
   const {
     paginatedItems: pageActivities,
@@ -248,6 +274,10 @@ export function ActivityManager() {
 
   if (loading) return <SkeletonList count={5} variant="row" />;
 
+  const noHUs   = allTeamStories.length === 0;
+  const noDevs  = developers.length === 0;
+  const canCreate = !noHUs && !noDevs;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -266,7 +296,7 @@ export function ActivityManager() {
             }}
           >
             <DialogTrigger asChild>
-              <Button size="sm" className="gap-1.5" disabled={sprintStories.length === 0 || developers.length === 0}>
+              <Button size="sm" className="gap-1.5" disabled={!canCreate}>
                 <Plus className="h-4 w-4" /> Nova Atividade
               </Button>
             </DialogTrigger>
@@ -339,7 +369,7 @@ export function ActivityManager() {
                       <SelectValue placeholder="Selecione a HU" />
                     </SelectTrigger>
                     <SelectContent>
-                      {sprintStories.map((hu) => {
+                      {allTeamStories.map((hu) => {
                         const used = getTotalHoursForHU(activities, hu.id);
                         return (
                           <SelectItem key={hu.id} value={hu.id}>
@@ -464,6 +494,33 @@ export function ActivityManager() {
             className="pl-8 h-8 text-xs"
           />
         </div>
+
+        {/* Filtro de Sprint */}
+        <Select
+          value={sprintFilter}
+          onValueChange={(v) => {
+            setSprintFilter(v);
+            setCurrentPage(1);
+          }}
+        >
+          <SelectTrigger className="h-8 w-[150px] text-xs">
+            <SelectValue placeholder="Sprint" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as sprints</SelectItem>
+            {activeSprint && (
+              <SelectItem value="active">🟢 Sprint ativa</SelectItem>
+            )}
+            {sprints
+              .filter((s) => !s.isActive)
+              .map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+
         <Select
           value={typeFilter}
           onValueChange={(v) => {
@@ -514,18 +571,32 @@ export function ActivityManager() {
         )}
       </div>
 
-      {(sprintStories.length === 0 || developers.length === 0) && (
+      {/* EmptyStates com mensagens corretas */}
+      {noDevs && (
         <EmptyState
           icon={ListTodo}
-          title={developers.length === 0 ? "Cadastre membros do time primeiro" : "Crie User Stories primeiro"}
+          title="Cadastre membros do time primeiro"
+          description="Adicione desenvolvedores na aba Equipe para criar atividades."
         />
       )}
 
-      {sprintStories.length > 0 && developers.length > 0 && totalItems === 0 && (
+      {!noDevs && noHUs && (
         <EmptyState
           icon={ListTodo}
-          title="Nenhum item encontrado"
-          description={hasFilters ? "Tente ajustar os filtros" : "Crie atividades para as User Stories da sprint"}
+          title="Nenhuma User Story cadastrada"
+          description="Crie User Stories no Backlog para poder registrar atividades."
+        />
+      )}
+
+      {canCreate && totalItems === 0 && (
+        <EmptyState
+          icon={ListTodo}
+          title="Nenhuma atividade encontrada"
+          description={
+            hasFilters
+              ? "Tente ajustar os filtros ou limpe para ver todas as atividades."
+              : "Clique em \"Nova Atividade\" para registrar a primeira atividade do time."
+          }
         />
       )}
 

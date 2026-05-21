@@ -1,12 +1,8 @@
 /**
- * SEC-003 — Edge Function: delete-user (hardened)
+ * SEC-003 + SEC-004 — Edge Function: delete-user (hardened)
  *
- * Correções aplicadas:
- *   1. CORS restrito ao SITE_URL (não mais "*")
- *   2. Verificação obrigatória de admin antes de deletar
- *   3. Validação UUID do user_id
- *   4. Audit log registrado ANTES da deleção (após deleção o user_id some)
- *   5. Impede auto-deleção (admin deletando a si mesmo)
+ * SEC-003: CORS restrito, validação UUID, audit log, impede auto-deleção
+ * SEC-004: Migrado de SUPABASE_SERVICE_ROLE_KEY para SUPABASE_SECRET_KEYS
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -21,6 +17,17 @@ const corsHeaders = {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// SEC-004: novas env vars (com fallback para compatibilidade durante transição)
+const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
+const _secretKeys   = Deno.env.get("SUPABASE_SECRET_KEYS");
+const _publishKeys  = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+const SERVICE_KEY   = _secretKeys
+  ? JSON.parse(_secretKeys).service_role
+  : Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON_KEY      = _publishKeys
+  ? JSON.parse(_publishKeys).anon
+  : Deno.env.get("SUPABASE_ANON_KEY")!;
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -32,10 +39,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
-
     // ── 1. Autenticação ────────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -87,7 +90,6 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 5. Audit log ANTES de deletar ─────────────────────────────────────
-    // (após deleteUser o registro em auth.users some — auditamos antes)
     const { data: targetProfile } = await adminClient
       .from("profiles")
       .select("email, full_name")

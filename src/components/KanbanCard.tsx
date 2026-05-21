@@ -138,16 +138,10 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
   const [editMounted,     setEditMounted]     = useState(false);
   const [impedimentOpen,  setImpedimentOpen]  = useState(false);
 
-<<<<<<< HEAD
   const openQuick   = useCallback(() => { setQuickMounted(true);   setQuickOpen(true);   }, []);
   const openPreview = useCallback(() => { setPreviewMounted(true); setPreviewOpen(true); }, []);
   const openEdit    = useCallback(() => { setEditMounted(true);    setEditOpen(true);    }, []);
-=======
-  function openQuick()   { setQuickMounted(true);   setQuickOpen(true); }
-  function openPreview() { setPreviewMounted(true);  setPreviewOpen(true); }
-  function openEdit()    { setEditMounted(true);     setEditOpen(true); }
   // ─────────────────────────────────────────────────────────────────────────
->>>>>>> origin/main
 
   const [expanded,            setExpanded]            = useState(false);
   const [impedimentReason,    setImpedimentReason]    = useState("");
@@ -230,11 +224,7 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
           }}
         >
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
-<<<<<<< HEAD
             {/* Código + bug + prioridade + aging */}
-=======
-            {/* Código + bug + prioridade */}
->>>>>>> origin/main
             <div className="flex items-start justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-[10px] font-mono text-muted-foreground">{hu.code}</span>

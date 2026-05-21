@@ -1,12 +1,12 @@
-# SEC-001 — Security Hardening
+# Segurança — SprintFlow
 
-## Visão Geral
-
-Este documento descreve as medidas de segurança implementadas no epic `perf-security-hardening`.
+> Documento unificado: SEC-001 (headers + sanitização) e SEC-002 (RLS audit + rate limiting)
 
 ---
 
-## 1. HTTP Security Headers
+## SEC-001 — Security Hardening
+
+### HTTP Security Headers
 
 Configurados em `public/_headers` (Netlify/Cloudflare) e `vercel.json` (Vercel).
 
@@ -25,7 +25,7 @@ Configurados em `public/_headers` (Netlify/Cloudflare) e `vercel.json` (Vercel).
 ```
 default-src 'self'
 script-src  'self' 'strict-dynamic'
-style-src   'self' 'unsafe-inline'       ← necessário para Tailwind/shadcn
+style-src   'self' 'unsafe-inline'
 img-src     'self' data: blob: https:
 font-src    'self' data:
 connect-src 'self' https://*.supabase.co wss://*.supabase.co
@@ -36,60 +36,115 @@ form-action 'self'
 upgrade-insecure-requests
 ```
 
----
+### Utilitários (`src/lib/security.ts`)
 
-## 2. Input Sanitization (`src/lib/security.ts`)
+- `sanitizeInput(value, maxLength)` — strip HTML, scripts e handlers `on*`
+- `checkRateLimit(key, limit, windowMs)` — rate limiter client-side
+- `maskEmail / maskToken` — ofuscação em logs
+- `generateNonce()` — nonce CSP dinâmico
+- `ensureNoIframe()` — frame buster
 
-- `sanitizeInput(value, maxLength)` — remove tags HTML, `<script>`, handlers `on*` e `javascript:`
-- Aplicar em todos os campos de texto livre antes de persistir no Supabase
-
-```ts
-import { sanitizeInput } from "@/lib/security";
-const safe = sanitizeInput(userInput, 500);
-```
-
----
-
-## 3. Rate Limiting Client-Side (`src/lib/security.ts`)
-
-> ⚠️ Rate limiting client-side é uma camada de UX, não de segurança real.
-> Para proteção real, use Row Level Security (RLS) e rate limiting no Supabase Edge Functions.
-
-```ts
-import { checkRateLimit } from "@/lib/security";
-
-const handleSubmit = () => {
-  if (!checkRateLimit("form_submit", 5, 60_000)) {
-    toast.error("Muitas tentativas. Aguarde 1 minuto.");
-    return;
-  }
-  // ... continua
-};
-```
-
----
-
-## 4. Idle Session Guard
-
-- `IdleSessionGuard` + `useIdleTimeout` — auto-logout após 30min de inatividade
-- Aviso modal 2min antes do logout
-- Ativado apenas quando há sessão ativa
-
----
-
-## 5. Env Validation (`src/lib/envValidation.ts`)
+### Env Validation
 
 ```ts
 // main.tsx
 import { validateEnvVars } from "@/lib/envValidation";
-validateEnvVars(); // lança erro em produção se vars ausentes
+validateEnvVars();
 ```
 
 ---
 
-## 6. Próximos Passos (fora do escopo desta PR)
+## SEC-002 — RLS Audit & Server-Side Rate Limiting
 
-- [ ] RLS audit — revisar todas as policies do Supabase
-- [ ] Edge Function rate limiting para auth endpoints
+### RLS Audit
+
+Migration: `supabase/migrations/20260520220000_sec002_rls_audit.sql`
+
+#### Tabelas auditadas e políticas aplicadas
+
+| Tabela | RLS | SELECT | INSERT | UPDATE | DELETE |
+|---|---|---|---|---|---|
+| `profiles` | ✅ | own + admin | own | own + admin | admin |
+| `team_members` | ✅ | team + admin | self/admin | admin | admin |
+| `sprints` | ✅ | team + admin | team + admin | team + admin | admin |
+| `user_stories` | ✅ | team (via sprint) + admin | team + admin | team + admin | team + admin |
+| `activities` | ✅ | team (via HU) + admin | próprio profile + admin | próprio + admin | próprio + admin |
+| `impediments` | ✅ | team (via HU) + admin | team + admin | team + admin | admin |
+| `sprint_impediments` | ✅ | team + admin | team + admin | team + admin | admin |
+| `apf_generations` | ✅ | próprio + admin | próprio | próprio + admin | próprio + admin |
+| `rdm_demandas` | ✅ | participante/responsável/admin | autenticado | responsável + admin | admin |
+| `rdm_participantes` | ✅ | participante/responsável/admin | responsável + admin | — | responsável + admin |
+| `rdm_fases` | ✅ | autenticado | admin | admin | admin |
+| `rdm_checklist_*` | ✅ | autenticado | admin | admin | admin |
+| `rdm_deployment_*` | ✅ | autenticado | admin | admin | admin |
+| `user_module_roles` | ✅ | próprio + admin | admin | admin | admin |
+| `user_management_audit_log` | ✅ | admin | via SECURITY DEFINER | — | — |
+
+#### Query de validação (Supabase SQL Editor)
+
+```sql
+-- Tabelas SEM RLS no schema public:
+SELECT tablename FROM pg_tables
+WHERE schemaname = 'public' AND NOT rowsecurity
+ORDER BY tablename;
+
+-- Tabelas com RLS mas SEM nenhuma policy (bloqueio total acidental):
+SELECT t.tablename
+FROM pg_tables t
+LEFT JOIN pg_policies p
+  ON p.tablename = t.tablename AND p.schemaname = 'public'
+WHERE t.schemaname = 'public' AND t.rowsecurity AND p.policyname IS NULL
+ORDER BY t.tablename;
+```
+
+---
+
+### Rate Limiting — Edge Function
+
+Edge Function: `supabase/functions/auth-rate-limiter/index.ts`
+
+#### Limites por endpoint
+
+| Endpoint | Máx. requisições | Janela |
+|---|---|---|
+| `login` | 10 | 60s |
+| `signup` | 5 | 60s |
+| `reset_password` | 3 | 300s |
+| `otp` | 5 | 60s |
+| `default` | 20 | 60s |
+
+#### Integração no frontend
+
+```ts
+import { checkAuthRateLimit } from "@/lib/authRateLimiter";
+
+const { allowed, retryAfter } = await checkAuthRateLimit("login");
+if (!allowed) {
+  toast.error(`Muitas tentativas. Aguarde ${retryAfter}s.`);
+  return;
+}
+await supabase.auth.signInWithPassword({ email, password });
+```
+
+#### Deploy da Edge Function
+
+```bash
+# Via Supabase CLI
+supabase functions deploy auth-rate-limiter --project-ref SEU_PROJECT_REF
+
+# Variáveis de ambiente (opcional — ativa Redis para produção):
+supabase secrets set UPSTASH_REDIS_REST_URL=https://...
+supabase secrets set UPSTASH_REDIS_REST_TOKEN=...
+supabase secrets set SITE_URL=https://seudominio.com
+```
+
+> ⚠️ Sem as variáveis Redis, a função usa armazenamento in-memory (cada instância independente). Para produção com múltiplas instâncias, configure o Upstash Redis.
+
+---
+
+## Próximos Passos (SEC-003+)
+
 - [ ] Supabase Vault para secrets sensíveis
-- [ ] Audit log de ações administrativas
+- [ ] Audit log de ações administrativas via trigger (todas as tabelas críticas)
+- [ ] PITR (Point-in-Time Recovery) habilitado no projeto Supabase
+- [ ] Revisão periódica de policies com `pg_policies` view

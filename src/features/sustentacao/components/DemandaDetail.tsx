@@ -576,15 +576,16 @@ export function DemandaDetail({
   };
 
   const handleAddHour = async () => {
-    if (!hourForm.horas || hourForm.horas <= 0) {
+    const horasDecimal = hhmmToDecimal(hourForm.horas);
+    if (!horasDecimal || horasDecimal <= 0) {
       toast.error("Informe um tempo válido.");
       return;
     }
     const created_at = hourForm.data
       ? new Date(hourForm.data + "T12:00:00").toISOString()
       : undefined;
-    await addHour({ horas: hourForm.horas, fase: hourForm.fase, descricao: hourForm.descricao, created_at });
-    setHourForm({ horas: 0, fase: "execucao", descricao: "", data: todayISO() });
+    await addHour({ horas: horasDecimal, fase: hourForm.fase, descricao: hourForm.descricao, created_at });
+    setHourForm({ horas: "", fase: "execucao", descricao: "", data: todayISO() });
   };
 
   const handleSearch = async (q: string) => {

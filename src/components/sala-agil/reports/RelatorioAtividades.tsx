@@ -176,7 +176,10 @@ const PDF = {
   OPEN_BG:      [254, 243, 199] as [number,number,number],
 };
 
-const COL = { DATE: 38, ACTIVITY: 139, STATUS: 38, HOURS: 38 };
+// Tabela do PDF tem 3 colunas visíveis por linha de atividade:
+// DESCRIÇÃO ATIVIDADE | STATUS | HORAS
+// A DATA fica como linha-cabeçalho de grupo (colSpan=3) com o total do dia na 3ª coluna.
+const COL = { ACTIVITY: 177, STATUS: 38, HOURS: 38 };
 
 async function buildPDFBlob(
   memberMetrics: ReturnType<typeof buildMemberMetrics>,
@@ -213,6 +216,7 @@ async function buildPDFBlob(
   targets.forEach((member, idx) => {
     if (idx > 0) doc.addPage();
 
+    // ── Cabeçalho verde ──────────────────────────────────────────────────────
     doc.setFillColor(...AGIL_PRIMARY);
     doc.rect(0, 0, W, 26, "F");
     doc.setTextColor(255, 255, 255);
@@ -227,6 +231,7 @@ async function buildPDFBlob(
 
     let y = 31;
 
+    // ── Card do membro ───────────────────────────────────────────────────────
     const cardH = periodoLabel ? 24 : 18;
     doc.setFillColor(...PDF.LIGHT_BG);
     doc.roundedRect(ML, y, CW, cardH, 2, 2, "F");
@@ -251,6 +256,7 @@ async function buildPDFBlob(
     );
     y += cardH + 5;
 
+    // ── KPIs ─────────────────────────────────────────────────────────────────
     doc.setTextColor(...PDF.DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
     doc.text("RESUMO DO MEMBRO", ML, y);
     y += 3;
@@ -274,12 +280,52 @@ async function buildPDFBlob(
     });
     y += 20;
 
+    // ── Tabela de detalhamento ────────────────────────────────────────────────
+    // Estrutura por grupo de data:
+    //
+    //  ┌────────────────────────────────────┬──────────┬──────────┐
+    //  │ 📅 21/05/2026                       │          │  4h 30min│  ← linha-cabeçalho do dia (colSpan=2 + col horas)
+    //  ├────────────────────────────────────┬──────────┬──────────┤
+    //  │ Daily - Time Ágil                  │ Concluída│ 0h 30min │  ← atividade
+    //  │ Projeto SonarQube x IA             │ Concluída│ 1h 30min │
+    //  │ ...                                │ ...      │ ...      │
+    //  └────────────────────────────────────┴──────────┴──────────┘
+
     const dateGroups = groupByDataInicio(acts);
     const body: any[][] = [];
 
     for (const group of dateGroups) {
       const dateFmt = group.date ? fmtDatePDF(group.date) : "Sem data";
 
+      // ── Linha-cabeçalho do dia: DATA (colSpan=2) + TOTAL DO DIA (col horas) ──
+      body.push([
+        {
+          content: dateFmt,
+          colSpan: 2,
+          styles: {
+            fillColor: PDF.DAY_DATE_BG,
+            textColor: PDF.DAY_DATE_TXT,
+            fontStyle: "bold",
+            fontSize: 8.5,
+            cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 3 },
+            valign: "middle",
+          },
+        },
+        {
+          content: formatMinutes(group.totalMin),
+          styles: {
+            fillColor: PDF.DAY_DATE_BG,
+            textColor: AGIL_PRIMARY,
+            fontStyle: "bold",
+            fontSize: 9,
+            halign: "right",
+            cellPadding: { top: 3.5, bottom: 3.5, left: 2, right: 4 },
+            valign: "middle",
+          },
+        },
+      ]);
+
+      // ── Linhas de atividades (sem coluna de data) ─────────────────────────
       group.rows.forEach((r: any, ri: number) => {
         const isDone    = !!r.status;
         const statusTxt = isDone ? "Concluída" : "Em aberto";
@@ -289,23 +335,12 @@ async function buildPDFBlob(
 
         body.push([
           {
-            content: ri === 0 ? dateFmt : "",
-            styles: {
-              fontStyle: ri === 0 ? "bold" : "normal",
-              fontSize: ri === 0 ? 8 : 7.5,
-              textColor: ri === 0 ? PDF.DAY_DATE_TXT : PDF.MUTED,
-              fillColor: ri === 0 ? PDF.DAY_DATE_BG  : rowBg,
-              cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 2 },
-              valign: "middle",
-            },
-          },
-          {
             content: r.titulo,
             styles: {
               fontStyle: "normal",
               fontSize: 8,
               fillColor: rowBg,
-              cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+              cellPadding: { top: 2.5, bottom: 2.5, left: 5, right: 3 },
             },
           },
           {
@@ -332,36 +367,10 @@ async function buildPDFBlob(
           },
         ]);
       });
-
-      body.push([
-        {
-          content: "TOTAL DO DIA",
-          colSpan: 3,
-          styles: {
-            fillColor: PDF.DAY_TOTAL_BG,
-            textColor: PDF.MUTED,
-            fontStyle: "bold",
-            fontSize: 7.5,
-            cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
-          },
-        },
-        {
-          content: formatMinutes(group.totalMin),
-          styles: {
-            fillColor: PDF.DAY_TOTAL_BG,
-            textColor: AGIL_PRIMARY,
-            fontStyle: "bold",
-            fontSize: 9,
-            halign: "right",
-            cellPadding: { top: 3, bottom: 3, left: 2, right: 4 },
-          },
-        },
-      ]);
     }
 
     autoTable(doc, {
       head: [[
-        { content: "DATA INÍCIO",         styles: { halign: "left"   } },
         { content: "DESCRIÇÃO ATIVIDADE", styles: { halign: "left"   } },
         { content: "STATUS",              styles: { halign: "center" } },
         { content: "HORAS",               styles: { halign: "right"  } },
@@ -380,13 +389,12 @@ async function buildPDFBlob(
         textColor: 255,
         fontStyle: "bold",
         fontSize: 8,
-        cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+        cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 4 },
       },
       columnStyles: {
-        0: { cellWidth: COL.DATE,     textColor: PDF.DAY_DATE_TXT },
-        1: { cellWidth: COL.ACTIVITY },
-        2: { cellWidth: COL.STATUS,   halign: "center" },
-        3: { cellWidth: COL.HOURS,    halign: "right", fontStyle: "bold", textColor: AGIL_PRIMARY },
+        0: { cellWidth: COL.ACTIVITY },
+        1: { cellWidth: COL.STATUS,  halign: "center" },
+        2: { cellWidth: COL.HOURS,   halign: "right", fontStyle: "bold", textColor: AGIL_PRIMARY },
       },
       margin: { left: ML, right: MR },
       tableLineColor: PDF.BORDER,
@@ -394,6 +402,7 @@ async function buildPDFBlob(
       rowPageBreak: "avoid",
     });
 
+    // ── Rodapé resumo ─────────────────────────────────────────────────────────
     const finalY = (doc as any).lastAutoTable.finalY + 8;
     const pageH  = doc.internal.pageSize.getHeight();
 
@@ -415,6 +424,7 @@ async function buildPDFBlob(
       ML + CW - 4, summaryY + 9, { align: "right" },
     );
 
+    // ── Paginação ─────────────────────────────────────────────────────────────
     const totalPages = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);

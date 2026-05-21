@@ -97,8 +97,10 @@ function fmtH(val: number | string | null | undefined): string {
   return formatMinutes(toMin(val));
 }
 
+// Prioridade: start_date > end_date > created_at
+// start_date é o campo mais semântico para "data de início da atividade"
 function lancamentoDate(act: any): string {
-  return (act.created_at || act.start_date || act.end_date || "").slice(0, 10);
+  return (act.start_date || act.end_date || act.created_at || "").slice(0, 10);
 }
 
 interface DayGroup {
@@ -146,10 +148,11 @@ interface DateGroup {
   totalMin: number;
 }
 
-// FIX: lê row.lancamento (já mapeado no tableData) em vez de lancamentoDate(row)
+// Agrupa por row.lancamento (já mapeado no tableData via lancamentoDate)
 function groupByDataInicio(acts: any[]): DateGroup[] {
   const dateMap = new Map<string, any[]>();
   for (const row of acts) {
+    // row.lancamento já é a string ISO "YYYY-MM-DD" mapeada no tableData
     const date = (row.lancamento || "").slice(0, 10);
     if (!dateMap.has(date)) dateMap.set(date, []);
     dateMap.get(date)!.push(row);
@@ -283,13 +286,15 @@ async function buildPDFBlob(
     // ── Tabela de detalhamento ────────────────────────────────────────────────
     // Estrutura por grupo de data:
     //
-    //  ┌────────────────────────────────────┬──────────┬──────────┐
-    //  │ 📅 21/05/2026                       │          │  4h 30min│  ← linha-cabeçalho do dia (colSpan=2 + col horas)
-    //  ├────────────────────────────────────┬──────────┬──────────┤
-    //  │ Daily - Time Ágil                  │ Concluída│ 0h 30min │  ← atividade
-    //  │ Projeto SonarQube x IA             │ Concluída│ 1h 30min │
-    //  │ ...                                │ ...      │ ...      │
-    //  └────────────────────────────────────┴──────────┴──────────┘
+    //  ┌─────────────────────────────────────────────────┬──────────┐
+    //  │ 📅 21/05/2026 (colSpan=2)                        │ 4h 30min │  ← linha-cabeçalho do dia
+    //  ├────────────────────────────────────┬────────────┼──────────┤
+    //  │ Daily - Time Ágil                  │ Concluída  │ 0h 30min │
+    //  │ Projeto SonarQube x IA             │ Concluída  │ 1h 30min │
+    //  │ Sprint Planning                    │ Concluída  │ 1h 00min │
+    //  ├─────────────────────────────────────────────────┼──────────┤
+    //  │ 📅 22/05/2026 (colSpan=2)                        │ 3h 00min │
+    //  │ ...                                │ ...        │ ...      │
 
     const dateGroups = groupByDataInicio(acts);
     const body: any[][] = [];
@@ -300,7 +305,7 @@ async function buildPDFBlob(
       // ── Linha-cabeçalho do dia: DATA (colSpan=2) + TOTAL DO DIA (col horas) ──
       body.push([
         {
-          content: dateFmt,
+          content: `📅  ${dateFmt}`,
           colSpan: 2,
           styles: {
             fillColor: PDF.DAY_DATE_BG,
@@ -517,6 +522,19 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     if (filters.type     !== "all") acts = acts.filter((a: any) => a.activity_type === filters.type);
     if (filters.status === "done")  acts = acts.filter((a: any) =>  a.is_closed);
     if (filters.status === "open")  acts = acts.filter((a: any) => !a.is_closed);
+    // Filtro por período usando start_date (mesma lógica do lancamentoDate)
+    if (filters.dateFrom) {
+      acts = acts.filter((a: any) => {
+        const d = (a.start_date || a.end_date || a.created_at || "").slice(0, 10);
+        return d >= filters.dateFrom;
+      });
+    }
+    if (filters.dateTo) {
+      acts = acts.filter((a: any) => {
+        const d = (a.start_date || a.end_date || a.created_at || "").slice(0, 10);
+        return d <= filters.dateTo;
+      });
+    }
     return acts;
   }, [rawData, filters]);
 
@@ -582,6 +600,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         sprint:      sprint?.name || "—",
         hu:          hu?.code     || "—",
         horas:       a.hours,
+        // lancamentoDate usa start_date > end_date > created_at
         lancamento:  lancamentoDate(a),
         status:      a.is_closed,
         _code:       a.code       || "",

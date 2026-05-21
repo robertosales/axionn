@@ -245,10 +245,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
   const [activeId, setActiveId]       = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
-<<<<<<< HEAD
-=======
   // ── #5: Colunas expandidas persistidas em sessionStorage ─────────────────
->>>>>>> origin/main
   const allColKeys = useMemo(
     () => (workflowColumns ?? []).map((c: WorkflowColumn) => c.key),
     [workflowColumns],
@@ -258,27 +255,16 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     () => loadExpandedCols(allColKeys),
   );
 
-<<<<<<< HEAD
-  useEffect(() => {
-    if (allColKeys.length === 0) return;
-    setExpandedCols((prev) => {
-      if (prev.size > 0) return prev;
-=======
   // Quando workflowColumns chegar (assíncrono), re-hidrata se o estado ainda for vazio
   useEffect(() => {
     if (allColKeys.length === 0) return;
     setExpandedCols((prev) => {
       if (prev.size > 0) return prev; // já hidratado
->>>>>>> origin/main
       return loadExpandedCols(allColKeys);
     });
   }, [allColKeys.join(",")]);
 
-<<<<<<< HEAD
   const toggleCol = useCallback((key: string) => {
-=======
-  function toggleCol(key: string) {
->>>>>>> origin/main
     setExpandedCols((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -286,12 +272,8 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       saveExpandedCols(next, allColKeys);
       return next;
     });
-<<<<<<< HEAD
   }, [allColKeys]);
-=======
-  }
   // ─────────────────────────────────────────────────────────────────────────
->>>>>>> origin/main
 
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
   const [finalizeOpen, setFinalizeOpen]     = useState(false);

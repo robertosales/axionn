@@ -376,10 +376,7 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
       </ContextMenuContent>
     </ContextMenu>
 
-<<<<<<< HEAD
-=======
     {/* ── #10: Lazy mount — só renderiza após primeira abertura ─────────── */}
->>>>>>> origin/main
     {previewMounted && (
       <HUPreviewSheet
         hu={hu}
@@ -396,10 +393,7 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
         onClose={() => setEditOpen(false)}
       />
     )}
-<<<<<<< HEAD
-=======
     {/* ─────────────────────────────────────────────────────────────────── */}
->>>>>>> origin/main
 
     <AlertDialog open={impedimentOpen} onOpenChange={(o) => { if (!o) { setImpedimentOpen(false); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); } }}>
       <AlertDialogContent>
@@ -447,10 +441,7 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
       </AlertDialogContent>
     </AlertDialog>
 
-<<<<<<< HEAD
-=======
     {/* QuickActivity também em lazy mount */}
->>>>>>> origin/main
     {quickMounted && (
       <QuickActivityDialog open={quickOpen} onClose={() => setQuickOpen(false)} huId={hu.id} />
     )}

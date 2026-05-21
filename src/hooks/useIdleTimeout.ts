@@ -1,101 +1,84 @@
 /**
- * useIdleTimeout — detecta inatividade do usuário e dispara callbacks.
+ * SEC-001 — useIdleTimeout
  *
- * Monitora: mousemove, mousedown, keydown, touchstart, scroll, click
- * Fluxo:
- *   0 ──────────── 4min (IDLE_TIMEOUT - WARNING_BEFORE) ──── onWarn ──── 5min ──── onIdle
+ * Detecta inatividade do usuário e dispara callbacks de aviso e logout.
  *
- * Uso:
- *   useIdleTimeout({ onWarn, onIdle, onReset })
+ * Eventos monitorados: mousemove, keydown, touchstart, click, scroll
+ *
+ * @param onWarn  - Chamado N segundos antes do timeout (exibe modal)
+ * @param onIdle  - Chamado quando o timeout é atingido (faz logout)
+ * @param onReset - Chamado quando o usuário volta a interagir
+ * @param enabled - Ativa/desativa o guard (false quando não há sessão)
+ * @param timeoutMs  - Tempo de inatividade para logout (padrão: 30min)
+ * @param warningMs  - Antecedência do aviso antes do logout (padrão: 2min)
  */
 import { useEffect, useRef, useCallback } from "react";
 
-const IDLE_TIMEOUT_MS   = 5 * 60 * 1000; // 5 minutos
-const WARNING_BEFORE_MS = 1 * 60 * 1000; // aviso 60s antes = aos 4min
-
-const ACTIVITY_EVENTS = [
-  "mousemove",
-  "mousedown",
-  "keydown",
-  "touchstart",
-  "scroll",
-  "click",
-] as const;
-
-interface UseIdleTimeoutOptions {
-  /** Chamado quando falta WARNING_BEFORE_MS para o timeout (aviso ao usuário) */
-  onWarn: () => void;
-  /** Chamado quando o timeout completo é atingido (executar signOut) */
-  onIdle: () => void;
-  /** Chamado quando usuário retoma atividade enquanto aviso está visível */
-  onReset: () => void;
-  /** Se false, o hook fica inativo (ex: usuário não logado) */
-  enabled?: boolean;
+interface Options {
+  onWarn:    () => void;
+  onIdle:    () => void;
+  onReset?:  () => void;
+  enabled?:  boolean;
+  timeoutMs?:  number;
+  warningMs?:  number;
 }
+
+const EVENTS = ["mousemove", "keydown", "touchstart", "click", "scroll"] as const;
 
 export function useIdleTimeout({
   onWarn,
   onIdle,
   onReset,
   enabled = true,
-}: UseIdleTimeoutOptions) {
-  const warnTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const idleTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const warningActiveRef = useRef(false);
+  timeoutMs  = 30 * 60 * 1000,
+  warningMs  = 2 * 60 * 1000,
+}: Options) {
+  const idleTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warnTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warnedRef    = useRef(false);
 
   const clearTimers = useCallback(() => {
-    if (warnTimerRef.current)  clearTimeout(warnTimerRef.current);
-    if (idleTimerRef.current)  clearTimeout(idleTimerRef.current);
-    warnTimerRef.current = null;
-    idleTimerRef.current = null;
+    if (idleTimer.current)  clearTimeout(idleTimer.current);
+    if (warnTimer.current)  clearTimeout(warnTimer.current);
   }, []);
 
-  const startTimers = useCallback(() => {
+  const resetTimer = useCallback(() => {
+    if (!enabled) return;
     clearTimers();
-    warnTimerRef.current = setTimeout(() => {
-      warningActiveRef.current = true;
+    warnedRef.current = false;
+
+    warnTimer.current = setTimeout(() => {
+      warnedRef.current = true;
       onWarn();
-      idleTimerRef.current = setTimeout(() => {
-        onIdle();
-      }, WARNING_BEFORE_MS);
-    }, IDLE_TIMEOUT_MS - WARNING_BEFORE_MS);
-  }, [clearTimers, onWarn, onIdle]);
+    }, timeoutMs - warningMs);
+
+    idleTimer.current = setTimeout(() => {
+      onIdle();
+    }, timeoutMs);
+  }, [enabled, clearTimers, onWarn, onIdle, timeoutMs, warningMs]);
 
   const handleActivity = useCallback(() => {
     if (!enabled) return;
-    if (warningActiveRef.current) {
-      // Usuário voltou enquanto aviso estava visível
-      warningActiveRef.current = false;
-      onReset();
+    if (warnedRef.current) {
+      onReset?.();
     }
-    startTimers();
-  }, [enabled, onReset, startTimers]);
+    resetTimer();
+  }, [enabled, resetTimer, onReset]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      clearTimers();
+      return;
+    }
 
-    // Inicia os timers imediatamente ao montar
-    startTimers();
-
-    ACTIVITY_EVENTS.forEach((evt) =>
-      window.addEventListener(evt, handleActivity, { passive: true }),
-    );
+    resetTimer();
+    EVENTS.forEach((e) => window.addEventListener(e, handleActivity, { passive: true }));
 
     return () => {
       clearTimers();
-      ACTIVITY_EVENTS.forEach((evt) =>
-        window.removeEventListener(evt, handleActivity),
-      );
+      EVENTS.forEach((e) => window.removeEventListener(e, handleActivity));
     };
-  }, [enabled, handleActivity, startTimers, clearTimers]);
-
-  /** Permite resetar manualmente (ex: botão "Continuar" no modal) */
-  const resetTimer = useCallback(() => {
-    warningActiveRef.current = false;
-    startTimers();
-  }, [startTimers]);
+  }, [enabled, resetTimer, handleActivity, clearTimers]);
 
   return { resetTimer };
 }
-
-export { IDLE_TIMEOUT_MS, WARNING_BEFORE_MS };

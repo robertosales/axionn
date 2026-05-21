@@ -1,6 +1,6 @@
 import React, { useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SIZE_OPTIONS } from "@/lib/constants";
+import { SIZE_REFERENCES } from "@/lib/sizeReference";
 
 interface Props {
   value: string;
@@ -18,12 +18,10 @@ export const SizeSelector = React.memo(function SizeSelector({ value, onChange, 
         <SelectValue placeholder={placeholder ?? "Tamanho"} />
       </SelectTrigger>
       <SelectContent>
-        {SIZE_OPTIONS.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value}>
-            <span className={`font-semibold ${opt.color ?? ""}`}>{opt.label}</span>
-            {opt.description && (
-              <span className="ml-1.5 text-muted-foreground text-xs">{opt.description}</span>
-            )}
+        {SIZE_REFERENCES.map((opt) => (
+          <SelectItem key={opt.key} value={opt.key}>
+            <span className="font-semibold">{opt.label}</span>
+            <span className="ml-1.5 text-muted-foreground text-xs">{opt.pointsLabel} · {opt.hours}h</span>
           </SelectItem>
         ))}
       </SelectContent>

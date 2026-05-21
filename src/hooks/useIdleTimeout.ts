@@ -24,6 +24,7 @@ interface Options {
 }
 
 const EVENTS = ["mousemove", "keydown", "touchstart", "click", "scroll"] as const;
+export const WARNING_BEFORE_MS = 2 * 60 * 1000;
 
 export function useIdleTimeout({
   onWarn,
@@ -31,7 +32,7 @@ export function useIdleTimeout({
   onReset,
   enabled = true,
   timeoutMs  = 30 * 60 * 1000,
-  warningMs  = 2 * 60 * 1000,
+  warningMs  = WARNING_BEFORE_MS,
 }: Options) {
   const idleTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warnTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);

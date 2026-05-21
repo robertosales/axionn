@@ -117,6 +117,7 @@ export function useApfGenerate() {
   const [generations, setGenerations]               = useState<(ApfGeneration & { template_name?: string })[]>([]);
   const [loadingHistory, setLoadingHistory]         = useState(false);
   const [provider, setProvider]                     = useState<Provider>("lovable");
+  const [apiKey, setApiKey]                         = useState("");
   const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
   const [lastResult, setLastResult] = useState<{
     base64: string;
@@ -150,6 +151,8 @@ export function useApfGenerate() {
     () => templates.find((t) => t.id === selectedTemplateId),
     [templates, selectedTemplateId],
   );
+
+  const providerCfg = useMemo(() => ({ needsKey: false, placeholder: "" }), []);
 
   useEffect(() => {
     if (!selectedTemplate) { setQuestions([]); setAnswers({}); return; }
@@ -277,7 +280,8 @@ export function useApfGenerate() {
     baselineFile, setBaselineFile,
     huFiles, setHuFiles,
     modelFile, setModelFile,
-    provider, setProvider,
+    provider, setProvider, providerCfg,
+    apiKey, setApiKey,
     outputFormat, setOutputFormat,
     generating, canGenerate,
     progressStep,

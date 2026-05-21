@@ -95,20 +95,6 @@ export default defineConfig(({ mode }) => {
            * feature-*     → código de cada módulo de negócio
            */
           manualChunks(id: string) {
-            // ── React core ─────────────────────────────────────────────
-            if (
-              id.includes("node_modules/react/") ||
-              id.includes("node_modules/react-dom/") ||
-              id.includes("node_modules/react-is/")
-            ) {
-              return "react-core";
-            }
-
-            // ── Router ─────────────────────────────────────────────────
-            if (id.includes("node_modules/react-router")) {
-              return "router";
-            }
-
             // ── Supabase ───────────────────────────────────────────────
             if (id.includes("node_modules/@supabase")) {
               return "supabase";
@@ -126,17 +112,6 @@ export default defineConfig(({ mode }) => {
               id.includes("node_modules/victory")
             ) {
               return "charts";
-            }
-
-            // ── Radix UI + Lucide (shadcn) ─────────────────────────────
-            if (
-              id.includes("node_modules/@radix-ui") ||
-              id.includes("node_modules/lucide-react") ||
-              id.includes("node_modules/class-variance-authority") ||
-              id.includes("node_modules/clsx") ||
-              id.includes("node_modules/tailwind-merge")
-            ) {
-              return "ui";
             }
 
             // ── Vendor genérico ────────────────────────────────────────

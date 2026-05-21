@@ -30,6 +30,10 @@ const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   critica: { label: "Crítica", color: "bg-destructive/15 text-destructive border border-destructive/30" },
 };
 
+// Separador canônico compartilhado entre montagem e leitura da descrição.
+// Mantém paridade com HUEditDrawer.tsx.
+const AC_SEPARATOR = "\n\n---\n**Critérios de Aceite:**\n";
+
 export function UserStoryManager() {
   const {
     userStories,
@@ -171,8 +175,10 @@ export function UserStoryManager() {
         : { sizeReference: null, estimatedHours: null, storyPoints: 0 };
 
       const fp = functionPoints ? parseFloat(functionPoints) : null;
+
+      // ✅ FIX: usa AC_SEPARATOR com \n reais (não \\n literais)
       const fullDesc = acceptanceCriteria
-        ? `${description.trim()}\\n\\n---\\n**Critérios de Aceite:**\\n${acceptanceCriteria.trim()}`
+        ? `${description.trim()}${AC_SEPARATOR}${acceptanceCriteria.trim()}`
         : description.trim();
 
       const selectedSprintId = sprintId === "" ? null : sprintId;
@@ -227,7 +233,8 @@ export function UserStoryManager() {
     setEditId(hu.id);
     setTitle(hu.title);
 
-    const parts = (hu.description || "").split("\\n\\n---\\n**Critérios de Aceite:**\\n");
+    // ✅ FIX: usa AC_SEPARATOR com \n reais para split correto
+    const parts = (hu.description || "").split(AC_SEPARATOR);
     setDescription(parts[0] || "");
     setAcceptanceCriteria(parts[1] || "");
 

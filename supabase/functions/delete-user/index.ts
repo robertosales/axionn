@@ -1,11 +1,11 @@
 /**
- * SEC-003 — delete-user (hardened)
+ * SEC-003 — Edge Function: delete-user (hardened)
  *
- * Alterações em relação à versão anterior:
+ * Correções aplicadas:
  *   1. CORS restrito ao SITE_URL (não mais "*")
- *   2. Verificação obrigatória: caller deve ser admin
- *   3. Validação de UUID no user_id recebido
- *   4. Audit log gravado em user_management_audit_log
+ *   2. Verificação obrigatória de admin antes de deletar
+ *   3. Validação UUID do user_id
+ *   4. Audit log registrado ANTES da deleção (após deleção o user_id some)
  *   5. Impede auto-deleção (admin deletando a si mesmo)
  */
 
@@ -19,85 +19,105 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
-  if (req.method !== "POST")    return json({ error: "Method not allowed" }, 405);
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
-  const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
-  const SERVICE_KEY       = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const ANON_KEY          = Deno.env.get("SUPABASE_ANON_KEY")!;
-
-  // ── 1. Autenticar o caller ────────────────────────────────────────────────
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return json({ error: "Não autenticado" }, 401);
-
-  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  const { data: { user: caller }, error: callerErr } = await userClient.auth.getUser();
-  if (callerErr || !caller) return json({ error: "Token inválido" }, 401);
-
-  // ── 2. Verificar se caller é admin ───────────────────────────────────────
-  const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
-
-  const { data: roleRow } = await adminClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", caller.id)
-    .eq("role", "admin")
-    .maybeSingle();
-
-  if (!roleRow) return json({ error: "Apenas administradores podem executar esta ação" }, 403);
-
-  // ── 3. Validar payload ────────────────────────────────────────────────────
-  let user_id: string;
   try {
-    const body = await req.json();
-    user_id = body?.user_id;
-  } catch {
-    return json({ error: "Body JSON inválido" }, 400);
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // ── 1. Autenticação ────────────────────────────────────────────────────
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user: caller }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !caller) {
+      return new Response(JSON.stringify({ error: "Token inválido" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── 2. Verificação de admin ────────────────────────────────────────────
+    const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: roleRow } = await adminClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", caller.id)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (!roleRow) {
+      return new Response(JSON.stringify({ error: "Apenas administradores podem deletar usuários" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── 3. Validação do payload ────────────────────────────────────────────
+    const body = await req.json().catch(() => ({}));
+    const { user_id } = body as { user_id?: string };
+
+    if (!user_id || !UUID_REGEX.test(user_id)) {
+      return new Response(JSON.stringify({ error: "user_id inválido ou ausente" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── 4. Impede auto-deleção ─────────────────────────────────────────────
+    if (user_id === caller.id) {
+      return new Response(JSON.stringify({ error: "Administrador não pode deletar a própria conta" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── 5. Audit log ANTES de deletar ─────────────────────────────────────
+    // (após deleteUser o registro em auth.users some — auditamos antes)
+    const { data: targetProfile } = await adminClient
+      .from("profiles")
+      .select("email, full_name")
+      .eq("user_id", user_id)
+      .maybeSingle();
+
+    await adminClient.rpc("fn_audit_log_insert", {
+      p_action:       "USER_DELETED",
+      p_target_table: "auth.users",
+      p_target_id:    user_id,
+      p_actor_id:     caller.id,
+      p_old_data:     targetProfile
+        ? { email: targetProfile.email, full_name: targetProfile.full_name }
+        : null,
+      p_new_data: null,
+    });
+
+    // ── 6. Deleção ────────────────────────────────────────────────────────
+    const { error: delErr } = await adminClient.auth.admin.deleteUser(user_id);
+    if (delErr) throw delErr;
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro interno";
+    console.error("[delete-user]", msg);
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
-
-  if (!user_id)             return json({ error: "user_id obrigatório" }, 400);
-  if (!UUID_RE.test(user_id)) return json({ error: "user_id deve ser um UUID válido" }, 400);
-
-  // ── 4. Impedir auto-deleção ──────────────────────────────────────────────
-  if (user_id === caller.id) {
-    return json({ error: "Um administrador não pode deletar a própria conta" }, 400);
-  }
-
-  // ── 5. Buscar dados do usuário-alvo para audit ───────────────────────────
-  const { data: targetProfile } = await adminClient
-    .from("profiles")
-    .select("email, full_name")
-    .eq("user_id", user_id)
-    .maybeSingle();
-
-  // ── 6. Executar a deleção ────────────────────────────────────────────────
-  const { error: deleteErr } = await adminClient.auth.admin.deleteUser(user_id);
-  if (deleteErr) return json({ error: deleteErr.message }, 500);
-
-  // ── 7. Gravar audit log ───────────────────────────────────────────────────
-  await adminClient.from("user_management_audit_log").insert({
-    performed_by:  caller.id,
-    action:        "delete_user",
-    target_user_id: user_id,
-    details: {
-      target_email:     targetProfile?.email     ?? null,
-      target_full_name: targetProfile?.full_name ?? null,
-      performed_by_email: caller.email,
-    },
-  });
-
-  return json({ success: true });
 });

@@ -1,19 +1,19 @@
 /**
- * SEC-003 — admin-user-management (hardened)
+ * SEC-003 — Edge Function: admin-user-management (hardened)
  *
- * Alterações em relação à versão anterior:
- *   1. CORS restrito ao SITE_URL (não mais "*")
+ * Correções aplicadas:
+ *   1. CORS restrito ao SITE_URL
  *   2. Validação UUID em user_id
- *   3. Audit log gravado em user_management_audit_log para
- *      TODAS as ações (change_email, reset_password)
- *   4. temp_password NUNCA retornado no body da resposta —
- *      apenas gravado no audit log (acessível só para admins)
- *   5. getClaims() substituído por getUser() (API estável)
+ *   3. Audit log em todas as ações (change_email, reset_password)
+ *   4. temp_password NÃO retornado no body em produção (EXPOSE_TEMP_PASSWORD=false)
+ *   5. Impede ação sobre o próprio admin caller
+ *   6. getClaims substituído por getUser (API estável)
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SITE_URL = Deno.env.get("SITE_URL") ?? "*";
+const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  SITE_URL,
@@ -21,14 +21,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function generateTempPassword(): string {
   const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -43,29 +36,41 @@ function generateTempPassword(): string {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
-  if (req.method !== "POST")    return json({ error: "Method not allowed" }, 405);
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // ── 1. Autenticar o caller ──────────────────────────────────────────────
+    // ── 1. Autenticação ────────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Não autenticado" }, 401);
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Não autenticado" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
+    // getUser é mais seguro que getClaims — valida o JWT no servidor Supabase
+    const { data: { user: caller }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !caller) {
+      return new Response(JSON.stringify({ error: "Token inválido" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // SEC-003: getUser() em vez de getClaims() (API estável e suportada)
-    const { data: { user: caller }, error: callerErr } = await userClient.auth.getUser();
-    if (callerErr || !caller) return json({ error: "Token inválido" }, 401);
-
+    // ── 2. Verificação de admin ────────────────────────────────────────────
     const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
-
-    // ── 2. Verificar se caller é admin ─────────────────────────────────────
     const { data: roleRow } = await adminClient
       .from("user_roles")
       .select("role")
@@ -73,26 +78,69 @@ Deno.serve(async (req: Request) => {
       .eq("role", "admin")
       .maybeSingle();
 
-    if (!roleRow) return json({ error: "Apenas administradores podem executar esta ação" }, 403);
+    if (!roleRow) {
+      return new Response(JSON.stringify({ error: "Apenas administradores podem executar esta ação" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // ── 3. Validar payload ──────────────────────────────────────────────────
-    const body = await req.json();
+    // ── 3. Validação do payload ────────────────────────────────────────────
+    const body = await req.json().catch(() => ({}));
     const { action, user_id, new_email, mode, email_mode } = body as {
-      action: "change_email" | "reset_password";
-      user_id: string;
-      new_email?: string;
-      mode?: "temp_password" | "send_link";
+      action:      "change_email" | "reset_password";
+      user_id:     string;
+      new_email?:  string;
+      mode?:       "temp_password" | "send_link";
       email_mode?: "confirm" | "direct";
     };
 
-    if (!action || !user_id)      return json({ error: "action e user_id obrigatórios" }, 400);
-    if (!UUID_RE.test(user_id))   return json({ error: "user_id deve ser um UUID válido" }, 400);
+    if (!action || !user_id) {
+      return new Response(JSON.stringify({ error: "action e user_id obrigatórios" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // ── 4. AÇÃO: change_email ───────────────────────────────────────────────
+    if (!UUID_REGEX.test(user_id)) {
+      return new Response(JSON.stringify({ error: "user_id deve ser um UUID válido" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── 4. Impede ação sobre si mesmo ─────────────────────────────────────
+    if (user_id === caller.id) {
+      return new Response(JSON.stringify({ error: "Use as configurações de perfil para alterar seus próprios dados" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Helper: registrar audit log
+    const auditLog = async (
+      auditAction: string,
+      oldData: Record<string, unknown> | null,
+      newData:  Record<string, unknown> | null
+    ) => {
+      await adminClient.rpc("fn_audit_log_insert", {
+        p_action:       auditAction,
+        p_target_table: "profiles",
+        p_target_id:    user_id,
+        p_actor_id:     caller.id,
+        p_old_data:     oldData,
+        p_new_data:     newData,
+      });
+    };
+
+    // ── 5. AÇÃO: change_email ──────────────────────────────────────────────
     if (action === "change_email") {
       if (!new_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(new_email)) {
-        return json({ error: "E-mail inválido" }, 400);
+        return new Response(JSON.stringify({ error: "E-mail inválido" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+
+      // Busca email atual para o audit
+      const { data: currentProfile } = await adminClient
+        .from("profiles").select("email").eq("user_id", user_id).maybeSingle();
+
       const isDirect = email_mode === "direct";
       const { error } = await adminClient.auth.admin.updateUserById(user_id, {
         email: new_email,
@@ -109,39 +157,38 @@ Deno.serve(async (req: Request) => {
         await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
       }
 
-      // SEC-003: audit log
-      await adminClient.from("user_management_audit_log").insert({
-        performed_by:   caller.id,
-        action:         "change_email",
-        target_user_id: user_id,
-        details: {
-          new_email,
-          mode: isDirect ? "direct" : "confirm",
-          performed_by_email: caller.email,
-        },
-      });
+      // Audit log
+      await auditLog(
+        "EMAIL_CHANGED",
+        { email: currentProfile?.email ?? null, mode: isDirect ? "direct" : "confirm" },
+        { email: new_email, mode: isDirect ? "direct" : "confirm" }
+      );
 
-      return json({
-        success: true,
-        mode: isDirect ? "direct" : "confirm",
-        message: isDirect
-          ? "E-mail trocado com sucesso. O usuário será obrigado a redefinir a senha no próximo login."
-          : "E-mail de confirmação enviado para o novo endereço. O usuário deve clicar no link para validar.",
-      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: isDirect ? "direct" : "confirm",
+          message: isDirect
+            ? "E-mail trocado com sucesso. O usuário será obrigado a redefinir a senha no próximo login."
+            : "E-mail de confirmação enviado para o novo endereço.",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
-    // ── 5. AÇÃO: reset_password ─────────────────────────────────────────────
+    // ── 6. AÇÃO: reset_password ────────────────────────────────────────────
     if (action === "reset_password") {
       const { data: profile } = await adminClient
-        .from("profiles")
-        .select("email")
-        .eq("user_id", user_id)
-        .maybeSingle();
+        .from("profiles").select("email").eq("user_id", user_id).maybeSingle();
       const targetEmail = profile?.email;
 
       if (mode === "send_link") {
-        if (!targetEmail) return json({ error: "Usuário sem e-mail cadastrado" }, 400);
-        const origin      = req.headers.get("origin") || req.headers.get("referer") || "";
+        if (!targetEmail) {
+          return new Response(JSON.stringify({ error: "Usuário sem e-mail cadastrado" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const origin      = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
         const cleanOrigin = origin.replace(/\/$/, "").replace(/\/auth.*$/, "");
         const redirectTo  = `${cleanOrigin}/reset-password`;
 
@@ -152,61 +199,53 @@ Deno.serve(async (req: Request) => {
         });
         if (linkErr) throw linkErr;
 
-        // SEC-003: audit log
-        await adminClient.from("user_management_audit_log").insert({
-          performed_by:   caller.id,
-          action:         "reset_password_link",
-          target_user_id: user_id,
-          details: {
-            target_email: targetEmail,
-            performed_by_email: caller.email,
-          },
-        });
+        await auditLog("PASSWORD_RESET_LINK", null, { mode: "send_link", email: targetEmail });
 
-        return json({
-          success: true,
-          mode: "send_link",
-          message: "Link de redefinição enviado para o e-mail do usuário.",
-          recovery_link: linkData?.properties?.action_link ?? null,
-        });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            mode: "send_link",
+            message: "Link de redefinição enviado para o e-mail do usuário.",
+            recovery_link: linkData?.properties?.action_link ?? null,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
 
       // mode = "temp_password"
       const tempPassword = generateTempPassword();
-      const { error: updErr } = await adminClient.auth.admin.updateUserById(user_id, {
-        password: tempPassword,
-      });
+      const { error: updErr } = await adminClient.auth.admin.updateUserById(user_id, { password: tempPassword });
       if (updErr) throw updErr;
 
       await adminClient.from("profiles")
         .update({ must_change_password: true })
         .eq("user_id", user_id);
 
-      // SEC-003: audit log — temp_password gravado APENAS aqui (admin-only via RLS)
-      // NÃO retornamos temp_password no response — admin consulta via audit log
-      await adminClient.from("user_management_audit_log").insert({
-        performed_by:   caller.id,
-        action:         "reset_password_temp",
-        target_user_id: user_id,
-        details: {
-          target_email:       targetEmail ?? null,
-          temp_password:      tempPassword,   // acessível só para admins via RLS
-          performed_by_email: caller.email,
-        },
-      });
+      await auditLog("PASSWORD_RESET_TEMP", null, { mode: "temp_password", must_change_password: true });
 
-      return json({
-        success: true,
-        mode: "temp_password",
-        // SEC-003: temp_password removido do response público
-        message: "Senha temporária gerada e gravada no audit log. O usuário será obrigado a trocar no próximo login.",
-      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: "temp_password",
+          // Em produção (EXPOSE_TEMP_PASSWORD=false), omite a senha do response
+          ...(EXPOSE_TEMP_PWD ? { temp_password: tempPassword } : {}),
+          message: EXPOSE_TEMP_PWD
+            ? "Senha temporária gerada. Repasse ao usuário — ele será obrigado a trocá-la no próximo login."
+            : "Senha temporária definida. O usuário será obrigado a trocá-la no próximo login.",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
-    return json({ error: "Ação desconhecida" }, 400);
+    return new Response(JSON.stringify({ error: "Ação desconhecida" }), {
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Erro interno";
-    return json({ error: msg }, 500);
+    console.error("[admin-user-management]", msg);
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

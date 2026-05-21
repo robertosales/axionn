@@ -39,11 +39,7 @@ import type { KanbanFiltros } from "./KanbanFilterBar";
 import { SprintImpedimentsBanner } from "./SprintImpedimentsBanner";
 import { supabase } from "@/integrations/supabase/client";
 
-<<<<<<< HEAD
-// ─── Chaves de sessionStorage ─────────────────────────────────────────────────────────────────────
-=======
 // ─── Chaves de sessionStorage ─────────────────────────────────────────────────
->>>>>>> origin/main
 const SS_FILTROS_KEY   = "kanban_board_filtros";
 const SS_EXPANDED_KEY  = "kanban_board_expanded_cols";
 
@@ -59,7 +55,6 @@ function saveFiltros(f: KanbanFiltros) {
   try { sessionStorage.setItem(SS_FILTROS_KEY, JSON.stringify(f)); } catch {}
 }
 
-<<<<<<< HEAD
 function clearKanbanSession() {
   try {
     sessionStorage.removeItem(SS_FILTROS_KEY);
@@ -70,21 +65,12 @@ function clearKanbanSession() {
 function loadExpandedCols(allKeys: string[]): Set<string> {
   try {
     const raw = sessionStorage.getItem(SS_EXPANDED_KEY);
-    if (!raw) return new Set(allKeys);
-    const parsed = JSON.parse(raw) as string[];
-    const saved = new Set(parsed);
-    allKeys.forEach((k) => { if (!parsed.includes(k) && !parsed.includes(`__hidden__${k}`)) saved.add(k); });
-=======
-function loadExpandedCols(allKeys: string[]): Set<string> {
-  try {
-    const raw = sessionStorage.getItem(SS_EXPANDED_KEY);
     if (!raw) return new Set(allKeys); // padrão: tudo expandido
     const parsed = JSON.parse(raw) as string[];
     // Garante que novas colunas adicionadas após salvar apareçam expandidas
     const saved = new Set(parsed);
     allKeys.forEach((k) => { if (!parsed.includes(k) && !parsed.includes(`__hidden__${k}`)) saved.add(k); });
     // Remove prefixo de colunas explicitamente recolhidas
->>>>>>> origin/main
     const hiddenKeys = parsed.filter((k) => k.startsWith("__hidden__")).map((k) => k.replace("__hidden__", ""));
     hiddenKeys.forEach((k) => saved.delete(k));
     return saved;
@@ -93,10 +79,7 @@ function loadExpandedCols(allKeys: string[]): Set<string> {
 
 function saveExpandedCols(expanded: Set<string>, allKeys: string[]) {
   try {
-<<<<<<< HEAD
-=======
     // Salva expanded + marca os recolhidos com prefixo para distinguir "nunca visto" de "recolhido"
->>>>>>> origin/main
     const payload: string[] = [
       ...Array.from(expanded),
       ...allKeys.filter((k) => !expanded.has(k)).map((k) => `__hidden__${k}`),

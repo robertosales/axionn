@@ -1,117 +1,168 @@
+/**
+ * SEC-003 — Edge Function: admin-user-management (hardened)
+ *
+ * Correções aplicadas:
+ *   1. CORS restrito ao SITE_URL
+ *   2. Validação UUID em user_id
+ *   3. Audit log em todas as ações (change_email, reset_password)
+ *   4. temp_password NÃO retornado no body em produção (EXPOSE_TEMP_PASSWORD=false)
+ *   5. Impede ação sobre o próprio admin caller
+ *   6. getClaims substituído por getUser (API estável)
+ */
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const SITE_URL = Deno.env.get("SITE_URL") ?? "*";
+const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin":  SITE_URL,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function generateTempPassword(): string {
-  // 12 chars: maiúscula + minúscula + dígito + símbolo
-  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lower = "abcdefghijkmnpqrstuvwxyz";
-  const digits = "23456789";
+  const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower   = "abcdefghijkmnpqrstuvwxyz";
+  const digits  = "23456789";
   const symbols = "!@#$%&*";
-  const all = upper + lower + digits + symbols;
-  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  const all     = upper + lower + digits + symbols;
+  const pick    = (s: string) => s[Math.floor(Math.random() * s.length)];
   let pwd = pick(upper) + pick(lower) + pick(digits) + pick(symbols);
   for (let i = 0; i < 8; i++) pwd += pick(all);
   return pwd.split("").sort(() => Math.random() - 0.5).join("");
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // ── Autenticação: exige usuário admin ────────────────────────────────────
+    // ── 1. Autenticação ────────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
-    if (claimsErr || !claims?.claims) {
+    // getUser é mais seguro que getClaims — valida o JWT no servidor Supabase
+    const { data: { user: caller }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !caller) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const callerId = claims.claims.sub;
 
-    const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-
-    // Verifica se o caller é admin
-    const { data: roleRow } = await admin
+    // ── 2. Verificação de admin ────────────────────────────────────────────
+    const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
+    const { data: roleRow } = await adminClient
       .from("user_roles")
       .select("role")
-      .eq("user_id", callerId)
+      .eq("user_id", caller.id)
       .eq("role", "admin")
       .maybeSingle();
+
     if (!roleRow) {
       return new Response(JSON.stringify({ error: "Apenas administradores podem executar esta ação" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const body = await req.json();
+    // ── 3. Validação do payload ────────────────────────────────────────────
+    const body = await req.json().catch(() => ({}));
     const { action, user_id, new_email, mode, email_mode } = body as {
-      action: "change_email" | "reset_password";
-      user_id: string;
-      new_email?: string;
-      mode?: "temp_password" | "send_link";
+      action:      "change_email" | "reset_password";
+      user_id:     string;
+      new_email?:  string;
+      mode?:       "temp_password" | "send_link";
       email_mode?: "confirm" | "direct";
     };
 
     if (!action || !user_id) {
       return new Response(JSON.stringify({ error: "action e user_id obrigatórios" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ── Ação: trocar e-mail (com duplo opt-in nativo do Supabase) ────────────
+    if (!UUID_REGEX.test(user_id)) {
+      return new Response(JSON.stringify({ error: "user_id deve ser um UUID válido" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── 4. Impede ação sobre si mesmo ─────────────────────────────────────
+    if (user_id === caller.id) {
+      return new Response(JSON.stringify({ error: "Use as configurações de perfil para alterar seus próprios dados" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Helper: registrar audit log
+    const auditLog = async (
+      auditAction: string,
+      oldData: Record<string, unknown> | null,
+      newData:  Record<string, unknown> | null
+    ) => {
+      await adminClient.rpc("fn_audit_log_insert", {
+        p_action:       auditAction,
+        p_target_table: "profiles",
+        p_target_id:    user_id,
+        p_actor_id:     caller.id,
+        p_old_data:     oldData,
+        p_new_data:     newData,
+      });
+    };
+
+    // ── 5. AÇÃO: change_email ──────────────────────────────────────────────
     if (action === "change_email") {
       if (!new_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(new_email)) {
         return new Response(JSON.stringify({ error: "E-mail inválido" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Busca email atual para o audit
+      const { data: currentProfile } = await adminClient
+        .from("profiles").select("email").eq("user_id", user_id).maybeSingle();
+
       const isDirect = email_mode === "direct";
-      // direct  → email_confirm: true  → troca imediata, sem e-mail de confirmação
-      // confirm → email_confirm: false → envia e-mail de confirmação ao novo endereço
-      const { error } = await admin.auth.admin.updateUserById(user_id, {
+      const { error } = await adminClient.auth.admin.updateUserById(user_id, {
         email: new_email,
         email_confirm: isDirect,
       });
       if (error) throw error;
 
-      // Sincroniza profiles.email + força troca de senha em modo direto (segurança)
       const profileUpdate: Record<string, unknown> = {};
       if (isDirect) {
         profileUpdate.email = new_email;
         profileUpdate.must_change_password = true;
       }
       if (Object.keys(profileUpdate).length > 0) {
-        await admin.from("profiles").update(profileUpdate).eq("user_id", user_id);
+        await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
       }
+
+      // Audit log
+      await auditLog(
+        "EMAIL_CHANGED",
+        { email: currentProfile?.email ?? null, mode: isDirect ? "direct" : "confirm" },
+        { email: new_email, mode: isDirect ? "direct" : "confirm" }
+      );
 
       return new Response(
         JSON.stringify({
@@ -119,87 +170,82 @@ Deno.serve(async (req) => {
           mode: isDirect ? "direct" : "confirm",
           message: isDirect
             ? "E-mail trocado com sucesso. O usuário será obrigado a redefinir a senha no próximo login."
-            : "E-mail de confirmação enviado para o novo endereço. O usuário deve clicar no link para validar.",
+            : "E-mail de confirmação enviado para o novo endereço.",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // ── Ação: reset de senha ─────────────────────────────────────────────────
+    // ── 6. AÇÃO: reset_password ────────────────────────────────────────────
     if (action === "reset_password") {
-      // Busca o e-mail do usuário-alvo
-      const { data: profile } = await admin
-        .from("profiles")
-        .select("email")
-        .eq("user_id", user_id)
-        .maybeSingle();
+      const { data: profile } = await adminClient
+        .from("profiles").select("email").eq("user_id", user_id).maybeSingle();
       const targetEmail = profile?.email;
 
       if (mode === "send_link") {
         if (!targetEmail) {
           return new Response(JSON.stringify({ error: "Usuário sem e-mail cadastrado" }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const origin = req.headers.get("origin") || req.headers.get("referer") || "";
+        const origin      = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
         const cleanOrigin = origin.replace(/\/$/, "").replace(/\/auth.*$/, "");
-        const redirectTo = `${cleanOrigin}/reset-password`;
+        const redirectTo  = `${cleanOrigin}/reset-password`;
 
-        // Gera link de recuperação. Se o e-mail não estiver configurado,
-        // o link é retornado e mostrado ao admin; caso contrário o Supabase envia.
-        const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+        const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
           type: "recovery",
           email: targetEmail,
           options: { redirectTo },
         });
         if (linkErr) throw linkErr;
 
+        await auditLog("PASSWORD_RESET_LINK", null, { mode: "send_link", email: targetEmail });
+
         return new Response(
           JSON.stringify({
             success: true,
             mode: "send_link",
             message: "Link de redefinição enviado para o e-mail do usuário.",
-            // fallback caso o SMTP não esteja configurado:
             recovery_link: linkData?.properties?.action_link ?? null,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
-      // mode = "temp_password" (default)
+      // mode = "temp_password"
       const tempPassword = generateTempPassword();
-      const { error: updErr } = await admin.auth.admin.updateUserById(user_id, {
-        password: tempPassword,
-      });
+      const { error: updErr } = await adminClient.auth.admin.updateUserById(user_id, { password: tempPassword });
       if (updErr) throw updErr;
 
-      // Marca o profile para forçar troca no próximo login
-      const { error: profErr } = await admin
-        .from("profiles")
+      await adminClient.from("profiles")
         .update({ must_change_password: true })
         .eq("user_id", user_id);
-      if (profErr) throw profErr;
+
+      await auditLog("PASSWORD_RESET_TEMP", null, { mode: "temp_password", must_change_password: true });
 
       return new Response(
         JSON.stringify({
           success: true,
           mode: "temp_password",
-          temp_password: tempPassword,
-          message: "Senha temporária gerada. Repasse ao usuário — ele será obrigado a trocá-la no próximo login.",
+          // Em produção (EXPOSE_TEMP_PASSWORD=false), omite a senha do response
+          ...(EXPOSE_TEMP_PWD ? { temp_password: tempPassword } : {}),
+          message: EXPOSE_TEMP_PWD
+            ? "Senha temporária gerada. Repasse ao usuário — ele será obrigado a trocá-la no próximo login."
+            : "Senha temporária definida. O usuário será obrigado a trocá-la no próximo login.",
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     return new Response(JSON.stringify({ error: "Ação desconhecida" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message ?? "Erro interno" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Erro interno";
+    console.error("[admin-user-management]", msg);
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

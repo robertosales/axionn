@@ -1042,6 +1042,53 @@ export type Database = {
           },
         ]
       }
+      feriados: {
+        Row: {
+          ano: number | null
+          ativo: boolean
+          created_at: string
+          dia: number
+          id: string
+          mes: number
+          nome: string
+          team_id: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ano?: number | null
+          ativo?: boolean
+          created_at?: string
+          dia: number
+          id?: string
+          mes: number
+          nome: string
+          team_id?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          ano?: number | null
+          ativo?: boolean
+          created_at?: string
+          dia?: number
+          id?: string
+          mes?: number
+          nome?: string
+          team_id?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feriados_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       impediments: {
         Row: {
           criticality: string
@@ -2536,6 +2583,35 @@ export type Database = {
           },
         ]
       }
+      team_modules: {
+        Row: {
+          created_at: string
+          id: string
+          module: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_modules_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teams: {
         Row: {
           created_at: string
@@ -2566,6 +2642,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_management_audit_log: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          id: string
+          payload: Json | null
+          target_id: string
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          target_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          target_id?: string
+        }
+        Relationships: []
+      }
       user_module_roles: {
         Row: {
           created_at: string | null
@@ -2588,15 +2691,7 @@ export type Database = {
           role_name?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_module_roles_role_name_fkey"
-            columns: ["role_name"]
-            isOneToOne: false
-            referencedRelation: "app_roles"
-            referencedColumns: ["name"]
-          },
-        ]
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -2638,6 +2733,7 @@ export type Database = {
           sprint_id: string | null
           start_date: string | null
           status: string
+          status_changed_at: string | null
           story_points: number
           team_id: string
           title: string
@@ -2666,6 +2762,7 @@ export type Database = {
           sprint_id?: string | null
           start_date?: string | null
           status?: string
+          status_changed_at?: string | null
           story_points?: number
           team_id: string
           title: string
@@ -2694,6 +2791,7 @@ export type Database = {
           sprint_id?: string | null
           start_date?: string | null
           status?: string
+          status_changed_at?: string | null
           story_points?: number
           team_id?: string
           title?: string
@@ -2778,11 +2876,60 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      ai_provider_keys_status: {
+        Row: {
+          configured: boolean | null
+          created_at: string | null
+          provider: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          configured?: never
+          created_at?: string | null
+          provider?: never
+          updated_at?: string | null
+        }
+        Update: {
+          configured?: never
+          created_at?: string | null
+          provider?: never
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       _assert_team_access: {
         Args: { p_team_ids: string[] }
+        Returns: undefined
+      }
+      calc_imr_periodo: {
+        Args: {
+          p_e8_alerta?: number
+          p_e8_glosa?: number
+          p_fim: string
+          p_inicio: string
+          p_team_id: string
+        }
+        Returns: Json
+      }
+      calc_kpis_sustentacao: {
+        Args: {
+          p_backlog_dias?: number
+          p_sla_risco_h?: number
+          p_team_id: string
+        }
+        Returns: Json
+      }
+      fn_audit_log_insert: {
+        Args: {
+          p_action: string
+          p_actor_id: string
+          p_new_data?: Json
+          p_old_data?: Json
+          p_target_id: string
+          p_target_table: string
+        }
         Returns: undefined
       }
       fn_rdm_criar_com_checklist: {
@@ -2819,6 +2966,7 @@ export type Database = {
         Args: { p_sla_dias?: number; p_team_ids: string[] }
         Returns: Json
       }
+      get_ai_provider_key: { Args: { p_provider: string }; Returns: string }
       get_capacity_planner: {
         Args: {
           p_default_cap?: number
@@ -2840,11 +2988,23 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_feriado: {
+        Args: { p_data: string; p_team_id?: string }
+        Returns: boolean
+      }
       is_team_member: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      set_ai_provider_key: {
+        Args: { p_key: string; p_provider: string }
+        Returns: undefined
+      }
       status_concluidos: { Args: never; Returns: string[] }
+      upsert_demandas_batch: {
+        Args: { p_rows: Json; p_team_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role:

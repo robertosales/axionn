@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Lock, Hexagon } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
+import { checkAuthRateLimit } from "@/lib/authRateLimiter";
 
 const ResetPassword = () => {
   const navigate = useNavigate();
@@ -39,6 +40,19 @@ const ResetPassword = () => {
       return;
     }
     setLoading(true);
+
+    // SEC-002: rate limit para redefinição de senha
+    const { allowed, retryAfter } = await checkAuthRateLimit("reset_password");
+    if (!allowed) {
+      toast.error(
+        retryAfter
+          ? `Muitas tentativas de redefinição. Aguarde ${retryAfter}s.`
+          : "Muitas tentativas. Tente novamente em instantes."
+      );
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
       toast.error(error.message);

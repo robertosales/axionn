@@ -1,36 +1,30 @@
-import { SIZE_REFERENCES, type SizeReference } from "@/lib/sizeReference";
-import { cn } from "@/lib/utils";
+import React, { useCallback } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SIZE_REFERENCES } from "@/lib/sizeReference";
 
-interface SizeSelectorProps {
-  value: string | null;
-  onChange: (size: SizeReference | null) => void;
+interface Props {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  placeholder?: string;
 }
 
-export function SizeSelector({ value, onChange }: SizeSelectorProps) {
+export const SizeSelector = React.memo(function SizeSelector({ value, onChange, className, placeholder }: Props) {
+  const handleChange = useCallback((v: string) => onChange(v), [onChange]);
+
   return (
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium">Pontos</label>
-      <div className="flex gap-2 flex-wrap">
-        {SIZE_REFERENCES.map((size) => {
-          const selected = value === size.key;
-          return (
-            <button
-              key={size.key}
-              type="button"
-              onClick={() => onChange(selected ? null : size)}
-              className={cn(
-                "flex flex-col items-center justify-center rounded-lg border-2 px-3 py-2 min-w-[72px] transition-all text-center cursor-pointer",
-                selected
-                  ? "border-primary bg-primary/10 text-primary shadow-sm"
-                  : "border-border bg-card hover:border-primary/40 hover:bg-muted/50 text-foreground"
-              )}
-            >
-              <span className="text-sm font-bold">{size.label} — {size.hours}h</span>
-              <span className="text-[10px] text-muted-foreground">{size.pointsLabel}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <Select value={value} onValueChange={handleChange}>
+      <SelectTrigger className={className}>
+        <SelectValue placeholder={placeholder ?? "Tamanho"} />
+      </SelectTrigger>
+      <SelectContent>
+        {SIZE_REFERENCES.map((opt) => (
+          <SelectItem key={opt.key} value={opt.key}>
+            <span className="font-semibold">{opt.label}</span>
+            <span className="ml-1.5 text-muted-foreground text-xs">{opt.pointsLabel} · {opt.hours}h</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
-}
+});

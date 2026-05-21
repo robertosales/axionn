@@ -25,10 +25,10 @@ export interface ApfGeneration {
   hu_file: string | null;
   model_file: string | null;
   output_filename: string | null;
-  output_markdown: string | null;  // novo
-  pf_total: number | null;         // novo
-  pf_breakdown: Record<string, number> | null; // novo
-  storage_path: string | null;     // novo
+  output_markdown: string | null;
+  pf_total: number | null;
+  pf_breakdown: Record<string, number> | null;
+  storage_path: string | null;
   status: "pending" | "success" | "error";
   error_message: string | null;
   created_at: string;
@@ -165,7 +165,7 @@ export async function createGeneration(payload: {
 }
 
 /**
- * Retorna a URL públicaa (signed) de um arquivo gerado no Storage
+ * Retorna a URL pública (signed) de um arquivo gerado no Storage
  */
 export async function getGenerationDownloadUrl(
   storagePath: string
@@ -210,14 +210,14 @@ export async function prepareFilesForEdgeFunction(
 
 /**
  * Invoca a Edge Function `apf-generate`.
- * - Envia arquivos binários como base64
- * - Passa generationId para persistência automática no banco
- * - Retorna pfBreakdown e pfTotal além do docx e markdown
+ * SEC-005: apiKey removida — a Edge Function busca a key no Vault (Supabase).
+ * O frontend nunca envia nem armazena API keys de providers de IA.
  */
 export async function invokeApfGeneration(body: {
   prompt: string;
   provider: string;
-  apiKey?: string;
+  // apiKey REMOVIDA — vem do Vault na Edge Function
+  model?: string;
   files: Array<{ name: string; content: string; encoding?: "base64" | "text"; mimeType?: string }>;
   generationId?: string;
 }): Promise<{
@@ -227,13 +227,9 @@ export async function invokeApfGeneration(body: {
   pfTotal: number | null;
   outputFilename: string;
 }> {
-  const supabaseUrl = (supabase as any).supabaseUrl as string | undefined;
   const { data, error } = await supabase.functions.invoke("apf-generate", {
-    body: {
-      ...body,
-      supabaseUrl,
-      // service key não fica no cliente — a Edge Function usa SUPABASE_SERVICE_ROLE_KEY do env
-    },
+    body,
+    // supabaseUrl e supabaseServiceKey REMOVIDOS — Edge Function usa env vars
   });
   if (error) throw new Error(error.message ?? "Erro ao chamar a IA");
   if (!data?.success || !data?.docxBase64) {

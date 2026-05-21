@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
@@ -32,12 +32,17 @@ export const PROGRESS_LABELS: Record<ProgressStep, string> = {
   done: "Concluído!",
 };
 
-export const PROVIDERS: { value: Provider; label: string; needsKey: boolean; placeholder: string }[] = [
-  { value: "lovable",     label: "Lovable AI (Gemini/GPT) — recomendado", needsKey: false, placeholder: "" },
-  { value: "openai",      label: "OpenAI (GPT)",      needsKey: true, placeholder: "sk-..." },
-  { value: "gemini",      label: "Google Gemini",     needsKey: true, placeholder: "AIza..." },
-  { value: "anthropic",   label: "Anthropic (Claude)",needsKey: true, placeholder: "sk-ant-..." },
-  { value: "perplexity",  label: "Perplexity",        needsKey: true, placeholder: "pplx-..." },
+/**
+ * SEC-005: needsKey REMOVIDO de todos os providers.
+ * As API keys são gerenciadas pelo admin via Supabase Vault.
+ * O usuário final nunca precisa inserir ou conhecer as keys.
+ */
+export const PROVIDERS: { value: Provider; label: string }[] = [
+  { value: "lovable",    label: "Lovable AI (Gemini/GPT) — recomendado" },
+  { value: "openai",     label: "OpenAI (GPT)" },
+  { value: "gemini",     label: "Google Gemini" },
+  { value: "anthropic",  label: "Anthropic (Claude)" },
+  { value: "perplexity", label: "Perplexity" },
 ];
 
 export type InteractiveQuestion = {
@@ -48,7 +53,7 @@ export type InteractiveQuestion = {
 };
 
 export const YESNO_REGEX =
-  /\(\s*(sim|s)\s*\/\s*(n[ãa]o|n)\s*\)|\[\s*(sim|s)\s*\/\s*(n[ãa]o|n)\s*\]/i;
+  /\(\s*(sim|s)\s*\/\s*(n[\u00e3a]o|n)\s*\)|\[\s*(sim|s)\s*\/\s*(n[\u00e3a]o|n)\s*\]/i;
 
 export function detectInteractiveQuestions(prompt: string): InteractiveQuestion[] {
   if (!prompt) return [];
@@ -81,11 +86,11 @@ export function applyAnswersToPrompt(
   const summary = questions
     .map((q) => {
       const a = answers[q.id];
-      if (!a) return `- ${q.text}\n  Resposta: (não informada)`;
+      if (!a) return `- ${q.text}\n  Resposta: (n\u00e3o informada)`;
       if (q.kind === "yesno") {
         const isYes = a.value === "sim";
         const detail = isYes && a.detail?.trim() ? `\n  Detalhes: ${a.detail.trim()}` : "";
-        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "Não"}${detail}`;
+        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "N\u00e3o"}${detail}`;
       }
       return `- ${q.text}\n  Resposta: ${a.value || "(vazio)"}`;
     })
@@ -94,7 +99,7 @@ export function applyAnswersToPrompt(
     .split(/\r?\n/)
     .filter((l) => !YESNO_REGEX.test(l) && !/\{\{\s*pergunta\s*:/i.test(l))
     .join("\n");
-  return `${stripped}\n\n=== RESPOSTAS DO USUÁRIO ===\n${summary}\n=== FIM DAS RESPOSTAS ===\n\nIMPORTANTE: Use as respostas acima como dados confirmados pelo usuário. NÃO repita as perguntas no documento — incorpore as respostas naturalmente no conteúdo gerado.`;
+  return `${stripped}\n\n=== RESPOSTAS DO USU\u00c1RIO ===\n${summary}\n=== FIM DAS RESPOSTAS ===\n\nIMPORTANTE: Use as respostas acima como dados confirmados pelo usu\u00e1rio. N\u00c3O repita as perguntas no documento \u2014 incorpore as respostas naturalmente no conte\u00fado gerado.`;
 }
 
 export function useApfGenerate() {
@@ -132,7 +137,7 @@ export function useApfGenerate() {
     fetchActiveTemplates(currentTeamId).then(setTemplates).catch(() => {});
   }, [currentTeamId]);
 
-  // Recarregar histórico quando sprint muda
+  // Recarregar hist\u00f3rico quando sprint muda
   useEffect(() => {
     if (!currentTeamId || !selectedSprintId) { setGenerations([]); return; }
     setLoadingHistory(true);
@@ -147,15 +152,17 @@ export function useApfGenerate() {
     [templates, selectedTemplateId],
   );
 
+  const providerCfg = useMemo(() => ({ needsKey: false, placeholder: "" }), []);
+
   useEffect(() => {
     if (!selectedTemplate) { setQuestions([]); setAnswers({}); return; }
     setQuestions(detectInteractiveQuestions(selectedTemplate.prompt_content));
     setAnswers({});
   }, [selectedTemplate]);
 
-  const providerCfg   = PROVIDERS.find((p) => p.value === provider)!;
-  const apiKeyOk      = !providerCfg.needsKey || apiKey.trim().length > 0;
-  const canGenerate   = !!selectedSprintId && !!selectedTemplateId && !!baselineFile && huFiles.length > 0 && !!modelFile && apiKeyOk;
+  // SEC-005: canGenerate n\u00e3o depende mais de apiKey
+  const canGenerate = !!selectedSprintId && !!selectedTemplateId && !!baselineFile && huFiles.length > 0 && !!modelFile;
+
   const allQuestionsAnswered = questions.every((q) => {
     const a = answers[q.id];
     if (!a || !a.value) return false;
@@ -163,9 +170,8 @@ export function useApfGenerate() {
     return true;
   });
 
-  // ─── runGeneration — lê SEMPRE via refs ───
   const runGeneration = useCallback(async () => {
-    if (!currentTeamId || !user) { toast.error("Sessão inválida. Faça login novamente."); return; }
+    if (!currentTeamId || !user) { toast.error("Sess\u00e3o inv\u00e1lida. Fa\u00e7a login novamente."); return; }
 
     const missing: string[] = [];
     if (!selectedSprintId)    missing.push("Sprint");
@@ -173,7 +179,6 @@ export function useApfGenerate() {
     if (!baselineFile)        missing.push("Baseline");
     if (huFiles.length === 0) missing.push("HUs da Sprint");
     if (!modelFile)           missing.push("Modelo de Contagem");
-    if (!apiKeyOk)            missing.push("API Key do provedor");
     if (missing.length > 0) { toast.error(`Preencha antes de gerar: ${missing.join(", ")}`); return; }
 
     setGenerating(true);
@@ -184,8 +189,7 @@ export function useApfGenerate() {
       const baseFilename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}`;
       const filename     = `${baseFilename}.${outputFormat === "docx" ? "docx" : "md"}`;
 
-      // ── ETAPA 1: Criar registro no banco com status=pending ──
-      // Feito ANTES da IA para garantir persistência mesmo se falhar
+      // \u2500\u2500 ETAPA 1: Criar registro no banco com status=pending \u2500\u2500
       const gen = await createGeneration({
         team_id:       currentTeamId,
         template_id:   selectedTemplateId,
@@ -199,9 +203,9 @@ export function useApfGenerate() {
       });
       generationId = gen.id;
 
-      // ── ETAPA 2: Ler e converter arquivos para base64 (xlsx/docx) ──
+      // \u2500\u2500 ETAPA 2: Ler e converter arquivos \u2500\u2500
       setProgressStep("reading_files");
-      const allFiles   = [baselineFile!, ...huFiles, modelFile!];
+      const allFiles    = [baselineFile!, ...huFiles, modelFile!];
       const filePayload = await prepareFilesForEdgeFunction(allFiles);
 
       const finalPrompt = applyAnswersToPrompt(
@@ -210,17 +214,18 @@ export function useApfGenerate() {
         answers,
       );
 
-      // ── ETAPA 3: Chamar a IA ──
+      // \u2500\u2500 ETAPA 3: Chamar a IA \u2500\u2500
+      // SEC-005: apiKey n\u00e3o \u00e9 mais passada \u2014 a Edge Function busca no Vault
       setProgressStep("calling_ai");
       const result = await invokeApfGeneration({
         prompt:       finalPrompt,
         provider,
-        apiKey:       providerCfg.needsKey ? apiKey.trim() : undefined,
+        model:        undefined,
         files:        filePayload,
-        generationId, // Edge Function salva o resultado automaticamente
+        generationId,
       });
 
-      // ── ETAPA 4: Finalizar ──
+      // \u2500\u2500 ETAPA 4: Finalizar \u2500\u2500
       setProgressStep("saving");
       setLastResult({
         base64:      result.docxBase64,
@@ -231,7 +236,6 @@ export function useApfGenerate() {
       });
       setShowPreview(true);
 
-      // Recarregar histórico (a Edge Function já atualizou o status para success)
       const updated = await fetchGenerations(currentTeamId, selectedSprintId);
       setGenerations(updated);
 
@@ -239,7 +243,6 @@ export function useApfGenerate() {
       toast.success("Documento gerado! Visualize e baixe no formato desejado.");
     } catch (e: any) {
       console.error("Erro ao gerar APF:", e);
-      // Marcar registro como error no banco se já foi criado
       if (generationId) {
         await (supabase
           .from("apf_generations")
@@ -258,16 +261,16 @@ export function useApfGenerate() {
     currentTeamId, user,
     selectedSprintId, selectedTemplateId,
     baselineFile, huFiles, modelFile,
-    apiKeyOk, sprints, outputFormat,
+    sprints, outputFormat,
     selectedTemplate, questions, answers,
-    provider, providerCfg.needsKey, apiKey,
+    provider,
   ]);
 
   const handleGenerateClick = useCallback(() => {
     if (!canGenerate) return;
     if (questions.length > 0 && !allQuestionsAnswered) { setShowQuestions(true); return; }
     void runGeneration();
-  }, [runGeneration]);
+  }, [canGenerate, allQuestionsAnswered, runGeneration]);
 
   return {
     sprints,
@@ -278,7 +281,7 @@ export function useApfGenerate() {
     huFiles, setHuFiles,
     modelFile, setModelFile,
     provider, setProvider, providerCfg,
-    apiKey, setApiKey, apiKeyOk,
+    apiKey, setApiKey,
     outputFormat, setOutputFormat,
     generating, canGenerate,
     progressStep,

@@ -37,7 +37,7 @@ import { EncerramentoDialog } from "./EncerramentoDialog";
 import { SuspensaoDialog } from "./SuspensaoDialog";
 import { NovaAtividadeDialog } from "./NovaAtividadeDialog";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
-import { HorasInput } from "@/shared/components/common/HorasInput";
+import { HorasInput, hhmmToDecimal } from "@/shared/components/common/HorasInput";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Demanda, DemandaHour } from "../types/demanda";
@@ -300,9 +300,9 @@ export function DemandaDetail({
   const todayISO = () => new Date().toISOString().slice(0, 10);
 
   // ─── Estado do formulário inline de lançamento de horas ───
-  // horas armazenado como número decimal (fração de hora) — HorasInput lida com a máscara
+  // horas em HH:MM — convertido para decimal ao salvar
   const [hourForm, setHourForm] = useState({
-    horas: 0,        // decimal: 1.5 = 1h30min
+    horas: "",
     fase: "execucao",
     descricao: "",
     data: todayISO(),

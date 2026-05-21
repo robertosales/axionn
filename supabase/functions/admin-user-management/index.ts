@@ -1,18 +1,13 @@
 /**
- * SEC-003 — Edge Function: admin-user-management (hardened)
+ * SEC-003 + SEC-004 — Edge Function: admin-user-management (hardened)
  *
- * Correções aplicadas:
- *   1. CORS restrito ao SITE_URL
- *   2. Validação UUID em user_id
- *   3. Audit log em todas as ações (change_email, reset_password)
- *   4. temp_password NÃO retornado no body em produção (EXPOSE_TEMP_PASSWORD=false)
- *   5. Impede ação sobre o próprio admin caller
- *   6. getClaims substituído por getUser (API estável)
+ * SEC-003: CORS restrito, validação UUID, audit log, impede ação sobre si mesmo
+ * SEC-004: Migrado de SUPABASE_SERVICE_ROLE_KEY para SUPABASE_SECRET_KEYS
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SITE_URL = Deno.env.get("SITE_URL") ?? "*";
+const SITE_URL      = Deno.env.get("SITE_URL") ?? "*";
 const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
 
 const corsHeaders = {
@@ -22,6 +17,17 @@ const corsHeaders = {
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// SEC-004: novas env vars (com fallback para compatibilidade durante transição)
+const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
+const _secretKeys   = Deno.env.get("SUPABASE_SECRET_KEYS");
+const _publishKeys  = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+const SERVICE_KEY   = _secretKeys
+  ? JSON.parse(_secretKeys).service_role
+  : Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON_KEY      = _publishKeys
+  ? JSON.parse(_publishKeys).anon
+  : Deno.env.get("SUPABASE_ANON_KEY")!;
 
 function generateTempPassword(): string {
   const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -46,10 +52,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
-
     // ── 1. Autenticação ────────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -61,7 +63,6 @@ Deno.serve(async (req: Request) => {
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-    // getUser é mais seguro que getClaims — valida o JWT no servidor Supabase
     const { data: { user: caller }, error: authErr } = await userClient.auth.getUser();
     if (authErr || !caller) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
@@ -113,7 +114,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Helper: registrar audit log
     const auditLog = async (
       auditAction: string,
       oldData: Record<string, unknown> | null,
@@ -137,7 +137,6 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Busca email atual para o audit
       const { data: currentProfile } = await adminClient
         .from("profiles").select("email").eq("user_id", user_id).maybeSingle();
 
@@ -157,7 +156,6 @@ Deno.serve(async (req: Request) => {
         await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
       }
 
-      // Audit log
       await auditLog(
         "EMAIL_CHANGED",
         { email: currentProfile?.email ?? null, mode: isDirect ? "direct" : "confirm" },
@@ -212,7 +210,6 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // mode = "temp_password"
       const tempPassword = generateTempPassword();
       const { error: updErr } = await adminClient.auth.admin.updateUserById(user_id, { password: tempPassword });
       if (updErr) throw updErr;
@@ -227,7 +224,6 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           success: true,
           mode: "temp_password",
-          // Em produção (EXPOSE_TEMP_PASSWORD=false), omite a senha do response
           ...(EXPOSE_TEMP_PWD ? { temp_password: tempPassword } : {}),
           message: EXPOSE_TEMP_PWD
             ? "Senha temporária gerada. Repasse ao usuário — ele será obrigado a trocá-la no próximo login."

@@ -1,29 +1,20 @@
 /**
- * SEC-002 — Edge Function: auth-rate-limiter
+ * SEC-002 + SEC-004 — Edge Function: auth-rate-limiter
  *
- * Rate limiting no servidor para endpoints sensíveis de auth.
- * Protege contra brute force e credential stuffing.
+ * SEC-002: Rate limiting contra brute force e credential stuffing
+ * SEC-004: Migrado de SUPABASE_ANON_KEY para SUPABASE_PUBLISHABLE_KEYS
  *
  * Estratégia:
  *   - Chave: IP + endpoint (ex: "1.2.3.4:login")
  *   - Janela deslizante de 60 segundos
  *   - Limites configuráveis por endpoint
- *   - Armazenamento: Upstash Redis via REST (sem SDK, apenas fetch)
- *     → Caso UPSTASH_REDIS_REST_URL não esteja configurado, usa
- *       armazenamento in-memory (adequado apenas para dev/single-instance)
+ *   - Armazenamento: Upstash Redis via REST
+ *     → Fallback para in-memory se UPSTASH_REDIS_REST_URL não configurado
  *
  * Headers retornados:
- *   X-RateLimit-Limit    — limite máximo
+ *   X-RateLimit-Limit     — limite máximo
  *   X-RateLimit-Remaining — requisições restantes
  *   X-RateLimit-Reset     — timestamp Unix do reset
- *
- * Uso (chamar ANTES de chamar Supabase auth):
- *   POST /functions/v1/auth-rate-limiter
- *   Body: { "endpoint": "login" | "signup" | "reset_password" | "otp" }
- *   Headers: Authorization: Bearer <anon_key>
- *
- * Resposta 200: { "allowed": true, "remaining": N }
- * Resposta 429: { "allowed": false, "retryAfter": N }
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -32,7 +23,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const LIMITS: Record<string, { max: number; windowSec: number }> = {
   login:          { max: 10, windowSec: 60 },
   signup:         { max: 5,  windowSec: 60 },
-  reset_password: { max: 3,  windowSec: 300 }, // 3 por 5 min
+  reset_password: { max: 3,  windowSec: 300 },
   otp:            { max: 5,  windowSec: 60 },
   default:        { max: 20, windowSec: 60 },
 };
@@ -71,7 +62,6 @@ async function redisCheck(
 ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
   const now = Math.floor(Date.now() / 1000);
 
-  // MULTI: INCR key + EXPIRE key windowSec
   const pipeline = [
     ["INCR", key],
     ["EXPIRE", key, windowSec],
@@ -103,6 +93,11 @@ async function redisCheck(
 
 // ─── Handler principal ───────────────────────────────────────────────────────
 serve(async (req: Request) => {
+  // SEC-004: fallback para chaves legadas durante período de transição
+  const _publishKeys = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+  // ANON_KEY disponível se necessário para validação futura
+  // const ANON_KEY = _publishKeys ? JSON.parse(_publishKeys).anon : Deno.env.get("SUPABASE_ANON_KEY")!;
+
   const corsHeaders = {
     "Access-Control-Allow-Origin":  Deno.env.get("SITE_URL") ?? "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -125,7 +120,6 @@ serve(async (req: Request) => {
     const endpoint = (body?.endpoint ?? "default").toLowerCase().replace(/[^a-z_]/g, "");
     const config = LIMITS[endpoint] ?? LIMITS.default;
 
-    // Extrai IP do cliente
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
       req.headers.get("x-real-ip") ??
@@ -133,7 +127,6 @@ serve(async (req: Request) => {
 
     const rateLimitKey = `rl:${ip}:${endpoint}`;
 
-    // Tenta Redis; fallback para memória
     const redisUrl   = Deno.env.get("UPSTASH_REDIS_REST_URL");
     const redisToken = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
 
@@ -166,7 +159,6 @@ serve(async (req: Request) => {
     );
   } catch (err) {
     console.error("[auth-rate-limiter] error:", err);
-    // Fail open — não bloqueia por erro interno
     return new Response(
       JSON.stringify({ allowed: true, remaining: -1, warning: "rate limiter unavailable" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },

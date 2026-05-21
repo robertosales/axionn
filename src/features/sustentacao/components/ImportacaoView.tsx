@@ -118,6 +118,8 @@ interface ValidationError {
 interface ParsedRow {
   rhm: string;
   projeto: string;
+  // ✅ FIX: team_id resolvido a partir do projeto cadastrado
+  teamId: string;
   tipo: string;
   data_inicio: Date;
   situacao?: string;
@@ -134,10 +136,7 @@ type ImportMode = null | "demandas" | "projetos";
 
 export function ImportacaoView() {
   const { currentTeamId } = useAuth();
-  // ✅ FIX: valida nomes de projetos contra TODOS os times de Sustentação.
-  // O CSV exportado do Redmine pode misturar projetos pertencentes a times
-  // distintos; restringir ao time atual gerava "Projeto não encontrado"
-  // mesmo quando o projeto já estava cadastrado em outro time.
+  // Busca projetos de TODOS os times para resolver team_id por nome de projeto
   const { projetos, reload: reloadProjetos } = useProjetos({ allTeams: true });
   const [mode, setMode] = useState<ImportMode>(null);
   const [loading, setLoading] = useState(false);
@@ -156,9 +155,12 @@ export function ImportacaoView() {
   );
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const projetoNamesNorm = new Map(projetos.map((p) => [normalize(p.nome), p.nome]));
+  // ✅ FIX: mapa nome-normalizado → { nome original, team_id }
+  // Permite rotear cada demanda para o time correto com base no projeto do CSV
+  const projetoMap = new Map(
+    projetos.map((p) => [normalize(p.nome), { nome: p.nome, teamId: p.team_id }])
+  );
 
-  // ✅ FIX 1: leitura manual do CSV com TextDecoder para preservar acentos e BOM
   function parseCsvToRows(buffer: ArrayBuffer): Record<string, string>[] {
     const text = new TextDecoder("utf-8").decode(buffer);
     const lines = text
@@ -167,7 +169,6 @@ export function ImportacaoView() {
       .split("\n")
       .filter((l) => l.trim());
     if (lines.length < 2) return [];
-    // Remove BOM da primeira linha
     lines[0] = lines[0].replace(/^\uFEFF/, "");
     const headers = lines[0].split(";").map((h) => h.trim());
     return lines.slice(1).map((line) => {
@@ -191,8 +192,6 @@ export function ImportacaoView() {
 
     try {
       const buffer = await file.arrayBuffer();
-
-      // ✅ FIX 1: usa parseCsvToRows para CSV com ";", preservando "Título" corretamente
       const rows = parseCsvToRows(buffer);
 
       const parsed: ParsedRow[] = [];
@@ -202,14 +201,12 @@ export function ImportacaoView() {
       rows.forEach((r, idx) => {
         const linha = idx + 2;
 
-        // ✅ FIX 2: campo "#" do Redmine é o RHM
         const rhm = String(r["#"] || r["RHM"] || r["rhm"] || "").trim();
         const projeto = String(r["Projeto"] || r["projeto"] || "").trim();
         const tipoRaw = String(r["Tipo"] || r["tipo"] || "").trim();
         const dataInicioRaw =
           r["Criado em"] || r["Criado Em"] || r["Data de Início"] || r["Data de Inicio"] || r["data_inicio"] || null;
 
-        // ✅ FIX 3: "Título" do CSV → campo descricao no banco
         const descricao =
           String(r["Título"] || r["Titulo"] || r["Subject"] || r["Descrição"] || r["descricao"] || "").trim() ||
           undefined;
@@ -223,8 +220,10 @@ export function ImportacaoView() {
           return;
         }
 
+        // ✅ FIX: resolve nome + team_id a partir do mapa de projetos
         const projNorm = normalize(projeto);
-        if (!projetoNamesNorm.has(projNorm)) {
+        const projetoInfo = projetoMap.get(projNorm);
+        if (!projetoInfo) {
           errs.push({ linha, mensagem: `Projeto '${projeto}' não encontrado. Verifique o cadastro.` });
           return;
         }
@@ -291,14 +290,16 @@ export function ImportacaoView() {
 
         parsed.push({
           rhm,
-          projeto: projetoNamesNorm.get(projNorm) || projeto,
+          projeto: projetoInfo.nome,
+          // ✅ FIX: team_id vem do projeto cadastrado, não do time ativo
+          teamId: projetoInfo.teamId,
           tipo: tipoNorm,
           data_inicio: dataInicio,
           situacao,
           sla,
           tipo_defeito,
           originada_diagnostico,
-          descricao, // ✅ título do CSV gravado aqui
+          descricao,
           data_previsao_encerramento: prevEnc || (prazoSolucao ? format(prazoSolucao, "yyyy-MM-dd") : undefined),
           prazo_inicio_atendimento: prazoInicio?.toISOString(),
           prazo_solucao: prazoSolucao?.toISOString(),
@@ -370,34 +371,46 @@ export function ImportacaoView() {
     }
   };
 
-  // ✅ FIX 4: handleImport agora envia TODOS os campos incluindo descricao
+  // ✅ FIX: agrupa linhas válidas por teamId e faz 1 chamada RPC por time
+  // Demandas do Rapina → team do Rapina | Demandas do GESP → team do GESP
   const handleImport = async () => {
     if (!currentTeamId || validRows.length === 0) return;
     setLoading(true);
 
     const results = { importados: 0, atualizados: 0, erros: 0 };
+
+    // Agrupa por teamId
+    const byTeam = new Map<string, ParsedRow[]>();
     for (const row of validRows) {
+      const group = byTeam.get(row.teamId) ?? [];
+      group.push(row);
+      byTeam.set(row.teamId, group);
+    }
+
+    // 1 chamada RPC por time
+    for (const [teamId, rows] of byTeam) {
       try {
-        const res = await upsertDemandas(currentTeamId, [
-          {
+        const res = await upsertDemandas(
+          teamId,
+          rows.map((row) => ({
             rhm: row.rhm,
             projeto: row.projeto,
             situacao: row.situacao || "fila_atendimento",
             tipo: row.tipo,
             sla: row.sla,
-            descricao: row.descricao, // ✅ título gravado no banco
+            descricao: row.descricao,
             tipo_defeito: row.tipo_defeito,
             originada_diagnostico: row.originada_diagnostico,
             data_previsao_encerramento: row.data_previsao_encerramento,
             prazo_inicio_atendimento: row.prazo_inicio_atendimento,
             prazo_solucao: row.prazo_solucao,
-          },
-        ]);
+          })),
+        );
         results.importados += res.importados;
         results.atualizados += res.atualizados;
         results.erros += res.erros;
       } catch {
-        results.erros++;
+        results.erros += rows.length;
       }
     }
 

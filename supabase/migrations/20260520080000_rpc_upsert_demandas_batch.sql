@@ -21,15 +21,13 @@ DECLARE
   v_affected    INT;
 BEGIN
   -- Valida acesso ao team
+  -- CORRIGIDO: profiles não possui coluna "role";
+  -- a tabela de roles é public.user_roles, e a função canônica é public.is_admin()
   IF NOT EXISTS (
     SELECT 1 FROM team_members
     WHERE team_id = p_team_id
       AND user_id = auth.uid()
-  ) AND NOT EXISTS (
-    SELECT 1 FROM profiles
-    WHERE id = auth.uid()
-      AND role = 'admin'
-  ) THEN
+  ) AND NOT public.is_admin() THEN
     RAISE EXCEPTION 'access_denied: user does not belong to team %', p_team_id
       USING ERRCODE = 'P0001';
   END IF;

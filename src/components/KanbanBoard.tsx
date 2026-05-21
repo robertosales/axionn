@@ -478,7 +478,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     <>
       {currentSprint && (
         <div className="mb-3">
-          <SprintImpedimentsBanner sprint={currentSprint} />
+          <SprintImpedimentsBanner sprintId={currentSprint.id} />
         </div>
       )}
 

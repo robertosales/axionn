@@ -204,7 +204,9 @@ export function useHours(demandaId: string | null) {
     queryKey:  KEYS.demandas.hours(demandaId ?? ''),
     queryFn:   () => svc.fetchHours(demandaId!),
     enabled:   !!demandaId,
-    staleTime: STALE.REALTIME,
+    // staleTime: 0 garante que ao mudar de demanda o React Query nunca serve
+    // o cache vazio (registrado quando demandaId era null) — sempre refaz o fetch
+    staleTime: 0,
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: KEYS.demandas.hours(demandaId!) });

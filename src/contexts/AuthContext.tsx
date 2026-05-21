@@ -128,6 +128,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Cada linha de team_modules gera um AuthTeam { id, name, module }.
   // Um mesmo time pode aparecer múltiplas vezes — uma por módulo associado.
   // Isso permite que TeamSwitcher filtre por module sem gambiarras.
+  //
+  // REGRA DE SELEÇÃO AUTOMÁTICA:
+  // Só restaura o time salvo no localStorage se ele ainda existe na lista.
+  // Se não há nada salvo (ou o salvo foi invalidado), currentTeamId fica null.
+  // Cada módulo/page é responsável por solicitar a seleção correta ao usuário,
+  // garantindo que o time escolhido seja do módulo certo — e nunca de outro.
   const refreshTeams = async () => {
     const { data, error } = await supabase
       .from("team_modules")
@@ -143,10 +149,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!mountedRef.current) return;
     setTeams(teamList);
 
+    // Só tenta restaurar se ainda não há um time selecionado na sessão atual
     if (teamList.length > 0 && !currentTeamIdRef.current) {
       const saved = localStorage.getItem("selectedTeamId");
-      const valid = saved && teamList.some(t => t.id === saved);
-      setCurrentTeamId(valid ? saved! : teamList[0].id);
+      const savedIsValid = saved && teamList.some(t => t.id === saved);
+
+      if (savedIsValid) {
+        // Restaura o time salvo — o usuário já escolheu isso antes
+        setCurrentTeamId(saved!);
+      } else {
+        // ID salvo não existe mais na lista (time removido, usuário trocou de org, etc.)
+        // Limpa o localStorage corrompido e deixa currentTeamId = null.
+        // Cada módulo vai pedir ao usuário que selecione o time correto.
+        if (saved) {
+          localStorage.removeItem("selectedTeamId");
+          console.warn("[Auth] selectedTeamId inválido removido do localStorage:", saved);
+        }
+        // NÃO define teamList[0] automaticamente — evita exibir dados do time errado
+      }
     }
   };
 

@@ -7,9 +7,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Bug, Plus, ArrowRightLeft, AlertTriangle, Eye, Pencil, Copy, ListChecks,
+  Bug, Plus, ArrowRightLeft, AlertTriangle, Eye, Pencil, Copy, ListChecks, Clock,
 } from "lucide-react";
-import { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { QuickActivityDialog } from "./QuickActivityDialog";
 import { HUPreviewSheet } from "./HUPreviewSheet";
@@ -76,7 +76,56 @@ function hoursColor(
   return { text: "text-green-600 dark:text-green-400",  bg: "bg-green-50 dark:bg-green-950/30",  border: "border-green-300 dark:border-green-800" };
 }
 
-export function KanbanCard({ hu, colHex }: Props) {
+// ─── #3: Aging badge ────────────────────────────────────────────────────────────
+function calcAgingDays(hu: UserStory): number {
+  const ref = (hu as any).statusChangedAt || hu.createdAt;
+  if (!ref) return 0;
+  const refDate = new Date(ref);
+  if (isNaN(refDate.getTime())) return 0;
+  const diffMs = Date.now() - refDate.getTime();
+  return Math.floor(diffMs / 86_400_000);
+}
+
+function AgingBadge({ days, colHex }: { days: number; colHex?: string }) {
+  if (days <= 0) return null;
+
+  let colorCls: string;
+  let label: string;
+  if (days >= 10) {
+    colorCls = "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-800";
+    label = `${days}d ⚠️`;
+  } else if (days >= 6) {
+    colorCls = "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30 border-orange-300 dark:border-orange-800";
+    label = `${days}d`;
+  } else if (days >= 3) {
+    colorCls = "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800";
+    label = `${days}d`;
+  } else {
+    colorCls = "text-muted-foreground bg-muted/40 border-border";
+    label = `${days}d`;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium ${colorCls}`}>
+            <Clock className="h-2.5 w-2.5 shrink-0" />
+            {label}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          {days === 1 ? "1 dia" : `${days} dias`} nesta coluna
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// React.memo: card só re-renderiza se hu ou colHex mudar.
+// Durante drag, o board re-renderiza mas cards não arrastados ficam intactos.
+export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: hu.id });
   const { developers, epics, activities, workflowColumns, updateUserStoryStatus, addImpediment } = useSprint() as any;
 
@@ -89,10 +138,16 @@ export function KanbanCard({ hu, colHex }: Props) {
   const [editMounted,     setEditMounted]     = useState(false);
   const [impedimentOpen,  setImpedimentOpen]  = useState(false);
 
+<<<<<<< HEAD
+  const openQuick   = useCallback(() => { setQuickMounted(true);   setQuickOpen(true);   }, []);
+  const openPreview = useCallback(() => { setPreviewMounted(true); setPreviewOpen(true); }, []);
+  const openEdit    = useCallback(() => { setEditMounted(true);    setEditOpen(true);    }, []);
+=======
   function openQuick()   { setQuickMounted(true);   setQuickOpen(true); }
   function openPreview() { setPreviewMounted(true);  setPreviewOpen(true); }
   function openEdit()    { setEditMounted(true);     setEditOpen(true); }
   // ─────────────────────────────────────────────────────────────────────────
+>>>>>>> origin/main
 
   const [expanded,            setExpanded]            = useState(false);
   const [impedimentReason,    setImpedimentReason]    = useState("");
@@ -105,9 +160,19 @@ export function KanbanCard({ hu, colHex }: Props) {
     ...(colHex ? { background: `color-mix(in srgb, ${colHex} 8%, var(--card))`, borderLeft: `3px solid ${colHex}` } : {}),
   };
 
-  const assignee      = hu.assigneeId ? developers.find((d: any) => d.id === hu.assigneeId) : null;
-  const epic          = hu.epicId     ? epics.find((e: any) => e.id === hu.epicId)          : null;
-  const huActivities  = (activities ?? []).filter((a: any) => a.huId === hu.id);
+  const assignee = useMemo(
+    () => hu.assigneeId ? developers.find((d: any) => d.id === hu.assigneeId) : null,
+    [hu.assigneeId, developers],
+  );
+  const epic = useMemo(
+    () => hu.epicId ? epics.find((e: any) => e.id === hu.epicId) : null,
+    [hu.epicId, epics],
+  );
+  const huActivities = useMemo(
+    () => (activities ?? []).filter((a: any) => a.huId === hu.id),
+    [activities, hu.id],
+  );
+
   const hasOpenBug    = huActivities.some((a: any) => a.activityType === "bug" && !a.isClosed);
   const assigneeShort = assignee?.name ? formatPersonName(assignee.name) : null;
   const initials      = assignee?.name ? getInitials(assignee.name) : "?";
@@ -124,7 +189,11 @@ export function KanbanCard({ hu, colHex }: Props) {
   const showHoursBadge = huActivities.length > 0;
   const overBudget     = estimatedHours && launchedHours > estimatedHours;
 
-  async function handleConfirmImpediment() {
+  // ── #3: Aging ─────────────────────────────────────────────────────────────────────────────
+  const agingDays = calcAgingDays(hu);
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const handleConfirmImpediment = useCallback(async () => {
     const reason = impedimentReason.trim();
     if (!reason) { toast.error("Informe o motivo do impedimento."); return; }
     try {
@@ -138,14 +207,14 @@ export function KanbanCard({ hu, colHex }: Props) {
     } catch (err: any) {
       toast.error(err?.message ?? "Erro ao registrar impedimento.");
     }
-  }
+  }, [impedimentReason, impedimentStartedAt, addImpediment, hu.id]);
 
-  function handleCopyId() {
+  const handleCopyId = useCallback(() => {
     navigator.clipboard.writeText(hu.code).then(
       () => toast.success(`ID copiado: ${hu.code}`),
       () => toast.error("Não foi possível copiar."),
     );
-  }
+  }, [hu.code]);
 
   return (
     <>
@@ -161,7 +230,11 @@ export function KanbanCard({ hu, colHex }: Props) {
           }}
         >
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+<<<<<<< HEAD
+            {/* Código + bug + prioridade + aging */}
+=======
             {/* Código + bug + prioridade */}
+>>>>>>> origin/main
             <div className="flex items-start justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-[10px] font-mono text-muted-foreground">{hu.code}</span>
@@ -171,11 +244,15 @@ export function KanbanCard({ hu, colHex }: Props) {
                   </TooltipTrigger><TooltipContent>Bug em aberto</TooltipContent></Tooltip></TooltipProvider>
                 )}
               </div>
-              {hu.priority && (
-                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 ${PRIORITY_COLORS[hu.priority] ?? ""}`}>
-                  {hu.priority}
-                </Badge>
-              )}
+              <div className="flex items-center gap-1 shrink-0">
+                {/* ── #3: Aging badge ── */}
+                <AgingBadge days={agingDays} colHex={colHex} />
+                {hu.priority && (
+                  <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 ${PRIORITY_COLORS[hu.priority] ?? ""}`}>
+                    {hu.priority}
+                  </Badge>
+                )}
+              </div>
             </div>
 
             {/* Épico */}
@@ -309,7 +386,10 @@ export function KanbanCard({ hu, colHex }: Props) {
       </ContextMenuContent>
     </ContextMenu>
 
+<<<<<<< HEAD
+=======
     {/* ── #10: Lazy mount — só renderiza após primeira abertura ─────────── */}
+>>>>>>> origin/main
     {previewMounted && (
       <HUPreviewSheet
         hu={hu}
@@ -326,7 +406,10 @@ export function KanbanCard({ hu, colHex }: Props) {
         onClose={() => setEditOpen(false)}
       />
     )}
+<<<<<<< HEAD
+=======
     {/* ─────────────────────────────────────────────────────────────────── */}
+>>>>>>> origin/main
 
     <AlertDialog open={impedimentOpen} onOpenChange={(o) => { if (!o) { setImpedimentOpen(false); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); } }}>
       <AlertDialogContent>
@@ -374,10 +457,13 @@ export function KanbanCard({ hu, colHex }: Props) {
       </AlertDialogContent>
     </AlertDialog>
 
+<<<<<<< HEAD
+=======
     {/* QuickActivity também em lazy mount */}
+>>>>>>> origin/main
     {quickMounted && (
       <QuickActivityDialog open={quickOpen} onClose={() => setQuickOpen(false)} huId={hu.id} />
     )}
     </>
   );
-}
+});

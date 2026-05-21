@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +38,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function HUEditDrawer({ huId, open, onClose }: Props) {
+export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClose }: Props) {
   const {
     userStories,
     updateUserStory,
@@ -86,7 +86,7 @@ export function HUEditDrawer({ huId, open, onClose }: Props) {
     setErrors({});
   }, [open, huId, userStories, workflowColumns]);
 
-  const validate = () => {
+  const validate = useCallback(() => {
     const e: Record<string, string> = {};
     if (!title.trim()) e.title = "Título é obrigatório";
     (customFields ?? []).forEach((f: any) => {
@@ -98,9 +98,9 @@ export function HUEditDrawer({ huId, open, onClose }: Props) {
     });
     setErrors(e);
     return Object.keys(e).length === 0;
-  };
+  }, [title, customFields, customFieldValues]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate() || !huId) return;
     setSubmitting(true);
@@ -136,7 +136,12 @@ export function HUEditDrawer({ huId, open, onClose }: Props) {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [
+    validate, huId, selectedSize, functionPoints, acceptanceCriteria,
+    description, title, priority, statusField, workflowColumns,
+    sprintId, epicId, customFieldValues, startDate, endDate,
+    assigneeId, updateUserStory, onClose,
+  ]);
 
   const hu = huId ? userStories.find((h: UserStory) => h.id === huId) : null;
 
@@ -285,7 +290,7 @@ export function HUEditDrawer({ huId, open, onClose }: Props) {
                       <SelectItem value="backlog">Backlog Geral</SelectItem>
                       {(sprints ?? []).map((s: any) => (
                         <SelectItem key={s.id} value={s.id}>
-                          {s.name}{s.isActive ? " ✦" : ""}
+                          {s.name}{s.isActive ? " ❆" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -464,4 +469,4 @@ export function HUEditDrawer({ huId, open, onClose }: Props) {
       </DialogContent>
     </Dialog>
   );
-}
+});

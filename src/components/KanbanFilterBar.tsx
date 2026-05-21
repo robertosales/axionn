@@ -3,7 +3,7 @@
  * Inclui seletor de sprint com badge de sprint ativa, visões salvas,
  * filter chips com contagem e contador de demandas.
  */
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { X, BookmarkPlus, ChevronDown, SlidersHorizontal, Search, CalendarDays } from "lucide-react";
 import {
   Popover,
@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// ─── Tipos ───────────────────────────────────────────────────────────────────
+// ─── Tipos ─────────────────────────────────────────────────────────────────────────────
 
 export interface KanbanFiltros {
   membros: string[];   // user IDs; vazio = todos
@@ -68,7 +68,7 @@ function loadViews(): KanbanViewSalva[] {
 }
 function saveViews(v: KanbanViewSalva[]) { localStorage.setItem(LS_KEY, JSON.stringify(v)); }
 
-// ─── Helpers visuais ─────────────────────────────────────────────────────────
+// ─── Helpers visuais ────────────────────────────────────────────────────────────────────
 
 const CHIP_COLORS: Record<string, string> = {
   tipo:       "text-violet-400 border-violet-400/40 bg-violet-400/10",
@@ -82,9 +82,9 @@ const CHIP_LABELS: Record<string, string> = {
   status:     "Status",
 };
 
-// ─── Componente principal ─────────────────────────────────────────────────────
+// ─── Componente principal ─────────────────────────────────────────────────────────────────────
 
-export function KanbanFilterBar({
+export const KanbanFilterBar = React.memo(function KanbanFilterBar({
   filtros,
   onChange,
   stories,
@@ -143,7 +143,7 @@ export function KanbanFilterBar({
     [sprints, filtros.sprintId],
   );
 
-  // ── Label completo da opção selecionada (para dimensionar o trigger) ──
+  // ── Label completo da opção selecionada ──
   const selectedLabel = useMemo(() => {
     if (filtros.sprintId === "all") return "📋 Todas as sprints";
     const s = selectedSprint;
@@ -205,15 +205,17 @@ export function KanbanFilterBar({
     filtros.search !== "" ||
     filtros.sprintId !== "all";
 
-  function clearChip(key: string) {
+  const clearChip = useCallback((key: string) => {
     setActiveViewId(null);
     onChange({ ...filtros, [key]: "all" });
-  }
-  function clearAll() {
+  }, [filtros, onChange]);
+
+  const clearAll = useCallback(() => {
     setActiveViewId(null);
     onChange({ ...KANBAN_FILTROS_DEFAULT, sprintId: activeSprint?.id ?? "all" });
-  }
-  function applyView(view: KanbanViewSalva) {
+  }, [activeSprint, onChange]);
+
+  const applyView = useCallback((view: KanbanViewSalva) => {
     if (view.id === "meus" && currentUserId) {
       setActiveViewId(view.id);
       onChange({ ...KANBAN_FILTROS_DEFAULT, membros: [currentUserId], sprintId: filtros.sprintId });
@@ -221,8 +223,9 @@ export function KanbanFilterBar({
     }
     setActiveViewId(view.id);
     onChange({ ...view.filtros, sprintId: filtros.sprintId });
-  }
-  function saveCurrentView() {
+  }, [currentUserId, filtros.sprintId, onChange]);
+
+  const saveCurrentView = useCallback(() => {
     if (!saveLabel.trim()) return;
     const newView: KanbanViewSalva = {
       id: Date.now().toString(),
@@ -236,13 +239,14 @@ export function KanbanFilterBar({
     setActiveViewId(newView.id);
     setSaveLabel("");
     setShowSaveInput(false);
-  }
-  function deleteView(id: string) {
+  }, [saveLabel, filtros, viewsCustom]);
+
+  const deleteView = useCallback((id: string) => {
     const updated = viewsCustom.filter((v) => v.id !== id);
     setViewsCustom(updated);
     saveViews(updated);
     if (activeViewId === id) setActiveViewId(null);
-  }
+  }, [viewsCustom, activeViewId]);
 
   const allViews = [...VIEWS_BUILTIN, ...viewsCustom];
 
@@ -278,16 +282,11 @@ export function KanbanFilterBar({
             onChange({ ...filtros, sprintId: val });
           }}
         >
-          {/*
-            w-auto + min-w-[12rem]: o trigger cresce com o texto,
-            respeitando um mínimo legível e sem cortar nomes longos.
-          */}
           <SelectTrigger className="h-8 text-xs w-auto min-w-[12rem] border-border/60 pr-8">
             <span className="whitespace-nowrap text-xs">{selectedLabel}</span>
           </SelectTrigger>
 
           <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
-            {/* Opção: todas as sprints */}
             <SelectItem value="all">
               <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                 <span>📋</span>
@@ -295,7 +294,6 @@ export function KanbanFilterBar({
               </span>
             </SelectItem>
 
-            {/* Opções por sprint */}
             {sprintsSorted.map((s: any) => {
               const isActive = s.isActive || s.is_active;
               const count    = huCountBySprint[s.id] ?? 0;
@@ -321,14 +319,12 @@ export function KanbanFilterBar({
           </SelectContent>
         </Select>
 
-        {/* Badge sprint em andamento */}
         {selectedSprint && (selectedSprint.isActive || selectedSprint.is_active) && (
           <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-600 text-[10px] font-semibold">
             🏃 Sprint em andamento
           </span>
         )}
 
-        {/* Badge sprint encerrada */}
         {selectedSprint && !selectedSprint.isActive && !selectedSprint.is_active && (
           <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-slate-400/15 border border-slate-400/40 text-slate-500 text-[10px] font-medium">
             🏁 Encerrada
@@ -448,11 +444,11 @@ export function KanbanFilterBar({
       </div>
     </div>
   );
-}
+});
 
-// ─── ViewChip ─────────────────────────────────────────────────────────────────
+// ─── ViewChip ─────────────────────────────────────────────────────────────────────────────
 
-function ViewChip({ view, active, onApply, onDelete }: {
+const ViewChip = React.memo(function ViewChip({ view, active, onApply, onDelete }: {
   view: KanbanViewSalva; active: boolean; onApply: () => void; onDelete?: () => void;
 }) {
   return (
@@ -473,11 +469,11 @@ function ViewChip({ view, active, onApply, onDelete }: {
       )}
     </span>
   );
-}
+});
 
-// ─── FilterGroup ──────────────────────────────────────────────────────────────
+// ─── FilterGroup ────────────────────────────────────────────────────────────────────────────
 
-function FilterGroup({ label, colorClass, items, selected, onSelect }: {
+const FilterGroup = React.memo(function FilterGroup({ label, colorClass, items, selected, onSelect }: {
   label: string; colorClass: string;
   items: { value: string; label: string; count: number }[];
   selected: string; onSelect: (v: string) => void;
@@ -503,4 +499,4 @@ function FilterGroup({ label, colorClass, items, selected, onSelect }: {
       </div>
     </div>
   );
-}
+});

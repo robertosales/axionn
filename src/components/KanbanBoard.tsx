@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -39,7 +39,11 @@ import type { KanbanFiltros } from "./KanbanFilterBar";
 import { SprintImpedimentsBanner } from "./SprintImpedimentsBanner";
 import { supabase } from "@/integrations/supabase/client";
 
+<<<<<<< HEAD
+// ─── Chaves de sessionStorage ─────────────────────────────────────────────────────────────────────
+=======
 // ─── Chaves de sessionStorage ─────────────────────────────────────────────────
+>>>>>>> origin/main
 const SS_FILTROS_KEY   = "kanban_board_filtros";
 const SS_EXPANDED_KEY  = "kanban_board_expanded_cols";
 
@@ -55,6 +59,22 @@ function saveFiltros(f: KanbanFiltros) {
   try { sessionStorage.setItem(SS_FILTROS_KEY, JSON.stringify(f)); } catch {}
 }
 
+<<<<<<< HEAD
+function clearKanbanSession() {
+  try {
+    sessionStorage.removeItem(SS_FILTROS_KEY);
+    sessionStorage.removeItem(SS_EXPANDED_KEY);
+  } catch {}
+}
+
+function loadExpandedCols(allKeys: string[]): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(SS_EXPANDED_KEY);
+    if (!raw) return new Set(allKeys);
+    const parsed = JSON.parse(raw) as string[];
+    const saved = new Set(parsed);
+    allKeys.forEach((k) => { if (!parsed.includes(k) && !parsed.includes(`__hidden__${k}`)) saved.add(k); });
+=======
 function loadExpandedCols(allKeys: string[]): Set<string> {
   try {
     const raw = sessionStorage.getItem(SS_EXPANDED_KEY);
@@ -64,6 +84,7 @@ function loadExpandedCols(allKeys: string[]): Set<string> {
     const saved = new Set(parsed);
     allKeys.forEach((k) => { if (!parsed.includes(k) && !parsed.includes(`__hidden__${k}`)) saved.add(k); });
     // Remove prefixo de colunas explicitamente recolhidas
+>>>>>>> origin/main
     const hiddenKeys = parsed.filter((k) => k.startsWith("__hidden__")).map((k) => k.replace("__hidden__", ""));
     hiddenKeys.forEach((k) => saved.delete(k));
     return saved;
@@ -72,7 +93,10 @@ function loadExpandedCols(allKeys: string[]): Set<string> {
 
 function saveExpandedCols(expanded: Set<string>, allKeys: string[]) {
   try {
+<<<<<<< HEAD
+=======
     // Salva expanded + marca os recolhidos com prefixo para distinguir "nunca visto" de "recolhido"
+>>>>>>> origin/main
     const payload: string[] = [
       ...Array.from(expanded),
       ...allKeys.filter((k) => !expanded.has(k)).map((k) => `__hidden__${k}`),
@@ -97,7 +121,12 @@ function getColumnHex(col: WorkflowColumn): string {
   return COLUMN_COLORS[col.key] ?? "#6b7280";
 }
 
+<<<<<<< HEAD
+// ─── DroppableColumn memoizado ────────────────────────────────────────────────────────────
+const DroppableColumn = React.memo(function DroppableColumn({
+=======
 function DroppableColumn({
+>>>>>>> origin/main
   colKey,
   colHex,
   isOver,
@@ -140,7 +169,8 @@ function DroppableColumn({
       </div>
     </SortableContext>
   );
-}
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
   sprintId?: string;
@@ -158,7 +188,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     refreshAll,
   } = useSprint() as any;
 
-  const { isAdmin, roles } = useAuth();
+  const { isAdmin, roles, currentTeamId } = useAuth();
   const canFinalizeSprint = isAdmin || roles.includes("scrum_master" as any);
 
   const activeSprint = useMemo(
@@ -166,7 +196,13 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     [sprints],
   );
 
+<<<<<<< HEAD
+  // ── Reset filtros ao trocar de time (limpa sessionStorage contaminado) ───────────
+  const prevTeamIdRef = useRef<string | null>(null);
+
+=======
   // ── #4: Filtros persistidos em sessionStorage ─────────────────────────────
+>>>>>>> origin/main
   const [filtros, setFiltros] = useState<KanbanFiltros>(() => {
     const saved = loadFiltros();
     if (saved) return saved;
@@ -179,6 +215,29 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
   }, []);
 
   // Auto-seleciona sprint ativa apenas se filtro ainda estiver em "all" e não houver filtro salvo
+  useEffect(() => {
+    // Na primeira montagem registra o time sem resetar
+    if (prevTeamIdRef.current === null) {
+      prevTeamIdRef.current = currentTeamId;
+      return;
+    }
+    // Time mudou: limpa sessionStorage e volta para "all"
+    if (prevTeamIdRef.current !== currentTeamId) {
+      prevTeamIdRef.current = currentTeamId;
+      clearKanbanSession();
+      const fresh = { ...KANBAN_FILTROS_DEFAULT, sprintId: "all" };
+      setFiltros(fresh);
+      setExpandedCols(new Set(allColKeys));
+    }
+  }, [currentTeamId]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const handleFiltrosChange = useCallback((next: KanbanFiltros) => {
+    setFiltros(next);
+    saveFiltros(next);
+  }, []);
+
+  // Só ativa o filtro de sprint ativa se o usuário ainda está em "all"
   useEffect(() => {
     if (!activeSprint) return;
     setFiltros((prev) => {
@@ -215,7 +274,10 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
   const [activeId, setActiveId]       = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
+<<<<<<< HEAD
+=======
   // ── #5: Colunas expandidas persistidas em sessionStorage ─────────────────
+>>>>>>> origin/main
   const allColKeys = useMemo(
     () => (workflowColumns ?? []).map((c: WorkflowColumn) => c.key),
     [workflowColumns],
@@ -225,16 +287,27 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     () => loadExpandedCols(allColKeys),
   );
 
+<<<<<<< HEAD
+  useEffect(() => {
+    if (allColKeys.length === 0) return;
+    setExpandedCols((prev) => {
+      if (prev.size > 0) return prev;
+=======
   // Quando workflowColumns chegar (assíncrono), re-hidrata se o estado ainda for vazio
   useEffect(() => {
     if (allColKeys.length === 0) return;
     setExpandedCols((prev) => {
       if (prev.size > 0) return prev; // já hidratado
+>>>>>>> origin/main
       return loadExpandedCols(allColKeys);
     });
   }, [allColKeys.join(",")]);
 
+<<<<<<< HEAD
+  const toggleCol = useCallback((key: string) => {
+=======
   function toggleCol(key: string) {
+>>>>>>> origin/main
     setExpandedCols((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -242,8 +315,12 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       saveExpandedCols(next, allColKeys);
       return next;
     });
+<<<<<<< HEAD
+  }, [allColKeys]);
+=======
   }
   // ─────────────────────────────────────────────────────────────────────────
+>>>>>>> origin/main
 
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
   const [finalizeOpen, setFinalizeOpen]     = useState(false);
@@ -265,6 +342,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
 
   const sprintBase = useMemo(() => {
     if (filtros.sprintId === "all") {
+      // Mostra todas as HUs do time (sem filtro de sprint)
       return sprintId ? userStories.filter((h: any) => h.sprintId === sprintId) : userStories;
     }
     return userStories.filter(
@@ -300,6 +378,22 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
     );
   }, [sprintBase, filtros, localPositions]);
+
+  const colItemsMap = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    (workflowColumns ?? []).forEach((col: WorkflowColumn) => {
+      map[col.key] = sprintStories.filter((h: any) => h.status === col.key);
+    });
+    return map;
+  }, [workflowColumns, sprintStories]);
+
+  const colHexMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    (workflowColumns ?? []).forEach((col: WorkflowColumn) => {
+      map[col.key] = getColumnHex(col);
+    });
+    return map;
+  }, [workflowColumns]);
 
   const sprintSummary = useMemo(() => {
     if (!sprintFinalizavel) return null;
@@ -482,8 +576,8 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       >
         <div className="flex gap-3 overflow-x-auto pb-4 items-start">
           {(workflowColumns ?? []).map((col: WorkflowColumn) => {
-            const colHex   = getColumnHex(col);
-            const colItems = sprintStories.filter((h: any) => h.status === col.key);
+            const colHex   = colHexMap[col.key] ?? "#6b7280";
+            const colItems = colItemsMap[col.key] ?? [];
             const isExpanded = expandedCols.has(col.key);
             const isOver     = dragOverCol === col.key;
 
@@ -585,7 +679,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
                 )}
                 {!(sprintFinalizavel?.isActive || sprintFinalizavel?.is_active) && (
                   <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-2 rounded-lg">
-                    ⚠️ Esta sprint não foi encerrada formalmente. Encerá-la agora irá marcar a data de término como hoje e mover as HUs incompletas para o backlog.
+                    ⚠️ Esta sprint não foi encerrada formalmente. Encírá-la agora irá marcar a data de término como hoje e mover as HUs incompletas para o backlog.
                   </p>
                 )}
                 {sprintSummary && (

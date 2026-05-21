@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/dialog";
 
 function useDemandaResponsaveis() {
-  const [responsaveis, setResponsaveis] = useState<Array<{ demanda_id: string; user_id: string; papel: string }>>([]);
+  const [responsaveis, setResponsaveis] = useState<Array<{ demanda_id: string; user_id: string; papel: string }>>([])
   useEffect(() => {
     supabase.from("demanda_responsaveis").select("demanda_id, user_id, papel")
       .then(({ data }) => setResponsaveis(data || []));
@@ -159,7 +159,6 @@ const SUST_PRIMARY: [number, number, number] = [37, 99, 235];
 async function buildPDFBlob(grupo: AnalistaGroup, dataInicio: string, dataFim: string): Promise<Blob> {
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
-  // Orientação PAISAGEM (landscape)
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const now = new Date();
   const W = doc.internal.pageSize.getWidth();
@@ -173,7 +172,6 @@ async function buildPDFBlob(grupo: AnalistaGroup, dataInicio: string, dataFim: s
   const ALT_ROW: [number,number,number]    = [248, 250, 252];
   const TOTAL_BG: [number,number,number]   = [241, 245, 249];
 
-  // ── Cabeçalho
   doc.setFillColor(...PRIMARY); doc.rect(0, 0, W, 26, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(13); doc.setFont("helvetica", "bold");
@@ -184,7 +182,6 @@ async function buildPDFBlob(grupo: AnalistaGroup, dataInicio: string, dataFim: s
 
   let y = 31;
 
-  // ── Card do analista: nome + cargo na linha de baixo
   doc.setFillColor(...LIGHT_BG); doc.roundedRect(ML, y, CW, 18, 2, 2, "F");
   doc.setDrawColor(...BORDER_CLR); doc.roundedRect(ML, y, CW, 18, 2, 2, "S");
   doc.setFillColor(...PRIMARY); doc.circle(ML + 8, y + 9, 5.5, "F");
@@ -200,7 +197,6 @@ async function buildPDFBlob(grupo: AnalistaGroup, dataInicio: string, dataFim: s
   doc.text(`Período: ${fmtDate(dataInicio)} a ${fmtDate(dataFim)}`, ML + CW - 3, y + 11, { align: "right" });
   y += 23;
 
-  // ── Resumo KPIs
   doc.setTextColor(...DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
   doc.text("RESUMO DO PERÍODO", ML, y);
   y += 3;
@@ -222,7 +218,6 @@ async function buildPDFBlob(grupo: AnalistaGroup, dataInicio: string, dataFim: s
   });
   y += 20;
 
-  // Somente atividades com horas lançadas
   const atividadesComHoras = grupo.atividades.filter(a => a.horasDetalhadas.length > 0);
 
   for (const ativ of atividadesComHoras) {
@@ -324,6 +319,12 @@ export function RelatorioProdutividade({ onBack }: Props) {
   const nomeMap    = useMemo(() => { const m = new Map<string,string>(); profiles.forEach(p => m.set(p.user_id, p.display_name||p.email||p.user_id.slice(0,8))); return m; }, [profiles]);
   const cargoMap   = useMemo(() => { const m = new Map<string,string>(); profiles.forEach(p => m.set(p.user_id, (p as any).role || (p as any).cargo || "")); return m; }, [profiles]);
 
+  const demandasMap = useMemo(() => {
+    const m = new Map<string, typeof demandas[number]>();
+    demandas.forEach(d => m.set(d.id, d));
+    return m;
+  }, [demandas]);
+
   const responsaveisPorDemanda = useMemo(() => {
     const m = new Map<string,Set<string>>();
     demandas.forEach(d => {
@@ -340,9 +341,38 @@ export function RelatorioProdutividade({ onBack }: Props) {
 
   const resolveUserId = (h: any): string | null => h.user_id || h.lancado_por || null;
 
+  // ── CORREÇÃO: filtra hours pelo período (data do lançamento), não pela criação da demanda
+  const hoursFiltradas = useMemo(() => {
+    const ini = new Date(dataInicio + "T00:00:00");
+    const fim = new Date(dataFim + "T23:59:59");
+    return hours.filter(h => {
+      if (!h.demanda_id || !resolveUserId(h)) return false;
+      const d = new Date(h.created_at);
+      if (d < ini || d > fim) return false;
+      // aplica filtro de time se selecionado
+      if (teamId !== "all") {
+        const demanda = demandasMap.get(h.demanda_id);
+        if (!demanda || demanda.team_id !== teamId) return false;
+      }
+      return true;
+    });
+  }, [hours, dataInicio, dataFim, teamId, demandasMap]);
+
+  // IDs de demandas que possuem pelo menos uma hora lançada no período
+  const demandaIdsNoPeriodo = useMemo(() => {
+    const s = new Set<string>();
+    hoursFiltradas.forEach(h => { if (h.demanda_id) s.add(h.demanda_id); });
+    return s;
+  }, [hoursFiltradas]);
+
+  // Demandas filtradas derivadas das horas — mantém compatibilidade com o restante do componente
+  const demandasFiltradas = useMemo(() => {
+    return demandas.filter(d => demandaIdsNoPeriodo.has(d.id));
+  }, [demandas, demandaIdsNoPeriodo]);
+
   const horasPorDemandaUser = useMemo(() => {
     const m = new Map<string,Map<string,number>>();
-    hours.forEach(h => {
+    hoursFiltradas.forEach(h => {
       const uid = resolveUserId(h);
       if (!h.demanda_id || !uid) return;
       if (!m.has(h.demanda_id)) m.set(h.demanda_id, new Map());
@@ -350,11 +380,11 @@ export function RelatorioProdutividade({ onBack }: Props) {
       inner.set(uid, (inner.get(uid) ?? 0) + Number(h.horas ?? 0));
     });
     return m;
-  }, [hours]);
+  }, [hoursFiltradas]);
 
   const horasDetalhadasMap = useMemo(() => {
     const m = new Map<string,HoraLancada[]>();
-    hours.forEach(h => {
+    hoursFiltradas.forEach(h => {
       const uid = resolveUserId(h);
       if (!h.demanda_id || !uid) return;
       const key = `${h.demanda_id}::${uid}`;
@@ -363,35 +393,26 @@ export function RelatorioProdutividade({ onBack }: Props) {
     });
     m.forEach(list => list.sort((a, b) => new Date(b.data.split("/").reverse().join("-")).getTime() - new Date(a.data.split("/").reverse().join("-")).getTime()));
     return m;
-  }, [hours, fasesMap]);
+  }, [hoursFiltradas, fasesMap]);
 
   const analistasList = useMemo(() => {
     const idSet = new Set<string>();
-    demandas.filter(d => teamId === "all" || d.team_id === teamId).forEach(d => {
+    demandasFiltradas.forEach(d => {
       responsaveisPorDemanda.get(d.id)?.forEach(uid => idSet.add(uid));
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => idSet.add(uid));
     });
     return profiles.filter(p => idSet.has(p.user_id)).map(p => ({ user_id: p.user_id, display_name: p.display_name || p.email || p.user_id.slice(0,8) })).sort((a, b) => a.display_name.localeCompare(b.display_name));
-  }, [demandas, responsaveisPorDemanda, horasPorDemandaUser, profiles, teamId]);
-
-  const demandasFiltradas = useMemo(() => {
-    const ini = new Date(dataInicio + "T00:00:00"); const fim = new Date(dataFim + "T23:59:59");
-    return demandas.filter(d => {
-      if (teamId !== "all" && d.team_id !== teamId) return false;
-      const c = new Date(d.created_at); return c >= ini && c <= fim;
-    });
-  }, [demandas, teamId, dataInicio, dataFim]);
+  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, profiles]);
 
   const grupos = useMemo(() => {
     const todosIds = new Set<string>();
     demandasFiltradas.forEach(d => {
-      responsaveisPorDemanda.get(d.id)?.forEach(uid => todosIds.add(uid));
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => todosIds.add(uid));
     });
     const ids = analista !== "all" ? [analista] : [...todosIds].filter(id => profileIds.has(id));
     return ids.map(userId => {
       const atividades: AtividadeRow[] = demandasFiltradas
-        .filter(d => (responsaveisPorDemanda.get(d.id)?.has(userId) ?? false) || (horasPorDemandaUser.get(d.id)?.has(userId) ?? false))
+        .filter(d => horasPorDemandaUser.get(d.id)?.has(userId) ?? false)
         .map(d => {
           const horasAnalista = horasPorDemandaUser.get(d.id)?.get(userId) ?? 0;
           const outrosIds = new Set<string>();
@@ -638,7 +659,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
         footer={
           <ReportLegendBlock items={[
             { sigla: "RHM",              descricao: "Clique na linha para ver o detalhe das horas lançadas" },
-            { sigla: "Horas",            descricao: "Total de horas lançadas pelo analista nesta atividade" },
+            { sigla: "Horas",            descricao: "Total de horas lançadas pelo analista nesta atividade — dentro do período selecionado" },
             { sigla: "Outros Analistas", descricao: "Demais pessoas vinculadas à mesma atividade" },
             { sigla: "Taxa Resolução",   descricao: "Atividades resolvidas ÷ total × 100 — por analista" },
             { sigla: "Data Fim",         descricao: "Data de aceite ou da última transição de conclusão" },

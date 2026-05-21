@@ -100,7 +100,7 @@ const Index = () => {
     } else {
       setShowTeamModal(true);
     }
-  }, [loading, teams]);
+  }, [loading, teams, currentTeamId]); // eslint-disable-line
 
   useEffect(() => {
     if (loading) return;
@@ -113,6 +113,10 @@ const Index = () => {
 
   const isTeamFreeSection = TEAM_FREE_SECTIONS.includes(active);
   const needsTeam = !loading && !isAdmin && !currentTeamId && !isTeamFreeSection;
+
+  // teamKey força remontagem de todos os componentes ao trocar de time,
+  // zerando states internos (filtros, sessionStorage, paginação, etc.)
+  const teamKey = currentTeamId ?? "no-team";
 
   return (
     <AppShell module="sala_agil" activeKey={active} onNavigate={handleNavigate}>
@@ -147,7 +151,9 @@ const Index = () => {
         )}
 
         {!loading && !needsTeam && (
-          <>
+          // key={teamKey} garante remontagem completa de todos os filhos
+          // quando o time muda, zerando states internos de cada componente
+          <div key={teamKey}>
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
             {active === "planning-poker" && <PlanningPoker />}
             {active === "equipe" && <DeveloperManager />}
@@ -226,7 +232,7 @@ const Index = () => {
                 <AutomationManager />
               </SectionGuard>
             )}
-          </>
+          </div>
         )}
       </div>
     </AppShell>

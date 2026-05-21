@@ -12,6 +12,7 @@ import { Mail, Lock, User, Clock } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { APP_TAGLINE } from "@/lib/constants";
 import { AxionLogo } from "@/components/AxionLogo";
+import { checkAuthRateLimit } from "@/lib/authRateLimiter";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -29,6 +30,19 @@ const Auth = () => {
       return;
     }
     setLoading(true);
+
+    // SEC-002: rate limit antes de chamar Supabase auth
+    const { allowed, retryAfter } = await checkAuthRateLimit("login");
+    if (!allowed) {
+      toast.error(
+        retryAfter
+          ? `Muitas tentativas de login. Aguarde ${retryAfter}s antes de tentar novamente.`
+          : "Muitas tentativas de login. Tente novamente em instantes."
+      );
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) toast.error(error.message);
     else toast.success("Login realizado com sucesso!");
@@ -42,6 +56,19 @@ const Auth = () => {
       return;
     }
     setLoading(true);
+
+    // SEC-002: rate limit antes de criar conta
+    const { allowed, retryAfter } = await checkAuthRateLimit("signup");
+    if (!allowed) {
+      toast.error(
+        retryAfter
+          ? `Muitas tentativas de cadastro. Aguarde ${retryAfter}s antes de tentar novamente.`
+          : "Muitas tentativas de cadastro. Tente novamente em instantes."
+      );
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -73,6 +100,19 @@ const Auth = () => {
       return;
     }
     setLoading(true);
+
+    // SEC-002: rate limit para reset de senha
+    const { allowed, retryAfter } = await checkAuthRateLimit("reset_password");
+    if (!allowed) {
+      toast.error(
+        retryAfter
+          ? `Muitas solicitações de redefinição. Aguarde ${retryAfter}s.`
+          : "Muitas solicitações. Tente novamente em instantes."
+      );
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });

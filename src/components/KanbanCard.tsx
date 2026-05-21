@@ -138,9 +138,16 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
   const [editMounted,     setEditMounted]     = useState(false);
   const [impedimentOpen,  setImpedimentOpen]  = useState(false);
 
+<<<<<<< HEAD
   const openQuick   = useCallback(() => { setQuickMounted(true);   setQuickOpen(true);   }, []);
   const openPreview = useCallback(() => { setPreviewMounted(true); setPreviewOpen(true); }, []);
   const openEdit    = useCallback(() => { setEditMounted(true);    setEditOpen(true);    }, []);
+=======
+  function openQuick()   { setQuickMounted(true);   setQuickOpen(true); }
+  function openPreview() { setPreviewMounted(true);  setPreviewOpen(true); }
+  function openEdit()    { setEditMounted(true);     setEditOpen(true); }
+  // ─────────────────────────────────────────────────────────────────────────
+>>>>>>> origin/main
 
   const [expanded,            setExpanded]            = useState(false);
   const [impedimentReason,    setImpedimentReason]    = useState("");
@@ -223,7 +230,11 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
           }}
         >
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+<<<<<<< HEAD
             {/* Código + bug + prioridade + aging */}
+=======
+            {/* Código + bug + prioridade */}
+>>>>>>> origin/main
             <div className="flex items-start justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-[10px] font-mono text-muted-foreground">{hu.code}</span>
@@ -375,6 +386,10 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
       </ContextMenuContent>
     </ContextMenu>
 
+<<<<<<< HEAD
+=======
+    {/* ── #10: Lazy mount — só renderiza após primeira abertura ─────────── */}
+>>>>>>> origin/main
     {previewMounted && (
       <HUPreviewSheet
         hu={hu}
@@ -391,6 +406,10 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
         onClose={() => setEditOpen(false)}
       />
     )}
+<<<<<<< HEAD
+=======
+    {/* ─────────────────────────────────────────────────────────────────── */}
+>>>>>>> origin/main
 
     <AlertDialog open={impedimentOpen} onOpenChange={(o) => { if (!o) { setImpedimentOpen(false); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); } }}>
       <AlertDialogContent>
@@ -438,6 +457,10 @@ export const KanbanCard = React.memo(function KanbanCard({ hu, colHex }: Props) 
       </AlertDialogContent>
     </AlertDialog>
 
+<<<<<<< HEAD
+=======
+    {/* QuickActivity também em lazy mount */}
+>>>>>>> origin/main
     {quickMounted && (
       <QuickActivityDialog open={quickOpen} onClose={() => setQuickOpen(false)} huId={hu.id} />
     )}

@@ -104,12 +104,8 @@ function getColumnHex(col: WorkflowColumn): string {
   return COLUMN_COLORS[col.key] ?? "#6b7280";
 }
 
-<<<<<<< HEAD
 // ─── DroppableColumn memoizado ────────────────────────────────────────────────────────────
 const DroppableColumn = React.memo(function DroppableColumn({
-=======
-function DroppableColumn({
->>>>>>> origin/main
   colKey,
   colHex,
   isOver,
@@ -179,13 +175,10 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     [sprints],
   );
 
-<<<<<<< HEAD
   // ── Reset filtros ao trocar de time (limpa sessionStorage contaminado) ───────────
   const prevTeamIdRef = useRef<string | null>(null);
 
-=======
   // ── #4: Filtros persistidos em sessionStorage ─────────────────────────────
->>>>>>> origin/main
   const [filtros, setFiltros] = useState<KanbanFiltros>(() => {
     const saved = loadFiltros();
     if (saved) return saved;
@@ -214,11 +207,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     }
   }, [currentTeamId]);
   // ─────────────────────────────────────────────────────────────────────────────
-
-  const handleFiltrosChange = useCallback((next: KanbanFiltros) => {
-    setFiltros(next);
-    saveFiltros(next);
-  }, []);
 
   // Só ativa o filtro de sprint ativa se o usuário ainda está em "all"
   useEffect(() => {

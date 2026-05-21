@@ -134,7 +134,11 @@ type ImportMode = null | "demandas" | "projetos";
 
 export function ImportacaoView() {
   const { currentTeamId } = useAuth();
-  const { projetos, reload: reloadProjetos } = useProjetos();
+  // ✅ FIX: valida nomes de projetos contra TODOS os times de Sustentação.
+  // O CSV exportado do Redmine pode misturar projetos pertencentes a times
+  // distintos; restringir ao time atual gerava "Projeto não encontrado"
+  // mesmo quando o projeto já estava cadastrado em outro time.
+  const { projetos, reload: reloadProjetos } = useProjetos({ allTeams: true });
   const [mode, setMode] = useState<ImportMode>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{

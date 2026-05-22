@@ -60,3 +60,41 @@ export async function searchProfiles(query: string) {
   if (error) throw error;
   return data || [];
 }
+
+// Prioridade: papel mais específico primeiro, depois genéricos.
+const ROLE_PRIORITY = [
+  "scrum_master",
+  "product_owner",
+  "architect",
+  "developer",
+  "qa_analyst",
+  "analyst",
+  "admin",
+  "member",
+] as const;
+
+const ROLE_LABEL_PT: Record<string, string> = {
+  scrum_master: "Scrum Master",
+  product_owner: "Product Owner",
+  architect: "Arquiteto",
+  developer: "Desenvolvedor",
+  qa_analyst: "Analista de QA",
+  analyst: "Analista",
+  admin: "Administrador",
+  member: "Membro",
+};
+
+/**
+ * Retorna o papel principal do usuário a partir de user_roles,
+ * formatado em PT-BR (ex: "Scrum Master"). Cai em "Membro" se não houver.
+ */
+export async function fetchPrimaryRoleLabel(userId: string): Promise<string> {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  if (error || !data?.length) return ROLE_LABEL_PT.member;
+  const roles = data.map((r: any) => r.role as string);
+  const picked = ROLE_PRIORITY.find((r) => roles.includes(r)) ?? roles[0];
+  return ROLE_LABEL_PT[picked] ?? picked;
+}

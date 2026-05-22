@@ -848,10 +848,13 @@ export type Database = {
           responsavel_teste: string | null
           rhm: string
           situacao: string
+          situacao_changed_at: string
           sla: string
           team_id: string
           tipo: string
           tipo_defeito: string | null
+          titulo: string
+          total_horas: number | null
           updated_at: string
         }
         Insert: {
@@ -878,10 +881,13 @@ export type Database = {
           responsavel_teste?: string | null
           rhm: string
           situacao?: string
+          situacao_changed_at?: string
           sla?: string
           team_id: string
           tipo?: string
           tipo_defeito?: string | null
+          titulo?: string
+          total_horas?: number | null
           updated_at?: string
         }
         Update: {
@@ -908,10 +914,13 @@ export type Database = {
           responsavel_teste?: string | null
           rhm?: string
           situacao?: string
+          situacao_changed_at?: string
           sla?: string
           team_id?: string
           tipo?: string
           tipo_defeito?: string | null
+          titulo?: string
+          total_horas?: number | null
           updated_at?: string
         }
         Relationships: [

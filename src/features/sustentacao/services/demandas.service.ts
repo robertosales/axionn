@@ -79,13 +79,15 @@ export async function addHours(h: Omit<DemandaHour, "id" | "created_at"> & { cre
 }
 
 /**
- * fetchHours — usa RPC get_demanda_hours (SECURITY DEFINER) para contornar
- * a policy RLS que bloqueia membros de times diferentes de verem lançamentos
- * de colegas. A RPC valida internamente se o chamador é membro do time ou admin.
+ * fetchHours — lê direto da tabela demanda_hours.
+ * RLS já permite SELECT para membros do time da demanda e admins.
  */
 export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
   const { data, error } = await supabase
-    .rpc("get_demanda_hours" as any, { p_demanda_id: demandaId });
+    .from("demanda_hours" as any)
+    .select("*")
+    .eq("demanda_id", demandaId)
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []) as unknown as DemandaHour[];
 }

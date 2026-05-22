@@ -601,7 +601,8 @@ export function DemandaDetail({
   const handleAddResp = async (userId: string) => {
     if (!demanda?.id) return;
     try {
-      await respSvc.addResponsavel(demanda.id, userId, addPapel);
+      const papel = await respSvc.fetchPrimaryRoleLabel(userId);
+      await respSvc.addResponsavel(demanda.id, userId, papel);
       toast.success("Responsável adicionado");
       setSearchQuery("");
       setSearchResults([]);

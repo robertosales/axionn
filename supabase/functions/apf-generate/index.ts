@@ -440,15 +440,20 @@ Deno.serve(async (req: Request) => {
 
     // ── 2. Parse e validação do body ──
     const body = await req.json().catch(() => ({})) as RequestBody;
-    const { prompt, provider, model, files, generationId } = body;
+    const { prompt, provider, providerId, model, files, generationId } = body;
 
     if (!prompt?.trim()) {
       return new Response(JSON.stringify({ error: "Prompt é obrigatório" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!provider || !VALID_PROVIDERS.has(provider)) {
-      return new Response(JSON.stringify({ error: `Provider inválido. Use: ${[...VALID_PROVIDERS].join(", ")}` }), {
+    if (!providerId && !provider) {
+      return new Response(JSON.stringify({ error: "providerId é obrigatório" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (providerId && !UUID_REGEX.test(providerId)) {
+      return new Response(JSON.stringify({ error: "providerId deve ser um UUID válido" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -458,8 +463,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 3. Busca a API key no Vault (nunca vem do cliente) ──
-    const apiKey = await getProviderKeyFromVault(provider);
+    // ── 3. Resolve o provider + busca a API key no Vault ──
+    const resolved = await resolveProvider(providerId, provider);
+    const apiKey = resolved.apiKey;
+    const providerType = resolved.providerType;
+    const effectiveModel = model ?? resolved.model ?? undefined;
 
     // ── 4. Processa arquivos ──
     const processedFiles: { name: string; content: string }[] = [];
@@ -471,12 +479,12 @@ Deno.serve(async (req: Request) => {
     // ── 5. Chama a IA ──
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
     let aiText = "";
-    switch (provider) {
-      case "lovable":    aiText = await callLovable(fullPrompt,    apiKey, model); break;
-      case "openai":     aiText = await callOpenAI(fullPrompt,     apiKey, model); break;
-      case "gemini":     aiText = await callGemini(fullPrompt,     apiKey, model); break;
-      case "anthropic":  aiText = await callAnthropic(fullPrompt,  apiKey, model); break;
-      case "perplexity": aiText = await callPerplexity(fullPrompt, apiKey, model); break;
+    switch (providerType) {
+      case "lovable":    aiText = await callLovable(fullPrompt,    apiKey, effectiveModel); break;
+      case "openai":     aiText = await callOpenAI(fullPrompt,     apiKey, effectiveModel); break;
+      case "gemini":     aiText = await callGemini(fullPrompt,     apiKey, effectiveModel); break;
+      case "anthropic":  aiText = await callAnthropic(fullPrompt,  apiKey, effectiveModel); break;
+      case "perplexity": aiText = await callPerplexity(fullPrompt, apiKey, effectiveModel); break;
     }
     if (!aiText.trim()) throw new Error("A IA retornou conteúdo vazio");
 

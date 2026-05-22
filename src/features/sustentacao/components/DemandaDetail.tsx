@@ -1160,13 +1160,9 @@ export function DemandaDetail({
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input placeholder="Adicionar Responsável..." value={searchQuery} onChange={(e) => handleSearch(e.target.value)} className="pl-9" />
                     </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Papel</Label>
-                    <Select value={addPapel} onValueChange={setAddPapel}>
-                      <SelectTrigger className="mt-1 w-40"><SelectValue /></SelectTrigger>
-                      <SelectContent>{PAPEIS_OPTIONS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      O papel é preenchido automaticamente conforme o perfil do usuário.
+                    </p>
                   </div>
                 </div>
                 {searchResults.length > 0 && (

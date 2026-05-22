@@ -20,7 +20,6 @@ import {
   useApfGenerate,
   YESNO_REGEX,
   PROGRESS_LABELS,
-  type Provider,
   type OutputFormat,
 } from "../hooks/useApfGenerate";
 

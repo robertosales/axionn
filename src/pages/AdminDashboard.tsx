@@ -12,13 +12,14 @@ import { AdminTimesPage }      from "@/features/admin/pages/AdminTimesPage";
 import { AdminUsuariosPage }   from "@/features/admin/pages/AdminUsuariosPage";
 import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
 import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
+import { AdminIAsPage }        from "@/features/admin/pages/AdminIAsPage";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History, Gauge, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, LogOut, Users, UsersRound, BarChart3, History, Gauge, AlertTriangle, Sparkles } from "lucide-react";
 
 export default function AdminDashboard() {
   const { profile, signOut, teams } = useAuth();
@@ -115,6 +116,9 @@ export default function AdminDashboard() {
             <TabsTrigger value="usuarios" className="gap-1.5 text-xs">
               <Users className="h-3.5 w-3.5" /> Usuários
             </TabsTrigger>
+            <TabsTrigger value="ias" className="gap-1.5 text-xs">
+              <Sparkles className="h-3.5 w-3.5" /> IAs
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="visao-geral" className="space-y-8">
@@ -129,6 +133,7 @@ export default function AdminDashboard() {
           <TabsContent value="capacidade"><AdminCapacidadePage /></TabsContent>
           <TabsContent value="times"><AdminTimesPage /></TabsContent>
           <TabsContent value="usuarios"><AdminUsuariosPage /></TabsContent>
+          <TabsContent value="ias"><AdminIAsPage /></TabsContent>
         </Tabs>
       </main>
     </div>

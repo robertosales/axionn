@@ -31,7 +31,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const VALID_PROVIDERS = new Set(["lovable", "openai", "gemini", "anthropic", "perplexity"]);
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
@@ -45,7 +44,8 @@ interface FileInput {
 
 interface RequestBody {
   prompt:       string;
-  provider:     Provider;
+  providerId?:  string;       // novo — uuid da linha em ai_providers
+  provider?:    Provider;     // legado — tipo fixo (compat)
   model?:       string;
   files?:       FileInput[];
   generationId?: string;
@@ -53,15 +53,54 @@ interface RequestBody {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Busca a API key do Vault via RPC (service_role)
+// Resolve provider row + API key
 // ─────────────────────────────────────────────────────────────
-async function getProviderKeyFromVault(provider: string): Promise<string> {
-  const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
-  const { data, error } = await adminClient.rpc("get_ai_provider_key", { p_provider: provider });
-  if (error || !data) {
-    throw new Error(`API key do provider "${provider}" não configurada. Configure via painel de administração.`);
+async function resolveProvider(providerId?: string, providerLegacy?: string): Promise<{
+  providerType: Provider; apiKey: string; model: string | null; name: string;
+}> {
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+  let row: { id: string; name: string; provider_type: Provider; model: string | null } | null = null;
+
+  if (providerId) {
+    const { data, error } = await admin
+      .from("ai_providers")
+      .select("id,name,provider_type,model,is_active")
+      .eq("id", providerId)
+      .maybeSingle();
+    if (error || !data) throw new Error("Provedor de IA não encontrado.");
+    if (!data.is_active) throw new Error("Este provedor de IA está desativado.");
+    row = data as any;
+  } else if (providerLegacy) {
+    // compat: primeira linha ativa do tipo
+    const { data } = await admin
+      .from("ai_providers")
+      .select("id,name,provider_type,model")
+      .eq("provider_type", providerLegacy)
+      .eq("is_active", true)
+      .order("is_recommended", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    row = (data as any) ?? null;
   }
-  return data as string;
+
+  if (!row) throw new Error("Nenhum provedor de IA selecionado/cadastrado.");
+
+  // Busca a key no Vault pelo id da linha
+  let apiKey: string | null = null;
+  const { data: keyData } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id });
+  if (keyData) apiKey = keyData as string;
+
+  // Fallback Lovable: usa a env do próprio gateway
+  if (!apiKey && row.provider_type === "lovable") {
+    apiKey = Deno.env.get("LOVABLE_API_KEY") ?? null;
+  }
+
+  if (!apiKey) {
+    throw new Error(`API key não configurada para "${row.name}". Configure no painel administrativo.`);
+  }
+
+  return { providerType: row.provider_type, apiKey, model: row.model, name: row.name };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -401,15 +440,20 @@ Deno.serve(async (req: Request) => {
 
     // ── 2. Parse e validação do body ──
     const body = await req.json().catch(() => ({})) as RequestBody;
-    const { prompt, provider, model, files, generationId } = body;
+    const { prompt, provider, providerId, model, files, generationId } = body;
 
     if (!prompt?.trim()) {
       return new Response(JSON.stringify({ error: "Prompt é obrigatório" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!provider || !VALID_PROVIDERS.has(provider)) {
-      return new Response(JSON.stringify({ error: `Provider inválido. Use: ${[...VALID_PROVIDERS].join(", ")}` }), {
+    if (!providerId && !provider) {
+      return new Response(JSON.stringify({ error: "providerId é obrigatório" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (providerId && !UUID_REGEX.test(providerId)) {
+      return new Response(JSON.stringify({ error: "providerId deve ser um UUID válido" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -419,8 +463,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 3. Busca a API key no Vault (nunca vem do cliente) ──
-    const apiKey = await getProviderKeyFromVault(provider);
+    // ── 3. Resolve o provider + busca a API key no Vault ──
+    const resolved = await resolveProvider(providerId, provider);
+    const apiKey = resolved.apiKey;
+    const providerType = resolved.providerType;
+    const effectiveModel = model ?? resolved.model ?? undefined;
 
     // ── 4. Processa arquivos ──
     const processedFiles: { name: string; content: string }[] = [];
@@ -432,12 +479,12 @@ Deno.serve(async (req: Request) => {
     // ── 5. Chama a IA ──
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
     let aiText = "";
-    switch (provider) {
-      case "lovable":    aiText = await callLovable(fullPrompt,    apiKey, model); break;
-      case "openai":     aiText = await callOpenAI(fullPrompt,     apiKey, model); break;
-      case "gemini":     aiText = await callGemini(fullPrompt,     apiKey, model); break;
-      case "anthropic":  aiText = await callAnthropic(fullPrompt,  apiKey, model); break;
-      case "perplexity": aiText = await callPerplexity(fullPrompt, apiKey, model); break;
+    switch (providerType) {
+      case "lovable":    aiText = await callLovable(fullPrompt,    apiKey, effectiveModel); break;
+      case "openai":     aiText = await callOpenAI(fullPrompt,     apiKey, effectiveModel); break;
+      case "gemini":     aiText = await callGemini(fullPrompt,     apiKey, effectiveModel); break;
+      case "anthropic":  aiText = await callAnthropic(fullPrompt,  apiKey, effectiveModel); break;
+      case "perplexity": aiText = await callPerplexity(fullPrompt, apiKey, effectiveModel); break;
     }
     if (!aiText.trim()) throw new Error("A IA retornou conteúdo vazio");
 

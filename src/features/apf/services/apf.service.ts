@@ -215,7 +215,8 @@ export async function prepareFilesForEdgeFunction(
  */
 export async function invokeApfGeneration(body: {
   prompt: string;
-  provider: string;
+  provider?: string;
+  providerId?: string;
   // apiKey REMOVIDA — vem do Vault na Edge Function
   model?: string;
   files: Array<{ name: string; content: string; encoding?: "base64" | "text"; mimeType?: string }>;

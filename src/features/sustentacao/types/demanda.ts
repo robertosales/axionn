@@ -109,6 +109,8 @@ export interface Demanda {
   aceite_responsavel?: string | null;
   created_at: string;
   updated_at: string;
+  situacao_changed_at?: string | null;
+  total_horas?: number | null;
 }
 
 export interface DemandaTransition {

@@ -848,6 +848,7 @@ export type Database = {
           responsavel_teste: string | null
           rhm: string
           situacao: string
+          situacao_changed_at: string
           sla: string
           team_id: string
           tipo: string
@@ -880,6 +881,7 @@ export type Database = {
           responsavel_teste?: string | null
           rhm: string
           situacao?: string
+          situacao_changed_at?: string
           sla?: string
           team_id: string
           tipo?: string
@@ -912,6 +914,7 @@ export type Database = {
           responsavel_teste?: string | null
           rhm?: string
           situacao?: string
+          situacao_changed_at?: string
           sla?: string
           team_id?: string
           tipo?: string

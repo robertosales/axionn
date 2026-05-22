@@ -468,6 +468,26 @@ function DemandaCard({
                     <Clock className="h-2.5 w-2.5" /> {slaD}d
                   </span>
                 )}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-muted/60 text-muted-foreground border border-border/50">
+                        <Clock className="h-2.5 w-2.5" /> {formatTimeInColumn(demanda.situacao_changed_at ?? demanda.updated_at)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Tempo nesta coluna</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 font-medium">
+                        {formatHorasTotais(demanda.total_horas)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Horas lançadas na demanda</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 {onNovaAtividade && (
                   <TooltipProvider>
                     <Tooltip>

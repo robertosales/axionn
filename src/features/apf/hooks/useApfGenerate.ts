@@ -12,6 +12,7 @@ import {
   type ApfGeneration,
 } from "../services/apf.service";
 import { supabase } from "@/integrations/supabase/client";
+import { listAIProviders, type AIProvider } from "@/features/admin/services/aiProviders.service";
 
 export type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
 export type OutputFormat = "docx" | "markdown";
@@ -37,13 +38,8 @@ export const PROGRESS_LABELS: Record<ProgressStep, string> = {
  * As API keys são gerenciadas pelo admin via Supabase Vault.
  * O usuário final nunca precisa inserir ou conhecer as keys.
  */
-export const PROVIDERS: { value: Provider; label: string }[] = [
-  { value: "lovable",    label: "Lovable AI (Gemini/GPT) — recomendado" },
-  { value: "openai",     label: "OpenAI (GPT)" },
-  { value: "gemini",     label: "Google Gemini" },
-  { value: "anthropic",  label: "Anthropic (Claude)" },
-  { value: "perplexity", label: "Perplexity" },
-];
+// Mantido apenas para fallback/legado — a lista real vem do banco
+export const PROVIDERS: { value: Provider; label: string }[] = [];
 
 export type InteractiveQuestion = {
   id: string;
@@ -116,7 +112,8 @@ export function useApfGenerate() {
   const [progressStep, setProgressStep]             = useState<ProgressStep>("idle");
   const [generations, setGenerations]               = useState<(ApfGeneration & { template_name?: string })[]>([]);
   const [loadingHistory, setLoadingHistory]         = useState(false);
-  const [provider, setProvider]                     = useState<Provider>("lovable");
+  const [aiProviders, setAiProviders]               = useState<AIProvider[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [apiKey, setApiKey]                         = useState("");
   const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
   const [lastResult, setLastResult] = useState<{
@@ -137,6 +134,19 @@ export function useApfGenerate() {
     fetchActiveTemplates(currentTeamId).then(setTemplates).catch(() => {});
   }, [currentTeamId]);
 
+  // Carregar provedores de IA ativos
+  useEffect(() => {
+    listAIProviders({ onlyActive: true })
+      .then((list) => {
+        setAiProviders(list);
+        if (list.length > 0) {
+          const recommended = list.find((p) => p.is_recommended) ?? list[0];
+          setSelectedProviderId((cur) => cur || recommended.id);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Recarregar hist\u00f3rico quando sprint muda
   useEffect(() => {
     if (!currentTeamId || !selectedSprintId) { setGenerations([]); return; }
@@ -152,7 +162,14 @@ export function useApfGenerate() {
     [templates, selectedTemplateId],
   );
 
+  const selectedProvider = useMemo(
+    () => aiProviders.find((p) => p.id === selectedProviderId) ?? null,
+    [aiProviders, selectedProviderId],
+  );
   const providerCfg = useMemo(() => ({ needsKey: false, placeholder: "" }), []);
+  // Compat com a UI antiga
+  const provider: Provider = (selectedProvider?.provider_type ?? "lovable") as Provider;
+  const setProvider = (_: Provider) => {};
 
   useEffect(() => {
     if (!selectedTemplate) { setQuestions([]); setAnswers({}); return; }
@@ -161,7 +178,8 @@ export function useApfGenerate() {
   }, [selectedTemplate]);
 
   // SEC-005: canGenerate n\u00e3o depende mais de apiKey
-  const canGenerate = !!selectedSprintId && !!selectedTemplateId && !!baselineFile && huFiles.length > 0 && !!modelFile;
+  const canGenerate = !!selectedSprintId && !!selectedTemplateId && !!baselineFile
+    && huFiles.length > 0 && !!modelFile && !!selectedProviderId;
 
   const allQuestionsAnswered = questions.every((q) => {
     const a = answers[q.id];
@@ -179,6 +197,7 @@ export function useApfGenerate() {
     if (!baselineFile)        missing.push("Baseline");
     if (huFiles.length === 0) missing.push("HUs da Sprint");
     if (!modelFile)           missing.push("Modelo de Contagem");
+    if (!selectedProviderId)  missing.push("Provedor de IA");
     if (missing.length > 0) { toast.error(`Preencha antes de gerar: ${missing.join(", ")}`); return; }
 
     setGenerating(true);
@@ -219,7 +238,7 @@ export function useApfGenerate() {
       setProgressStep("calling_ai");
       const result = await invokeApfGeneration({
         prompt:       finalPrompt,
-        provider,
+        providerId:   selectedProviderId,
         model:        undefined,
         files:        filePayload,
         generationId,
@@ -263,7 +282,7 @@ export function useApfGenerate() {
     baselineFile, huFiles, modelFile,
     sprints, outputFormat,
     selectedTemplate, questions, answers,
-    provider,
+    selectedProviderId,
   ]);
 
   const handleGenerateClick = useCallback(() => {
@@ -281,6 +300,7 @@ export function useApfGenerate() {
     huFiles, setHuFiles,
     modelFile, setModelFile,
     provider, setProvider, providerCfg,
+    aiProviders, selectedProviderId, setSelectedProviderId,
     apiKey, setApiKey,
     outputFormat, setOutputFormat,
     generating, canGenerate,

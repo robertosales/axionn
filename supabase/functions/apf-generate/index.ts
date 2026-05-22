@@ -284,7 +284,7 @@ function buildFullPrompt(prompt: string, processedFiles: { name: string; content
   const ctx = processedFiles.length > 0
     ? `\n\n=== ARQUIVOS DE CONTEXTO ===\n${processedFiles.map(f => `--- ${f.name} ---\n${f.content}`).join("\n\n")}\n=== FIM DOS ARQUIVOS ===\n`
     : "";
-  return `Você é um especialista em Análise de Pontos de Função (APF) seguindo a metodologia IFPUG e o Guia de Métricas DPF.\n\nSiga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro.\n\nREGRA — BASELINE:\n- Se um arquivo de BASELINE APF foi fornecido, use a lista de itens para classificar cada funcionalidade:\n  - Impacto "I" (Inclusão) = funcionalidade NÃO existe no baseline\n  - Impacto "A" (Alteração) = funcionalidade JÁ EXISTE no baseline\n  - Impacto "E" (Exclusão) = funcionalidade foi removida\n- Calcule PF FS = PF Bruto × Contribuição FS do fator de impacto aplicado\n\nREGRA — FORMATO DO DOCUMENTO:\n- Use o modelo de documento fornecido como referência de estrutura e seções\n- Mantenha as mesmas seções numeradas: 1. Dados do Atendimento, 2. Contexto, 3. Tabela de Funcionalidades, 4. Funcionalidades Impactadas na Baseline, 5. Itens Não Identificados, 6. Banco de Dados, 7. Contagem de PF (7.1 Detalhamento, 7.2 Consolidado por HU, 7.3 Resumo Executivo), 8. Solicitação de Mudança, 9. Legenda\n- SEMPRE gere a seção 7.2 com a tabela: | HU / Escopo | Qtd. Funções | PF Bruto | PF FS |\n\nREGRA — TABELAS:\n- Use formato Markdown padrão com pipes e linha separadora\n- NÃO inclua tabela dentro de bloco de código\n\nREGRA CRÍTICA — PERGUNTAS NO PROMPT:\n- NÃO inclua perguntas literais no documento gerado\n- Se houver "=== RESPOSTAS DO USUÁRIO ===", incorpore as respostas naturalmente ao texto\n${ctx}\n=== INSTRUÇÕES DO USUÁRIO ===\n${prompt}`;
+  return `Você é um especialista em Análise de Pontos de Função (APF) seguindo a metodologia IFPUG e o Guia de Métricas DPF.\n\nSiga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro.\n\nREGRA — BASELINE:\n- Se um arquivo de BASELINE APF foi fornecido, use a lista de itens para classificar cada funcionalidade:\n  - Impacto \"I\" (Inclusão) = funcionalidade NÃO existe no baseline\n  - Impacto \"A\" (Alteração) = funcionalidade JÁ EXISTE no baseline\n  - Impacto \"E\" (Exclusão) = funcionalidade foi removida\n- Calcule PF FS = PF Bruto × Contribuição FS do fator de impacto aplicado\n\nREGRA — FORMATO DO DOCUMENTO:\n- Use o modelo de documento fornecido como referência de estrutura e seções\n- Mantenha as mesmas seções numeradas: 1. Dados do Atendimento, 2. Contexto, 3. Tabela de Funcionalidades, 4. Funcionalidades Impactadas na Baseline, 5. Itens Não Identificados, 6. Banco de Dados, 7. Contagem de PF (7.1 Detalhamento, 7.2 Consolidado por HU, 7.3 Resumo Executivo), 8. Solicitação de Mudança, 9. Legenda\n- SEMPRE gere a seção 7.2 com a tabela: | HU / Escopo | Qtd. Funções | PF Bruto | PF FS |\n\nREGRA — TABELAS:\n- Use formato Markdown padrão com pipes e linha separadora\n- NÃO inclua tabela dentro de bloco de código\n\nREGRA CRÍTICA — PERGUNTAS NO PROMPT:\n- NÃO inclua perguntas literais no documento gerado\n- Se houver \"=== RESPOSTAS DO USUÁRIO ===\", incorpore as respostas naturalmente ao texto\n${ctx}\n=== INSTRUÇÕES DO USUÁRIO ===\n${prompt}`;
 }
 
 // Chamadas aos providers (apiKey vem do Vault, não do body)
@@ -295,7 +295,10 @@ async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") 
     body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
   });
   if (!r.ok) throw new Error(`Lovable AI [${r.status}]: ${await r.text()}`);
-  return (await r.json()).choices?.[0]?.message?.content ?? "";
+  const data = await r.json();
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error(`Lovable AI retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
+  return text;
 }
 async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -304,17 +307,30 @@ async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
     body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
   });
   if (!r.ok) throw new Error(`OpenAI [${r.status}]: ${await r.text()}`);
-  return (await r.json()).choices?.[0]?.message?.content ?? "";
+  const data = await r.json();
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error(`OpenAI retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
+  return text;
 }
-async function callGemini(p: string, k: string, m = "gemini-1.5-flash") {
+async function callGemini(p: string, k: string, m = "gemini-2.0-flash") {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ parts: [{ text: p }] }] }),
   });
-  if (!r.ok) throw new Error(`Gemini [${r.status}]: ${await r.text()}`);
   const data = await r.json();
-  return data.choices?.[0]?.message?.content ?? data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  // Trata erros retornados com status 200 mas com campo "error" no body
+  if (!r.ok || data.error) {
+    const errMsg = data.error?.message ?? data.error ?? `HTTP ${r.status}`;
+    throw new Error(`Gemini [${r.status}]: ${errMsg}`);
+  }
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  if (!text) {
+    // Loga o motivo de bloqueio, se houver (finishReason, safetyRatings)
+    const reason = data.candidates?.[0]?.finishReason ?? "sem candidatos";
+    throw new Error(`Gemini retornou conteúdo vazio (motivo: ${reason}). Verifique o modelo "${m}" e a chave.`);
+  }
+  return text;
 }
 async function callAnthropic(p: string, k: string, m = "claude-3-5-sonnet-20241022") {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -323,7 +339,10 @@ async function callAnthropic(p: string, k: string, m = "claude-3-5-sonnet-202410
     body: JSON.stringify({ model: m, max_tokens: 8000, messages: [{ role: "user", content: p }] }),
   });
   if (!r.ok) throw new Error(`Anthropic [${r.status}]: ${await r.text()}`);
-  return (await r.json()).content?.[0]?.text ?? "";
+  const data = await r.json();
+  const text = data.content?.[0]?.text ?? "";
+  if (!text) throw new Error(`Anthropic retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
+  return text;
 }
 async function callPerplexity(p: string, k: string, m = "sonar") {
   const r = await fetch("https://api.perplexity.ai/chat/completions", {
@@ -332,7 +351,10 @@ async function callPerplexity(p: string, k: string, m = "sonar") {
     body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
   });
   if (!r.ok) throw new Error(`Perplexity [${r.status}]: ${await r.text()}`);
-  return (await r.json()).choices?.[0]?.message?.content ?? "";
+  const data = await r.json();
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error(`Perplexity retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
+  return text;
 }
 
 // ─────────────────────────────────────────────────────────────

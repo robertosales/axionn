@@ -70,7 +70,7 @@ function fmtDate(d: string) {
 }
 
 function fmtDatePDF(d: string) {
-  if (!d) return "—";
+  if (!d) return "---";
   return new Date(d + "T00:00:00").toLocaleDateString("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric",
   });
@@ -97,8 +97,9 @@ function fmtH(val: number | string | null | undefined): string {
   return formatMinutes(toMin(val));
 }
 
+// Prioridade: start_date > end_date > created_at
 function lancamentoDate(act: any): string {
-  return (act.created_at || act.start_date || act.end_date || "").slice(0, 10);
+  return (act.start_date || act.end_date || act.created_at || "").slice(0, 10);
 }
 
 interface DayGroup {
@@ -116,7 +117,7 @@ interface HuGroup {
 function groupByHuDate(acts: any[]): HuGroup[] {
   const huMap = new Map<string, { huCode: string; huTitle: string; dateMap: Map<string, any[]> }>();
   for (const row of acts) {
-    const huKey = row.hu !== "—" ? row.hu : "SEM-HU";
+    const huKey = row.hu !== "---" ? row.hu : "SEM-HU";
     const date  = lancamentoDate(row);
     if (!huMap.has(huKey)) huMap.set(huKey, { huCode: row.hu, huTitle: row._huTitle || "", dateMap: new Map() });
     const huEntry = huMap.get(huKey)!;
@@ -146,7 +147,6 @@ interface DateGroup {
   totalMin: number;
 }
 
-// FIX: lê row.lancamento (já mapeado no tableData) em vez de lancamentoDate(row)
 function groupByDataInicio(acts: any[]): DateGroup[] {
   const dateMap = new Map<string, any[]>();
   for (const row of acts) {
@@ -167,7 +167,6 @@ const PDF = {
   LIGHT_BG:     [248, 250, 252] as [number,number,number],
   BORDER:       [226, 232, 240] as [number,number,number],
   HEAD_ROW:     [30,  41,  59]  as [number,number,number],
-  DAY_TOTAL_BG: [241, 245, 249] as [number,number,number],
   DAY_DATE_BG:  [236, 253, 245] as [number,number,number],
   DAY_DATE_TXT: [21,  128, 61]  as [number,number,number],
   DONE_TXT:     [6,   95,  70]  as [number,number,number],
@@ -176,10 +175,10 @@ const PDF = {
   OPEN_BG:      [254, 243, 199] as [number,number,number],
 };
 
-// Tabela do PDF tem 3 colunas visíveis por linha de atividade:
-// DESCRIÇÃO ATIVIDADE | STATUS | HORAS
-// A DATA fica como linha-cabeçalho de grupo (colSpan=3) com o total do dia na 3ª coluna.
-const COL = { ACTIVITY: 177, STATUS: 38, HOURS: 38 };
+// 4 colunas: DATA INICIO | DESCRICAO ATIVIDADE | STATUS | HORAS
+// Na linha-cabecalho do grupo: DATA na col1 (verde, bold) | "" col2 | "" col3 | TOTAL col4
+// Nas linhas de atividade: "" col1 | titulo col2 | status col3 | horas col4
+const COL = { DATE: 30, ACTIVITY: 147, STATUS: 38, HOURS: 38 };
 
 async function buildPDFBlob(
   memberMetrics: ReturnType<typeof buildMemberMetrics>,
@@ -200,7 +199,7 @@ async function buildPDFBlob(
   const CW  = W - ML - MR;
 
   const periodoLabel = (filters.dateFrom && filters.dateTo)
-    ? `${isoToBR(filters.dateFrom)} até ${isoToBR(filters.dateTo)}`
+    ? `${isoToBR(filters.dateFrom)} ate ${isoToBR(filters.dateTo)}`
     : "";
 
   const memberMap = new Map<string, typeof tableData>();
@@ -216,22 +215,22 @@ async function buildPDFBlob(
   targets.forEach((member, idx) => {
     if (idx > 0) doc.addPage();
 
-    // ── Cabeçalho verde ──────────────────────────────────────────────────────
+    // Cabecalho verde
     doc.setFillColor(...AGIL_PRIMARY);
     doc.rect(0, 0, W, 26, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(13); doc.setFont("helvetica", "bold");
-    doc.text("RELATÓRIO DE ATIVIDADES & PRODUTIVIDADE INDIVIDUAL", ML, 10);
+    doc.text("RELATORIO DE ATIVIDADES & PRODUTIVIDADE INDIVIDUAL", ML, 10);
     doc.setFontSize(8); doc.setFont("helvetica", "normal");
-    doc.text("Módulo: Sala Ágil", ML, 16);
+    doc.text("Modulo: Sala Agil", ML, 16);
     doc.text(
-      `Gerado em: ${now.toLocaleDateString("pt-BR")} às ${now.toLocaleTimeString("pt-BR")}  ·  Por: ${currentUserName}`,
+      `Gerado em: ${now.toLocaleDateString("pt-BR")} as ${now.toLocaleTimeString("pt-BR")}  -  Por: ${currentUserName}`,
       ML, 21,
     );
 
     let y = 31;
 
-    // ── Card do membro ───────────────────────────────────────────────────────
+    // Card do membro
     const cardH = periodoLabel ? 24 : 18;
     doc.setFillColor(...PDF.LIGHT_BG);
     doc.roundedRect(ML, y, CW, cardH, 2, 2, "F");
@@ -247,16 +246,16 @@ async function buildPDFBlob(
     doc.text(member.role, ML + 17, y + 14);
     if (periodoLabel) {
       doc.setFontSize(7.5); doc.setTextColor(...PDF.DARK); doc.setFont("helvetica", "normal");
-      doc.text(`Período: ${periodoLabel}`, ML + 17, y + 21);
+      doc.text(`Periodo: ${periodoLabel}`, ML + 17, y + 21);
     }
     doc.setFontSize(7.5); doc.setTextColor(...PDF.MUTED);
     doc.text(
-      `Sprint: ${sprintLabel}  ·  Time: ${teamName}`,
+      `Sprint: ${sprintLabel}  -  Time: ${teamName}`,
       ML + CW - 3, y + cardH / 2 + 2, { align: "right" },
     );
     y += cardH + 5;
 
-    // ── KPIs ─────────────────────────────────────────────────────────────────
+    // KPIs
     doc.setTextColor(...PDF.DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
     doc.text("RESUMO DO MEMBRO", ML, y);
     y += 3;
@@ -265,9 +264,9 @@ async function buildPDFBlob(
     const totalMin = acts.reduce((s: number, r: any) => s + toMin(r.horas), 0);
     const kpis = [
       { label: "Atividades",   value: String(member.total),  bg: [219,234,254] as [number,number,number], txt: [30,64,175]  as [number,number,number] },
-      { label: "Concluídas",   value: String(member.closed), bg: AGIL_LIGHT,                              txt: AGIL_DARK },
+      { label: "Concluidas",   value: String(member.closed), bg: AGIL_LIGHT,                              txt: AGIL_DARK },
       { label: "Em Aberto",    value: String(member.open),   bg: [255,237,213] as [number,number,number], txt: [154,52,18]  as [number,number,number] },
-      { label: "Eficiência",   value: `${member.eff}%`,      bg: [243,232,255] as [number,number,number], txt: [109,40,217] as [number,number,number] },
+      { label: "Eficiencia",   value: `${member.eff}%`,      bg: [243,232,255] as [number,number,number], txt: [109,40,217] as [number,number,number] },
       { label: "Horas Concl.", value: fmtH(member.hoursC),   bg: [219,234,254] as [number,number,number], txt: AGIL_PRIMARY },
     ];
     kpis.forEach(({ label, value, bg, txt }, i) => {
@@ -280,16 +279,15 @@ async function buildPDFBlob(
     });
     y += 20;
 
-    // ── Tabela de detalhamento ────────────────────────────────────────────────
-    // Estrutura por grupo de data:
+    // ── Tabela 4 colunas ────────────────────────────────────────────────────
     //
-    //  ┌────────────────────────────────────┬──────────┬──────────┐
-    //  │ 📅 21/05/2026                       │          │  4h 30min│  ← linha-cabeçalho do dia (colSpan=2 + col horas)
-    //  ├────────────────────────────────────┬──────────┬──────────┤
-    //  │ Daily - Time Ágil                  │ Concluída│ 0h 30min │  ← atividade
-    //  │ Projeto SonarQube x IA             │ Concluída│ 1h 30min │
-    //  │ ...                                │ ...      │ ...      │
-    //  └────────────────────────────────────┴──────────┴──────────┘
+    //  | DATA INICIO  | DESCRICAO ATIVIDADE         | STATUS    | HORAS    |
+    //  | 21/05/2026   |                             |           | 4h 30min |  <- linha grupo (verde)
+    //  |              | Daily - Time Agil           | Concluida | 0h 30min |
+    //  |              | Projeto SonarQube x IA      | Concluida | 1h 30min |
+    //  |              | Sprint Planning             | Concluida | 1h 00min |
+    //  | 22/05/2026   |                             |           | 3h 00min |  <- linha grupo (verde)
+    //  |              | Daily NEXO                  | Concluida | 0h 30min |
 
     const dateGroups = groupByDataInicio(acts);
     const body: any[][] = [];
@@ -297,18 +295,32 @@ async function buildPDFBlob(
     for (const group of dateGroups) {
       const dateFmt = group.date ? fmtDatePDF(group.date) : "Sem data";
 
-      // ── Linha-cabeçalho do dia: DATA (colSpan=2) + TOTAL DO DIA (col horas) ──
+      // Linha-cabecalho do grupo: data em verde na col1, cols 2-3 vazias, total na col4
       body.push([
         {
           content: dateFmt,
-          colSpan: 2,
           styles: {
             fillColor: PDF.DAY_DATE_BG,
             textColor: PDF.DAY_DATE_TXT,
             fontStyle: "bold",
             fontSize: 8.5,
-            cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 3 },
+            halign: "center",
+            cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
             valign: "middle",
+          },
+        },
+        {
+          content: "",
+          styles: {
+            fillColor: PDF.DAY_DATE_BG,
+            cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+          },
+        },
+        {
+          content: "",
+          styles: {
+            fillColor: PDF.DAY_DATE_BG,
+            cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
           },
         },
         {
@@ -325,22 +337,29 @@ async function buildPDFBlob(
         },
       ]);
 
-      // ── Linhas de atividades (sem coluna de data) ─────────────────────────
+      // Linhas de atividade: col1 vazia, col2 titulo, col3 status, col4 horas
       group.rows.forEach((r: any, ri: number) => {
         const isDone    = !!r.status;
-        const statusTxt = isDone ? "Concluída" : "Em aberto";
+        const statusTxt = isDone ? "Concluida" : "Em aberto";
         const rowBg     = ri % 2 === 0
           ? [255, 255, 255] as [number,number,number]
           : PDF.LIGHT_BG;
 
         body.push([
           {
+            content: "",
+            styles: {
+              fillColor: rowBg,
+              cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+            },
+          },
+          {
             content: r.titulo,
             styles: {
               fontStyle: "normal",
               fontSize: 8,
               fillColor: rowBg,
-              cellPadding: { top: 2.5, bottom: 2.5, left: 5, right: 3 },
+              cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 3 },
             },
           },
           {
@@ -371,9 +390,10 @@ async function buildPDFBlob(
 
     autoTable(doc, {
       head: [[
-        { content: "DESCRIÇÃO ATIVIDADE", styles: { halign: "left"   } },
-        { content: "STATUS",              styles: { halign: "center" } },
-        { content: "HORAS",               styles: { halign: "right"  } },
+        { content: "DATA INICIO",          styles: { halign: "center" } },
+        { content: "DESCRICAO ATIVIDADE",  styles: { halign: "left"   } },
+        { content: "STATUS",               styles: { halign: "center" } },
+        { content: "HORAS",                styles: { halign: "right"  } },
       ]],
       body,
       startY: y,
@@ -389,12 +409,13 @@ async function buildPDFBlob(
         textColor: 255,
         fontStyle: "bold",
         fontSize: 8,
-        cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 4 },
+        cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
       },
       columnStyles: {
-        0: { cellWidth: COL.ACTIVITY },
-        1: { cellWidth: COL.STATUS,  halign: "center" },
-        2: { cellWidth: COL.HOURS,   halign: "right", fontStyle: "bold", textColor: AGIL_PRIMARY },
+        0: { cellWidth: COL.DATE,     halign: "center" },
+        1: { cellWidth: COL.ACTIVITY, halign: "left"   },
+        2: { cellWidth: COL.STATUS,   halign: "center" },
+        3: { cellWidth: COL.HOURS,    halign: "right", fontStyle: "bold", textColor: AGIL_PRIMARY },
       },
       margin: { left: ML, right: MR },
       tableLineColor: PDF.BORDER,
@@ -402,10 +423,9 @@ async function buildPDFBlob(
       rowPageBreak: "avoid",
     });
 
-    // ── Rodapé resumo ─────────────────────────────────────────────────────────
+    // Rodape resumo
     const finalY = (doc as any).lastAutoTable.finalY + 8;
     const pageH  = doc.internal.pageSize.getHeight();
-
     const summaryY = Math.min(finalY, pageH - 22);
     doc.setFillColor(...AGIL_PRIMARY);
     doc.roundedRect(ML, summaryY, CW, 14, 2, 2, "F");
@@ -420,18 +440,18 @@ async function buildPDFBlob(
       ML + 4, summaryY + 12,
     );
     doc.text(
-      `Cycle Time médio: ${member.cycleTime > 0 ? member.cycleTime + "d" : "—"}`,
+      `Cycle Time medio: ${member.cycleTime > 0 ? member.cycleTime + "d" : "---"}`,
       ML + CW - 4, summaryY + 9, { align: "right" },
     );
 
-    // ── Paginação ─────────────────────────────────────────────────────────────
+    // Paginacao
     const totalPages = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
       doc.setFontSize(7); doc.setFont("helvetica", "normal"); doc.setTextColor(...PDF.MUTED);
-      doc.text(`Página ${i} de ${totalPages}`, W - MR, pageH - 6, { align: "right" });
+      doc.text(`Pagina ${i} de ${totalPages}`, W - MR, pageH - 6, { align: "right" });
       doc.text(
-        "Documento gerado automaticamente pelo sistema — Sala Ágil",
+        "Documento gerado automaticamente pelo sistema - Sala Agil",
         W / 2, pageH - 6, { align: "center" },
       );
     }
@@ -517,6 +537,18 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     if (filters.type     !== "all") acts = acts.filter((a: any) => a.activity_type === filters.type);
     if (filters.status === "done")  acts = acts.filter((a: any) =>  a.is_closed);
     if (filters.status === "open")  acts = acts.filter((a: any) => !a.is_closed);
+    if (filters.dateFrom) {
+      acts = acts.filter((a: any) => {
+        const d = (a.start_date || a.end_date || a.created_at || "").slice(0, 10);
+        return d >= filters.dateFrom;
+      });
+    }
+    if (filters.dateTo) {
+      acts = acts.filter((a: any) => {
+        const d = (a.start_date || a.end_date || a.created_at || "").slice(0, 10);
+        return d <= filters.dateTo;
+      });
+    }
     return acts;
   }, [rawData, filters]);
 
@@ -536,7 +568,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   const kpis = [
     { label: "Atividades",       value: totalActs,               sub: `${totalClosed} concluídas`,              icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
     { label: "Horas Concluídas", value: formatMinutes(totalMinC), sub: `de ${formatMinutes(totalMinP)} planejadas`, icon: <Clock className="h-4 w-4" />,       status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "warning" as any },
-    { label: "Eficiência Média", value: `${avgEff}%`,            sub: "meta ≥ 80%",                              icon: <Zap className="h-4 w-4" />,         status: effStatus(avgEff) },
+    { label: "Eficiência Média", value: `${avgEff}%`,            sub: "meta >= 80%",                             icon: <Zap className="h-4 w-4" />,         status: effStatus(avgEff) },
     { label: "Membros Ativos",   value: memberMetrics.length,    sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
   ];
 
@@ -577,10 +609,10 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
       const hu     = rawData.hus.find((h: any) => h.id === a.hu_id);
       const sprint = hu ? rawData.sprints.find((s: any) => s.id === hu.sprint_id) : null;
       return {
-        membro:      dev?.name    || "—",
+        membro:      dev?.name    || "---",
         titulo:      a.title,
-        sprint:      sprint?.name || "—",
-        hu:          hu?.code     || "—",
+        sprint:      sprint?.name || "---",
+        hu:          hu?.code     || "---",
         horas:       a.hours,
         lancamento:  lancamentoDate(a),
         status:      a.is_closed,
@@ -891,9 +923,9 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
                 <Badge variant="secondary" className="text-[10px] bg-red-50 text-red-600">
                   <Bug className="h-2.5 w-2.5 mr-0.5" />{row.bugsClosed}/{v}
                 </Badge>
-              ) : <span className="text-muted-foreground text-xs">—</span> },
+              ) : <span className="text-muted-foreground text-xs">---</span> },
             { key: "cycleTime", header: "Cycle Time", align: "center", sortable: true,
-              render: (v) => v > 0 ? `${v}d` : "—" },
+              render: (v) => v > 0 ? `${v}d` : "---" },
           ]}
         />
 
@@ -904,12 +936,12 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           rowKey={(_, i) => i}
           columns={[
             { key: "_code",      header: "Código",
-              render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || "—"}</span> },
+              render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || "---"}</span> },
             { key: "membro",     header: "Membro",              sortable: true },
             { key: "hu",         header: "HU", align: "center",
-              render: (v) => v !== "—" ? <span className="font-mono text-xs">{v}</span> : "—" },
+              render: (v) => v !== "---" ? <span className="font-mono text-xs">{v}</span> : "---" },
             { key: "lancamento", header: "Data Início", align: "center",
-              render: (v) => v ? fmtDate(v) : "—" },
+              render: (v) => v ? fmtDate(v) : "---" },
             { key: "titulo",     header: "Descrição Atividade", sortable: true },
             { key: "horas",      header: "Duração", align: "center", sortable: true,
               render: (v) => <span className="font-semibold text-primary">{fmtH(v)}</span> },

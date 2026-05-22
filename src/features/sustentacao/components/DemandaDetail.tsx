@@ -31,6 +31,7 @@ import {
   Link2,
   AlertCircle,
   Eye,
+  Settings2,
 } from "lucide-react";
 import { JustificativaDialog } from "./JustificativaDialog";
 import { EncerramentoDialog } from "./EncerramentoDialog";
@@ -38,6 +39,14 @@ import { SuspensaoDialog } from "./SuspensaoDialog";
 import { NovaAtividadeDialog } from "./NovaAtividadeDialog";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { HorasInput, hhmmToDecimal } from "@/shared/components/common/HorasInput";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Demanda, DemandaHour } from "../types/demanda";
@@ -62,15 +71,6 @@ import {
   fetchProfileDisplayNameById,
   fetchProfilesByUserIds,
 } from "../services/profiles.service";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Settings2 } from "lucide-react";
 import type { DemandaResponsavel } from "../services/responsaveis.service";
 import type { DemandaEvidencia } from "../services/evidencias.service";
 
@@ -311,7 +311,7 @@ export function DemandaDetail({
   const [showFasesManager, setShowFasesManager] = useState(false);
   const [newFaseLabel, setNewFaseLabel] = useState("");
   const [deleteHourId, setDeleteHourId] = useState<string | null>(null);
-  // Edição de atividade (somente admin)
+  // Edição de atividade — delegada ao NovaAtividadeDialog (inclui campo "Lançado por" para admin)
   const [editHour, setEditHour] = useState<DemandaHour | null>(null);
   const [showEditHourDialog, setShowEditHourDialog] = useState(false);
 
@@ -601,7 +601,8 @@ export function DemandaDetail({
   const handleAddResp = async (userId: string) => {
     if (!demanda?.id) return;
     try {
-      await respSvc.addResponsavel(demanda.id, userId, addPapel);
+      const papel = await respSvc.fetchPrimaryRoleLabel(userId);
+      await respSvc.addResponsavel(demanda.id, userId, papel);
       toast.success("Responsável adicionado");
       setSearchQuery("");
       setSearchResults([]);
@@ -1053,7 +1054,7 @@ export function DemandaDetail({
                         />
                       </div>
 
-                      {/* ── Tempo HH:MM — substituiu o antigo <Input type="number"> ── */}
+                      {/* Tempo HH:MM */}
                       <div>
                         <Label className="text-xs">Tempo (HH:MM)</Label>
                         <HorasInput
@@ -1114,7 +1115,6 @@ export function DemandaDetail({
                             <td className="px-3 py-2 text-xs">{fasesMap[h.fase] || h.fase}</td>
                             <td className="px-3 py-2 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
                             <td className="px-3 py-2 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
-                            {/* Exibe HH:MM em vez de decimal */}
                             <td className="px-3 py-2 text-xs text-right font-mono font-medium">
                               {minutesToDisplay(Number(h.horas))}
                             </td>
@@ -1160,13 +1160,9 @@ export function DemandaDetail({
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input placeholder="Adicionar Responsável..." value={searchQuery} onChange={(e) => handleSearch(e.target.value)} className="pl-9" />
                     </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Papel</Label>
-                    <Select value={addPapel} onValueChange={setAddPapel}>
-                      <SelectTrigger className="mt-1 w-40"><SelectValue /></SelectTrigger>
-                      <SelectContent>{PAPEIS_OPTIONS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      O papel é preenchido automaticamente conforme o perfil do usuário.
+                    </p>
                   </div>
                 </div>
                 {searchResults.length > 0 && (
@@ -1317,6 +1313,7 @@ export function DemandaDetail({
         isCorretiva={isCorretiva}
       />
 
+      {/* Edição de atividade via NovaAtividadeDialog — inclui campo "Lançado por" para admin */}
       <NovaAtividadeDialog
         demanda={demanda as Demanda}
         open={showEditHourDialog}

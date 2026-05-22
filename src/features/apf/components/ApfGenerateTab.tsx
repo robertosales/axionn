@@ -18,10 +18,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   useApfGenerate,
-  PROVIDERS,
   YESNO_REGEX,
   PROGRESS_LABELS,
-  type Provider,
   type OutputFormat,
 } from "../hooks/useApfGenerate";
 
@@ -129,7 +127,8 @@ export function ApfGenerateTab() {
     baselineFile, setBaselineFile,
     huFiles, setHuFiles,
     modelFile, setModelFile,
-    provider, setProvider, providerCfg,
+    providerCfg,
+    aiProviders, selectedProviderId, setSelectedProviderId,
     apiKey, setApiKey,
     outputFormat, setOutputFormat,
     generating, canGenerate,
@@ -189,10 +188,21 @@ export function ApfGenerateTab() {
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Escolha qual IA gerará o documento <span className="text-destructive">*</span></Label>
-              <Select value={provider} onValueChange={(v) => setProvider(v as Provider)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{PROVIDERS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+              <Select value={selectedProviderId} onValueChange={setSelectedProviderId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={aiProviders.length === 0 ? "Nenhuma IA cadastrada — configure no painel admin" : "Selecione uma IA"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {aiProviders.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
+              {aiProviders.length === 0 && (
+                <p className="text-[11px] text-destructive">
+                  Nenhum provedor de IA ativo. Peça ao administrador para cadastrar em <strong>Admin → IAs</strong>.
+                </p>
+              )}
             </div>
             {providerCfg.needsKey ? (
               <div className="space-y-1.5">

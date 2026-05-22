@@ -162,6 +162,45 @@ export type Database = {
           },
         ]
       }
+      ai_providers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          has_key: boolean
+          id: string
+          is_active: boolean
+          is_recommended: boolean
+          model: string | null
+          name: string
+          provider_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          has_key?: boolean
+          id?: string
+          is_active?: boolean
+          is_recommended?: boolean
+          model?: string | null
+          name: string
+          provider_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          has_key?: boolean
+          id?: string
+          is_active?: boolean
+          is_recommended?: boolean
+          model?: string | null
+          name?: string
+          provider_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       apf_generations: {
         Row: {
           baseline_file: string | null
@@ -848,10 +887,13 @@ export type Database = {
           responsavel_teste: string | null
           rhm: string
           situacao: string
+          situacao_changed_at: string
           sla: string
           team_id: string
           tipo: string
           tipo_defeito: string | null
+          titulo: string
+          total_horas: number | null
           updated_at: string
         }
         Insert: {
@@ -878,10 +920,13 @@ export type Database = {
           responsavel_teste?: string | null
           rhm: string
           situacao?: string
+          situacao_changed_at?: string
           sla?: string
           team_id: string
           tipo?: string
           tipo_defeito?: string | null
+          titulo?: string
+          total_horas?: number | null
           updated_at?: string
         }
         Update: {
@@ -908,10 +953,13 @@ export type Database = {
           responsavel_teste?: string | null
           rhm?: string
           situacao?: string
+          situacao_changed_at?: string
           sla?: string
           team_id?: string
           tipo?: string
           tipo_defeito?: string | null
+          titulo?: string
+          total_horas?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -2921,6 +2969,7 @@ export type Database = {
         }
         Returns: Json
       }
+      delete_ai_provider_key: { Args: { p_id: string }; Returns: undefined }
       fn_audit_log_insert: {
         Args: {
           p_action: string
@@ -2967,6 +3016,7 @@ export type Database = {
         Returns: Json
       }
       get_ai_provider_key: { Args: { p_provider: string }; Returns: string }
+      get_ai_provider_key_by_id: { Args: { p_id: string }; Returns: string }
       get_capacity_planner: {
         Args: {
           p_default_cap?: number
@@ -2998,6 +3048,10 @@ export type Database = {
       }
       set_ai_provider_key: {
         Args: { p_key: string; p_provider: string }
+        Returns: undefined
+      }
+      set_ai_provider_key_v2: {
+        Args: { p_id: string; p_key: string }
         Returns: undefined
       }
       status_concluidos: { Args: never; Returns: string[] }

@@ -36,6 +36,27 @@ export type { Demanda };
 
 export const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
 
+// ── Helpers de tempo em coluna / horas ────────────────────────────────
+function formatTimeInColumn(iso?: string | null): string {
+  if (!iso) return "—";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 0) return "agora";
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+function formatHorasTotais(horas?: number | null): string {
+  const h = Number(horas ?? 0);
+  if (!h) return "0h";
+  const hh = Math.floor(h);
+  const mm = Math.round((h - hh) * 60);
+  return mm > 0 ? `${hh}h${String(mm).padStart(2, "0")}` : `${hh}h`;
+}
+
 // Colunas padrão usadas como fallback quando workflowColumns não for passado
 export const FLOWPRINCIPAL = [
   "fila_atendimento",
@@ -447,6 +468,26 @@ function DemandaCard({
                     <Clock className="h-2.5 w-2.5" /> {slaD}d
                   </span>
                 )}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-muted/60 text-muted-foreground border border-border/50">
+                        <Clock className="h-2.5 w-2.5" /> {formatTimeInColumn(demanda.situacao_changed_at ?? demanda.updated_at)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Tempo nesta coluna</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 font-medium">
+                        {formatHorasTotais(demanda.total_horas)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Horas lançadas na demanda</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 {onNovaAtividade && (
                   <TooltipProvider>
                     <Tooltip>

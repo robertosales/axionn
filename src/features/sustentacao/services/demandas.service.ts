@@ -78,6 +78,10 @@ export async function addHours(h: Omit<DemandaHour, "id" | "created_at"> & { cre
   if (error) throw error;
 }
 
+/**
+ * fetchHours — lê direto da tabela demanda_hours.
+ * RLS já permite SELECT para membros do time da demanda e admins.
+ */
 export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
   const { data, error } = await supabase
     .from("demanda_hours" as any)

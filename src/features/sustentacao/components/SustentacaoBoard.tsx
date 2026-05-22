@@ -36,6 +36,27 @@ export type { Demanda };
 
 export const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
 
+// ── Helpers de tempo em coluna / horas ────────────────────────────────
+function formatTimeInColumn(iso?: string | null): string {
+  if (!iso) return "—";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 0) return "agora";
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+function formatHorasTotais(horas?: number | null): string {
+  const h = Number(horas ?? 0);
+  if (!h) return "0h";
+  const hh = Math.floor(h);
+  const mm = Math.round((h - hh) * 60);
+  return mm > 0 ? `${hh}h${String(mm).padStart(2, "0")}` : `${hh}h`;
+}
+
 // Colunas padrão usadas como fallback quando workflowColumns não for passado
 export const FLOWPRINCIPAL = [
   "fila_atendimento",

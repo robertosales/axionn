@@ -565,9 +565,6 @@ Deno.serve(async (req: Request) => {
 
     // ── 3. Resolve o provider + busca a API key no Vault ──
     const resolved = await resolveProvider(providerId, provider);
-    const apiKey = resolved.apiKey;
-    const providerType = resolved.providerType;
-    const effectiveModel = model ?? resolved.model ?? undefined;
 
     // ── 4. Processa arquivos ──
     const processedFiles: { name: string; content: string }[] = [];
@@ -576,16 +573,76 @@ Deno.serve(async (req: Request) => {
       processedFiles.push({ name: extracted.name, content: extracted.content });
     }
 
-    // ── 5. Chama a IA ──
+    // ── 5. Chama a IA com fallback automático ──
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
+
     let aiText = "";
-    switch (providerType) {
-      case "lovable":    aiText = await callLovable(fullPrompt,    apiKey, effectiveModel); break;
-      case "openai":     aiText = await callOpenAI(fullPrompt,     apiKey, effectiveModel); break;
-      case "gemini":     aiText = await callGemini(fullPrompt,     apiKey, effectiveModel); break;
-      case "anthropic":  aiText = await callAnthropic(fullPrompt,  apiKey, effectiveModel); break;
-      case "perplexity": aiText = await callPerplexity(fullPrompt, apiKey, effectiveModel); break;
+    let usedProviderName = resolved.name;
+    let fallbackInfo: { from: string; to: string; reason: string } | null = null;
+    const attempts: Array<{ name: string; status?: number; error: string }> = [];
+
+    try {
+      aiText = await callProvider(
+        resolved.providerType, fullPrompt, resolved.apiKey,
+        model ?? resolved.model ?? undefined,
+      );
+    } catch (primaryErr) {
+      const primaryStatus = primaryErr instanceof ProviderError ? primaryErr.status : 500;
+      attempts.push({
+        name: resolved.name, status: primaryStatus,
+        error: primaryErr instanceof Error ? primaryErr.message : String(primaryErr),
+      });
+      console.warn(`[apf-generate] Primary provider "${resolved.name}" failed (status=${primaryStatus}). Trying fallback...`);
+
+      if (!isFallbackableStatus(primaryStatus)) {
+        // erro não-recuperável → propaga
+        throw primaryErr;
+      }
+
+      // Tenta o próximo provider ativo (excluindo o que já falhou)
+      const candidates = await listActiveProvidersForFallback(providerId);
+      let succeeded = false;
+      for (const cand of candidates) {
+        try {
+          const candKey = await getProviderKey(cand.id, cand.provider_type);
+          if (!candKey) {
+            attempts.push({ name: cand.name, error: "Sem API key configurada" });
+            continue;
+          }
+          aiText = await callProvider(cand.provider_type, fullPrompt, candKey, cand.model ?? undefined);
+          usedProviderName = cand.name;
+          fallbackInfo = {
+            from: resolved.name, to: cand.name,
+            reason: primaryStatus === 402 ? "sem créditos" : `falha HTTP ${primaryStatus}`,
+          };
+          succeeded = true;
+          console.log(`[apf-generate] Fallback succeeded: ${resolved.name} → ${cand.name}`);
+          break;
+        } catch (fallErr) {
+          const fallStatus = fallErr instanceof ProviderError ? fallErr.status : 500;
+          attempts.push({
+            name: cand.name, status: fallStatus,
+            error: fallErr instanceof Error ? fallErr.message : String(fallErr),
+          });
+          console.warn(`[apf-generate] Fallback "${cand.name}" failed (status=${fallStatus}).`);
+        }
+      }
+
+      if (!succeeded) {
+        // Nenhum provider conseguiu → retorna estrutura amigável (sem quebrar a tela)
+        const { reason, userMessage } = mapErrorToReason(primaryErr);
+        if (generationId) {
+          const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+          await admin.from("apf_generations").update({
+            status: "error", error_message: userMessage,
+          }).eq("id", generationId);
+        }
+        return new Response(JSON.stringify({
+          success: false, reason, userMessage, attempts,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
+
     if (!aiText.trim()) throw new Error("A IA retornou conteúdo vazio");
 
     // ── 6. Gera docx + persiste ──
@@ -599,25 +656,23 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, docxBase64, markdown: aiText, charCount: aiText.length, pfBreakdown, pfTotal, outputFilename }),
+      JSON.stringify({
+        success: true, docxBase64, markdown: aiText, charCount: aiText.length,
+        pfBreakdown, pfTotal, outputFilename,
+        providerUsed: usedProviderName, fallback: fallbackInfo,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
 
   } catch (e: unknown) {
     console.error("apf-generate error:", e);
-    const raw = e instanceof Error ? e.message : "Erro desconhecido";
-    let friendly = raw;
-    if (/credit balance is too low/i.test(raw))
-      friendly = "A conta associada à chave configurada está sem créditos. Contate o administrador.";
-    else if (/invalid.*api.key|incorrect api key/i.test(raw))
-      friendly = "Chave de API inválida para o provider. Contate o administrador.";
-    else if (/rate limit|429/i.test(raw))
-      friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
-    else if (/não configurada/i.test(raw))
-      friendly = raw; // mensagem já é amigável
+    const { reason, userMessage, status } = mapErrorToReason(e);
+    // Para erros recuperáveis (402/429/5xx) devolvemos 200 com payload tipado, evitando
+    // Runtime Error no cliente. Outros erros mantém status apropriado.
+    const httpStatus = isFallbackableStatus(status) ? 200 : (status >= 400 && status < 600 ? status : 500);
     return new Response(
-      JSON.stringify({ error: friendly, raw }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ success: false, reason, userMessage }),
+      { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

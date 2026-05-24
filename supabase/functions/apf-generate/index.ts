@@ -49,13 +49,18 @@ interface RequestBody {
   model?:       string;
   files?:       FileInput[];
   generationId?: string;
-  // apiKey e supabaseServiceKey REMOVIDOS — não aceitos mais
+  /**
+   * Modelo híbrido: chave inline informada pelo usuário (não persistida).
+   * Só é considerada quando o Vault não tem chave para este provider
+   * e o provider não é o Lovable AI.
+   */
+  apiKey?: string;
 }
 
 // ─────────────────────────────────────────────────────────────
 // Resolve provider row + API key
 // ─────────────────────────────────────────────────────────────
-async function resolveProvider(providerId?: string, providerLegacy?: string): Promise<{
+async function resolveProvider(providerId?: string, providerLegacy?: string, bodyApiKey?: string): Promise<{
   providerType: Provider; apiKey: string; model: string | null; name: string;
 }> {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -96,8 +101,14 @@ async function resolveProvider(providerId?: string, providerLegacy?: string): Pr
     apiKey = Deno.env.get("LOVABLE_API_KEY") ?? null;
   }
 
+  // Modelo híbrido: aceita chave inline informada pelo usuário quando o
+  // Vault não tem nada cadastrado (e o provider não é o Lovable).
+  if (!apiKey && row.provider_type !== "lovable" && bodyApiKey && bodyApiKey.trim().length >= 10) {
+    apiKey = bodyApiKey.trim();
+  }
+
   if (!apiKey) {
-    throw new Error(`API key não configurada para "${row.name}". Configure no painel administrativo.`);
+    throw new Error(`API key não configurada para "${row.name}". Cadastre no painel admin ou informe a chave na tela.`);
   }
 
   return { providerType: row.provider_type, apiKey, model: row.model, name: row.name };
@@ -563,8 +574,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 3. Resolve o provider + busca a API key no Vault ──
-    const resolved = await resolveProvider(providerId, provider);
+    // ── 3. Resolve o provider + busca a API key (Vault → env → body) ──
+    const resolved = await resolveProvider(providerId, provider, body.apiKey);
 
     // ── 4. Processa arquivos ──
     const processedFiles: { name: string; content: string }[] = [];

@@ -263,7 +263,7 @@ export function useApfGenerate() {
 
       // \u2500\u2500 ETAPA 2: Ler e converter arquivos \u2500\u2500
       setProgressStep("reading_files");
-      const allFiles    = [baselineFile!, ...huFiles, modelFile!];
+      const allFiles    = [baselineFile!, ...huFiles, modelFile!, ...sqlFiles];
       const filePayload = await prepareFilesForEdgeFunction(allFiles);
 
       const finalPrompt = applyAnswersToPrompt(
@@ -275,9 +275,11 @@ export function useApfGenerate() {
       // \u2500\u2500 ETAPA 3: Chamar a IA \u2500\u2500
       // SEC-005: apiKey n\u00e3o \u00e9 mais passada \u2014 a Edge Function busca no Vault
       setProgressStep("calling_ai");
+      const isInlineProvider = selectedProviderId.startsWith("inline:");
       const result = await invokeApfGeneration({
         prompt:       finalPrompt,
-        providerId:   selectedProviderId,
+        providerId:   isInlineProvider ? undefined : selectedProviderId,
+        provider:     isInlineProvider ? selectedProvider?.provider_type : undefined,
         model:        undefined,
         files:        filePayload,
         generationId,
@@ -322,7 +324,7 @@ export function useApfGenerate() {
     baselineFile, huFiles, modelFile,
     sprints, outputFormat,
     selectedTemplate, questions, answers,
-    selectedProviderId, apiKey, providerCfg.needsKey,
+    selectedProviderId, selectedProvider?.provider_type, apiKey, providerCfg.needsKey, sqlFiles,
   ]);
 
   const handleGenerateClick = useCallback(() => {
@@ -349,6 +351,7 @@ export function useApfGenerate() {
     generations, loadingHistory,
     lastResult, showPreview, setShowPreview,
     questions, answers, setAnswers,
+    sqlFiles, setSqlFiles,
     showQuestions, setShowQuestions,
     allQuestionsAnswered,
   };

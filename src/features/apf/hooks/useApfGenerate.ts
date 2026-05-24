@@ -94,6 +94,7 @@ export function applyAnswersToPrompt(
   prompt: string,
   questions: InteractiveQuestion[],
   answers: Record<string, { value: string; detail?: string }>,
+  sqlFileNames: string[] = [],
 ): string {
   if (questions.length === 0) return prompt;
   const summary = questions
@@ -103,7 +104,10 @@ export function applyAnswersToPrompt(
       if (q.kind === "yesno") {
         const isYes = a.value === "sim";
         const detail = isYes && a.detail?.trim() ? `\n  Detalhes: ${a.detail.trim()}` : "";
-        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "N\u00e3o"}${detail}`;
+        const scripts = isYes && q.allowSqlFiles && sqlFileNames.length > 0
+          ? `\n  Scripts SQL Server anexados: ${sqlFileNames.join(", ")}`
+          : "";
+        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "N\u00e3o"}${detail}${scripts}`;
       }
       return `- ${q.text}\n  Resposta: ${a.value || "(vazio)"}`;
     })

@@ -67,6 +67,16 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
 
   let row: { id: string; name: string; provider_type: Provider; model: string | null } | null = null;
 
+  // Modelo híbrido: provider temporário selecionado na tela com chave inline.
+  if (!providerId && providerLegacy && providerLegacy !== "lovable" && bodyApiKey && bodyApiKey.trim().length >= 10) {
+    return {
+      providerType: providerLegacy as Provider,
+      apiKey: bodyApiKey.trim(),
+      model: null,
+      name: `${providerLegacy} — chave temporária`,
+    };
+  }
+
   if (providerId) {
     const { data, error } = await admin
       .from("ai_providers")
@@ -87,17 +97,6 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
       .limit(1)
       .maybeSingle();
     row = (data as any) ?? null;
-  }
-
-  // Modelo híbrido: se o usuário escolheu um provider temporário e informou a
-  // chave na tela, a geração não depende de cadastro prévio em ai_providers.
-  if (!row && providerLegacy && providerLegacy !== "lovable" && bodyApiKey && bodyApiKey.trim().length >= 10) {
-    return {
-      providerType: providerLegacy as Provider,
-      apiKey: bodyApiKey.trim(),
-      model: null,
-      name: `${providerLegacy} — chave temporária`,
-    };
   }
 
   if (!row) throw new Error("Nenhum provedor de IA selecionado/cadastrado.");

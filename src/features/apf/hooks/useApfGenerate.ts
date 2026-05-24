@@ -133,6 +133,7 @@ export function useApfGenerate() {
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [apiKey, setApiKey]                         = useState("");
   const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
+  const [sqlFiles, setSqlFiles]                     = useState<File[]>([]);
   const [lastResult, setLastResult] = useState<{
     base64: string;
     markdown: string;
@@ -155,9 +156,13 @@ export function useApfGenerate() {
   useEffect(() => {
     listAIProviders({ onlyActive: true })
       .then((list) => {
-        setAiProviders(list);
-        if (list.length > 0) {
-          const recommended = list.find((p) => p.is_recommended) ?? list[0];
+        const merged = [
+          ...list,
+          ...INLINE_AI_PROVIDERS.filter((inline) => !list.some((p) => p.provider_type === inline.provider_type && !p.has_key)),
+        ];
+        setAiProviders(merged);
+        if (merged.length > 0) {
+          const recommended = merged.find((p) => p.is_recommended) ?? merged[0];
           setSelectedProviderId((cur) => cur || recommended.id);
         }
       })
@@ -218,7 +223,7 @@ export function useApfGenerate() {
   const allQuestionsAnswered = questions.every((q) => {
     const a = answers[q.id];
     if (!a || !a.value) return false;
-    if (q.kind === "yesno" && a.value === "sim" && !a.detail?.trim()) return false;
+    if (q.kind === "yesno" && a.value === "sim" && !a.detail?.trim() && !(q.allowSqlFiles && sqlFiles.length > 0)) return false;
     return true;
   });
 

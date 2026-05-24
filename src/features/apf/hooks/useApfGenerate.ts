@@ -267,7 +267,8 @@ export function useApfGenerate() {
 
       // \u2500\u2500 ETAPA 2: Ler e converter arquivos \u2500\u2500
       setProgressStep("reading_files");
-      const allFiles    = [baselineFile!, ...huFiles, modelFile!, ...sqlFiles];
+      const hasDbChanges = questions.some((q) => q.allowSqlFiles && answers[q.id]?.value === "sim");
+      const allFiles    = [baselineFile!, ...huFiles, modelFile!, ...(hasDbChanges ? sqlFiles : [])];
       const filePayload = await prepareFilesForEdgeFunction(allFiles);
 
       const finalPrompt = applyAnswersToPrompt(

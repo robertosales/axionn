@@ -67,6 +67,27 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
 
   let row: { id: string; name: string; provider_type: Provider; model: string | null } | null = null;
 
+  if (!providerId && providerLegacy === "lovable") {
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY") ?? null;
+    if (!lovableKey) throw new Error("LOVABLE_API_KEY não configurada.");
+    return {
+      providerType: "lovable",
+      apiKey: lovableKey,
+      model: "google/gemini-2.5-flash",
+      name: "Lovable AI (Gemini/GPT) — recomendado",
+    };
+  }
+
+  // Modelo híbrido: provider temporário selecionado na tela com chave inline.
+  if (!providerId && providerLegacy && providerLegacy !== "lovable" && bodyApiKey && bodyApiKey.trim().length >= 10) {
+    return {
+      providerType: providerLegacy as Provider,
+      apiKey: bodyApiKey.trim(),
+      model: null,
+      name: `${providerLegacy} — chave temporária`,
+    };
+  }
+
   if (providerId) {
     const { data, error } = await admin
       .from("ai_providers")

@@ -137,6 +137,7 @@ export function ApfGenerateTab() {
     generations, loadingHistory,
     lastResult, showPreview, setShowPreview,
     questions, answers, setAnswers,
+    sqlFiles, setSqlFiles,
     showQuestions, setShowQuestions,
     allQuestionsAnswered,
   } = useApfGenerate();
@@ -364,6 +365,28 @@ export function ApfGenerateTab() {
                         <Label className="text-[11px] text-muted-foreground">{q.followUp ?? "Descreva os detalhes"} <span className="text-destructive">*</span></Label>
                         <Textarea rows={3} placeholder="Informe aqui o que foi alterado..." value={a.detail ?? ""}
                           onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: { value: "sim", detail: e.target.value } }))} />
+                        {q.allowSqlFiles && (
+                          <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                            <Label className="text-[11px] font-medium">Scripts SQL Server</Label>
+                            {sqlFiles.length > 0 && (
+                              <div className="space-y-1">
+                                {sqlFiles.map((file, idx) => (
+                                  <div key={`${file.name}-${idx}`} className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5">
+                                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="min-w-0 flex-1 truncate text-[11px]">{file.name}</span>
+                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSqlFiles((prev) => prev.filter((_, i) => i !== idx))}>
+                                      <X className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground hover:border-primary/50">
+                              <Upload className="h-3.5 w-3.5" /> Anexar .sql ou .txt
+                              <input type="file" multiple accept=".sql,.txt" className="hidden" onChange={(e) => { const selected = Array.from(e.target.files ?? []); if (selected.length) setSqlFiles((prev) => [...prev, ...selected]); e.target.value = ""; }} />
+                            </label>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

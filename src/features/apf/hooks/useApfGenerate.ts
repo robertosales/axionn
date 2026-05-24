@@ -46,13 +46,29 @@ export type InteractiveQuestion = {
   text: string;
   kind: "yesno" | "open";
   followUp?: string;
+  allowSqlFiles?: boolean;
 };
+
+const DEFAULT_DB_CHANGE_QUESTION: InteractiveQuestion = {
+  id: "q_db_changes",
+  text: "Houve alteração de banco de dados?",
+  kind: "yesno",
+  followUp: "Descreva as alterações de banco e anexe os scripts SQL Server, se houver.",
+  allowSqlFiles: true,
+};
+
+const INLINE_AI_PROVIDERS: AIProvider[] = [
+  { id: "inline:lovable", name: "Lovable AI (Gemini/GPT) — recomendado", provider_type: "lovable", model: "google/gemini-2.5-flash", is_recommended: true, is_active: true, has_key: true, created_at: "", updated_at: "" },
+  { id: "inline:openai", name: "OpenAI — informar chave agora", provider_type: "openai", model: "gpt-4o-mini", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
+  { id: "inline:gemini", name: "Google Gemini — informar chave agora", provider_type: "gemini", model: "gemini-2.0-flash", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
+  { id: "inline:anthropic", name: "Anthropic Claude — informar chave agora", provider_type: "anthropic", model: "claude-3-5-sonnet-20241022", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
+];
 
 export const YESNO_REGEX =
   /\(\s*(sim|s)\s*\/\s*(n[\u00e3a]o|n)\s*\)|\[\s*(sim|s)\s*\/\s*(n[\u00e3a]o|n)\s*\]/i;
 
 export function detectInteractiveQuestions(prompt: string): InteractiveQuestion[] {
-  if (!prompt) return [];
+  if (!prompt) return [DEFAULT_DB_CHANGE_QUESTION];
   const lines = prompt.split(/\r?\n/);
   const questions: InteractiveQuestion[] = [];
   lines.forEach((rawLine, idx) => {
@@ -64,12 +80,14 @@ export function detectInteractiveQuestions(prompt: string): InteractiveQuestion[
         /^se\s+sim/i.test(next) || /descreva|informe|detalhe/i.test(next)
           ? next
           : "Descreva o que foi alterado";
-      questions.push({ id: `q_${idx}`, text: line, kind: "yesno", followUp });
+      questions.push({ id: `q_${idx}`, text: line, kind: "yesno", followUp, allowSqlFiles: /banco|database|sql|dados/i.test(`${line} ${next}`) });
       return;
     }
     const open = line.match(/\{\{\s*pergunta\s*:\s*(.+?)\s*\}\}/i);
     if (open) questions.push({ id: `q_${idx}`, text: open[1], kind: "open" });
   });
+  const hasDbChangeQuestion = questions.some((q) => /banco|dados|database|sql/i.test(q.text));
+  if (!hasDbChangeQuestion) questions.push(DEFAULT_DB_CHANGE_QUESTION);
   return questions;
 }
 
@@ -77,6 +95,7 @@ export function applyAnswersToPrompt(
   prompt: string,
   questions: InteractiveQuestion[],
   answers: Record<string, { value: string; detail?: string }>,
+  sqlFileNames: string[] = [],
 ): string {
   if (questions.length === 0) return prompt;
   const summary = questions
@@ -86,7 +105,10 @@ export function applyAnswersToPrompt(
       if (q.kind === "yesno") {
         const isYes = a.value === "sim";
         const detail = isYes && a.detail?.trim() ? `\n  Detalhes: ${a.detail.trim()}` : "";
-        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "N\u00e3o"}${detail}`;
+        const scripts = isYes && q.allowSqlFiles && sqlFileNames.length > 0
+          ? `\n  Scripts SQL Server anexados: ${sqlFileNames.join(", ")}`
+          : "";
+        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "N\u00e3o"}${detail}${scripts}`;
       }
       return `- ${q.text}\n  Resposta: ${a.value || "(vazio)"}`;
     })
@@ -116,6 +138,7 @@ export function useApfGenerate() {
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [apiKey, setApiKey]                         = useState("");
   const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
+  const [sqlFiles, setSqlFiles]                     = useState<File[]>([]);
   const [lastResult, setLastResult] = useState<{
     base64: string;
     markdown: string;
@@ -138,13 +161,20 @@ export function useApfGenerate() {
   useEffect(() => {
     listAIProviders({ onlyActive: true })
       .then((list) => {
-        setAiProviders(list);
-        if (list.length > 0) {
-          const recommended = list.find((p) => p.is_recommended) ?? list[0];
+        const merged = [
+          ...list,
+          ...INLINE_AI_PROVIDERS.filter((inline) => !list.some((p) => p.provider_type === inline.provider_type)),
+        ];
+        setAiProviders(merged);
+        if (merged.length > 0) {
+          const recommended = merged.find((p) => p.is_recommended) ?? merged[0];
           setSelectedProviderId((cur) => cur || recommended.id);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setAiProviders(INLINE_AI_PROVIDERS);
+        setSelectedProviderId((cur) => cur || INLINE_AI_PROVIDERS[0].id);
+      });
   }, []);
 
   // Recarregar hist\u00f3rico quando sprint muda
@@ -201,7 +231,7 @@ export function useApfGenerate() {
   const allQuestionsAnswered = questions.every((q) => {
     const a = answers[q.id];
     if (!a || !a.value) return false;
-    if (q.kind === "yesno" && a.value === "sim" && !a.detail?.trim()) return false;
+    if (q.kind === "yesno" && a.value === "sim" && !a.detail?.trim() && !(q.allowSqlFiles && sqlFiles.length > 0)) return false;
     return true;
   });
 
@@ -241,21 +271,25 @@ export function useApfGenerate() {
 
       // \u2500\u2500 ETAPA 2: Ler e converter arquivos \u2500\u2500
       setProgressStep("reading_files");
-      const allFiles    = [baselineFile!, ...huFiles, modelFile!];
+      const hasDbChanges = questions.some((q) => q.allowSqlFiles && answers[q.id]?.value === "sim");
+      const allFiles    = [baselineFile!, ...huFiles, modelFile!, ...(hasDbChanges ? sqlFiles : [])];
       const filePayload = await prepareFilesForEdgeFunction(allFiles);
 
       const finalPrompt = applyAnswersToPrompt(
         selectedTemplate!.prompt_content,
         questions,
         answers,
+        sqlFiles.map((file) => file.name),
       );
 
       // \u2500\u2500 ETAPA 3: Chamar a IA \u2500\u2500
       // SEC-005: apiKey n\u00e3o \u00e9 mais passada \u2014 a Edge Function busca no Vault
       setProgressStep("calling_ai");
+      const isInlineProvider = selectedProviderId.startsWith("inline:");
       const result = await invokeApfGeneration({
         prompt:       finalPrompt,
-        providerId:   selectedProviderId,
+        providerId:   isInlineProvider ? undefined : selectedProviderId,
+        provider:     isInlineProvider ? selectedProvider?.provider_type : undefined,
         model:        undefined,
         files:        filePayload,
         generationId,
@@ -300,7 +334,7 @@ export function useApfGenerate() {
     baselineFile, huFiles, modelFile,
     sprints, outputFormat,
     selectedTemplate, questions, answers,
-    selectedProviderId, apiKey, providerCfg.needsKey,
+    selectedProviderId, selectedProvider?.provider_type, apiKey, providerCfg.needsKey, sqlFiles,
   ]);
 
   const handleGenerateClick = useCallback(() => {
@@ -327,6 +361,7 @@ export function useApfGenerate() {
     generations, loadingHistory,
     lastResult, showPreview, setShowPreview,
     questions, answers, setAnswers,
+    sqlFiles, setSqlFiles,
     showQuestions, setShowQuestions,
     allQuestionsAnswered,
   };

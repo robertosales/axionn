@@ -243,7 +243,10 @@ export async function invokeApfGeneration(body: {
     throw new Error(friendly);
   }
   if (data?.success === false) {
-    throw new Error(data.userMessage ?? "Não foi possível gerar o documento agora. Tente novamente em instantes.");
+    const details = Array.isArray(data.attempts) && data.attempts.length > 0
+      ? `\nTentativas: ${data.attempts.map((a: any) => `${a.name}${a.status ? ` (${a.status})` : ""}`).join(" → ")}`
+      : "";
+    throw new Error(`${data.userMessage ?? "Não foi possível gerar o documento agora. Tente novamente em instantes."}${details}`);
   }
   if (!data?.docxBase64) {
     throw new Error(data?.userMessage ?? data?.error ?? "A IA não retornou conteúdo");

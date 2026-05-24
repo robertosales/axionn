@@ -287,6 +287,19 @@ function buildFullPrompt(prompt: string, processedFiles: { name: string; content
   return `Você é um especialista em Análise de Pontos de Função (APF) seguindo a metodologia IFPUG e o Guia de Métricas DPF.\n\nSiga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro.\n\nREGRA — BASELINE:\n- Se um arquivo de BASELINE APF foi fornecido, use a lista de itens para classificar cada funcionalidade:\n  - Impacto \"I\" (Inclusão) = funcionalidade NÃO existe no baseline\n  - Impacto \"A\" (Alteração) = funcionalidade JÁ EXISTE no baseline\n  - Impacto \"E\" (Exclusão) = funcionalidade foi removida\n- Calcule PF FS = PF Bruto × Contribuição FS do fator de impacto aplicado\n\nREGRA — FORMATO DO DOCUMENTO:\n- Use o modelo de documento fornecido como referência de estrutura e seções\n- Mantenha as mesmas seções numeradas: 1. Dados do Atendimento, 2. Contexto, 3. Tabela de Funcionalidades, 4. Funcionalidades Impactadas na Baseline, 5. Itens Não Identificados, 6. Banco de Dados, 7. Contagem de PF (7.1 Detalhamento, 7.2 Consolidado por HU, 7.3 Resumo Executivo), 8. Solicitação de Mudança, 9. Legenda\n- SEMPRE gere a seção 7.2 com a tabela: | HU / Escopo | Qtd. Funções | PF Bruto | PF FS |\n\nREGRA — TABELAS:\n- Use formato Markdown padrão com pipes e linha separadora\n- NÃO inclua tabela dentro de bloco de código\n\nREGRA CRÍTICA — PERGUNTAS NO PROMPT:\n- NÃO inclua perguntas literais no documento gerado\n- Se houver \"=== RESPOSTAS DO USUÁRIO ===\", incorpore as respostas naturalmente ao texto\n${ctx}\n=== INSTRUÇÕES DO USUÁRIO ===\n${prompt}`;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Erro tipado com status HTTP (para fallback e UX)
+// ─────────────────────────────────────────────────────────────
+class ProviderError extends Error {
+  status: number;
+  providerName: string;
+  constructor(providerName: string, status: number, message: string) {
+    super(`${providerName} [${status}]: ${message}`);
+    this.status = status;
+    this.providerName = providerName;
+  }
+}
+
 // Chamadas aos providers (apiKey vem do Vault, não do body)
 async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") {
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -294,7 +307,7 @@ async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") 
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
   });
-  if (!r.ok) throw new Error(`Lovable AI [${r.status}]: ${await r.text()}`);
+  if (!r.ok) throw new ProviderError("Lovable AI", r.status, await r.text());
   const data = await r.json();
   const text = data.choices?.[0]?.message?.content ?? "";
   if (!text) throw new Error(`Lovable AI retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
@@ -306,7 +319,7 @@ async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
   });
-  if (!r.ok) throw new Error(`OpenAI [${r.status}]: ${await r.text()}`);
+  if (!r.ok) throw new ProviderError("OpenAI", r.status, await r.text());
   const data = await r.json();
   const text = data.choices?.[0]?.message?.content ?? "";
   if (!text) throw new Error(`OpenAI retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
@@ -322,7 +335,7 @@ async function callGemini(p: string, k: string, m = "gemini-2.0-flash") {
   // Trata erros retornados com status 200 mas com campo "error" no body
   if (!r.ok || data.error) {
     const errMsg = data.error?.message ?? data.error ?? `HTTP ${r.status}`;
-    throw new Error(`Gemini [${r.status}]: ${errMsg}`);
+    throw new ProviderError("Gemini", r.status || 500, String(errMsg));
   }
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   if (!text) {
@@ -338,7 +351,7 @@ async function callAnthropic(p: string, k: string, m = "claude-3-5-sonnet-202410
     headers: { "x-api-key": k, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
     body: JSON.stringify({ model: m, max_tokens: 8000, messages: [{ role: "user", content: p }] }),
   });
-  if (!r.ok) throw new Error(`Anthropic [${r.status}]: ${await r.text()}`);
+  if (!r.ok) throw new ProviderError("Anthropic", r.status, await r.text());
   const data = await r.json();
   const text = data.content?.[0]?.text ?? "";
   if (!text) throw new Error(`Anthropic retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
@@ -350,11 +363,76 @@ async function callPerplexity(p: string, k: string, m = "sonar") {
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
   });
-  if (!r.ok) throw new Error(`Perplexity [${r.status}]: ${await r.text()}`);
+  if (!r.ok) throw new ProviderError("Perplexity", r.status, await r.text());
   const data = await r.json();
   const text = data.choices?.[0]?.message?.content ?? "";
   if (!text) throw new Error(`Perplexity retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
   return text;
+}
+
+// Despacha a chamada pela tipologia do provider
+async function callProvider(
+  type: Provider, prompt: string, apiKey: string, model?: string,
+): Promise<string> {
+  switch (type) {
+    case "lovable":    return await callLovable(prompt,    apiKey, model);
+    case "openai":     return await callOpenAI(prompt,     apiKey, model);
+    case "gemini":     return await callGemini(prompt,     apiKey, model);
+    case "anthropic":  return await callAnthropic(prompt,  apiKey, model);
+    case "perplexity": return await callPerplexity(prompt, apiKey, model);
+  }
+}
+
+// Lista de provedores ativos para fallback (ordenados: recomendados primeiro)
+async function listActiveProvidersForFallback(excludeId?: string) {
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+  const { data } = await admin
+    .from("ai_providers")
+    .select("id,name,provider_type,model")
+    .eq("is_active", true)
+    .order("is_recommended", { ascending: false })
+    .order("name");
+  const list = (data ?? []) as Array<{ id: string; name: string; provider_type: Provider; model: string | null }>;
+  return excludeId ? list.filter((p) => p.id !== excludeId) : list;
+}
+
+async function getProviderKey(id: string, type: Provider): Promise<string | null> {
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+  const { data } = await admin.rpc("get_ai_provider_key_by_id", { p_id: id });
+  let key = (data as string) ?? null;
+  if (!key && type === "lovable") key = Deno.env.get("LOVABLE_API_KEY") ?? null;
+  return key;
+}
+
+// Erros recuperáveis → tentamos fallback
+function isFallbackableStatus(status: number): boolean {
+  return status === 402 || status === 429 || (status >= 500 && status < 600);
+}
+
+function mapErrorToReason(err: unknown): { reason: string; userMessage: string; status: number } {
+  if (err instanceof ProviderError) {
+    if (err.status === 402) return {
+      reason: "AI_PROVIDER_PAYMENT_REQUIRED", status: 402,
+      userMessage: "O serviço de IA está sem créditos no momento. Tente novamente mais tarde ou selecione outro provedor de IA.",
+    };
+    if (err.status === 429) return {
+      reason: "AI_PROVIDER_RATE_LIMITED", status: 429,
+      userMessage: "Muitas requisições em sequência. Aguarde alguns segundos e tente novamente.",
+    };
+    if (err.status === 401 || err.status === 403) return {
+      reason: "AI_PROVIDER_AUTH", status: err.status,
+      userMessage: `Chave de API inválida para "${err.providerName}". Contate o administrador.`,
+    };
+    if (err.status >= 500) return {
+      reason: "AI_PROVIDER_UNAVAILABLE", status: err.status,
+      userMessage: `O serviço de IA "${err.providerName}" está temporariamente indisponível. Tente novamente em instantes.`,
+    };
+  }
+  const raw = err instanceof Error ? err.message : "Erro desconhecido";
+  return {
+    reason: "AI_PROVIDER_ERROR", status: 500,
+    userMessage: "Não foi possível gerar o documento agora. Tente novamente em alguns instantes.",
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -487,9 +565,6 @@ Deno.serve(async (req: Request) => {
 
     // ── 3. Resolve o provider + busca a API key no Vault ──
     const resolved = await resolveProvider(providerId, provider);
-    const apiKey = resolved.apiKey;
-    const providerType = resolved.providerType;
-    const effectiveModel = model ?? resolved.model ?? undefined;
 
     // ── 4. Processa arquivos ──
     const processedFiles: { name: string; content: string }[] = [];
@@ -498,16 +573,76 @@ Deno.serve(async (req: Request) => {
       processedFiles.push({ name: extracted.name, content: extracted.content });
     }
 
-    // ── 5. Chama a IA ──
+    // ── 5. Chama a IA com fallback automático ──
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
+
     let aiText = "";
-    switch (providerType) {
-      case "lovable":    aiText = await callLovable(fullPrompt,    apiKey, effectiveModel); break;
-      case "openai":     aiText = await callOpenAI(fullPrompt,     apiKey, effectiveModel); break;
-      case "gemini":     aiText = await callGemini(fullPrompt,     apiKey, effectiveModel); break;
-      case "anthropic":  aiText = await callAnthropic(fullPrompt,  apiKey, effectiveModel); break;
-      case "perplexity": aiText = await callPerplexity(fullPrompt, apiKey, effectiveModel); break;
+    let usedProviderName = resolved.name;
+    let fallbackInfo: { from: string; to: string; reason: string } | null = null;
+    const attempts: Array<{ name: string; status?: number; error: string }> = [];
+
+    try {
+      aiText = await callProvider(
+        resolved.providerType, fullPrompt, resolved.apiKey,
+        model ?? resolved.model ?? undefined,
+      );
+    } catch (primaryErr) {
+      const primaryStatus = primaryErr instanceof ProviderError ? primaryErr.status : 500;
+      attempts.push({
+        name: resolved.name, status: primaryStatus,
+        error: primaryErr instanceof Error ? primaryErr.message : String(primaryErr),
+      });
+      console.warn(`[apf-generate] Primary provider "${resolved.name}" failed (status=${primaryStatus}). Trying fallback...`);
+
+      if (!isFallbackableStatus(primaryStatus)) {
+        // erro não-recuperável → propaga
+        throw primaryErr;
+      }
+
+      // Tenta o próximo provider ativo (excluindo o que já falhou)
+      const candidates = await listActiveProvidersForFallback(providerId);
+      let succeeded = false;
+      for (const cand of candidates) {
+        try {
+          const candKey = await getProviderKey(cand.id, cand.provider_type);
+          if (!candKey) {
+            attempts.push({ name: cand.name, error: "Sem API key configurada" });
+            continue;
+          }
+          aiText = await callProvider(cand.provider_type, fullPrompt, candKey, cand.model ?? undefined);
+          usedProviderName = cand.name;
+          fallbackInfo = {
+            from: resolved.name, to: cand.name,
+            reason: primaryStatus === 402 ? "sem créditos" : `falha HTTP ${primaryStatus}`,
+          };
+          succeeded = true;
+          console.log(`[apf-generate] Fallback succeeded: ${resolved.name} → ${cand.name}`);
+          break;
+        } catch (fallErr) {
+          const fallStatus = fallErr instanceof ProviderError ? fallErr.status : 500;
+          attempts.push({
+            name: cand.name, status: fallStatus,
+            error: fallErr instanceof Error ? fallErr.message : String(fallErr),
+          });
+          console.warn(`[apf-generate] Fallback "${cand.name}" failed (status=${fallStatus}).`);
+        }
+      }
+
+      if (!succeeded) {
+        // Nenhum provider conseguiu → retorna estrutura amigável (sem quebrar a tela)
+        const { reason, userMessage } = mapErrorToReason(primaryErr);
+        if (generationId) {
+          const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+          await admin.from("apf_generations").update({
+            status: "error", error_message: userMessage,
+          }).eq("id", generationId);
+        }
+        return new Response(JSON.stringify({
+          success: false, reason, userMessage, attempts,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
+
     if (!aiText.trim()) throw new Error("A IA retornou conteúdo vazio");
 
     // ── 6. Gera docx + persiste ──
@@ -521,25 +656,23 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, docxBase64, markdown: aiText, charCount: aiText.length, pfBreakdown, pfTotal, outputFilename }),
+      JSON.stringify({
+        success: true, docxBase64, markdown: aiText, charCount: aiText.length,
+        pfBreakdown, pfTotal, outputFilename,
+        providerUsed: usedProviderName, fallback: fallbackInfo,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
 
   } catch (e: unknown) {
     console.error("apf-generate error:", e);
-    const raw = e instanceof Error ? e.message : "Erro desconhecido";
-    let friendly = raw;
-    if (/credit balance is too low/i.test(raw))
-      friendly = "A conta associada à chave configurada está sem créditos. Contate o administrador.";
-    else if (/invalid.*api.key|incorrect api key/i.test(raw))
-      friendly = "Chave de API inválida para o provider. Contate o administrador.";
-    else if (/rate limit|429/i.test(raw))
-      friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
-    else if (/não configurada/i.test(raw))
-      friendly = raw; // mensagem já é amigável
+    const { reason, userMessage, status } = mapErrorToReason(e);
+    // Para erros recuperáveis (402/429/5xx) devolvemos 200 com payload tipado, evitando
+    // Runtime Error no cliente. Outros erros mantém status apropriado.
+    const httpStatus = isFallbackableStatus(status) ? 200 : (status >= 400 && status < 600 ? status : 500);
     return new Response(
-      JSON.stringify({ error: friendly, raw }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ success: false, reason, userMessage }),
+      { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

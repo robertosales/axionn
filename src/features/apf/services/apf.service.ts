@@ -217,7 +217,8 @@ export async function invokeApfGeneration(body: {
   prompt: string;
   provider?: string;
   providerId?: string;
-  // apiKey REMOVIDA — vem do Vault na Edge Function
+  /** Chave inline (modelo híbrido) — usada quando o provider não tem chave no Vault. */
+  apiKey?: string;
   model?: string;
   files: Array<{ name: string; content: string; encoding?: "base64" | "text"; mimeType?: string }>;
   generationId?: string;

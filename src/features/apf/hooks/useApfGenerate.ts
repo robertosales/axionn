@@ -166,7 +166,23 @@ export function useApfGenerate() {
     () => aiProviders.find((p) => p.id === selectedProviderId) ?? null,
     [aiProviders, selectedProviderId],
   );
-  const providerCfg = useMemo(() => ({ needsKey: false, placeholder: "" }), []);
+  // Modelo híbrido: pede a chave inline quando o provider NÃO é Lovable
+  // e ainda não tem chave cadastrada no Vault.
+  const providerCfg = useMemo(() => {
+    if (!selectedProvider) return { needsKey: false, placeholder: "" };
+    const isLovable = selectedProvider.provider_type === "lovable";
+    const needsKey = !isLovable && !selectedProvider.has_key;
+    const placeholderByType: Record<string, string> = {
+      openai: "sk-...",
+      gemini: "AIza...",
+      anthropic: "sk-ant-...",
+      perplexity: "pplx-...",
+      lovable: "",
+    };
+    return { needsKey, placeholder: placeholderByType[selectedProvider.provider_type] ?? "Cole sua API key" };
+  }, [selectedProvider]);
+  // Limpa apiKey ao trocar de provider
+  useEffect(() => { setApiKey(""); }, [selectedProviderId]);
   // Compat com a UI antiga
   const provider: Provider = (selectedProvider?.provider_type ?? "lovable") as Provider;
   const setProvider = (_: Provider) => {};
@@ -177,9 +193,10 @@ export function useApfGenerate() {
     setAnswers({});
   }, [selectedTemplate]);
 
-  // SEC-005: canGenerate n\u00e3o depende mais de apiKey
+  // canGenerate: exige apiKey somente quando o provider escolhido precisa de uma chave inline
   const canGenerate = !!selectedSprintId && !!selectedTemplateId && !!baselineFile
-    && huFiles.length > 0 && !!modelFile && !!selectedProviderId;
+    && huFiles.length > 0 && !!modelFile && !!selectedProviderId
+    && (!providerCfg.needsKey || apiKey.trim().length >= 10);
 
   const allQuestionsAnswered = questions.every((q) => {
     const a = answers[q.id];
@@ -242,6 +259,7 @@ export function useApfGenerate() {
         model:        undefined,
         files:        filePayload,
         generationId,
+        apiKey:       providerCfg.needsKey ? apiKey.trim() : undefined,
       });
 
       // \u2500\u2500 ETAPA 4: Finalizar \u2500\u2500
@@ -282,7 +300,7 @@ export function useApfGenerate() {
     baselineFile, huFiles, modelFile,
     sprints, outputFormat,
     selectedTemplate, questions, answers,
-    selectedProviderId,
+    selectedProviderId, apiKey, providerCfg.needsKey,
   ]);
 
   const handleGenerateClick = useCallback(() => {

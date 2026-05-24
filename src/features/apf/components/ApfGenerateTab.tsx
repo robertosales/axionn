@@ -205,15 +205,17 @@ export function ApfGenerateTab() {
               )}
             </div>
             {providerCfg.needsKey ? (
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
                 <Label className="text-xs flex items-center gap-1.5">
                   <KeyRound className="h-3.5 w-3.5" /> Sua API Key <span className="text-destructive">*</span>
                 </Label>
                 <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={providerCfg.placeholder} autoComplete="off" />
-                <p className="text-[11px] text-muted-foreground">A chave é usada apenas para esta requisição e <strong>não é armazenada</strong>.</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Esta IA ainda não tem chave cadastrada. A chave informada será usada apenas nesta requisição e <strong>não será armazenada</strong>.
+                </p>
               </div>
             ) : (
-              <p className="text-[11px] text-muted-foreground">✅ Lovable AI já está configurado — sem necessidade de chave própria.</p>
+              <p className="text-[11px] text-muted-foreground">✅ Provedor pronto para uso — sem necessidade de informar chave.</p>
             )}
             <div className="space-y-1.5 pt-2 border-t border-border/60">
               <Label className="text-xs">Formato de saída <span className="text-destructive">*</span></Label>

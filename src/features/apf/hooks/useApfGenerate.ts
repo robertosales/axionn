@@ -46,7 +46,22 @@ export type InteractiveQuestion = {
   text: string;
   kind: "yesno" | "open";
   followUp?: string;
+  allowSqlFiles?: boolean;
 };
+
+const DEFAULT_DB_CHANGE_QUESTION: InteractiveQuestion = {
+  id: "q_db_changes",
+  text: "Houve alteração de banco de dados?",
+  kind: "yesno",
+  followUp: "Descreva as alterações de banco e anexe os scripts SQL Server, se houver.",
+  allowSqlFiles: true,
+};
+
+const INLINE_AI_PROVIDERS: AIProvider[] = [
+  { id: "inline:openai", name: "OpenAI — informar chave agora", provider_type: "openai", model: "gpt-4o-mini", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
+  { id: "inline:gemini", name: "Google Gemini — informar chave agora", provider_type: "gemini", model: "gemini-2.0-flash", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
+  { id: "inline:anthropic", name: "Anthropic Claude — informar chave agora", provider_type: "anthropic", model: "claude-3-5-sonnet-20241022", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
+];
 
 export const YESNO_REGEX =
   /\(\s*(sim|s)\s*\/\s*(n[\u00e3a]o|n)\s*\)|\[\s*(sim|s)\s*\/\s*(n[\u00e3a]o|n)\s*\]/i;
@@ -70,6 +85,8 @@ export function detectInteractiveQuestions(prompt: string): InteractiveQuestion[
     const open = line.match(/\{\{\s*pergunta\s*:\s*(.+?)\s*\}\}/i);
     if (open) questions.push({ id: `q_${idx}`, text: open[1], kind: "open" });
   });
+  const hasDbChangeQuestion = questions.some((q) => /banco|dados|database|sql/i.test(q.text));
+  if (!hasDbChangeQuestion) questions.push(DEFAULT_DB_CHANGE_QUESTION);
   return questions;
 }
 

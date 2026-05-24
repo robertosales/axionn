@@ -68,7 +68,7 @@ export const YESNO_REGEX =
   /\(\s*(sim|s)\s*\/\s*(n[\u00e3a]o|n)\s*\)|\[\s*(sim|s)\s*\/\s*(n[\u00e3a]o|n)\s*\]/i;
 
 export function detectInteractiveQuestions(prompt: string): InteractiveQuestion[] {
-  if (!prompt) return [];
+  if (!prompt) return [DEFAULT_DB_CHANGE_QUESTION];
   const lines = prompt.split(/\r?\n/);
   const questions: InteractiveQuestion[] = [];
   lines.forEach((rawLine, idx) => {

@@ -79,7 +79,7 @@ export function detectInteractiveQuestions(prompt: string): InteractiveQuestion[
         /^se\s+sim/i.test(next) || /descreva|informe|detalhe/i.test(next)
           ? next
           : "Descreva o que foi alterado";
-      questions.push({ id: `q_${idx}`, text: line, kind: "yesno", followUp });
+      questions.push({ id: `q_${idx}`, text: line, kind: "yesno", followUp, allowSqlFiles: /banco|database|sql|dados/i.test(`${line} ${next}`) });
       return;
     }
     const open = line.match(/\{\{\s*pergunta\s*:\s*(.+?)\s*\}\}/i);

@@ -171,7 +171,10 @@ export function useApfGenerate() {
           setSelectedProviderId((cur) => cur || recommended.id);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setAiProviders(INLINE_AI_PROVIDERS);
+        setSelectedProviderId((cur) => cur || INLINE_AI_PROVIDERS[0].id);
+      });
   }, []);
 
   // Recarregar hist\u00f3rico quando sprint muda

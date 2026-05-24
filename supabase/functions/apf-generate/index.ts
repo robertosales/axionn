@@ -91,6 +91,17 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
 
   if (!row) throw new Error("Nenhum provedor de IA selecionado/cadastrado.");
 
+  // Modelo híbrido: se o usuário escolheu um provider temporário e informou a
+  // chave na tela, a geração não depende de cadastro prévio em ai_providers.
+  if (!row && providerLegacy && providerLegacy !== "lovable" && bodyApiKey && bodyApiKey.trim().length >= 10) {
+    return {
+      providerType: providerLegacy as Provider,
+      apiKey: bodyApiKey.trim(),
+      model: null,
+      name: `${providerLegacy} — chave temporária`,
+    };
+  }
+
   // Busca a key no Vault pelo id da linha
   let apiKey: string | null = null;
   const { data: keyData } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id });

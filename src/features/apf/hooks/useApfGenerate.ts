@@ -163,7 +163,7 @@ export function useApfGenerate() {
       .then((list) => {
         const merged = [
           ...list,
-          ...INLINE_AI_PROVIDERS.filter((inline) => !list.some((p) => p.provider_type === inline.provider_type && (inline.provider_type === "lovable" || !p.has_key))),
+          ...INLINE_AI_PROVIDERS.filter((inline) => !list.some((p) => p.provider_type === inline.provider_type)),
         ];
         setAiProviders(merged);
         if (merged.length > 0) {

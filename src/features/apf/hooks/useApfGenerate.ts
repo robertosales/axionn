@@ -274,6 +274,7 @@ export function useApfGenerate() {
         selectedTemplate!.prompt_content,
         questions,
         answers,
+        sqlFiles.map((file) => file.name),
       );
 
       // \u2500\u2500 ETAPA 3: Chamar a IA \u2500\u2500

@@ -3,18 +3,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { TabsContent } from "@/components/ui/tabs";
 import {
-  TrendingUp,
-  Users,
-  Target,
-  Gauge,
-  CheckCircle,
-  AlertTriangle,
-  ShieldAlert,
-  Clock,
-  User,
-  Bug,
-  Rocket,
-  FileBarChart2,
+  TrendingUp, Users, Target, Gauge, CheckCircle, AlertTriangle,
+  ShieldAlert, Clock,
 } from "lucide-react";
 import { DashboardFilters, DashboardFilterState, INITIAL_FILTERS } from "@/components/dashboard/DashboardFilters";
 import { IndividualPerformance } from "@/components/dashboard/IndividualPerformance";
@@ -28,18 +18,7 @@ import { MetricsTabs } from "@/components/dashboard/MetricsTabs";
 import { ImpedimentHistoryPanel } from "@/components/dashboard/ImpedimentHistoryPanel";
 import { formatMinutes } from "@/lib/duration";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const STATUS_COLORS: Record<string, string> = {
-  aguardando_desenvolvimento: "#94a3b8",
-  em_desenvolvimento: "#3b82f6",
-  em_code_review: "#8b5cf6",
-  em_teste: "#f59e0b",
-  bug: "#ef4444",
-  pronto_para_publicacao: "#22c55e",
-};
-
-// ─── Persistência de filtros ──────────────────────────────────────────────────
+// ─── Persistência de filtros via sessionStorage ───────────────────────────────
 
 function usePersistedState<T>(key: string, defaultValue: T) {
   const [state, setState] = useState<T>(() => {
@@ -63,10 +42,32 @@ function usePersistedState<T>(key: string, defaultValue: T) {
   return [state, setPersisted] as const;
 }
 
+// ─── Tipos internos ───────────────────────────────────────────────────────────
+
+const STATUS_COLORS: Record<string, string> = {
+  aguardando_desenvolvimento: "#94a3b8",
+  em_desenvolvimento: "#3b82f6",
+  em_code_review: "#8b5cf6",
+  em_teste: "#f59e0b",
+  bug: "#ef4444",
+  pronto_para_publicacao: "#22c55e",
+};
+
+interface RawData {
+  sprints: any[];
+  hus: any[];
+  activities: any[];
+  impediments: any[];
+  developers: any[];
+  workflowCols: any[];
+}
+
 // ─── MetricsDashboard ─────────────────────────────────────────────────────────
 
 export function MetricsDashboard() {
   const { isAdmin, teams, currentTeamId, user } = useAuth();
+
+  // ✅ useMemo com dep precisa: só recalcula quando `teams` muda
   const agileTeams = useMemo(() => teams.filter((t: any) => t.module === "sala_agil"), [teams]);
 
   const [filters, setFilters] = usePersistedState<DashboardFilterState>("metricas:filters", {
@@ -76,13 +77,13 @@ export function MetricsDashboard() {
   const [activeTab, setActiveTab] = usePersistedState<string>("metricas:tab", "individual");
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [rawData, setRawData] = useState<{
-    sprints: any[]; hus: any[]; activities: any[];
-    impediments: any[]; developers: any[]; workflowCols: any[];
-  }>({ sprints: [], hus: [], activities: [], impediments: [], developers: [], workflowCols: [] });
+  const [rawData, setRawData] = useState<RawData>({
+    sprints: [], hus: [], activities: [], impediments: [], developers: [], workflowCols: [],
+  });
 
-  const lastTeamIdRef = useRef<string>("");
   const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ✅ AbortController: evita race condition ao trocar de time/filtro rapidamente
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (currentTeamId && filters.teamId === "all")
@@ -95,9 +96,14 @@ export function MetricsDashboard() {
       setFilters((prev) => ({ ...prev, teamId: "all" }));
   }, [filters.teamId, agileTeams, setFilters]);
 
+  // ✅ loadData com AbortController
   const loadData = useCallback(async (forceTeamId?: string) => {
     const teamId = forceTeamId ?? filters.teamId;
-    lastTeamIdRef.current = teamId;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     const teamsToLoad = isAdmin && teamId === "all"
       ? agileTeams
@@ -106,29 +112,48 @@ export function MetricsDashboard() {
     const allSprints: any[] = [], allHUs: any[] = [], allActs: any[] = [];
     const allImps: any[] = [], allDevs: any[] = [], allWfCols: any[] = [];
 
-    for (const team of teamsToLoad) {
-      const [sprintRes, huRes, actRes, impRes, devRes, wcRes] = await Promise.all([
-        supabase.from("sprints").select("*").eq("team_id", team.id),
-        supabase.from("user_stories").select("*").eq("team_id", team.id),
-        supabase.from("activities").select("*").eq("team_id", team.id),
-        supabase.from("impediments").select("*").eq("team_id", team.id),
-        supabase.from("developers").select("*").eq("team_id", team.id),
-        supabase.from("workflow_columns").select("*").eq("team_id", team.id).order("sort_order"),
-      ]);
-      allSprints.push(...(sprintRes.data || []));
-      allHUs.push(...(huRes.data || []));
-      allActs.push(...(actRes.data || []));
-      allImps.push(...(impRes.data || []));
-      allDevs.push(...(devRes.data || []));
-      allWfCols.push(...(wcRes.data || []));
+    try {
+      for (const team of teamsToLoad) {
+        if (controller.signal.aborted) return;
+        const [sprintRes, huRes, actRes, impRes, devRes, wcRes] = await Promise.all([
+          supabase.from("sprints").select("*").eq("team_id", team.id),
+          supabase.from("user_stories").select("*").eq("team_id", team.id),
+          supabase.from("activities").select("*").eq("team_id", team.id),
+          supabase.from("impediments").select("*").eq("team_id", team.id),
+          supabase.from("developers").select("*").eq("team_id", team.id),
+          supabase.from("workflow_columns").select("*").eq("team_id", team.id).order("sort_order"),
+        ]);
+        allSprints.push(...(sprintRes.data || []));
+        allHUs.push(...(huRes.data || []));
+        allActs.push(...(actRes.data || []));
+        allImps.push(...(impRes.data || []));
+        allDevs.push(...(devRes.data || []));
+        allWfCols.push(...(wcRes.data || []));
+      }
+
+      if (controller.signal.aborted) return;
+
+      setRawData({
+        sprints: allSprints, hus: allHUs, activities: allActs,
+        impediments: allImps, developers: allDevs, workflowCols: allWfCols,
+      });
+      setLastUpdated(new Date());
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      console.error("[MetricsDashboard] Erro ao carregar dados:", err);
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
     }
-    setRawData({ sprints: allSprints, hus: allHUs, activities: allActs, impediments: allImps, developers: allDevs, workflowCols: allWfCols });
-    setLastUpdated(new Date());
-    setLoading(false);
   }, [filters.teamId, agileTeams, isAdmin, currentTeamId]);
+
+  // ✅ Cleanup no unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   useEffect(() => { if (agileTeams.length > 0) loadData(); }, [filters.teamId, agileTeams]); // eslint-disable-line
 
+  // ✅ Realtime com cleanup correto + debounce 800ms
   useEffect(() => {
     if (agileTeams.length === 0) return;
     const scheduleReload = () => {
@@ -154,22 +179,25 @@ export function MetricsDashboard() {
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [loadData]);
 
-  // ─── Filtros ─────────────────────────────────────────────────────────────────
+  // ─── FILTROS ─────────────────────────────────────────────────────────────────
+  // ✅ dep: [rawData, filters] — recalcula somente quando dados brutos ou filtros mudam
   const filtered = useMemo(() => {
     const { sprints, hus, activities, impediments, developers, workflowCols } = rawData;
     let filteredSprints = sprints;
-    if (filters.sprintId === "active") filteredSprints = sprints.filter((s: any) => s.is_active);
-    else if (filters.sprintId !== "all") filteredSprints = sprints.filter((s: any) => s.id === filters.sprintId);
+    if (filters.sprintId === "active")      filteredSprints = sprints.filter((s: any) => s.is_active);
+    else if (filters.sprintId !== "all")    filteredSprints = sprints.filter((s: any) => s.id === filters.sprintId);
     const sprintIds = new Set(filteredSprints.map((s: any) => s.id));
 
     let filteredHUs = filters.sprintId === "all" ? hus : hus.filter((h: any) => sprintIds.has(h.sprint_id));
     if (filters.priority !== "all") filteredHUs = filteredHUs.filter((h: any) => h.priority === filters.priority);
     const huIds = new Set(filteredHUs.map((h: any) => h.id));
+
     let filteredActs = activities.filter((a: any) => huIds.has(a.hu_id));
     if (filters.dateFrom) filteredActs = filteredActs.filter((a: any) => a.end_date >= filters.dateFrom);
     if (filters.dateTo)   filteredActs = filteredActs.filter((a: any) => a.start_date <= filters.dateTo);
-    if (filters.dateFrom) filteredHUs = filteredHUs.filter((h: any) => h.end_date ? h.end_date >= filters.dateFrom : h.created_at.split("T")[0] >= filters.dateFrom);
-    if (filters.dateTo)   filteredHUs = filteredHUs.filter((h: any) => h.start_date ? h.start_date <= filters.dateTo : h.created_at.split("T")[0] <= filters.dateTo);
+    if (filters.dateFrom) filteredHUs  = filteredHUs.filter((h: any) => h.end_date ? h.end_date >= filters.dateFrom : h.created_at.split("T")[0] >= filters.dateFrom);
+    if (filters.dateTo)   filteredHUs  = filteredHUs.filter((h: any) => h.start_date ? h.start_date <= filters.dateTo : h.created_at.split("T")[0] <= filters.dateTo);
+
     const finalHuIds = new Set(filteredHUs.map((h: any) => h.id));
     filteredActs = filteredActs.filter((a: any) => finalHuIds.has(a.hu_id));
     if (filters.activityType !== "all") filteredActs = filteredActs.filter((a: any) => a.activity_type === filters.activityType);
@@ -191,40 +219,42 @@ export function MetricsDashboard() {
     return { sprints: filteredSprints, hus: filteredHUs, activities: filteredActs, impediments: filteredImps, developers, workflowCols, lastCol };
   }, [rawData, filters]);
 
-  // ─── Member metrics ────────────────────────────────────────────────────────
+  // ─── MEMBER METRICS ───────────────────────────────────────────────────────────
+  // ✅ dep: [filtered] — cálculo pesado isolado, não executa em outros re-renders
   const memberMetrics = useMemo(() => {
     const { developers, activities, hus, impediments, lastCol } = filtered;
     const today = new Date().toISOString().split("T")[0];
     const blockedHuIds = new Set(impediments.filter((i: any) => !i.resolved_at).map((i: any) => i.hu_id));
     return developers.map((dev: any) => {
-      const devActs = activities.filter((a: any) => a.assignee_id === dev.id);
-      const devHUIds = new Set(devActs.map((a: any) => a.hu_id));
-      const devHUs = hus.filter((h: any) => devHUIds.has(h.id));
-      const closedActs = devActs.filter((a: any) => a.is_closed);
+      const devActs     = activities.filter((a: any) => a.assignee_id === dev.id);
+      const devHUIds    = new Set(devActs.map((a: any) => a.hu_id));
+      const devHUs      = hus.filter((h: any) => devHUIds.has(h.id));
+      const closedActs  = devActs.filter((a: any) => a.is_closed);
       const startedActs = devActs.filter((a: any) => !a.is_closed && a.start_date <= today);
-      const notStartedCount = devActs.length - startedActs.length - closedActs.length;
-      const hoursPlannedMin = devActs.reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
+      const notStartedCount   = devActs.length - startedActs.length - closedActs.length;
+      const hoursPlannedMin   = devActs.reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
       const hoursCompletedMin = closedActs.reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
-      const bugActs = devActs.filter((a: any) => a.activity_type === "bug");
+      const bugActs    = devActs.filter((a: any) => a.activity_type === "bug");
       const bugsClosed = bugActs.filter((a: any) => a.is_closed);
       const completedHUs = devHUs.filter((h: any) => h.status === lastCol);
-      const spCompleted = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
-      const avgTimeMin = closedActs.length > 0 ? Math.round(hoursCompletedMin / closedActs.length) : 0;
+      const spCompleted  = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
+      const avgTimeMin   = closedActs.length > 0 ? Math.round(hoursCompletedMin / closedActs.length) : 0;
       const wip = startedActs.length;
       let cycleTime = 0;
       if (closedActs.length > 0) {
         const totalDays = closedActs.reduce((s: number, a: any) => {
-          if (a.closed_at && a.start_date) return s + Math.max(0, (new Date(a.closed_at).getTime() - new Date(a.start_date).getTime()) / 86400000);
+          if (a.closed_at && a.start_date)
+            return s + Math.max(0, (new Date(a.closed_at).getTime() - new Date(a.start_date).getTime()) / 86400000);
           return s + Math.max(0, (new Date(a.end_date).getTime() - new Date(a.start_date).getTime()) / 86400000);
         }, 0);
         cycleTime = Math.round((totalDays / closedActs.length) * 10) / 10;
       }
       const devBlockedActs = devActs.filter((a: any) => !a.is_closed && blockedHuIds.has(a.hu_id));
       const tasksByStatus = [
-        { name: "Concluída",    value: closedActs.length,                                     color: "#22c55e" },
+        { name: "Concluída",    value: closedActs.length,                                       color: "#22c55e" },
         { name: "Em Progresso", value: Math.max(0, startedActs.length - devBlockedActs.length), color: "#3b82f6" },
-        { name: "Não Iniciada", value: Math.max(0, notStartedCount),                          color: "#94a3b8" },
-        { name: "Bloqueada",    value: devBlockedActs.length,                                 color: "#ef4444" },
+        { name: "Não Iniciada", value: Math.max(0, notStartedCount),                            color: "#94a3b8" },
+        { name: "Bloqueada",    value: devBlockedActs.length,                                   color: "#ef4444" },
       ].filter((s) => s.value > 0);
       return {
         id: dev.id, name: dev.name, role: dev.role || "developer",
@@ -250,8 +280,8 @@ export function MetricsDashboard() {
       .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date))
       .slice(-5)
       .map((sprint: any) => {
-        const sprintHUs = rawData.hus.filter((h: any) => h.sprint_id === sprint.id);
-        const huIds = new Set(sprintHUs.map((h: any) => h.id));
+        const sprintHUs  = rawData.hus.filter((h: any) => h.sprint_id === sprint.id);
+        const huIds      = new Set(sprintHUs.map((h: any) => h.id));
         const sprintActs = rawData.activities.filter((a: any) => huIds.has(a.hu_id));
         const entry: any = { sprint: sprint.name };
         filtered.developers.forEach((dev: any) => {
@@ -261,15 +291,16 @@ export function MetricsDashboard() {
         });
         return entry;
       });
-  }, [rawData, filtered.developers]);
+  }, [rawData.sprints, rawData.hus, rawData.activities, filtered.developers]);
 
-  // ─── Team overview ─────────────────────────────────────────────────────────
+  // ─── TEAM OVERVIEW ────────────────────────────────────────────────────────────
+  // ✅ dep: [filtered] — cálculo mais pesado, isolado de memberMetrics
   const teamOverview = useMemo(() => {
     const { hus, activities, impediments, lastCol, workflowCols } = filtered;
-    const completedHUs = hus.filter((h: any) => h.status === lastCol);
-    const totalPoints = hus.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
-    const completedPoints = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
-    const totalHoursMin = activities.reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
+    const completedHUs      = hus.filter((h: any) => h.status === lastCol);
+    const totalPoints       = hus.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
+    const completedPoints   = completedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
+    const totalHoursMin     = activities.reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
     const completedHoursMin = activities.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
     const today = new Date().toISOString().split("T")[0];
     const overdueCount = hus.filter((h: any) => h.status !== lastCol && h.end_date && h.end_date < today).length;
@@ -284,14 +315,19 @@ export function MetricsDashboard() {
       if (completedHUs.length === 0) return 0;
       const withDates = completedHUs.filter((h: any) => h.start_date && h.end_date);
       if (!withDates.length) return 0;
-      const total = withDates.reduce((s: number, h: any) => s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000), 0);
+      const total = withDates.reduce((s: number, h: any) =>
+        s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000), 0);
       return Math.round((total / withDates.length) * 10) / 10;
     })();
     const activeSprint = filtered.sprints.find((s: any) => s.is_active) || filtered.sprints[0];
     const impedimentHistory = impediments
       .map((imp: any) => {
         const hu = hus.find((h: any) => h.id === imp.hu_id);
-        return { id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality, ticketId: imp.ticket_id, reportedAt: imp.reported_at, resolvedAt: imp.resolved_at, resolution: imp.resolution, huCode: hu?.code || "?", huTitle: hu?.title || "" };
+        return {
+          id: imp.id, reason: imp.reason, type: imp.type, criticality: imp.criticality,
+          ticketId: imp.ticket_id, reportedAt: imp.reported_at, resolvedAt: imp.resolved_at,
+          resolution: imp.resolution, huCode: hu?.code || "?", huTitle: hu?.title || "",
+        };
       })
       .sort((a: any, b: any) => new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime());
     return {
@@ -300,35 +336,39 @@ export function MetricsDashboard() {
       totalActivities: activities.length,
       completedActivities: activities.filter((a: any) => a.is_closed).length,
       overdueCount, blockedCount, devCount: filtered.developers.length, statusData,
-      sprintName: activeSprint?.name || "Sem sprint",
+      sprintName:  activeSprint?.name || "Sem sprint",
       sprintStart: activeSprint?.start_date || "",
-      sprintEnd: activeSprint?.end_date || "",
+      sprintEnd:   activeSprint?.end_date || "",
       isActive: activeSprint?.is_active ?? false,
       commitmentAccuracy, cycleTimeDays, impedimentHistory,
     };
   }, [filtered]);
 
-  // ─── Trends ─────────────────────────────────────────────────────────────────
+  // ─── TRENDS ───────────────────────────────────────────────────────────────────
   const trends = useMemo(() => {
     const sorted = [...rawData.sprints].sort((a, b) => a.start_date.localeCompare(b.start_date));
     if (sorted.length < 2 || filtered.sprints.length === 0) return null;
     const currentIdx = sorted.findIndex((s) => s.id === filtered.sprints[0].id);
     if (currentIdx <= 0) return null;
-    const prev = sorted[currentIdx - 1];
-    const prevHUs = rawData.hus.filter((h: any) => h.sprint_id === prev.id);
+    const prev      = sorted[currentIdx - 1];
+    const prevHUs   = rawData.hus.filter((h: any) => h.sprint_id === prev.id);
     const prevHuIds = new Set(prevHUs.map((h: any) => h.id));
-    const prevActs = rawData.activities.filter((a: any) => prevHuIds.has(a.hu_id));
+    const prevActs  = rawData.activities.filter((a: any) => prevHuIds.has(a.hu_id));
     const { lastCol } = filtered;
     const prevCompletedHUs = prevHUs.filter((h: any) => h.status === lastCol);
-    const prevVelocity = prevCompletedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
-    const prevCommitment = prevHUs.length > 0 ? Math.round((prevCompletedHUs.length / prevHUs.length) * 100) : 0;
-    const prevWithDates = prevCompletedHUs.filter((h: any) => h.start_date && h.end_date);
-    const prevCycleTime = prevWithDates.length > 0
-      ? Math.round((prevWithDates.reduce((s: number, h: any) => s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000), 0) / prevWithDates.length) * 10) / 10
+    const prevVelocity    = prevCompletedHUs.reduce((s: number, h: any) => s + (h.story_points || 0), 0);
+    const prevCommitment  = prevHUs.length > 0 ? Math.round((prevCompletedHUs.length / prevHUs.length) * 100) : 0;
+    const prevWithDates   = prevCompletedHUs.filter((h: any) => h.start_date && h.end_date);
+    const prevCycleTime   = prevWithDates.length > 0
+      ? Math.round((prevWithDates.reduce((s: number, h: any) =>
+          s + Math.max(0, (new Date(h.end_date).getTime() - new Date(h.start_date).getTime()) / 86400000), 0
+        ) / prevWithDates.length) * 10) / 10
       : 0;
     const prevDoneMin = prevActs.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + Math.round(Number(a.hours) * 60), 0);
     return { velocity: prevVelocity, commitment: prevCommitment, cycleTime: prevCycleTime, hoursMin: prevDoneMin };
-  }, [rawData, filtered]);
+  }, [rawData.sprints, rawData.hus, rawData.activities, filtered]);
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
 
   if (loading)
     return (
@@ -337,28 +377,28 @@ export function MetricsDashboard() {
       </div>
     );
 
-  const memberNames = filtered.developers.map((d: any) => d.name.split(" ")[0]);
+  const memberNames     = filtered.developers.map((d: any) => d.name.split(" ")[0]);
   const effectiveTeamId = filters.teamId === "all" ? currentTeamId || "" : filters.teamId;
   const currentTeamName = agileTeams.find((t: any) => t.id === filters.teamId)?.name ?? "NexOps";
 
   const getTrend = (current: number, previous: number, invertColor = false) => {
-    if (current > previous) return { direction: "up" as const, isGood: !invertColor };
-    if (current < previous) return { direction: "down" as const, isGood: invertColor };
-    return { direction: "same" as const, isGood: true };
+    if (current > previous) return { direction: "up" as const,   isGood: !invertColor };
+    if (current < previous) return { direction: "down" as const, isGood: invertColor  };
+    return                         { direction: "same" as const, isGood: true          };
   };
 
   const deliveryKpis = [
-    { icon: TrendingUp, label: "Velocity",       value: `${teamOverview.completedPoints}`,       sub: `de ${teamOverview.totalPoints} pts planejados`,  trend: trends ? getTrend(teamOverview.completedPoints, trends.velocity) : undefined },
-    { icon: Target,     label: "HUs Concluídas", value: `${teamOverview.completedHUs}`,         sub: `de ${teamOverview.totalHUs} HUs`,                trend: trends ? getTrend(teamOverview.completedHUs, teamOverview.totalHUs > 0 ? trends.velocity : 0) : undefined },
-    { icon: CheckCircle,label: "Commitment",     value: `${teamOverview.commitmentAccuracy}%`,   sub: "HUs entregues / planejadas",
+    { icon: TrendingUp,  label: "Velocity",       value: `${teamOverview.completedPoints}`,     sub: `de ${teamOverview.totalPoints} pts planejados`, trend: trends ? getTrend(teamOverview.completedPoints, trends.velocity) : undefined },
+    { icon: Target,      label: "HUs Concluídas", value: `${teamOverview.completedHUs}`,        sub: `de ${teamOverview.totalHUs} HUs` },
+    { icon: CheckCircle, label: "Commitment",     value: `${teamOverview.commitmentAccuracy}%`, sub: "HUs entregues / planejadas",
       accent: teamOverview.commitmentAccuracy >= 80 ? ("success" as const) : teamOverview.commitmentAccuracy >= 60 ? ("warning" as const) : ("destructive" as const),
       trend: trends ? getTrend(teamOverview.commitmentAccuracy, trends.commitment) : undefined },
-    { icon: Clock,      label: "Cycle Time",     value: `${teamOverview.cycleTimeDays}d`,        sub: "média por HU",                                  trend: trends ? getTrend(trends.cycleTime, teamOverview.cycleTimeDays, true) : undefined },
+    { icon: Clock,       label: "Cycle Time",     value: `${teamOverview.cycleTimeDays}d`,      sub: "média por HU", trend: trends ? getTrend(trends.cycleTime, teamOverview.cycleTimeDays, true) : undefined },
   ];
 
   const operationalKpis = [
     { icon: Gauge,         label: "Horas",     value: formatMinutes(teamOverview.completedHoursMin), sub: `de ${formatMinutes(teamOverview.totalHoursMin)} planejadas`, trend: trends ? getTrend(teamOverview.completedHoursMin, trends.hoursMin) : undefined },
-    { icon: Users,         label: "Membros",   value: `${teamOverview.devCount}`,    sub: "no time" },
+    { icon: Users,         label: "Membros",   value: `${teamOverview.devCount}`,     sub: "no time" },
     { icon: AlertTriangle, label: "Atrasadas", value: `${teamOverview.overdueCount}`, sub: "HUs fora do prazo", accent: teamOverview.overdueCount > 0 ? ("destructive" as const) : undefined },
     { icon: ShieldAlert,   label: "Impedidas", value: `${teamOverview.blockedCount}`, sub: "HUs bloqueadas",   accent: teamOverview.blockedCount > 0 ? ("warning" as const) : undefined },
   ];

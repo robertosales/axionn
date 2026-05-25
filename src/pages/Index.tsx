@@ -1,31 +1,49 @@
-import React, { useEffect } from "react";
+import React, { useEffect, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { AgileHistory } from "@/components/AgileHistory";
 import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
-import { SprintManager } from "@/components/SprintManager";
-import { DeveloperManager } from "@/components/DeveloperManager";
-import { UserStoryManager } from "@/components/UserStoryManager";
-import { ActivityManager } from "@/components/ActivityManager";
-import { KanbanBoard } from "@/components/KanbanBoard";
-import { MetricsDashboard } from "@/components/MetricsDashboard";
-import { ImpedimentList } from "@/components/ImpedimentManager";
-import { EpicManager } from "@/components/EpicManager";
-import { WorkflowManager } from "@/components/WorkflowManager";
-import { CustomFieldManager } from "@/components/CustomFieldManager";
-import { AutomationManager } from "@/components/AutomationManager";
-import { TeamManager } from "@/components/TeamManager";
-import { TeamMembersManager } from "@/components/TeamMembersManager";
-import { UserRolesManager } from "@/components/UserRolesManager";
-import { DashboardHome } from "@/components/DashboardHome";
-import { CalendarView } from "@/components/CalendarView";
-import { PlanningPoker } from "@/components/PlanningPoker";
-import { RetroManager } from "@/components/RetroManager";
-import { ApfGeneratorPage } from "@/features/apf/components/ApfGeneratorPage";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+
+// ─── Componentes leves — importados estaticamente ─────────────────────────────
+import { SprintManager }     from "@/components/SprintManager";
+import { DeveloperManager }  from "@/components/DeveloperManager";
+import { KanbanBoard }       from "@/components/KanbanBoard";
+import { DashboardHome }     from "@/components/DashboardHome";
+
+// ─── Componentes pesados — lazy loaded (só baixados quando a rota é acessada) ──
+// AgileHistory   ~43.5 KB  — histórico de sprints, acesso ocasional
+// UserRolesManager ~48.6 KB — gestão de perfis, acesso restrito/admin
+// PlanningPoker  ~43.9 KB  — sessões de poker, carregado por rota dedicada
+//                            mas importado aqui p/ seção interna também
+// Os demais têm 15–35 KB e beneficiam do lazy quando há muitas seções ativas
+const AgileHistory        = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
+const UserRolesManager    = lazy(() => import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })));
+const PlanningPoker       = lazy(() => import("@/components/PlanningPoker").then((m) => ({ default: m.PlanningPoker })));
+const UserStoryManager    = lazy(() => import("@/components/UserStoryManager").then((m) => ({ default: m.UserStoryManager })));
+const ActivityManager     = lazy(() => import("@/components/ActivityManager").then((m) => ({ default: m.ActivityManager })));
+const MetricsDashboard    = lazy(() => import("@/components/MetricsDashboard").then((m) => ({ default: m.MetricsDashboard })));
+const ImpedimentList      = lazy(() => import("@/components/ImpedimentManager").then((m) => ({ default: m.ImpedimentList })));
+const EpicManager         = lazy(() => import("@/components/EpicManager").then((m) => ({ default: m.EpicManager })));
+const WorkflowManager     = lazy(() => import("@/components/WorkflowManager").then((m) => ({ default: m.WorkflowManager })));
+const CustomFieldManager  = lazy(() => import("@/components/CustomFieldManager").then((m) => ({ default: m.CustomFieldManager })));
+const AutomationManager   = lazy(() => import("@/components/AutomationManager").then((m) => ({ default: m.AutomationManager })));
+const TeamManager         = lazy(() => import("@/components/TeamManager").then((m) => ({ default: m.TeamManager })));
+const TeamMembersManager  = lazy(() => import("@/components/TeamMembersManager").then((m) => ({ default: m.TeamMembersManager })));
+const CalendarView        = lazy(() => import("@/components/CalendarView").then((m) => ({ default: m.CalendarView })));
+const RetroManager        = lazy(() => import("@/components/RetroManager").then((m) => ({ default: m.RetroManager })));
+const ApfGeneratorPage    = lazy(() => import("@/features/apf/components/ApfGeneratorPage").then((m) => ({ default: m.ApfGeneratorPage })));
+
+// ─── Fallback de seção ────────────────────────────────────────────────────────
+function SectionLoader() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
+}
 
 const VALID_SECTIONS = [
   "dashboard",
@@ -154,84 +172,104 @@ const Index = () => {
           // key={teamKey} garante remontagem completa de todos os filhos
           // quando o time muda, zerando states internos de cada componente
           <div key={teamKey}>
+            {/* Seções leves — sem Suspense adicional */}
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
-            {active === "planning-poker" && <PlanningPoker />}
-            {active === "equipe" && <DeveloperManager />}
-            {active === "calendario" && <CalendarView />}
-            {active === "retrospectiva" && <RetroManager />}
-            {active === "gerador-apf" && (
-              <SectionGuard permission="view_backlog">
-                <ApfGeneratorPage />
-              </SectionGuard>
-            )}
-            {active === "backlog" && (
-              <SectionGuard permission="view_backlog">
-                <div className="space-y-8">
-                  <SprintManager />
-                  <UserStoryManager />
-                </div>
-              </SectionGuard>
-            )}
-            {active === "epicos" && (
-              <SectionGuard permission="view_backlog">
-                <EpicManager />
-              </SectionGuard>
-            )}
-            {active === "board" && (
+            {active === "equipe"    && <DeveloperManager />}
+            {active === "board"     && (
               <SectionGuard permission="view_kanban">
                 <KanbanBoard />
               </SectionGuard>
             )}
-            {active === "atividades" && (
-              <SectionGuard permission="manage_activities">
-                <ActivityManager />
-              </SectionGuard>
-            )}
-            {active === "impedimentos" && (
-              <SectionGuard permission="report_impediment">
-                <ImpedimentList />
-              </SectionGuard>
-            )}
-            {active === "metricas" && (
-              <SectionGuard permission="view_dashboard">
-                <MetricsDashboard />
-              </SectionGuard>
-            )}
-            {active === "historico" && (
-              <SectionGuard permission="view_dashboard">
-                <AgileHistory />
-              </SectionGuard>
-            )}
-            {active === "times" && (
-              <SectionGuard permission="manage_teams">
-                <TeamManager moduleFilter="sala_agil" />
-              </SectionGuard>
-            )}
-            {active === "membros" && (
-              <SectionGuard permission="manage_users">
-                <TeamMembersManager />
-              </SectionGuard>
-            )}
-            {active === "perfis" && (
-              <SectionGuard permission="manage_roles">
-                <UserRolesManager />
-              </SectionGuard>
-            )}
-            {active === "fluxo" && (
-              <SectionGuard permission="manage_workflow">
-                <WorkflowManager />
-              </SectionGuard>
-            )}
-            {active === "campos" && (
-              <SectionGuard permission="manage_custom_fields">
-                <CustomFieldManager />
-              </SectionGuard>
-            )}
-            {active === "automacoes" && (
-              <SectionGuard permission="manage_automations">
-                <AutomationManager />
-              </SectionGuard>
-            )}
+
+            {/* Seções pesadas — cada uma com seu próprio Suspense boundary */}
+            <Suspense fallback={<SectionLoader />}>
+              {active === "planning-poker" && <PlanningPoker />}
+              {active === "calendario"     && <CalendarView />}
+              {active === "retrospectiva"  && <RetroManager />}
+
+              {active === "gerador-apf" && (
+                <SectionGuard permission="view_backlog">
+                  <ApfGeneratorPage />
+                </SectionGuard>
+              )}
+
+              {active === "backlog" && (
+                <SectionGuard permission="view_backlog">
+                  <div className="space-y-8">
+                    <SprintManager />
+                    <UserStoryManager />
+                  </div>
+                </SectionGuard>
+              )}
+
+              {active === "epicos" && (
+                <SectionGuard permission="view_backlog">
+                  <EpicManager />
+                </SectionGuard>
+              )}
+
+              {active === "atividades" && (
+                <SectionGuard permission="manage_activities">
+                  <ActivityManager />
+                </SectionGuard>
+              )}
+
+              {active === "impedimentos" && (
+                <SectionGuard permission="report_impediment">
+                  <ImpedimentList />
+                </SectionGuard>
+              )}
+
+              {active === "metricas" && (
+                <SectionGuard permission="view_dashboard">
+                  <MetricsDashboard />
+                </SectionGuard>
+              )}
+
+              {/* AgileHistory — 43.5KB, carregado só na rota historico */}
+              {active === "historico" && (
+                <SectionGuard permission="view_dashboard">
+                  <AgileHistory />
+                </SectionGuard>
+              )}
+
+              {active === "times" && (
+                <SectionGuard permission="manage_teams">
+                  <TeamManager moduleFilter="sala_agil" />
+                </SectionGuard>
+              )}
+
+              {active === "membros" && (
+                <SectionGuard permission="manage_users">
+                  <TeamMembersManager />
+                </SectionGuard>
+              )}
+
+              {/* UserRolesManager — 48.6KB, carregado só na rota perfis */}
+              {active === "perfis" && (
+                <SectionGuard permission="manage_roles">
+                  <UserRolesManager />
+                </SectionGuard>
+              )}
+
+              {active === "fluxo" && (
+                <SectionGuard permission="manage_workflow">
+                  <WorkflowManager />
+                </SectionGuard>
+              )}
+
+              {active === "campos" && (
+                <SectionGuard permission="manage_custom_fields">
+                  <CustomFieldManager />
+                </SectionGuard>
+              )}
+
+              {active === "automacoes" && (
+                <SectionGuard permission="manage_automations">
+                  <AutomationManager />
+                </SectionGuard>
+              )}
+            </Suspense>
           </div>
         )}
       </div>

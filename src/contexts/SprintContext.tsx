@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -234,15 +234,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   // ─────────────────────────────────────────────────────────────────────────────
   // PRIORIDADE #5 — Realtime channels
-  //
-  // Estratégia de deduplicação:
-  //   - O usuário local já aplicou o optimistic update imediatamente.
-  //   - O evento Realtime chega logo depois, vindo do próprio banco.
-  //   - Para evitar flickering, verificamos se o registro já existe com o
-  //     mesmo conteúdo (UPDATE) ou se o ID já está na lista (INSERT de volta).
-  //   - Para DELETE, removemos apenas se ainda existir (idempotente).
-  //   - INSERTs de user_stories disparam refreshAll() pois precisam do `code`
-  //     gerado pelo banco (trigger HU-XXX) — os demais INSERTs fazem patch local.
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!teamId) return;
@@ -254,10 +245,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "user_stories", filter: `team_id=eq.${teamId}` },
-        () => {
-          // INSERT precisa do `code` gerado pelo banco — refreshAll() cirúrgico
-          refreshAll();
-        },
+        () => { refreshAll(); },
       )
       .on(
         "postgres_changes",
@@ -266,8 +254,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
           const row = payload.new as any;
           setUserStories((prev) => {
             const exists = prev.find((h) => h.id === row.id);
-            if (!exists) return prev; // segurança: se não existe, ignora
-            // Aplica apenas os campos que mudaram (merge cirúrgico)
+            if (!exists) return prev;
             return prev.map((h) =>
               h.id === row.id
                 ? {
@@ -315,7 +302,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const row = payload.new as any;
           setActivities((prev) => {
-            if (prev.some((a) => a.id === row.id)) return prev; // já existe (optimistic local)
+            if (prev.some((a) => a.id === row.id)) return prev;
             return [...prev, mapActivity(row)];
           });
         },
@@ -469,13 +456,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         }
       });
 
-    // ✅ CRÍTICO: cleanup — remove o canal ao trocar de time ou desmontar o provider
     return () => {
       supabase.removeChannel(channel);
       console.debug(`[Realtime] canal sprint-team-${teamId} removido`);
     };
   }, [teamId, refreshAll]);
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const activeSprint = sprints.find((s) => s.isActive) || null;
 
@@ -507,7 +492,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .select()
       .single();
     if (error) { toast.error("Erro ao adicionar desenvolvedor"); return; }
-    // Optimistic update — Realtime INSERT também chegará, mas será deduplicado
     if (data) setDevelopers((prev) =>
       prev.some((d) => d.id === data.id) ? prev : [...prev, { id: data.id, name: data.name, email: data.email, role: data.role, avatar: data.avatar }]
     );
@@ -544,8 +528,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       assignee_id: (hu as any).assigneeId || null,
     });
     if (error) { toast.error("Erro ao criar HU"); return; }
-    // refreshAll necessário: código HU-XXX é gerado pelo banco
-    // O evento Realtime INSERT de user_stories também aciona refreshAll() — idempotente
     await refreshAll();
   }, [teamId, userStories, workflowColumns, refreshAll]);
 
@@ -571,14 +553,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
     if (error) { toast.error("Erro ao atualizar HU: " + error.message); return; }
     if (!data || data.length === 0) { toast.error("Erro ao atualizar HU: nenhuma linha afetada"); return; }
-    // Optimistic update — evento Realtime UPDATE chegará em seguida e será idempotente
     setUserStories((prev) => prev.map((h) => h.id === id ? mapUserStory(data[0], impediments.filter((imp) => imp.huId === id)) : h));
   }, [impediments]);
 
   const removeUserStory = useCallback(async (id: string) => {
     const { error } = await supabase.from("user_stories").delete().eq("id", id);
     if (error) { toast.error("Erro ao remover HU"); return; }
-    // Optimistic: remove localmente; evento Realtime DELETE também chegará (idempotente)
     setUserStories((prev) => prev.filter((h) => h.id !== id));
     setImpediments((prev) => prev.filter((imp) => imp.huId !== id));
     setActivities((prev) => prev.filter((a) => a.huId !== id));
@@ -635,7 +615,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .select()
       .single();
     if (error) { toast.error("Erro ao criar atividade"); return; }
-    // Optimistic — Realtime INSERT chegará e será deduplicado (verifica se id já existe)
     if (data) setActivities((prev) =>
       prev.some((a) => a.id === data.id) ? prev : [...prev, mapActivity(data)]
     );
@@ -735,7 +714,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (error) { toast.error("Erro ao adicionar impedimento: " + error.message); return; }
     if (row) {
       const newImp = mapImpediment(row);
-      // Optimistic — Realtime INSERT chegará e será deduplicado
       setImpediments((prev) => prev.some((imp) => imp.id === row.id) ? prev : [...prev, newImp]);
       if (huId) {
         setUserStories((prev) => prev.map((h) =>
@@ -774,9 +752,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       closed_at: null, delay_days: null,
     });
     if (error) { toast.error("Erro ao criar sprint"); return; }
-    // Realtime INSERT de sprints tratará a chegada — refreshAll apenas por segurança
-    await refreshAll();
-  }, [teamId, refreshAll]);
+    // Realtime INSERT cuidará da atualização local — sem refreshAll() aqui
+  }, [teamId]);
 
   const updateSprint = useCallback(async (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => {
     const updateData: any = {};
@@ -1031,4 +1008,84 @@ export function useSprint() {
   const ctx = useContext(SprintContext);
   if (!ctx) throw new Error("useSprint must be used within SprintProvider");
   return ctx;
+}
+
+// ─── PROBLEMA 3: Selectors — hooks granulares para evitar re-renders globais ──
+//
+// Uso: em vez de const { activities } = useSprint() em todo componente,
+// use o selector específico. O componente só re-renderiza quando aquele
+// slice de estado muda — não quando outros arrays do contexto mudam.
+//
+// Exemplo de migração em KanbanCard:
+//   ANTES: const { developers, epics, activities, workflowColumns } = useSprint();
+//   DEPOIS: const developers     = useDevelopers();
+//           const epics          = useEpics();
+//           const huActivities   = useActivitiesForHU(hu.id);  // já filtrado!
+//           const workflowCols   = useWorkflowColumns();
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Retorna apenas o sprint ativo. Re-renderiza só quando o sprint ativo muda. */
+export function useActiveSprint() {
+  const { sprints } = useSprint();
+  return useMemo(() => sprints.find((s) => s.isActive) ?? null, [sprints]);
+}
+
+/** Retorna a lista de developers. Re-renderiza só quando developers muda. */
+export function useDevelopers() {
+  const { developers } = useSprint();
+  return developers;
+}
+
+/** Retorna a lista de epics. Re-renderiza só quando epics muda. */
+export function useEpics() {
+  const { epics } = useSprint();
+  return epics;
+}
+
+/** Retorna a lista de workflow columns. Re-renderiza só quando workflowColumns muda. */
+export function useWorkflowColumns() {
+  const { workflowColumns } = useSprint();
+  return workflowColumns;
+}
+
+/**
+ * Retorna activities filtradas por HU.
+ * Re-renderiza APENAS quando activities da HU específica mudam.
+ * Ideal para KanbanCard — evita re-render de todos os cards quando
+ * uma atividade de outra HU é atualizada.
+ */
+export function useActivitiesForHU(huId: string): Activity[] {
+  const { activities } = useSprint();
+  return useMemo(
+    () => activities.filter((a) => a.huId === huId),
+    [activities, huId],
+  );
+}
+
+/**
+ * Retorna métricas computadas do sprint ativo.
+ * Evita que MetricsDashboard re-execute cálculos pesados a cada re-render.
+ */
+export function useSprintMetrics() {
+  const { userStories, activities, sprints } = useSprint();
+  return useMemo(() => {
+    const activeSprint = sprints.find((s) => s.isActive) ?? null;
+    const totalHUs       = userStories.length;
+    const completedHUs   = userStories.filter((h) => h.status === "concluido").length;
+    const inProgressHUs  = userStories.filter((h) => h.status !== "concluido" && h.status !== "aguardando_desenvolvimento").length;
+    const totalHours     = activities.reduce((s, a) => s + (a.hours ?? 0), 0);
+    const closedHours    = activities.filter((a) => a.isClosed).reduce((s, a) => s + (a.hours ?? 0), 0);
+    const openBugs       = activities.filter((a) => a.activityType === "bug" && !a.isClosed).length;
+    const completionPct  = totalHUs > 0 ? Math.round((completedHUs / totalHUs) * 100) : 0;
+    return {
+      activeSprint,
+      totalHUs,
+      completedHUs,
+      inProgressHUs,
+      totalHours,
+      closedHours,
+      openBugs,
+      completionPct,
+    };
+  }, [userStories, activities, sprints]);
 }

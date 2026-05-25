@@ -1,14 +1,24 @@
-import { memo, useMemo, useCallback } from "react";
+import { memo, useMemo, useCallback, useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import {
   Bug, Clock, AlertTriangle, Tag, Zap, CheckCircle2,
-  Timer, TrendingUp,
+  Timer, TrendingUp, ArrowRight, ArrowLeft, MoveRight, ExternalLink,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { HU, Activity } from "@/types/sprint";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import type { HU, Activity, WorkflowColumn } from "@/types/sprint";
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -96,10 +106,12 @@ interface KanbanCardProps {
   columnKey: string;
   draggingDisabled?: boolean;
   onSelect: (hu: HU) => void;
+  workflowColumns?: WorkflowColumn[];
+  onMoveCard?: (huId: string, targetStatus: string) => void;
+  colHex?: string;
 }
 
 // ─── TagBadges ─────────────────────────────────────────────────────────────────
-// Exibe as tags da HU como badges coloridos (ex: JUST, GESP, PDOP)
 
 const TagBadges = memo(function TagBadges({ tags }: { tags: string[] }) {
   if (!tags || tags.length === 0) return null;
@@ -141,7 +153,6 @@ const PriorityBadge = memo(function PriorityBadge({ priority }: { priority: stri
 });
 
 // ─── SizeBadge ─────────────────────────────────────────────────────────────────
-// Exibe PP/P/M/G/GG + story points
 
 const CardSizeBadge = memo(function CardSizeBadge({
   sizeReference,
@@ -164,7 +175,6 @@ const CardSizeBadge = memo(function CardSizeBadge({
 });
 
 // ─── EpicBadge ─────────────────────────────────────────────────────────────────
-// Epic com cor customizada — igual ao card da Sustentação com categoria
 
 const EpicBadge = memo(function EpicBadge({ epicId }: { epicId: string }) {
   const { epics } = useSprint();
@@ -182,7 +192,6 @@ const EpicBadge = memo(function EpicBadge({ epicId }: { epicId: string }) {
 });
 
 // ─── ActivityProgressBar ───────────────────────────────────────────────────────
-// Barra de progresso com indicadores por tipo de atividade
 
 const ActivityProgressBar = memo(function ActivityProgressBar({
   activities,
@@ -201,7 +210,6 @@ const ActivityProgressBar = memo(function ActivityProgressBar({
 
   return (
     <div className="space-y-1.5">
-      {/* Indicadores de tipo + contador */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
           {byType.map(([type, count]) => (
@@ -221,7 +229,6 @@ const ActivityProgressBar = memo(function ActivityProgressBar({
             </Tooltip>
           ))}
         </div>
-        {/* Contador fechadas/total estilo Sustentação */}
         <span className={cn(
           "text-[9px] font-semibold tabular-nums",
           pct === 100 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
@@ -230,7 +237,6 @@ const ActivityProgressBar = memo(function ActivityProgressBar({
           {closed}/{total}
         </span>
       </div>
-      {/* Barra de progresso */}
       <div className="h-1 rounded-full bg-muted overflow-hidden">
         <div
           className={cn(
@@ -251,26 +257,56 @@ const ActivityProgressBar = memo(function ActivityProgressBar({
 });
 
 // ─── AssigneeAvatars ───────────────────────────────────────────────────────────
+// Exibe avatar do responsável direto da HU (hu.assigneeId) +
+// colaboradores das atividades
 
 const AssigneeAvatars = memo(function AssigneeAvatars({
-  assigneeIds,
-}: { assigneeIds: string[] }) {
+  huAssigneeId,
+  activityAssigneeIds,
+}: {
+  huAssigneeId?: string | null;
+  activityAssigneeIds: string[];
+}) {
   const { developers } = useSprint();
+
+  // Monta lista única: responsável da HU sempre primeiro
+  const memberIds = useMemo(() => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    if (huAssigneeId) { seen.add(huAssigneeId); ids.push(huAssigneeId); }
+    for (const id of activityAssigneeIds) {
+      if (!seen.has(id)) { seen.add(id); ids.push(id); }
+    }
+    return ids;
+  }, [huAssigneeId, activityAssigneeIds]);
+
   const members = useMemo(
-    () => assigneeIds.map((id) => developers.find((d) => d.id === id)).filter(Boolean),
-    [assigneeIds, developers],
+    () => memberIds.map((id) => developers.find((d: any) => d.id === id)).filter(Boolean),
+    [memberIds, developers],
   );
+
   if (members.length === 0) return null;
+
   return (
     <div className="flex -space-x-1.5">
-      {members.slice(0, 3).map((dev: any) => (
+      {members.slice(0, 3).map((dev: any, idx: number) => (
         <Tooltip key={dev.id}>
           <TooltipTrigger asChild>
-            <div className="w-5 h-5 rounded-full bg-primary/20 border-2 border-card flex items-center justify-center text-[9px] font-bold text-primary cursor-default">
+            <div
+              className={cn(
+                "w-5 h-5 rounded-full border-2 border-card flex items-center justify-center text-[9px] font-bold cursor-default",
+                // Responsável da HU (primeiro) → destaque com bg sólido
+                idx === 0 && huAssigneeId === dev.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-primary/20 text-primary",
+              )}
+            >
               {dev.name.charAt(0).toUpperCase()}
             </div>
           </TooltipTrigger>
-          <TooltipContent side="bottom"><p>{dev.name}</p></TooltipContent>
+          <TooltipContent side="bottom">
+            <p>{dev.name}{idx === 0 && huAssigneeId === dev.id ? " (responsável)" : ""}</p>
+          </TooltipContent>
         </Tooltip>
       ))}
       {members.length > 3 && (
@@ -283,7 +319,6 @@ const AssigneeAvatars = memo(function AssigneeAvatars({
 });
 
 // ─── HoursChip ─────────────────────────────────────────────────────────────────
-// Formato "Xd Yh" igual ao card da Sustentação
 
 const HoursChip = memo(function HoursChip({
   activities,
@@ -330,11 +365,13 @@ function huPropsAreEqual(prev: KanbanCardProps, next: KanbanCardProps) {
     p.sizeReference  === n.sizeReference  &&
     p.status         === n.status         &&
     p.epicId         === n.epicId         &&
-    // tags: compara JSON simples — tags raramente mudam
+    p.assigneeId     === n.assigneeId     &&
     JSON.stringify(p.tags) === JSON.stringify(n.tags) &&
     prev.columnKey         === next.columnKey         &&
     prev.draggingDisabled  === next.draggingDisabled  &&
-    prev.onSelect          === next.onSelect
+    prev.onSelect          === next.onSelect          &&
+    prev.onMoveCard        === next.onMoveCard        &&
+    prev.workflowColumns   === next.workflowColumns
   );
 }
 
@@ -345,6 +382,9 @@ export const KanbanCard = memo(function KanbanCard({
   columnKey,
   draggingDisabled = false,
   onSelect,
+  workflowColumns = [],
+  onMoveCard,
+  colHex,
 }: KanbanCardProps) {
   const { activities: allActivities, impediments: allImpediments } = useSprint();
 
@@ -358,7 +398,7 @@ export const KanbanCard = memo(function KanbanCard({
     [allImpediments, hu.id],
   );
 
-  const assigneeIds = useMemo(
+  const activityAssigneeIds = useMemo(
     () => [...new Set(activities.map((a) => a.assigneeId).filter(Boolean))],
     [activities],
   );
@@ -368,7 +408,6 @@ export const KanbanCard = memo(function KanbanCard({
     [activities],
   );
 
-  // Calcula total de horas para exibir overdue na borda
   const totalMin = useMemo(
     () => activities.reduce((s, a) => s + Math.round(Number(a.hours) * 60), 0),
     [activities],
@@ -381,6 +420,27 @@ export const KanbanCard = memo(function KanbanCard({
 
   const priorityCfg = PRIORITY_CONFIG[hu.priority] ?? PRIORITY_CONFIG.baixa;
 
+  // ─── Colunas para context menu ────────────────────────────────────────────
+  const currentColIndex = useMemo(
+    () => workflowColumns.findIndex((c) => c.key === hu.status),
+    [workflowColumns, hu.status],
+  );
+
+  const prevColumns = useMemo(
+    () => workflowColumns.slice(0, currentColIndex),
+    [workflowColumns, currentColIndex],
+  );
+
+  const nextColumns = useMemo(
+    () => workflowColumns.slice(currentColIndex + 1),
+    [workflowColumns, currentColIndex],
+  );
+
+  const otherColumns = useMemo(
+    () => workflowColumns.filter((c) => c.key !== hu.status),
+    [workflowColumns, hu.status],
+  );
+
   // ─── DnD-Kit ────────────────────────────────────────────────────────────────
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } =
     useSortable({
@@ -392,7 +452,14 @@ export const KanbanCard = memo(function KanbanCard({
   const style = { transform: CSS.Transform.toString(transform), transition };
   const handleClick = useCallback(() => onSelect(hu), [onSelect, hu]);
 
-  return (
+  const handleMove = useCallback(
+    (targetStatus: string) => {
+      onMoveCard?.(hu.id, targetStatus);
+    },
+    [onMoveCard, hu.id],
+  );
+
+  const cardContent = (
     <div
       ref={setNodeRef}
       style={style}
@@ -420,7 +487,6 @@ export const KanbanCard = memo(function KanbanCard({
         {/* ── Linha 1: código + prioridade + size ── */}
         <div className="flex items-center justify-between gap-1 min-w-0">
           <div className="flex items-center gap-1 min-w-0 flex-wrap">
-            {/* Código RHM / identificador — destaque igual Sustentação */}
             <span className="text-[10px] font-mono font-semibold text-primary/80 shrink-0 tracking-tight">
               {hu.code}
             </span>
@@ -459,31 +525,34 @@ export const KanbanCard = memo(function KanbanCard({
           {hu.title}
         </p>
 
-        {/* ── Tags — igual aos badges [JUST][GESP][PDOP] da Sustentação ── */}
+        {/* ── Tags ── */}
         {hu.tags && hu.tags.length > 0 && (
           <TagBadges tags={hu.tags} />
         )}
 
-        {/* ── Epic / Categoria — linha colorida igual Sustentação ── */}
+        {/* ── Epic / Categoria ── */}
         {hu.epicId && <EpicBadge epicId={hu.epicId} />}
 
         {/* ── Barra de progresso de atividades ── */}
         <ActivityProgressBar activities={activities} />
 
         {/* ── Divider ── */}
-        {(activities.length > 0 || assigneeIds.length > 0) && (
+        {(activities.length > 0 || activityAssigneeIds.length > 0 || hu.assigneeId) && (
           <div className="border-t border-border/50" />
         )}
 
         {/* ── Footer: avatares | horas | bugs ── */}
         <div className="flex items-center justify-between gap-1 pt-0.5">
-          {/* Esquerda: avatares + horas */}
+          {/* Esquerda: avatares (responsável da HU + colaboradores) + horas */}
           <div className="flex items-center gap-1.5 min-w-0">
-            <AssigneeAvatars assigneeIds={assigneeIds} />
+            <AssigneeAvatars
+              huAssigneeId={hu.assigneeId}
+              activityAssigneeIds={activityAssigneeIds}
+            />
             <HoursChip activities={activities} />
           </div>
 
-          {/* Direita: bugs abertos + atividades totais */}
+          {/* Direita: bugs abertos */}
           <div className="flex items-center gap-1.5 shrink-0">
             {openBugs > 0 && (
               <Tooltip>
@@ -500,5 +569,101 @@ export const KanbanCard = memo(function KanbanCard({
         </div>
       </div>
     </div>
+  );
+
+  // Se não há colunas configuradas ou sem handler de mover, renderiza sem context menu
+  if (workflowColumns.length === 0 || !onMoveCard) return cardContent;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        {/* Abrir detalhes */}
+        <ContextMenuItem
+          onSelect={() => onSelect(hu)}
+          className="gap-2"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Abrir detalhes
+        </ContextMenuItem>
+
+        <ContextMenuSeparator />
+
+        {/* Avançar para → próximas colunas */}
+        {nextColumns.length > 0 && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="gap-2">
+              <ArrowRight className="w-3.5 h-3.5 text-emerald-500" />
+              Avançar para
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              {nextColumns.map((col) => (
+                <ContextMenuItem
+                  key={col.key}
+                  onSelect={() => handleMove(col.key)}
+                  className="gap-2"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: (col as any).hex ?? "#6b7280" }}
+                  />
+                  {col.label}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
+
+        {/* Regredir para → colunas anteriores */}
+        {prevColumns.length > 0 && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="gap-2">
+              <ArrowLeft className="w-3.5 h-3.5 text-amber-500" />
+              Regredir para
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              {prevColumns.map((col) => (
+                <ContextMenuItem
+                  key={col.key}
+                  onSelect={() => handleMove(col.key)}
+                  className="gap-2"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: (col as any).hex ?? "#6b7280" }}
+                  />
+                  {col.label}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
+
+        {/* Mover para → todas as outras colunas */}
+        {otherColumns.length > 0 && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="gap-2">
+              <MoveRight className="w-3.5 h-3.5 text-primary" />
+              Mover para
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              {otherColumns.map((col) => (
+                <ContextMenuItem
+                  key={col.key}
+                  onSelect={() => handleMove(col.key)}
+                  className="gap-2"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: (col as any).hex ?? "#6b7280" }}
+                  />
+                  {col.label}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }, huPropsAreEqual);

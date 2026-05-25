@@ -164,3 +164,40 @@ export function formatHours(hours: number): string {
   return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
 }
 */
+
+// ─── formatHours ─────────────────────────────────────────────────────────────
+export function formatHours(hours: number): string {
+  if (!hours || hours <= 0) return "0min";
+
+  // Converte horas decimais para minutos totais
+  const totalMinutes = Math.round(hours * 60);
+
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const remainingAfterDays = totalMinutes % (24 * 60);
+
+  const hrs = Math.floor(remainingAfterDays / 60);
+  const mins = remainingAfterDays % 60;
+
+  // Menor que 1 hora → só minutos
+  if (days === 0 && hrs === 0) {
+    return `${mins}min`;
+  }
+
+  // Menor que 1 dia → horas + minutos
+  if (days === 0) {
+    return `${hrs}h${mins.toString().padStart(2, "0")}min`;
+  }
+
+  // Dias + horas + minutos
+  if (mins > 0) {
+    return `${days}d ${hrs}h${mins.toString().padStart(2, "0")}min`;
+  }
+
+  // Dias + horas
+  if (hrs > 0) {
+    return `${days}d ${hrs}h`;
+  }
+
+  // Apenas dias
+  return `${days}d`;
+}

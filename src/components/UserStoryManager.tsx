@@ -22,6 +22,7 @@ import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
+import { HUEditDrawer } from "@/components/HUEditDrawer";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
   baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
@@ -53,8 +54,8 @@ export function UserStoryManager() {
   const canCreate = hasPermission("create_backlog");
   const canEdit = hasPermission("edit_backlog");
 
+  // ── Dialog de criação de nova HU ───────────────────────────────────────────
   const [open, setOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [acceptanceCriteria, setAcceptanceCriteria] = useState("");
@@ -68,10 +69,17 @@ export function UserStoryManager() {
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [sprintId, setSprintId] = useState<string>("");
   const [statusField, setStatusField] = useState<string>("");
-  // ✅ NOVO: HU alvo para criação rápida de tarefa
+
+  // ── HUEditDrawer (edição via lápis) ────────────────────────────────────────
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [editHuId, setEditHuId] = useState<string | null>(null);
+
+  // ── Exclusão ───────────────────────────────────────────────────────────────
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // ── Criação rápida de tarefa ───────────────────────────────────────────────
   const [quickTaskHU, setQuickTaskHU] = useState<string | null>(null);
 
   // Filters
@@ -143,7 +151,6 @@ export function UserStoryManager() {
     setAssigneeId("");
     setCustomFieldValues({});
     setErrors({});
-    setEditId(null);
   };
 
   const validate = () => {
@@ -176,7 +183,6 @@ export function UserStoryManager() {
 
       const fp = functionPoints ? parseFloat(functionPoints) : null;
 
-      // ✅ FIX: usa AC_SEPARATOR com \n reais (não \\n literais)
       const fullDesc = acceptanceCriteria
         ? `${description.trim()}${AC_SEPARATOR}${acceptanceCriteria.trim()}`
         : description.trim();
@@ -184,38 +190,20 @@ export function UserStoryManager() {
       const selectedSprintId = sprintId === "" ? null : sprintId;
       const selectedStatus = statusField || workflowColumns[0]?.key || "aguardando_desenvolvimento";
 
-      if (editId) {
-        await updateUserStory(editId, {
-          title: title.trim(),
-          description: fullDesc,
-          ...sizeData,
-          priority,
-          status: selectedStatus,
-          sprintId: selectedSprintId,
-          epicId: epicId || null,
-          customFields: customFieldValues,
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
-          functionPoints: fp,
-          assigneeId: assigneeId || null,
-        } as any);
-        toast.success("Alterações salvas com sucesso");
-      } else {
-        await addUserStory({
-          title: title.trim(),
-          description: fullDesc,
-          ...sizeData,
-          priority,
-          sprintId: selectedSprintId,
-          epicId: epicId || null,
-          customFields: customFieldValues,
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
-          functionPoints: fp,
-          assigneeId: assigneeId || null,
-        } as any);
-        toast.success("Registro criado com sucesso");
-      }
+      await addUserStory({
+        title: title.trim(),
+        description: fullDesc,
+        ...sizeData,
+        priority,
+        sprintId: selectedSprintId,
+        epicId: epicId || null,
+        customFields: customFieldValues,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        functionPoints: fp,
+        assigneeId: assigneeId || null,
+      } as any);
+      toast.success("Registro criado com sucesso");
 
       resetForm();
       setOpen(false);
@@ -224,32 +212,6 @@ export function UserStoryManager() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const openEdit = (huId: string) => {
-    const hu = userStories.find((h) => h.id === huId);
-    if (!hu) return;
-
-    setEditId(hu.id);
-    setTitle(hu.title);
-
-    // ✅ FIX: usa AC_SEPARATOR com \n reais para split correto
-    const parts = (hu.description || "").split(AC_SEPARATOR);
-    setDescription(parts[0] || "");
-    setAcceptanceCriteria(parts[1] || "");
-
-    setSelectedSize(hu.sizeReference ?? null);
-    setPriority(hu.priority);
-    setEpicId(hu.epicId || "");
-    setStartDate(hu.startDate || "");
-    setEndDate(hu.endDate || "");
-    setSprintId(hu.sprintId || "");
-    setStatusField(hu.status || workflowColumns[0]?.key || "");
-    setFunctionPoints(hu.functionPoints != null ? String(hu.functionPoints) : "");
-    setAssigneeId(hu.assigneeId || "");
-    setCustomFieldValues(hu.customFields || {});
-    setErrors({});
-    setOpen(true);
   };
 
   const handleConfirmRemove = async () => {
@@ -276,13 +238,13 @@ export function UserStoryManager() {
 
   if (loading) return <SkeletonList count={5} variant="row" />;
 
-  // ─── Formulário do Dialog (reutilizado para criar e editar) ───────────────
+  // ─── Formulário do Dialog (apenas criação) ────────────────────────────────
   const dialogForm = (
     <DialogContent className="max-w-[960px] w-[80vw] max-h-[90vh] overflow-y-auto p-0">
       <DialogHeader className="px-6 pt-6 pb-0">
         <DialogTitle className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />
-          {editId ? "Editar User Story" : "Nova User Story"}
+          Nova User Story
         </DialogTitle>
       </DialogHeader>
 
@@ -574,7 +536,7 @@ export function UserStoryManager() {
           <Badge variant="secondary">{totalItems}</Badge>
         </div>
 
-        {/* ✅ FIX: Dialog sempre na árvore; DialogTrigger só renderiza se canCreate */}
+        {/* Dialog apenas para criação de nova HU */}
         <Dialog
           open={open}
           onOpenChange={(v) => {
@@ -841,7 +803,16 @@ export function UserStoryManager() {
                       </Button>
                     )}
                     {canEdit && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(hu.id)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Editar HU"
+                        onClick={() => {
+                          setEditHuId(hu.id);
+                          setEditDrawerOpen(true);
+                        }}
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -875,6 +846,7 @@ export function UserStoryManager() {
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         onConfirm={handleConfirmRemove}
       />
+
       {quickTaskHU && (
         <QuickActivityDialog
           open={!!quickTaskHU}
@@ -882,6 +854,16 @@ export function UserStoryManager() {
           huId={quickTaskHU}
         />
       )}
+
+      {/* HUEditDrawer — abre ao clicar no lápis de qualquer HU */}
+      <HUEditDrawer
+        huId={editHuId}
+        open={editDrawerOpen}
+        onClose={() => {
+          setEditDrawerOpen(false);
+          setEditHuId(null);
+        }}
+      />
     </div>
   );
 }

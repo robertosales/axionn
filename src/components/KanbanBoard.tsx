@@ -488,14 +488,17 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     [updateUserStoryStatus],
   );
 
-  // ─── Handler para abrir detalhes: abre HUEditDrawer interno ──────────────
+  // ─── Handler para abrir detalhes: busca HU completa do contexto ───────────
+  // Garante que o HUEditDrawer receba sempre o objeto completo em camelCase,
+  // evitando campos undefined quando o card passa um objeto parcial.
   const handleSelectHU = useCallback(
-    (hu: any) => {
-      setSelectedHU(hu);
+    (huFromCard: any) => {
+      const fullHU = (userStories ?? []).find((s: any) => s.id === huFromCard.id) ?? huFromCard;
+      setSelectedHU(fullHU);
       setDrawerOpen(true);
-      onSelectHU?.(hu);
+      onSelectHU?.(fullHU);
     },
-    [onSelectHU],
+    [onSelectHU, userStories],
   );
 
   const activeHu = activeId ? sprintStories.find((h: any) => h.id === activeId) : null;

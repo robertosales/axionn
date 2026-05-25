@@ -48,7 +48,7 @@ export function useReleases() {
         supabase.from("sprints").select("id, name").eq("team_id", teamId).order("created_at", { ascending: false }).limit(30),
       ]);
 
-      const rels = (relRes.data ?? []) as Release[];
+      const rels = (relRes.data ?? []) as unknown as Release[];
 
       // Enriquece com contagem de HUs
       const enriched = await Promise.all(rels.map(async (r) => {

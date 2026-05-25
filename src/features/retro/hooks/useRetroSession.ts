@@ -113,6 +113,7 @@ export function useRetroSession({ teamId, sprintId, userId }: UseRetroSessionPar
           hidden:       c.hidden ?? false,
           isAction:     c.is_action ?? false,
           actionOwnerId:c.action_owner_id ?? null,
+          actionTargetSprintId: c.action_target_sprint_id ?? null,
           createdAt:    c.created_at,
         }));
 
@@ -124,9 +125,10 @@ export function useRetroSession({ teamId, sprintId, userId }: UseRetroSessionPar
           title:          a.description ?? a.title ?? "",
           description:    a.description ?? "",
           ownerId:        a.owner_id ?? null,
+          dueDate:        a.due_date ?? null,
           status:         a.status ?? "pending",
-          targetSprintId: a.target_sprint_id ?? null,
           createdAt:      a.created_at,
+          updatedAt:      a.updated_at ?? a.created_at,
         }));
 
         // Facilitador
@@ -222,7 +224,7 @@ export function useRetroSession({ teamId, sprintId, userId }: UseRetroSessionPar
   }, [session?.id, loadAll]);
 
   // ─ CRUD ────────────────────────────────────────────────────────────────────────────
-  const createSession = useCallback(async (sprintIdOverride?: string, model: RetroModelKey = "classic") => {
+  const createSession = useCallback(async (sprintIdOverride?: string, model: RetroModelKey = "4ls") => {
     if (!userId || !teamId) return;
     const sid = sprintIdOverride ?? sprintId;
     if (!sid) { toast.error("Nenhuma sprint ativa para criar retrospectiva"); return; }

@@ -860,7 +860,7 @@ export function DemandaDetail({
                 </TabsTrigger>
                 <TabsTrigger value="horas" disabled={isCancelada} className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                   <Clock className="h-4 w-4" />Atividades{" "}
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-5">{minutesToDisplay(total)</Badge>
+                  <Badge variant="secondary" className="ml-1 text-[10px] h-5">{minutesToDisplay(total)}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="responsaveis" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
                   <Users className="h-4 w-4" />Responsáveis{" "}

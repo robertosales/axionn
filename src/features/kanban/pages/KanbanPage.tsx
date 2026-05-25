@@ -1,13 +1,16 @@
-import { useKanbanBoard } from "../hooks/useKanbanBoard";
-import { useFinalizeSprint } from "../hooks/useFinalizeSprint";
-import { KanbanFiltersBar } from "../components/KanbanFilters";
-import { KanbanColumnItem } from "../components/KanbanColumn";
-import { FinalizeSprintModal } from "../components/FinalizeSprintModal";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge }   from "@/components/ui/badge";
-import { Button }  from "@/components/ui/button";
+import { useState } from "react";
+import { useKanbanBoard }          from "../hooks/useKanbanBoard";
+import { useFinalizeSprint }       from "../hooks/useFinalizeSprint";
+import { KanbanFiltersBar }        from "../components/KanbanFilters";
+import { KanbanColumnItem }        from "../components/KanbanColumn";
+import { FinalizeSprintModal }     from "../components/FinalizeSprintModal";
+import { UserStoryDetailModal }    from "../components/UserStoryDetailModal";
+import { Skeleton }  from "@/components/ui/skeleton";
+import { Badge }     from "@/components/ui/badge";
+import { Button }    from "@/components/ui/button";
 import { RefreshCw, Layers } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth }   from "@/contexts/AuthContext";
+import type { KanbanCard } from "../hooks/useKanbanBoard";
 
 export function KanbanPage() {
   const { isAdmin, profile } = useAuth();
@@ -32,6 +35,24 @@ export function KanbanPage() {
     finalize,
     activeSprint,
   } = useFinalizeSprint(cards, columns, sprints as any, reload);
+
+  // ── Estado do modal de detalhe da HU ─────────────────────────────────────
+  const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
+  const [detailOpen,   setDetailOpen]   = useState(false);
+
+  const handleCardClick = (card: KanbanCard) => {
+    setSelectedCard(card);
+    setDetailOpen(true);
+  };
+
+  const handleDetailClose = () => {
+    setDetailOpen(false);
+    setSelectedCard(null);
+  };
+
+  const handleCardMoved = (cardId: string, newStatus: string) => {
+    moveCard(cardId, newStatus);
+  };
 
   if (loading) return (
     <div className="space-y-4 p-4">
@@ -64,6 +85,7 @@ export function KanbanPage() {
               moveCard(cardId, colKey);
               setDragging(null);
             }}
+            onCardClick={handleCardClick}
           />
         );
       })}
@@ -72,7 +94,7 @@ export function KanbanPage() {
 
   return (
     <div className="space-y-4 p-4">
-      {/* Header — apenas título e refresh */}
+      {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <Layers className="h-5 w-5 text-primary" />
@@ -91,7 +113,6 @@ export function KanbanPage() {
         </Button>
       </div>
 
-      {/* Barra de filtros — Finalizar Sprint integrado no lado direito */}
       <KanbanFiltersBar
         filters={filters}
         onChange={setFilters}
@@ -131,6 +152,17 @@ export function KanbanPage() {
         loading={finalizing}
         sprints={sprints as any}
         onConfirm={finalize}
+      />
+
+      {/* Modal de Detalhe da HU */}
+      <UserStoryDetailModal
+        card={selectedCard}
+        columns={columns}
+        devs={devs}
+        open={detailOpen}
+        onClose={handleDetailClose}
+        onMoved={handleCardMoved}
+        onReload={reload}
       />
     </div>
   );

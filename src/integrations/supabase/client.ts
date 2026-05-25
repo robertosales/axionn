@@ -1,13 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { supabaseCircuitBreaker, CircuitOpenError } from '@/lib/circuit-breaker';
+import { retryQuery } from '@/lib/query-retry';
 
 // A Anon Key é uma chave PÚBLICA por design.
 // A segurança dos dados é garantida pelo RLS (Row Level Security) no Supabase.
-const SUPABASE_URL = 'https://rgikyyazotqapaxijwui.supabase.co';
+const SUPABASE_URL      = 'https://rgikyyazotqapaxijwui.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnaWt5eWF6b3RxYXBheGlqd3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjM5NTIsImV4cCI6MjA4OTgzOTk1Mn0.ADQ3VDenVwNL3fgyNc2Fgu-Si66T7SHdG5se4Hvf5eg';
 
 /**
  * instrumentedFetch — wraps every Supabase HTTP request with:
+ *  • Circuit Breaker (CLOSED/OPEN/HALF_OPEN)  → fast-fail quando DB está inacessível
+ *  • Retry com exponential backoff (3 tentativas, 500ms base)
  *  • 15 s hard timeout   → tela nunca trava indefinidamente
  *  • slow-query warning  → log de queries > 1 s no console
  *  • error logging       → log de respostas HTTP >= 400
@@ -29,29 +33,34 @@ const instrumentedFetch: typeof fetch = (url, options) => {
   const callerSignal = (options as RequestInit | undefined)?.signal as AbortSignal | undefined;
   let combinedSignal = timeoutController.signal;
   if (callerSignal) {
-    // AbortSignal.any está disponível nos browsers modernos e no Node 20+
     if (typeof AbortSignal.any === 'function') {
       combinedSignal = AbortSignal.any([timeoutController.signal, callerSignal]);
     } else {
-      // fallback: propaga cancelamento do chamador manualmente
       callerSignal.addEventListener('abort', () => timeoutController.abort(), { once: true });
     }
   }
 
-  return fetch(url, { ...options, signal: combinedSignal })
-    .then((res) => {
-      const ms = Math.round(performance.now() - start);
-      if (ms > 1_000) {
-        console.warn(`[Supabase SLOW] ${ms} ms → ${path}`);
-      }
-      if (!res.ok) {
-        console.error(`[Supabase ERROR] HTTP ${res.status} → ${path}`);
-      }
-      return res;
-    })
+  // Executa dentro do Circuit Breaker + Retry
+  const doFetch = () =>
+    fetch(url, { ...options, signal: combinedSignal })
+      .then((res) => {
+        const ms = Math.round(performance.now() - start);
+        if (ms > 1_000) console.warn(`[Supabase SLOW] ${ms} ms → ${path}`);
+        if (!res.ok)    console.error(`[Supabase ERROR] HTTP ${res.status} → ${path}`);
+        return res;
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error(`[Supabase TIMEOUT] requisição cancelada após 15 s: ${path}`);
+        }
+        throw err;
+      });
+
+  return supabaseCircuitBreaker
+    .execute(() => retryQuery(doFetch, { maxAttempts: 3, baseDelayMs: 500, signal: combinedSignal }))
     .catch((err: unknown) => {
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error(`[Supabase TIMEOUT] requisição cancelada após 15 s: ${path}`);
+      if (err instanceof CircuitOpenError) {
+        console.error(`[Supabase CIRCUIT OPEN] requisição bloqueada → ${path}`);
       }
       throw err;
     })
@@ -68,11 +77,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     fetch: instrumentedFetch,
   },
   realtime: {
-    // Timeout para handshake inicial do WebSocket
     timeout: 30_000,
-    // Heartbeat a cada 15 s — detecta conexão morta mais rápido
     heartbeatIntervalMs: 15_000,
-    // Backoff exponencial: 1 s, 2 s, 3 s … até 30 s entre tentativas
     reconnectAfterMs: (tries: number) => Math.min(tries * 1_000, 30_000),
   },
 });

@@ -11,7 +11,6 @@
 })();
 
 import { createRoot } from "react-dom/client";
-import { StrictMode } from "react";
 import App from "./App";
 import "./index.css";
 
@@ -19,14 +18,10 @@ import "./index.css";
 import { initMonitoring } from "./lib/monitoring";
 import { initConnectionMonitor, initGlobalErrorHandlers } from "./lib/error-interceptor";
 
-// Inicia APM (Sentry + Web Vitals + Memory Monitor + Long Task Observer)
-const stopMonitoring     = initMonitoring();
-// Inicia monitor de rede (online/offline → Sentry)
-const stopConnMonitor    = initConnectionMonitor();
-// Inicia captura global de erros não tratados (uncaught + unhandledrejection)
-const stopErrorHandlers  = initGlobalErrorHandlers();
+const stopMonitoring    = initMonitoring();
+const stopConnMonitor   = initConnectionMonitor();
+const stopErrorHandlers = initGlobalErrorHandlers();
 
-// Cleanup ao desmontar a aplicação (HMR / testes)
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     stopMonitoring();
@@ -36,8 +31,23 @@ if (import.meta.hot) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+/**
+ * ⚠️  StrictMode desabilitado em PRODUÇÃO.
+ *
+ * O React.StrictMode monta/desmonta cada componente 2× em desenvolvimento
+ * para detectar efeitos colaterais — comportamento útil em dev, mas que
+ * dobra os useEffects e as requisições ao Supabase em produção se esquecido.
+ *
+ * Mantemos StrictMode ativo apenas em desenvolvimento (import.meta.env.DEV).
+ * Em produção o render é direto, sem dupla montagem.
+ */
+const app = <App />;
+
+if (import.meta.env.DEV) {
+  const { StrictMode } = await import("react");
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>{app}</StrictMode>
+  );
+} else {
+  createRoot(document.getElementById("root")!).render(app);
+}

@@ -1,11 +1,11 @@
-import { memo, useMemo, useCallback, useState } from "react";
+import { memo, useMemo, useCallback } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import {
   Bug, Clock, AlertTriangle, Tag, Zap, CheckCircle2,
-  Timer, TrendingUp, ArrowRight, ArrowLeft, MoveRight, ExternalLink,
+  Timer, TrendingUp, ArrowRight, ArrowLeft, ExternalLink,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -63,12 +63,10 @@ const ACTIVITY_TYPE_COLORS: Record<string, string> = {
   documentation: "bg-emerald-500",
   review:        "bg-orange-500",
   other:         "bg-slate-400",
-  // legado
   development:   "bg-blue-500",
   code_review:   "bg-purple-500",
 };
 
-// Paleta de cores para tags — cicla pelas cores baseado no texto da tag
 const TAG_PALETTE = [
   "bg-blue-500/15   text-blue-700   dark:text-blue-400   border-blue-500/30",
   "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/30",
@@ -86,10 +84,10 @@ function tagColor(tag: string): string {
   return TAG_PALETTE[hash % TAG_PALETTE.length];
 }
 
-/** Converte minutos → "Xd Yh" igual ao card da Sustentação */
+/** Converte minutos → "Xd Yh" */
 function fmtMinutes(min: number): string {
   if (min <= 0) return "0h";
-  const d = Math.floor(min / 480); // 8h/dia
+  const d = Math.floor(min / 480);
   const h = Math.floor((min % 480) / 60);
   const m = min % 60;
   if (d > 0 && h > 0) return `${d}d ${h}h`;
@@ -97,6 +95,17 @@ function fmtMinutes(min: number): string {
   if (h > 0 && m > 0) return `${h}h ${m}m`;
   if (h > 0) return `${h}h`;
   return `${m}m`;
+}
+
+/**
+ * Gera as iniciais do nome completo.
+ * Ex: "Roberto de Araujo Sales" → "RS" (primeira e última palavra)
+ */
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -258,7 +267,9 @@ const ActivityProgressBar = memo(function ActivityProgressBar({
 
 // ─── AssigneeAvatars ───────────────────────────────────────────────────────────
 // Exibe avatar do responsável direto da HU (hu.assigneeId) +
-// colaboradores das atividades
+// colaboradores das atividades.
+// Avatar: iniciais da primeira e última palavra do nome (ex: "RS" para Roberto de Araujo Sales).
+// Tooltip: nome completo. Responsável sempre último na lista visual (canto direito).
 
 const AssigneeAvatars = memo(function AssigneeAvatars({
   huAssigneeId,
@@ -269,50 +280,68 @@ const AssigneeAvatars = memo(function AssigneeAvatars({
 }) {
   const { developers } = useSprint();
 
-  // Monta lista única: responsável da HU sempre primeiro
-  const memberIds = useMemo(() => {
+  // Colaboradores de atividades (excluindo o responsável da HU)
+  const collaboratorIds = useMemo(() => {
     const seen = new Set<string>();
+    if (huAssigneeId) seen.add(huAssigneeId);
     const ids: string[] = [];
-    if (huAssigneeId) { seen.add(huAssigneeId); ids.push(huAssigneeId); }
     for (const id of activityAssigneeIds) {
       if (!seen.has(id)) { seen.add(id); ids.push(id); }
     }
     return ids;
   }, [huAssigneeId, activityAssigneeIds]);
 
-  const members = useMemo(
-    () => memberIds.map((id) => developers.find((d: any) => d.id === id)).filter(Boolean),
-    [memberIds, developers],
+  const collaborators = useMemo(
+    () => collaboratorIds.map((id) => developers.find((d: any) => d.id === id)).filter(Boolean) as any[],
+    [collaboratorIds, developers],
   );
 
-  if (members.length === 0) return null;
+  const responsible = useMemo(
+    () => huAssigneeId ? developers.find((d: any) => d.id === huAssigneeId) ?? null : null,
+    [huAssigneeId, developers],
+  );
+
+  // Total visível = colaboradores (máx 2) + responsável
+  const visibleCollabs = collaborators.slice(0, 2);
+  const extraCollabs   = collaborators.length - visibleCollabs.length;
+
+  if (!responsible && collaborators.length === 0) return null;
 
   return (
-    <div className="flex -space-x-1.5">
-      {members.slice(0, 3).map((dev: any, idx: number) => (
+    <div className="flex items-center -space-x-1.5">
+      {/* Colaboradores de atividades (aparecem primeiro, à esquerda) */}
+      {visibleCollabs.map((dev: any) => (
         <Tooltip key={dev.id}>
           <TooltipTrigger asChild>
-            <div
-              className={cn(
-                "w-5 h-5 rounded-full border-2 border-card flex items-center justify-center text-[9px] font-bold cursor-default",
-                // Responsável da HU (primeiro) → destaque com bg sólido
-                idx === 0 && huAssigneeId === dev.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-primary/20 text-primary",
-              )}
-            >
-              {dev.name.charAt(0).toUpperCase()}
+            <div className="w-5 h-5 rounded-full border-2 border-card flex items-center justify-center text-[8px] font-bold cursor-default bg-primary/20 text-primary">
+              {getInitials(dev.name)}
             </div>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p>{dev.name}{idx === 0 && huAssigneeId === dev.id ? " (responsável)" : ""}</p>
+            <p>{dev.name}</p>
           </TooltipContent>
         </Tooltip>
       ))}
-      {members.length > 3 && (
-        <div className="w-5 h-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[9px] font-medium text-muted-foreground">
-          +{members.length - 3}
+
+      {/* Badge de excedente de colaboradores */}
+      {extraCollabs > 0 && (
+        <div className="w-5 h-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[8px] font-medium text-muted-foreground">
+          +{extraCollabs}
         </div>
+      )}
+
+      {/* Responsável da HU — sempre último (mais à direita) e com destaque */}
+      {responsible && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="w-5 h-5 rounded-full border-2 border-card flex items-center justify-center text-[8px] font-bold cursor-default bg-primary text-primary-foreground">
+              {getInitials(responsible.name)}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>{responsible.name} <span className="text-muted-foreground text-[10px]">(responsável)</span></p>
+          </TooltipContent>
+        </Tooltip>
       )}
     </div>
   );
@@ -436,11 +465,6 @@ export const KanbanCard = memo(function KanbanCard({
     [workflowColumns, currentColIndex],
   );
 
-  const otherColumns = useMemo(
-    () => workflowColumns.filter((c) => c.key !== hu.status),
-    [workflowColumns, hu.status],
-  );
-
   // ─── DnD-Kit ────────────────────────────────────────────────────────────────
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } =
     useSortable({
@@ -543,16 +567,12 @@ export const KanbanCard = memo(function KanbanCard({
 
         {/* ── Footer: avatares | horas | bugs ── */}
         <div className="flex items-center justify-between gap-1 pt-0.5">
-          {/* Esquerda: avatares (responsável da HU + colaboradores) + horas */}
+          {/* Esquerda: horas */}
           <div className="flex items-center gap-1.5 min-w-0">
-            <AssigneeAvatars
-              huAssigneeId={hu.assigneeId}
-              activityAssigneeIds={activityAssigneeIds}
-            />
             <HoursChip activities={activities} />
           </div>
 
-          {/* Direita: bugs abertos */}
+          {/* Direita: bugs + avatares (responsável sempre mais à direita) */}
           <div className="flex items-center gap-1.5 shrink-0">
             {openBugs > 0 && (
               <Tooltip>
@@ -565,6 +585,10 @@ export const KanbanCard = memo(function KanbanCard({
                 <TooltipContent side="top"><p>{openBugs} bug{openBugs > 1 ? "s" : ""} aberto{openBugs > 1 ? "s" : ""}</p></TooltipContent>
               </Tooltip>
             )}
+            <AssigneeAvatars
+              huAssigneeId={hu.assigneeId}
+              activityAssigneeIds={activityAssigneeIds}
+            />
           </div>
         </div>
       </div>
@@ -623,31 +647,6 @@ export const KanbanCard = memo(function KanbanCard({
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {prevColumns.map((col) => (
-                <ContextMenuItem
-                  key={col.key}
-                  onSelect={() => handleMove(col.key)}
-                  className="gap-2"
-                >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: (col as any).hex ?? "#6b7280" }}
-                  />
-                  {col.label}
-                </ContextMenuItem>
-              ))}
-            </ContextMenuSubContent>
-          </ContextMenuSub>
-        )}
-
-        {/* Mover para → todas as outras colunas */}
-        {otherColumns.length > 0 && (
-          <ContextMenuSub>
-            <ContextMenuSubTrigger className="gap-2">
-              <MoveRight className="w-3.5 h-3.5 text-primary" />
-              Mover para
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-48">
-              {otherColumns.map((col) => (
                 <ContextMenuItem
                   key={col.key}
                   onSelect={() => handleMove(col.key)}

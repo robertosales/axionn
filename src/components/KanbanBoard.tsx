@@ -38,6 +38,7 @@ import { KanbanFilterBar, KANBAN_FILTROS_DEFAULT } from "./KanbanFilterBar";
 import type { KanbanFiltros } from "./KanbanFilterBar";
 import { SprintImpedimentsBanner } from "./SprintImpedimentsBanner";
 import { supabase } from "@/integrations/supabase/client";
+import { HUEditDrawer } from "./HUEditDrawer";
 
 // ─── Chaves de sessionStorage ─────────────────────────────────────────────────
 const SS_FILTROS_KEY   = "kanban_board_filtros";
@@ -193,6 +194,10 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     if (saved) return saved;
     return { ...KANBAN_FILTROS_DEFAULT, sprintId: "all" };
   });
+
+  // ─── Estado interno para abrir HUEditDrawer ───────────────────────────────
+  const [selectedHU, setSelectedHU] = useState<any | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleFiltrosChange = useCallback((next: KanbanFiltros) => {
     setFiltros(next);
@@ -483,9 +488,11 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     [updateUserStoryStatus],
   );
 
-  // ─── Handler para abrir detalhes via context menu ─────────────────────────
+  // ─── Handler para abrir detalhes: abre HUEditDrawer interno ──────────────
   const handleSelectHU = useCallback(
     (hu: any) => {
+      setSelectedHU(hu);
+      setDrawerOpen(true);
       onSelectHU?.(hu);
     },
     [onSelectHU],
@@ -640,6 +647,15 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
           )}
         </DragOverlay>
       </DndContext>
+
+      {/* ─── HUEditDrawer: abre ao clicar em Abrir detalhes ou no card ──── */}
+      {selectedHU && (
+        <HUEditDrawer
+          hu={selectedHU}
+          open={drawerOpen}
+          onClose={() => { setDrawerOpen(false); setSelectedHU(null); }}
+        />
+      )}
 
       <AlertDialog open={finalizeOpen} onOpenChange={(o) => { if (!finalizing) setFinalizeOpen(o); }}>
         <AlertDialogContent>

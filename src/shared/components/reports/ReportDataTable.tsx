@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 
 export interface TableColumn<T = any> {
   key: string;
-  header: string;
+  header?: string;
+  label?: string;
   render?: (value: any, row: T) => ReactNode;
   sortable?: boolean;
   align?: "left" | "center" | "right";
@@ -16,6 +17,7 @@ export interface TableColumn<T = any> {
 
 interface ReportDataTableProps<T = any> {
   title?: string;
+  titulo?: string;
   subtitle?: string;
   columns: TableColumn<T>[];
   data: T[];
@@ -23,10 +25,12 @@ interface ReportDataTableProps<T = any> {
   emptyMessage?: string;
   maxRows?: number;
   badge?: string | number;
+  totals?: Record<string, any>;
 }
 
 export function ReportDataTable<T extends Record<string, any>>({
   title,
+  titulo,
   subtitle,
   columns,
   data,
@@ -35,6 +39,7 @@ export function ReportDataTable<T extends Record<string, any>>({
   maxRows,
   badge,
 }: ReportDataTableProps<T>) {
+  const finalTitle = title ?? titulo;
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(0);
@@ -61,10 +66,10 @@ export function ReportDataTable<T extends Record<string, any>>({
 
   return (
     <Card>
-      {(title || subtitle) && (
+      {(finalTitle || subtitle) && (
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
-            {title && <CardTitle className="text-sm font-semibold">{title}</CardTitle>}
+            {finalTitle && <CardTitle className="text-sm font-semibold">{finalTitle}</CardTitle>}
             {badge !== undefined && (
               <Badge variant="secondary" className="text-[10px] font-mono">{badge}</Badge>
             )}
@@ -72,7 +77,7 @@ export function ReportDataTable<T extends Record<string, any>>({
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </CardHeader>
       )}
-      <CardContent className={cn(!title && !subtitle ? "pt-4" : "pt-0")}>
+      <CardContent className={cn(!finalTitle && !subtitle ? "pt-4" : "pt-0")}>
         {data.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">{emptyMessage}</p>
         ) : (
@@ -94,7 +99,7 @@ export function ReportDataTable<T extends Record<string, any>>({
                         onClick={() => col.sortable && handleSort(col.key)}
                       >
                         <span className="inline-flex items-center gap-1">
-                          {col.header}
+                          {col.header ?? col.label}
                           {col.sortable && (
                             sortKey === col.key ? (
                               sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />

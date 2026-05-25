@@ -30,11 +30,7 @@ const RESOLVED_STATUSES = ["resolvida", "fechada", "concluida"];
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
   const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
 }
 
 function hoursBetween(a: string, b: string): number {
@@ -58,23 +54,21 @@ export function calcAtendimento(demandas: Demanda[]): AtendimentoKPI {
     total: demandas.filter((d) => OPEN_STATUSES.includes(d.situacao)).length,
     abertosHoje: demandas.filter((d) => isToday(d.created_at)).length,
     resolvidosHoje: demandas.filter(
-      (d) => RESOLVED_STATUSES.includes(d.situacao) && d.resolved_at && isToday(d.resolved_at)
+      (d) => RESOLVED_STATUSES.includes(d.situacao) && d.resolved_at && isToday(d.resolved_at),
     ).length,
-    backlog: demandas.filter(
-      (d) => OPEN_STATUSES.includes(d.situacao) && new Date(d.created_at) < cutoff
-    ).length,
+    backlog: demandas.filter((d) => OPEN_STATUSES.includes(d.situacao) && new Date(d.created_at) < cutoff).length,
     backlogDays: BACKLOG_DAYS,
   };
 }
 
 // ─── calcTempos ───────────────────────────────────────────────────────────────
 export interface TemposKPI {
-  tmr: number;       // Tempo Médio de Resposta (h)
+  tmr: number; // Tempo Médio de Resposta (h)
   tmrCount: number;
-  mttr: number;      // Mean Time To Resolve (h)
+  mttr: number; // Mean Time To Resolve (h)
   mttrCount: number;
-  tma: number;       // Tempo Médio de Atendimento (h)
-  mtta: number;      // Mean Time To Acknowledge (h)
+  tma: number; // Tempo Médio de Atendimento (h)
+  mtta: number; // Mean Time To Acknowledge (h)
   mttaCount: number;
 }
 
@@ -86,8 +80,7 @@ export function calcTempos(demandas: Demanda[], transitions: Transition[]): Temp
       .filter((t) => t.demanda_id === d.id)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
     if (first) tmrValues.push(Math.abs(hoursBetween(d.created_at, first.created_at)));
-    else if (d.first_response_at)
-      tmrValues.push(Math.abs(hoursBetween(d.created_at, d.first_response_at)));
+    else if (d.first_response_at) tmrValues.push(Math.abs(hoursBetween(d.created_at, d.first_response_at)));
   });
 
   // MTTR — criação até resolução
@@ -96,9 +89,7 @@ export function calcTempos(demandas: Demanda[], transitions: Transition[]): Temp
     .map((d) => Math.abs(hoursBetween(d.created_at, d.resolved_at!)));
 
   // TMA — média de (updated_at - created_at) para todas as demandas
-  const tmaValues: number[] = demandas.map((d) =>
-    Math.abs(hoursBetween(d.created_at, d.updated_at))
-  );
+  const tmaValues: number[] = demandas.map((d) => Math.abs(hoursBetween(d.created_at, d.updated_at)));
 
   // MTTA — criação até transição para "em_andamento"
   const mttaValues: number[] = [];
@@ -109,15 +100,15 @@ export function calcTempos(demandas: Demanda[], transitions: Transition[]): Temp
     if (ack) mttaValues.push(Math.abs(hoursBetween(d.created_at, ack.created_at)));
   });
 
-  const avg = (arr: number[]) => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+  const avg = (arr: number[]) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 0);
 
   return {
-    tmr:       avg(tmrValues),
-    tmrCount:  tmrValues.length,
-    mttr:      avg(mttrValues),
+    tmr: avg(tmrValues),
+    tmrCount: tmrValues.length,
+    mttr: avg(mttrValues),
     mttrCount: mttrValues.length,
-    tma:       avg(tmaValues),
-    mtta:      avg(mttaValues),
+    tma: avg(tmaValues),
+    mtta: avg(mttaValues),
     mttaCount: mttaValues.length,
   };
 }
@@ -128,17 +119,41 @@ export interface SLAKPI {
   compliance: number; // % (0–100)
   emRisco: number;
   violados: number;
+  results: Array<{
+    rhm: string;
+    projeto: string;
+    prioridade: string;
+    abertura: string;
+    prazoSLA: string;
+    resolucao: string | null;
+    statusSLA: "dentro" | "em_risco" | "violado";
+    atraso: number;
+  }>;
 }
 
 export function calcSLA(demandas: Demanda[], _transitions: Transition[]): SLAKPI {
-  const total    = demandas.length;
+  const total = demandas.length;
   const violados = demandas.filter((d) => d.sla_violado).length;
-  const emRisco  = demandas.filter((d) => d.sla_em_risco && !d.sla_violado).length;
+  const emRisco = demandas.filter((d) => d.sla_em_risco && !d.sla_violado).length;
   const compliance = total === 0 ? 100 : ((total - violados) / total) * 100;
 
-  return { total, compliance, emRisco, violados };
-}
+  const results = demandas.map((d) => ({
+    rhm: (d as any).rhm ?? d.id,
+    projeto: (d as any).projeto ?? "-",
+    prioridade: (d as any).prioridade ?? "Padrão",
+    abertura: d.created_at,
+    prazoSLA: (d as any).prazo_sla ?? d.created_at,
+    resolucao: d.resolved_at ?? null,
+    statusSLA: (d.sla_violado ? "violado" : d.sla_em_risco ? "em_risco" : "dentro") as
+      | "dentro"
+      | "em_risco"
+      | "violado",
+    atraso: 0,
+  }));
 
+  return { total, compliance, emRisco, violados, results };
+}
+/*
 // ─── formatHours ─────────────────────────────────────────────────────────────
 export function formatHours(hours: number): string {
   if (hours === 0) return "0h";
@@ -147,4 +162,42 @@ export function formatHours(hours: number): string {
   const days = Math.floor(hours / 24);
   const rem  = Math.round(hours % 24);
   return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
+}
+*/
+
+// ─── formatHours ─────────────────────────────────────────────────────────────
+export function formatHours(hours: number): string {
+  if (!hours || hours <= 0) return "0min";
+
+  // Converte horas decimais para minutos totais
+  const totalMinutes = Math.round(hours * 60);
+
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const remainingAfterDays = totalMinutes % (24 * 60);
+
+  const hrs = Math.floor(remainingAfterDays / 60);
+  const mins = remainingAfterDays % 60;
+
+  // Menor que 1 hora → só minutos
+  if (days === 0 && hrs === 0) {
+    return `${mins}min`;
+  }
+
+  // Menor que 1 dia → horas + minutos
+  if (days === 0) {
+    return `${hrs}h${mins.toString().padStart(2, "0")}min`;
+  }
+
+  // Dias + horas + minutos
+  if (mins > 0) {
+    return `${days}d ${hrs}h${mins.toString().padStart(2, "0")}min`;
+  }
+
+  // Dias + horas
+  if (hrs > 0) {
+    return `${days}d ${hrs}h`;
+  }
+
+  // Apenas dias
+  return `${days}d`;
 }

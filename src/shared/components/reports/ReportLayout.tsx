@@ -6,6 +6,7 @@ interface ReportLayoutProps {
   filters?: ReactNode;
   kpis?: ReactNode;
   table?: ReactNode;
+  chart?: ReactNode;
   footer?: ReactNode;
   // Alternativa: children direto
   children?: ReactNode;
@@ -22,6 +23,7 @@ export function ReportLayout({
   header,
   filters,
   kpis,
+  chart,
   table,
   footer,
   children,
@@ -45,6 +47,7 @@ export function ReportLayout({
         {header  && <div>{header}</div>}
         {filters && <div>{filters}</div>}
         {kpis    && <div>{kpis}</div>}
+        {chart   && <div>{chart}</div>}
         {table   && <div>{table}</div>}
         {footer  && <div>{footer}</div>}
         {children}

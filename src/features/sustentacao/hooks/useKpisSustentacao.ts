@@ -91,7 +91,7 @@ async function fetchKpis(teamId: string, backlogDias: number): Promise<KpisSuste
     p_sla_risco_h:  2,
   });
   if (error) throw new Error(error.message);
-  return data as KpisSustentacao;
+  return data as unknown as KpisSustentacao;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────────

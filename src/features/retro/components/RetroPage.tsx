@@ -177,7 +177,7 @@ export function RetroPage() {
           {/* Sessão encerrada ou corrompida → ResultsView com opções */}
           {isClosedSession && (
             <RetroResultsView
-              session={session!}
+              session={session! as any}
               cards={cards}
               actionItems={actionItems}
               profiles={profiles}
@@ -190,8 +190,8 @@ export function RetroPage() {
           {isActiveSession && (
             <>
               <RetroPhaseHeader
-                session={session!}
-                participants={participants}
+                session={session! as any}
+                participants={participants as any}
                 profiles={profiles}
                 isFacilitator={isFacilitator}
                 facilitatorOffline={facilitatorOffline}
@@ -229,7 +229,7 @@ export function RetroPage() {
                 <RetroVotingPhase
                   model={session!.model}
                   cards={cards}
-                  votes={votes}
+                  votes={votes as any}
                   profiles={profiles}
                   userId={user?.id ?? ""}
                   onToggleVote={toggleVote}
@@ -242,7 +242,7 @@ export function RetroPage() {
                   cards={cards}
                   profiles={profiles}
                   isFacilitator={isFacilitator}
-                  onCreate={createActionItem}
+                  onCreate={(p) => createActionItem(p.description ?? p.title, p.cardId, p.ownerId)}
                   onUpdate={updateActionItem}
                   onDelete={deleteActionItem}
                 />

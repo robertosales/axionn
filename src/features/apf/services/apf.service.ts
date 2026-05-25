@@ -217,7 +217,8 @@ export async function invokeApfGeneration(body: {
   prompt: string;
   provider?: string;
   providerId?: string;
-  // apiKey REMOVIDA — vem do Vault na Edge Function
+  /** Chave inline (modelo híbrido) — usada quando o provider não tem chave no Vault. */
+  apiKey?: string;
   model?: string;
   files: Array<{ name: string; content: string; encoding?: "base64" | "text"; mimeType?: string }>;
   generationId?: string;
@@ -227,14 +228,28 @@ export async function invokeApfGeneration(body: {
   pfBreakdown: Record<string, number>;
   pfTotal: number | null;
   outputFilename: string;
+  providerUsed?: string;
+  fallback?: { from: string; to: string; reason: string } | null;
 }> {
   const { data, error } = await supabase.functions.invoke("apf-generate", {
     body,
-    // supabaseUrl e supabaseServiceKey REMOVIDOS — Edge Function usa env vars
   });
-  if (error) throw new Error(error.message ?? "Erro ao chamar a IA");
-  if (!data?.success || !data?.docxBase64) {
-    throw new Error(data?.error ?? "A IA não retornou conteúdo");
+  // A Edge Function devolve { success:false, reason, userMessage } com HTTP 200
+  // para falhas recuperáveis (402, 429, 5xx) — evita Runtime Error no cliente.
+  if (error) {
+    // Tenta extrair payload tipado do contexto, se disponível
+    const ctx: any = (error as any)?.context;
+    const friendly = ctx?.userMessage ?? error.message ?? "Não foi possível gerar o documento agora.";
+    throw new Error(friendly);
+  }
+  if (data?.success === false) {
+    const details = Array.isArray(data.attempts) && data.attempts.length > 0
+      ? `\nTentativas: ${data.attempts.map((a: any) => `${a.name}${a.status ? ` (${a.status})` : ""}`).join(" → ")}`
+      : "";
+    throw new Error(`${data.userMessage ?? "Não foi possível gerar o documento agora. Tente novamente em instantes."}${details}`);
+  }
+  if (!data?.docxBase64) {
+    throw new Error(data?.userMessage ?? data?.error ?? "A IA não retornou conteúdo");
   }
   return {
     docxBase64: data.docxBase64,
@@ -242,5 +257,7 @@ export async function invokeApfGeneration(body: {
     pfBreakdown: data.pfBreakdown ?? {},
     pfTotal: data.pfTotal ?? null,
     outputFilename: data.outputFilename ?? "Evidencia_APF.docx",
+    providerUsed: data.providerUsed,
+    fallback: data.fallback ?? null,
   };
 }

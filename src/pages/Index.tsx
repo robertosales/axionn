@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense } from "react";
+import React, { useEffect, lazy, Suspense, useTransition } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
 import { useSprint } from "@/contexts/SprintContext";
@@ -13,12 +13,7 @@ import { DeveloperManager }  from "@/components/DeveloperManager";
 import { KanbanBoard }       from "@/components/KanbanBoard";
 import { DashboardHome }     from "@/components/DashboardHome";
 
-// ─── Componentes pesados — lazy loaded (só baixados quando a rota é acessada) ──
-// AgileHistory   ~43.5 KB  — histórico de sprints, acesso ocasional
-// UserRolesManager ~48.6 KB — gestão de perfis, acesso restrito/admin
-// PlanningPoker  ~43.9 KB  — sessões de poker, carregado por rota dedicada
-//                            mas importado aqui p/ seção interna também
-// Os demais têm 15–35 KB e beneficiam do lazy quando há muitas seções ativas
+// ─── Componentes pesados — lazy loaded ────────────────────────────────────────
 const AgileHistory        = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
 const UserRolesManager    = lazy(() => import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })));
 const PlanningPoker       = lazy(() => import("@/components/PlanningPoker").then((m) => ({ default: m.PlanningPoker })));
@@ -36,7 +31,30 @@ const CalendarView        = lazy(() => import("@/components/CalendarView").then(
 const RetroManager        = lazy(() => import("@/components/RetroManager").then((m) => ({ default: m.RetroManager })));
 const ApfGeneratorPage    = lazy(() => import("@/features/apf/components/ApfGeneratorPage").then((m) => ({ default: m.ApfGeneratorPage })));
 
-// ─── Fallback de seção ────────────────────────────────────────────────────────
+// ─── Skeleton de seção — exibido enquanto o chunk lazy está carregando ────────
+function SectionSkeleton() {
+  return (
+    <div className="space-y-4 p-2" aria-busy="true" aria-label="Carregando seção…">
+      {/* Título da seção */}
+      <div className="h-7 w-48 rounded-md bg-muted animate-pulse" />
+      {/* Linha de filtros/ações */}
+      <div className="flex gap-3">
+        <div className="h-9 w-32 rounded-md bg-muted animate-pulse" />
+        <div className="h-9 w-24 rounded-md bg-muted animate-pulse" />
+        <div className="ml-auto h-9 w-28 rounded-md bg-muted animate-pulse" />
+      </div>
+      {/* Cards/linhas de conteúdo */}
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="h-20 w-full rounded-lg bg-muted animate-pulse" style={{ opacity: 1 - i * 0.15 }} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * SectionLoader — fallback legado (spinner simples).
+ * Mantido para compatibilidade, mas SectionSkeleton é o preferido.
+ */
 function SectionLoader() {
   return (
     <div className="flex items-center justify-center py-20">
@@ -45,42 +63,61 @@ function SectionLoader() {
   );
 }
 
+/** ErrorBoundary simples para cada seção lazy */
+class SectionErrorBoundary extends React.Component<
+  { name: string; children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { name: string; children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err: Error) {
+    console.error(`[SectionErrorBoundary] Erro na seção "${this.props.name}":`, err);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 space-y-3 text-center">
+          <ShieldAlert className="h-12 w-12 text-destructive/40" />
+          <p className="text-base font-medium text-foreground">Erro ao carregar a seção</p>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            Ocorreu um problema ao carregar <strong>{this.props.name}</strong>.
+            Tente recarregar a página.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => this.setState({ hasError: false })}>
+            Tentar novamente
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/** Wrapper que combina ErrorBoundary + Suspense com skeleton robusto */
+function LazySection({ name, children }: { name: string; children: React.ReactNode }) {
+  return (
+    <SectionErrorBoundary name={name}>
+      <Suspense fallback={<SectionSkeleton />}>
+        {children}
+      </Suspense>
+    </SectionErrorBoundary>
+  );
+}
+
 const VALID_SECTIONS = [
-  "dashboard",
-  "backlog",
-  "board",
-  "planning-poker",
-  "retrospectiva",
-  "releases",
-  "relatorios",
-  "notificacoes",
-  "gerador-apf",
-  "metricas",
-  "historico",
-  "calendario",
-  "equipe",
-  "epicos",
-  "atividades",
-  "impedimentos",
-  "times",
-  "membros",
-  "perfis",
-  "fluxo",
-  "campos",
-  "automacoes",
+  "dashboard", "backlog", "board", "planning-poker", "retrospectiva",
+  "releases", "relatorios", "notificacoes", "gerador-apf", "metricas",
+  "historico", "calendario", "equipe", "epicos", "atividades",
+  "impedimentos", "times", "membros", "perfis", "fluxo", "campos", "automacoes",
 ] as const;
 
 export type SectionKey = (typeof VALID_SECTIONS)[number];
 
 const TEAM_FREE_SECTIONS: SectionKey[] = [
-  "planning-poker",
-  "retrospectiva",
-  "times",
-  "membros",
-  "perfis",
-  "fluxo",
-  "campos",
-  "automacoes",
+  "planning-poker", "retrospectiva", "times", "membros", "perfis", "fluxo", "campos", "automacoes",
 ];
 
 function AccessDenied() {
@@ -107,6 +144,15 @@ const Index = () => {
   const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
+
+  /**
+   * useTransition — navegação entre seções sem bloquear a UI.
+   * React 18: `startTransition` marca a atualização como não urgente,
+   * permitindo que interações do usuário (clique, scroll) continuem responsivas
+   * enquanto o novo conteúdo carrega em background.
+   */
+  const [, startTransition] = useTransition();
+
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
 
   useEffect(() => {
@@ -127,14 +173,13 @@ const Index = () => {
     }
   }, [loading, section]);
 
-  const handleNavigate = (key: string) => navigate(`/sala-agil/${key}`);
+  // Navegação via startTransition — sem freeze de UI
+  const handleNavigate = (key: string) =>
+    startTransition(() => navigate(`/sala-agil/${key}`));
 
   const isTeamFreeSection = TEAM_FREE_SECTIONS.includes(active);
   const needsTeam = !loading && !isAdmin && !currentTeamId && !isTeamFreeSection;
-
-  // teamKey força remontagem de todos os componentes ao trocar de time,
-  // zerando states internos (filtros, sessionStorage, paginação, etc.)
-  const teamKey = currentTeamId ?? "no-team";
+  const teamKey   = currentTeamId ?? "no-team";
 
   return (
     <AppShell module="sala_agil" activeKey={active} onNavigate={handleNavigate}>
@@ -142,10 +187,7 @@ const Index = () => {
         open={showTeamModal}
         teams={moduleTeams}
         moduleLabel="Sala Ágil"
-        onSelect={(id) => {
-          setCurrentTeamId(id);
-          setShowTeamModal(false);
-        }}
+        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
         onClose={() => setShowTeamModal(false)}
       />
 
@@ -169,10 +211,8 @@ const Index = () => {
         )}
 
         {!loading && !needsTeam && (
-          // key={teamKey} garante remontagem completa de todos os filhos
-          // quando o time muda, zerando states internos de cada componente
           <div key={teamKey}>
-            {/* Seções leves — sem Suspense adicional */}
+            {/* Seções leves — sem LazySection */}
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
             {active === "equipe"    && <DeveloperManager />}
             {active === "board"     && (
@@ -181,95 +221,131 @@ const Index = () => {
               </SectionGuard>
             )}
 
-            {/* Seções pesadas — cada uma com seu próprio Suspense boundary */}
-            <Suspense fallback={<SectionLoader />}>
-              {active === "planning-poker" && <PlanningPoker />}
-              {active === "calendario"     && <CalendarView />}
-              {active === "retrospectiva"  && <RetroManager />}
+            {/* Seções pesadas — cada uma com ErrorBoundary + Suspense + Skeleton */}
+            {active === "planning-poker" && (
+              <LazySection name="Planning Poker">
+                <PlanningPoker />
+              </LazySection>
+            )}
 
-              {active === "gerador-apf" && (
-                <SectionGuard permission="view_backlog">
+            {active === "calendario" && (
+              <LazySection name="Calendário">
+                <CalendarView />
+              </LazySection>
+            )}
+
+            {active === "retrospectiva" && (
+              <LazySection name="Retrospectiva">
+                <RetroManager />
+              </LazySection>
+            )}
+
+            {active === "gerador-apf" && (
+              <SectionGuard permission="view_backlog">
+                <LazySection name="Gerador APF">
                   <ApfGeneratorPage />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "backlog" && (
-                <SectionGuard permission="view_backlog">
+            {active === "backlog" && (
+              <SectionGuard permission="view_backlog">
+                <LazySection name="Backlog">
                   <div className="space-y-8">
                     <SprintManager />
                     <UserStoryManager />
                   </div>
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "epicos" && (
-                <SectionGuard permission="view_backlog">
+            {active === "epicos" && (
+              <SectionGuard permission="view_backlog">
+                <LazySection name="Épicos">
                   <EpicManager />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "atividades" && (
-                <SectionGuard permission="manage_activities">
+            {active === "atividades" && (
+              <SectionGuard permission="manage_activities">
+                <LazySection name="Atividades">
                   <ActivityManager />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "impedimentos" && (
-                <SectionGuard permission="report_impediment">
+            {active === "impedimentos" && (
+              <SectionGuard permission="report_impediment">
+                <LazySection name="Impedimentos">
                   <ImpedimentList />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "metricas" && (
-                <SectionGuard permission="view_dashboard">
+            {active === "metricas" && (
+              <SectionGuard permission="view_dashboard">
+                <LazySection name="Métricas">
                   <MetricsDashboard />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {/* AgileHistory — 43.5KB, carregado só na rota historico */}
-              {active === "historico" && (
-                <SectionGuard permission="view_dashboard">
+            {active === "historico" && (
+              <SectionGuard permission="view_dashboard">
+                <LazySection name="Histórico">
                   <AgileHistory />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "times" && (
-                <SectionGuard permission="manage_teams">
+            {active === "times" && (
+              <SectionGuard permission="manage_teams">
+                <LazySection name="Times">
                   <TeamManager moduleFilter="sala_agil" />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "membros" && (
-                <SectionGuard permission="manage_users">
+            {active === "membros" && (
+              <SectionGuard permission="manage_users">
+                <LazySection name="Membros">
                   <TeamMembersManager />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {/* UserRolesManager — 48.6KB, carregado só na rota perfis */}
-              {active === "perfis" && (
-                <SectionGuard permission="manage_roles">
+            {active === "perfis" && (
+              <SectionGuard permission="manage_roles">
+                <LazySection name="Perfis">
                   <UserRolesManager />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "fluxo" && (
-                <SectionGuard permission="manage_workflow">
+            {active === "fluxo" && (
+              <SectionGuard permission="manage_workflow">
+                <LazySection name="Fluxo">
                   <WorkflowManager />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "campos" && (
-                <SectionGuard permission="manage_custom_fields">
+            {active === "campos" && (
+              <SectionGuard permission="manage_custom_fields">
+                <LazySection name="Campos">
                   <CustomFieldManager />
-                </SectionGuard>
-              )}
+                </LazySection>
+              </SectionGuard>
+            )}
 
-              {active === "automacoes" && (
-                <SectionGuard permission="manage_automations">
+            {active === "automacoes" && (
+              <SectionGuard permission="manage_automations">
+                <LazySection name="Automações">
                   <AutomationManager />
-                </SectionGuard>
-              )}
-            </Suspense>
+                </LazySection>
+              </SectionGuard>
+            )}
           </div>
         )}
       </div>

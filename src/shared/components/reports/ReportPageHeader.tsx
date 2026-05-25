@@ -50,7 +50,7 @@ export function ReportPageHeader({
   // Renderiza o ícone: pode ser ElementType (componente Lucide) ou ReactNode (JSX)
   let iconNode: ReactNode = null;
   if (icon) {
-    if (typeof icon === "function" || (typeof icon === "object" && "$$typeof" in (icon as object) && !!(icon as { $$typeof: unknown }).$$typeof === false)) {
+    if (typeof icon === "function" || (typeof icon === "object" && "$$typeof" in (icon as unknown as object) && !!(icon as unknown as { $$typeof: unknown }).$$typeof === false)) {
       // é um ElementType (componente)
       const IconComp = icon as ElementType;
       iconNode = <IconComp className="h-5 w-5" />;

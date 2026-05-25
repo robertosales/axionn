@@ -117,6 +117,6 @@ export function validateEnv(): void {
 export function ensureNoIframe(): void {
   if (typeof window === "undefined") return;
   if (window.top !== window.self) {
-    window.top!.location = window.location;
+    window.top!.location.href = window.location.href;
   }
 }

@@ -76,7 +76,7 @@ async function fetchImr(
     p_e8_glosa:  e8Glosa,
   });
   if (error) throw new Error(error.message);
-  return data as ImrPeriodo;
+  return data as unknown as ImrPeriodo;
 }
 
 // ─── Defaults ──────────────────────────────────────────────────────────────────────

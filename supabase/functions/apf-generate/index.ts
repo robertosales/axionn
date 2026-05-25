@@ -3,12 +3,17 @@
  * SEC-005 — apf-generate (hardened)
  *
  * Mudanças de segurança:
- *   1. apiKey removida do body — buscada no Vault via get_ai_provider_key()
+ *   1. apiKey removida do body — buscada no Vault via get_ai_provider_key_by_id()
  *   2. supabaseServiceKey removida do body — usa env var SUPABASE_SERVICE_ROLE_KEY
  *   3. CORS restrito ao SITE_URL
  *   4. Autenticação obrigatória (JWT validado)
  *   5. provider validado contra lista de permitidos
  *   6. generationId validado como UUID
+ *
+ * FIX-001 — Correção de regressão API key (2026-05-22)
+ *   - RPC get_ai_provider_key_by_id: erro não era capturado (silent failure)
+ *   - Fallback LOVABLE_API_KEY: aceitava qualquer valor sem validar formato sk_...
+ *   - Guard obrigatório antes do switch de chamada à IA
  */
 
 import {
@@ -112,14 +117,41 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
 
   if (!row) throw new Error("Nenhum provedor de IA selecionado/cadastrado.");
 
-  // Busca a key no Vault pelo id da linha
+  // ── FIX-001: Busca a key no Vault capturando o erro corretamente ──
   let apiKey: string | null = null;
-  const { data: keyData } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id });
-  if (keyData) apiKey = keyData as string;
+  const { data: keyData, error: vaultErr } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id });
+  if (vaultErr) {
+    console.error(`[VAULT] Falha ao buscar key para provider "${row.name}" (${row.id}):`, vaultErr.message);
+  } else if (keyData && typeof keyData === "string" && keyData.trim().length > 0) {
+    apiKey = keyData.trim();
+  } else if (keyData !== null) {
+    console.warn(`[VAULT] RPC retornou valor inesperado para provider "${row.name}":`, typeof keyData);
+  }
 
-  // Fallback Lovable: usa a env do próprio gateway
-  if (!apiKey && row.provider_type === "lovable") {
-    apiKey = Deno.env.get("LOVABLE_API_KEY") ?? null;
+  // ── FIX-001: Fallback env — valida formato antes de aceitar ──
+  if (!apiKey) {
+    const envKey = (Deno.env.get(`${row.provider_type.toUpperCase()}_API_KEY`) ?? "").trim();
+    if (envKey.length > 0) {
+      // Validação por provider: Lovable/OpenAI/Perplexity precisam de sk_; Gemini e Anthropic têm outros prefixos
+      const VALID_PREFIXES: Record<string, string[]> = {
+        lovable:    ["sk_"],
+        openai:     ["sk-"],
+        perplexity: ["pplx-"],
+        gemini:     ["AIza"],
+        anthropic:  ["sk-ant-"],
+      };
+      const prefixes = VALID_PREFIXES[row.provider_type] ?? [];
+      const isValidFormat = prefixes.length === 0 || prefixes.some(p => envKey.startsWith(p));
+      if (isValidFormat && envKey.length >= 20) {
+        apiKey = envKey;
+        console.warn(`[FALLBACK] Usando env var ${row.provider_type.toUpperCase()}_API_KEY para "${row.name}". Configure a key no Vault para produção.`);
+      } else {
+        console.error(
+          `[FALLBACK] Env var ${row.provider_type.toUpperCase()}_API_KEY presente mas com formato inválido.` +
+          ` Prefixo: "${envKey.slice(0, 10)}...". Esperado: ${prefixes.join(" ou ")}`
+        );
+      }
+    }
   }
 
   // Modelo híbrido: aceita chave inline informada pelo usuário quando o
@@ -129,7 +161,11 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
   }
 
   if (!apiKey) {
+<<<<<<< HEAD
     throw new Error(`API key não configurada para "${row.name}". Cadastre no painel admin ou informe a chave na tela.`);
+=======
+    throw new Error(`API key não configurada para "${row.name}". Configure a chave no painel administrativo (Vault).`);
+>>>>>>> origin/main
   }
 
   return { providerType: row.provider_type, apiKey, model: row.model, name: row.name };
@@ -364,14 +400,12 @@ async function callGemini(p: string, k: string, m = "gemini-2.0-flash") {
     body: JSON.stringify({ contents: [{ parts: [{ text: p }] }] }),
   });
   const data = await r.json();
-  // Trata erros retornados com status 200 mas com campo "error" no body
   if (!r.ok || data.error) {
     const errMsg = data.error?.message ?? data.error ?? `HTTP ${r.status}`;
     throw new ProviderError("Gemini", r.status || 500, String(errMsg));
   }
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   if (!text) {
-    // Loga o motivo de bloqueio, se houver (finishReason, safetyRatings)
     const reason = data.candidates?.[0]?.finishReason ?? "sem candidatos";
     throw new Error(`Gemini retornou conteúdo vazio (motivo: ${reason}). Verifique o modelo "${m}" e a chave.`);
   }
@@ -605,7 +639,11 @@ Deno.serve(async (req: Request) => {
       processedFiles.push({ name: extracted.name, content: extracted.content });
     }
 
+<<<<<<< HEAD
     // ── 5. Chama a IA com fallback automático ──
+=======
+    // ── 5. Chama a IA (guard anti-regressão: garante key válida antes de chamar) ──
+>>>>>>> origin/main
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
 
     let aiText = "";
@@ -698,10 +736,25 @@ Deno.serve(async (req: Request) => {
 
   } catch (e: unknown) {
     console.error("apf-generate error:", e);
+<<<<<<< HEAD
     const { reason, userMessage, status } = mapErrorToReason(e);
     // Para erros recuperáveis (402/429/5xx) devolvemos 200 com payload tipado, evitando
     // Runtime Error no cliente. Outros erros mantém status apropriado.
     const httpStatus = isFallbackableStatus(status) ? 200 : (status >= 400 && status < 600 ? status : 500);
+=======
+    const raw = e instanceof Error ? e.message : "Erro desconhecido";
+    let friendly = raw;
+    if (/credit balance is too low/i.test(raw))
+      friendly = "A conta associada à chave configurada está sem créditos. Contate o administrador.";
+    else if (/invalid.*api.key|incorrect api key/i.test(raw))
+      friendly = "Chave de API inválida para o provider. Contate o administrador.";
+    else if (/401/i.test(raw))
+      friendly = "Chave de API recusada pelo provider (401). Verifique a chave configurada no Vault ou na variável de ambiente.";
+    else if (/rate limit|429/i.test(raw))
+      friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
+    else if (/não configurada/i.test(raw))
+      friendly = raw;
+>>>>>>> origin/main
     return new Response(
       JSON.stringify({ success: false, reason, userMessage }),
       { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },

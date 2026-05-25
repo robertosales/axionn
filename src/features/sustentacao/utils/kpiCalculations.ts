@@ -128,6 +128,16 @@ export interface SLAKPI {
   compliance: number; // % (0–100)
   emRisco: number;
   violados: number;
+  results: Array<{
+    rhm: string;
+    projeto: string;
+    prioridade: string;
+    abertura: string;
+    prazoSLA: string;
+    resolucao: string | null;
+    statusSLA: "dentro" | "em_risco" | "violado";
+    atraso: number;
+  }>;
 }
 
 export function calcSLA(demandas: Demanda[], _transitions: Transition[]): SLAKPI {
@@ -136,7 +146,18 @@ export function calcSLA(demandas: Demanda[], _transitions: Transition[]): SLAKPI
   const emRisco  = demandas.filter((d) => d.sla_em_risco && !d.sla_violado).length;
   const compliance = total === 0 ? 100 : ((total - violados) / total) * 100;
 
-  return { total, compliance, emRisco, violados };
+  const results = demandas.map((d) => ({
+    rhm:        (d as any).rhm ?? d.id,
+    projeto:    (d as any).projeto ?? "-",
+    prioridade: (d as any).prioridade ?? "Padrão",
+    abertura:   d.created_at,
+    prazoSLA:   (d as any).prazo_sla ?? d.created_at,
+    resolucao:  d.resolved_at ?? null,
+    statusSLA:  (d.sla_violado ? "violado" : d.sla_em_risco ? "em_risco" : "dentro") as "dentro" | "em_risco" | "violado",
+    atraso:     0,
+  }));
+
+  return { total, compliance, emRisco, violados, results };
 }
 
 // ─── formatHours ─────────────────────────────────────────────────────────────

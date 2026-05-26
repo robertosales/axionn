@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Search, Clock } from "lucide-react";
+import { CalendarIcon, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -57,9 +57,11 @@ interface Props {
 }
 
 export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda }: Props) {
-  // allTeams=true para garantir que o projeto da demanda aparece mesmo sendo de outro time
-  const { projetos, loading: loadingProjetos } = useProjetos({ allTeams: true });
   const isEdit = !!demanda;
+
+  // ESCOPO 1 FIX: na criação filtra projetos do time do usuário logado (allTeams=false).
+  // Na edição usa allTeams=true para não perder o projeto caso seja de outro time.
+  const { projetos, loading: loadingProjetos } = useProjetos({ allTeams: isEdit });
 
   const [form, setForm] = useState({
     rhm: "",
@@ -73,7 +75,10 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     data_previsao_encerramento: null as Date | null,
   });
   const [loading, setLoading] = useState(false);
+  // touched rastreia apenas interação real do usuário (blur/change).
+  // forceValidate é ativado somente na submissão, revelando todos os erros.
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [forceValidate, setForceValidate] = useState(false);
   const [dataInicio] = useState(() => new Date());
 
   const [demandanteSearch, setDemandanteSearch] = useState("");
@@ -87,7 +92,6 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     if (!open) return;
 
     if (demanda) {
-      // Modo edição: popula com os dados da demanda existente
       setForm({
         rhm: demanda.rhm ?? "",
         projeto: demanda.projeto ?? "",
@@ -103,12 +107,10 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
             : demanda.data_previsao_encerramento
           : null,
       });
-      // Se tiver nome do demandante salvo na demanda, pré-preenche
       if (demanda.demandante) {
         setSelectedDemandante({ id: demanda.demandante, display_name: (demanda as any).demandante_nome ?? demanda.demandante });
       }
     } else {
-      // Modo criação: reseta o form
       setForm({
         rhm: "",
         projeto: "",
@@ -123,6 +125,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
       setSelectedDemandante(null);
     }
     setTouched({});
+    setForceValidate(false);
     setDemandanteSearch("");
     setDemandanteResults([]);
   }, [open, demanda]);
@@ -138,7 +141,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
   }, [isCorretiva]);
 
   const prazoInfo = useMemo(() => {
-    if (isEdit) return null; // não recalcula prazos em modo edição
+    if (isEdit) return null;
     const regime = isCorretiva ? form.sla : undefined;
     const defeito = isCorretiva ? form.tipo_defeito : undefined;
     const regra = getPrazoRegra(form.tipo, regime, defeito);
@@ -162,23 +165,33 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     setDemandanteResults(results as any[]);
   };
 
-  const rhmError = touched.rhm && (!form.rhm.trim() || !/^\d+$/.test(form.rhm.trim()));
-  const projetoError = touched.projeto && !form.projeto;
-  const demandanteError = touched.demandante && !selectedDemandante;
-  const previsaoError = touched.data_previsao_encerramento && !form.data_previsao_encerramento;
+  // ESCOPO 1 FIX: rhmError só dispara se:
+  //   a) o usuário tocou no campo E digitou algo inválido, OU
+  //   b) o form foi submetido (forceValidate) E o campo está vazio ou inválido.
+  // Isso elimina o erro prematuro ao abrir o modal com campo vazio.
+  const rhmTouched = touched.rhm || forceValidate;
+  const rhmInvalid = !form.rhm.trim() || !/^\d+$/.test(form.rhm.trim());
+  // Só mostra erro se tocou no campo após ter digitado (touched via blur/change) OU forceValidate
+  const rhmError = rhmTouched && rhmInvalid;
+
+  const projetoError = (touched.projeto || forceValidate) && !form.projeto;
+  const demandanteError = (touched.demandante || forceValidate) && !selectedDemandante && !isEdit;
+  const previsaoError = (touched.data_previsao_encerramento || forceValidate) && !form.data_previsao_encerramento;
 
   const handle = async () => {
-    setTouched({ rhm: true, projeto: true, demandante: true, data_previsao_encerramento: true });
-    if (
-      !form.rhm.trim() ||
-      !/^\d+$/.test(form.rhm.trim()) ||
-      !form.projeto ||
-      (!isEdit && !selectedDemandante) || // demandante só obrigatório na criação
-      !form.data_previsao_encerramento
-    ) {
+    // Ativa validação visual para todos os campos obrigatórios
+    setForceValidate(true);
+
+    const rhmOk = form.rhm.trim() && /^\d+$/.test(form.rhm.trim());
+    const projetoOk = !!form.projeto;
+    const demandanteOk = isEdit || !!selectedDemandante;
+    const previsaoOk = !!form.data_previsao_encerramento;
+
+    if (!rhmOk || !projetoOk || !demandanteOk || !previsaoOk) {
       toast.error("Preencha os campos obrigatórios: #, Projeto, Autor e Data de Previsão.");
       return;
     }
+
     setLoading(true);
     const regime = isCorretiva ? form.sla : "padrao";
     const defeito = isCorretiva ? form.tipo_defeito : undefined;
@@ -199,12 +212,10 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
         : null,
     };
 
-    // Só sobrescreve demandante se for selecionado novo (criação ou troca)
     if (selectedDemandante) {
       payload.demandante = selectedDemandante.id;
     }
 
-    // Prazos calculados: só na criação
     if (!isEdit) {
       payload.prazo_inicio_atendimento = calcPrazoInicio(dataInicio, form.tipo, regime, defeito)?.toISOString() || null;
       payload.prazo_solucao = calcPrazoSolucao(dataInicio, form.tipo, regime, defeito)?.toISOString() || null;
@@ -221,6 +232,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
       setSelectedDemandante(null);
     }
     setTouched({});
+    setForceValidate(false);
     setLoading(false);
     onClose();
   };
@@ -255,13 +267,23 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, "");
                   setForm((p) => ({ ...p, rhm: val }));
+                  // Marca touched via change apenas se o usuário já interagiu (digitou algo)
+                  if (val.length > 0) markTouched("rhm");
                 }}
-                onBlur={() => markTouched("rhm")}
+                onBlur={() => {
+                  // Marca touched via blur apenas se o campo não está vazio
+                  // (evita erro vermelho ao abrir modal e clicar fora sem digitar nada)
+                  if (form.rhm.trim().length > 0) markTouched("rhm");
+                }}
                 placeholder="81"
                 inputMode="numeric"
                 className={cn("h-8 text-sm", rhmError && "border-destructive focus-visible:ring-destructive")}
               />
-              {rhmError && <p className="text-[11px] text-destructive mt-0.5">Informe um número válido.</p>}
+              {rhmError && (
+                <p className="text-[11px] text-destructive mt-0.5">
+                  {!form.rhm.trim() ? "Informe o número da demanda." : "Informe um número válido."}
+                </p>
+              )}
             </div>
             <div>
               <Label className="text-xs">Projeto <span className="text-destructive">*</span></Label>

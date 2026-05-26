@@ -602,13 +602,13 @@ export const KanbanCard = memo(function KanbanCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
       <ContextMenuContent className="w-56">
-        {/* Abrir detalhes */}
+        {/* Detalhar */}
         <ContextMenuItem
           onSelect={() => onSelect(hu)}
           className="gap-2"
         >
           <ExternalLink className="w-3.5 h-3.5" />
-          Abrir detalhes
+          Detalhar
         </ContextMenuItem>
 
         <ContextMenuSeparator />

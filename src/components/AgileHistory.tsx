@@ -353,7 +353,10 @@ export function AgileHistory() {
   // ─── Loaders ──────────────────────────────────────────────────────────────
 
   const loadProfiles = useCallback(async () => {
-    const { data } = await supabase.from("profiles").select("user_id, display_name");
+    const { data } = await supabase
+      .from("profiles")
+      .select("user_id, display_name")
+      .eq("is_active", true);
     if (data) {
       const map: Record<string, string> = {};
       data.forEach((p) => {

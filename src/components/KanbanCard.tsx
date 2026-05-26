@@ -8,6 +8,7 @@ import {
   Timer, TrendingUp, ArrowRight, ArrowLeft, ExternalLink,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatDisplayName } from "@/lib/nameUtils";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -307,42 +308,50 @@ const AssigneeAvatars = memo(function AssigneeAvatars({
 
   if (!responsible && collaborators.length === 0) return null;
 
+  // Avatar padronizado (mesmo visual do card de Sustentação):
+  // círculo bordado, borde-2, hover scale, highlight no responsável.
+  const COLLAB_COLOR = "#64748b"; // slate-500
+  const RESP_COLOR   = "hsl(var(--primary))";
+  const renderAvatar = (name: string, opts: { size: "sm" | "md"; highlight?: boolean; color: string; role: string }) => {
+    const dim = opts.size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border-2 transition-transform hover:scale-110 cursor-default`}
+            style={{
+              backgroundColor: opts.color.startsWith("hsl") ? `hsl(var(--primary) / 0.18)` : `${opts.color}33`,
+              color: opts.color,
+              borderColor: opts.highlight ? opts.color : (opts.color.startsWith("hsl") ? `hsl(var(--primary) / 0.4)` : `${opts.color}66`),
+              boxShadow: opts.highlight ? (opts.color.startsWith("hsl") ? `0 0 0 2px hsl(var(--primary) / 0.25)` : `0 0 0 2px ${opts.color}40`) : undefined,
+            }}
+          >
+            {getInitials(name)}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs py-1.5 px-2.5">
+          <div className="font-semibold">{formatDisplayName(name)}</div>
+          <div className="text-muted-foreground mt-0.5">{opts.role}</div>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
   return (
     <div className="flex items-center -space-x-1.5">
-      {/* Colaboradores de atividades (aparecem primeiro, à esquerda) */}
       {visibleCollabs.map((dev: any) => (
-        <Tooltip key={dev.id}>
-          <TooltipTrigger asChild>
-            <div className="w-5 h-5 rounded-full border-2 border-card flex items-center justify-center text-[8px] font-bold cursor-default bg-primary/20 text-primary">
-              {getInitials(dev.name)}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>{dev.name}</p>
-          </TooltipContent>
-        </Tooltip>
+        <span key={dev.id}>
+          {renderAvatar(dev.name, { size: "sm", color: COLLAB_COLOR, role: "Colaborador" })}
+        </span>
       ))}
 
-      {/* Badge de excedente de colaboradores */}
       {extraCollabs > 0 && (
         <div className="w-5 h-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[8px] font-medium text-muted-foreground">
           +{extraCollabs}
         </div>
       )}
 
-      {/* Responsável da HU — sempre último (mais à direita) e com destaque */}
-      {responsible && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="w-5 h-5 rounded-full border-2 border-card flex items-center justify-center text-[8px] font-bold cursor-default bg-primary text-primary-foreground">
-              {getInitials(responsible.name)}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>{responsible.name} <span className="text-muted-foreground text-[10px]">(responsável)</span></p>
-          </TooltipContent>
-        </Tooltip>
-      )}
+      {responsible && renderAvatar(responsible.name, { size: "md", highlight: true, color: RESP_COLOR, role: "Responsável" })}
     </div>
   );
 });
@@ -602,13 +611,13 @@ export const KanbanCard = memo(function KanbanCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
       <ContextMenuContent className="w-56">
-        {/* Abrir detalhes */}
+        {/* Detalhar */}
         <ContextMenuItem
           onSelect={() => onSelect(hu)}
           className="gap-2"
         >
           <ExternalLink className="w-3.5 h-3.5" />
-          Abrir detalhes
+          Detalhar
         </ContextMenuItem>
 
         <ContextMenuSeparator />

@@ -138,11 +138,7 @@ export function PlanningPoker() {
 
   useEffect(() => {
     const loadProfiles = async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("user_id, display_name")
-        .eq("is_active", true)
-        .limit(500);
+      const { data } = await supabase.from("profiles").select("user_id, display_name").limit(500);
       if (data) {
         const map: Record<string, string> = {};
         data.forEach((p) => {

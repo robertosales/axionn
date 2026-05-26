@@ -3,7 +3,6 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { AppRole, Permission, getPermissionsForRoles } from "@/hooks/usePermissions";
-import { toast } from "sonner";
 
 interface Profile {
   id:                   string;
@@ -184,18 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data: profileData } = await supabase
         .from("profiles").select("*").eq("user_id", userId).single();
-
-      if (!profileData) return;
-
-      // Bloqueio de segurança: se o usuário estiver inativo, desloga imediatamente
-      if (profileData.is_active === false) {
-        console.warn("[Auth] Usuário inativo tentando acesso. Forçando logout.");
-        toast.error("Sua conta está inativa. Entre em contato com o administrador.");
-        await signOut();
-        return;
-      }
-
-      if (mountedRef.current) setProfile(profileData as Profile);
+      if (profileData && mountedRef.current) setProfile(profileData as Profile);
 
       await Promise.all([
         fetchRoles(userId),

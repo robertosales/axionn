@@ -489,8 +489,6 @@ export function UserRolesManager() {
   async function handleDeleteClick(user: UserRow) {
     setDeleteState({ ...DELETE_INITIAL, user, checking: true });
     try {
-      // Busca contagem de vínculos ativos usando a nova lógica de migração global
-      // Para fins de interface, mantemos a checagem em demandas como indicador de carga
       const orFilter = DEMANDAS_USER_COLS.map(col => `${col}.eq.${user.user_id}`).join(",");
       const [directRes, relationalRes] = await Promise.all([
         supabase.from(DEMANDAS_TABLE).select("*", { count: "exact", head: true }).or(orFilter),
@@ -503,34 +501,54 @@ export function UserRolesManager() {
   }
 
   async function confirmDelete() {
-    const { user, reassignToId } = deleteState;
+    const { user, affectedCount, reassignToId } = deleteState;
     if (!user) return;
-    if (!reassignToId) { toast.error("Selecione um usuário para transferir as responsabilidades"); return; }
-
+    if (affectedCount > 0 && !reassignToId) { toast.error("Selecione um usuário para transferir as demandas"); return; }
     setDeleteState(prev => ({ ...prev, deleting: true }));
     try {
-      const { data, error: rpcError } = await supabase.rpc("fn_inactivate_user_with_migration", {
-        p_old_user_id: user.user_id,
-        p_new_user_id: reassignToId
-      });
-
-      if (rpcError) throw rpcError;
+      if (affectedCount > 0 && reassignToId) {
+        for (const col of DEMANDAS_USER_COLS) {
+          await supabase.from(DEMANDAS_TABLE).update({ [col]: reassignToId }).eq(col, user.user_id);
+        }
+        const { data: relRows } = await supabase
+          .from(DEMANDA_RESPONSAVEIS_TABLE)
+          .select("id, demanda_id, papel")
+          .eq("user_id", user.user_id);
+        for (const row of relRows ?? []) {
+          const { count } = await supabase
+            .from(DEMANDA_RESPONSAVEIS_TABLE)
+            .select("*", { count: "exact", head: true })
+            .eq("demanda_id", row.demanda_id)
+            .eq("user_id", reassignToId)
+            .eq("papel", row.papel);
+          if ((count ?? 0) > 0) {
+            await supabase.from(DEMANDA_RESPONSAVEIS_TABLE).delete().eq("id", row.id);
+          } else {
+            await supabase.from(DEMANDA_RESPONSAVEIS_TABLE).update({ user_id: reassignToId }).eq("id", row.id);
+          }
+        }
+      }
+      await supabase.from("user_module_roles").delete().eq("user_id", user.user_id);
 
       const { data: { user: actor } } = await supabase.auth.getUser();
       if (actor) {
         await writeAudit(actor.id, user.user_id, "delete_user", {
           nome:  user.display_name,
           email: user.email,
-          transferido_para: reassignToId,
-          resultado_migracao: (data as any)?.affected_counts
+          ...(reassignToId && { transferido_para: reassignToId }),
         });
       }
 
-      toast.success("Usuário inativado e vínculos transferidos com sucesso!");
+      const { error: fnError } = await supabase.functions.invoke("delete-user", { body: { user_id: user.user_id } });
+      if (fnError) throw new Error(fnError.message);
+      toast.success(affectedCount > 0
+        ? `Usuário excluído e ${affectedCount} vínculo(s) transferido(s)!`
+        : "Usuário excluído com sucesso!"
+      );
       setDeleteState(DELETE_INITIAL);
       await fetchUsers();
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao inativar usuário");
+      toast.error(err?.message || "Erro ao excluir usuário");
       setDeleteState(prev => ({ ...prev, deleting: false }));
     }
   }
@@ -715,7 +733,7 @@ export function UserRolesManager() {
                         <Button size="sm" variant="outline"
                           className="text-destructive hover:bg-destructive/10 border-destructive/30"
                           onClick={() => handleDeleteClick(user)}>
-                          <UserX className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     )}
@@ -877,30 +895,30 @@ export function UserRolesManager() {
           ) : deleteState.affectedCount > 0 ? (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-amber-600">
-                  <ArrowRightLeft className="h-4 w-4" /> Inativar Usuário & Migrar Vínculos
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <ArrowRightLeft className="h-4 w-4" /> Transferir demandas antes de excluir
                 </DialogTitle>
                 <DialogDescription asChild>
                   <div className="space-y-3 pt-1">
                     <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
                       <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-800 dark:text-amber-300">
-                        O usuário <span className="font-semibold">{deleteState.user?.display_name}</span> será{" "}
-                        <strong>inativado</strong>. Todos os seus vínculos ativos (Demandas, Atividades, RDMs e HUs) serão
-                        transferidos para o sucessor abaixo.
+                        O usuário <span className="font-semibold">{deleteState.user?.display_name}</span> possui{" "}
+                        <span className="font-semibold">{deleteState.affectedCount} vínculo(s)</span> em demandas.
+                        Selecione um novo responsável antes de excluir.
                       </p>
                     </div>
                     <div>
-                      <Label className="text-xs font-semibold">Transferir todas as responsabilidades para</Label>
+                      <Label className="text-xs font-semibold">Transferir responsabilidades para</Label>
                       <Select
                         value={deleteState.reassignToId}
                         onValueChange={v => setDeleteState(prev => ({ ...prev, reassignToId: v }))}
                       >
                         <SelectTrigger className="h-8 mt-1 text-xs">
-                          <SelectValue placeholder="Selecione um sucessor ativo..." />
+                          <SelectValue placeholder="Selecione um usuário..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {reassignOptions.filter(u => u.is_active).map(u => (
+                          {reassignOptions.map(u => (
                             <SelectItem key={u.user_id} value={u.user_id}>
                               {u.display_name}{u.email ? ` — ${u.email}` : ""}
                             </SelectItem>
@@ -913,32 +931,32 @@ export function UserRolesManager() {
               </DialogHeader>
               <DialogFooter className="gap-2 pt-2">
                 <Button variant="ghost" size="sm" onClick={() => setDeleteState(DELETE_INITIAL)} disabled={deleteState.deleting}>Cancelar</Button>
-                <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmDelete} disabled={deleteState.deleting || !deleteState.reassignToId}>
+                <Button variant="destructive" size="sm" onClick={confirmDelete} disabled={deleteState.deleting || !deleteState.reassignToId}>
                   {deleteState.deleting
                     ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
-                    : <UserX className="h-3.5 w-3.5 mr-1" />}
-                  Confirmar Inativação
+                    : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                  Transferir e Excluir
                 </Button>
               </DialogFooter>
             </>
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-amber-600">
-                  <UserX className="h-4 w-4" /> Inativar usuário
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <Trash2 className="h-4 w-4" /> Excluir usuário
                 </DialogTitle>
                 <DialogDescription>
-                  Deseja inativar o usuário <span className="font-semibold text-foreground">{deleteState.user?.display_name}</span>?
-                  Esta ação impedirá novos acessos mas preservará o histórico.
+                  Tem certeza que deseja excluir{" "}
+                  <span className="font-semibold text-foreground">{deleteState.user?.display_name}</span>? Esta ação não pode ser desfeita.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="gap-2 pt-2">
                 <Button variant="ghost" size="sm" onClick={() => setDeleteState(DELETE_INITIAL)} disabled={deleteState.deleting}>Cancelar</Button>
-                <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmDelete} disabled={deleteState.deleting}>
+                <Button variant="destructive" size="sm" onClick={confirmDelete} disabled={deleteState.deleting}>
                   {deleteState.deleting
                     ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
-                    : <UserX className="h-3.5 w-3.5 mr-1" />}
-                  Confirmar Inativação
+                    : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                  Confirmar Exclusão
                 </Button>
               </DialogFooter>
             </>

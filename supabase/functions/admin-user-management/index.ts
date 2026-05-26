@@ -22,12 +22,30 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
 const _secretKeys   = Deno.env.get("SUPABASE_SECRET_KEYS");
 const _publishKeys  = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
-const SERVICE_KEY   = _secretKeys
-  ? JSON.parse(_secretKeys).service_role
-  : Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON_KEY      = _publishKeys
-  ? JSON.parse(_publishKeys).anon
-  : Deno.env.get("SUPABASE_ANON_KEY")!;
+let SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+let ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY");
+
+if (_secretKeys) {
+  try {
+    const keys = JSON.parse(_secretKeys);
+    if (keys.service_role) SERVICE_KEY = keys.service_role;
+  } catch (e) {
+    console.error("[admin-user-management] Falha ao parsear SUPABASE_SECRET_KEYS:", e);
+  }
+}
+
+if (_publishKeys) {
+  try {
+    const pKeys = JSON.parse(_publishKeys);
+    if (pKeys.anon) ANON_KEY = pKeys.anon;
+  } catch (e) {
+    console.error("[admin-user-management] Falha ao parsear SUPABASE_PUBLISHABLE_KEYS:", e);
+  }
+}
+
+if (!SERVICE_KEY || !ANON_KEY) {
+  throw new Error("Credenciais do Supabase (SERVICE_KEY/ANON_KEY) não encontradas.");
+}
 
 function generateTempPassword(): string {
   const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -119,14 +137,19 @@ Deno.serve(async (req: Request) => {
       oldData: Record<string, unknown> | null,
       newData:  Record<string, unknown> | null
     ) => {
-      await adminClient.rpc("fn_audit_log_insert", {
-        p_action:       auditAction,
-        p_target_table: "profiles",
-        p_target_id:    user_id,
-        p_actor_id:     caller.id,
-        p_old_data:     oldData,
-        p_new_data:     newData,
-      });
+      try {
+        const { error } = await adminClient.rpc("fn_audit_log_insert", {
+          p_action:       auditAction,
+          p_target_table: "profiles",
+          p_target_id:    user_id,
+          p_actor_id:     caller.id,
+          p_old_data:     oldData,
+          p_new_data:     newData,
+        });
+        if (error) console.error("[admin-user-management] Erro RPC Auditoria:", error.message);
+      } catch (e) {
+        console.error("[admin-user-management] Falha na auditoria (best-effort):", e);
+      }
     };
 
     // ── 5. AÇÃO: change_email ──────────────────────────────────────────────
@@ -186,9 +209,9 @@ Deno.serve(async (req: Request) => {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const origin      = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
+        const origin      = req.headers.get("origin") ?? req.headers.get("referer") ?? SITE_URL;
         const cleanOrigin = origin.replace(/\/$/, "").replace(/\/auth.*$/, "");
-        const redirectTo  = `${cleanOrigin}/reset-password`;
+        const redirectTo  = `${cleanOrigin}/reset-password`.replace("/*", "");
 
         const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
           type: "recovery",

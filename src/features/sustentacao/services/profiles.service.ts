@@ -79,7 +79,7 @@ export async function fetchResponsaveisByDemandaIds(
   return map;
 }
 
-/** Search profiles by display_name (ilike). Returns up to `limit` rows. Only active. */
+/** Search profiles by display_name (ilike). Returns up to `limit` rows. */
 export async function searchProfilesByName(
   query: string,
   limit = 5,
@@ -88,7 +88,6 @@ export async function searchProfilesByName(
   const { data } = await supabase
     .from("profiles")
     .select("id, user_id, display_name")
-    .eq("is_active", true)
     .ilike("display_name", `%${query}%`)
     .limit(limit);
   return (data ?? []) as any[];

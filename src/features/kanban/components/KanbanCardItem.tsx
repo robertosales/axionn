@@ -1,5 +1,5 @@
 import { Badge }  from "@/components/ui/badge";
-import { AlertTriangle, GripVertical, User } from "lucide-react";
+import { AlertTriangle, GripVertical } from "lucide-react";
 import type { KanbanCard } from "../hooks/useKanbanBoard";
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -12,18 +12,34 @@ const PRIORITY_LABEL: Record<string, string> = {
   high: "Alta", medium: "Média", low: "Baixa",
 };
 
+/** Gera iniciais a partir do nome completo. Ex: "Roberto de Araujo Sales" → "RS" */
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 interface Props {
   card:        KanbanCard;
   isDragging:  boolean;
   onDragStart: (id: string) => void;
   onDragEnd:   () => void;
+  onClick?:    (card: KanbanCard) => void;
 }
 
-export function KanbanCardItem({ card, isDragging, onDragStart, onDragEnd }: Props) {
+export function KanbanCardItem({ card, isDragging, onDragStart, onDragEnd, onClick }: Props) {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData("text/plain", card.id);
     e.dataTransfer.effectAllowed = "move";
     onDragStart(card.id);
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Não abre detalhe se estiver arrastando
+    if (isDragging) return;
+    e.stopPropagation();
+    onClick?.(card);
   };
 
   return (
@@ -31,8 +47,9 @@ export function KanbanCardItem({ card, isDragging, onDragStart, onDragEnd }: Pro
       draggable
       onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
-      className={`rounded-lg border bg-background p-3 space-y-2 cursor-grab active:cursor-grabbing shadow-sm transition-all ${
-        isDragging ? "opacity-40 scale-95" : "hover:shadow-md"
+      onClick={handleClick}
+      className={`rounded-lg border bg-background p-3 space-y-2 cursor-pointer shadow-sm transition-all ${
+        isDragging ? "opacity-40 scale-95" : "hover:shadow-md hover:border-primary/40"
       } ${
         card.is_blocked ? "border-destructive/50 bg-destructive/5" : ""
       }`}
@@ -70,15 +87,27 @@ export function KanbanCardItem({ card, isDragging, onDragStart, onDragEnd }: Pro
             <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{card.story_points}pt</Badge>
           )}
         </div>
+
+        {/* Avatar com iniciais duplas ou foto */}
         <div className="flex items-center gap-1">
           {card.assignee_avatar ? (
-            <img src={card.assignee_avatar} alt={card.assignee_name} className="h-5 w-5 rounded-full object-cover border" />
+            <img
+              src={card.assignee_avatar}
+              alt={card.assignee_name ?? "Assignee"}
+              title={card.assignee_name}
+              className="h-6 w-6 rounded-full object-cover border border-border"
+            />
           ) : card.assignee_name ? (
-            <div className="h-5 w-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
-              {card.assignee_name.charAt(0).toUpperCase()}
+            <div
+              title={card.assignee_name}
+              className="h-6 w-6 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-[9px] font-bold text-primary select-none"
+            >
+              {getInitials(card.assignee_name)}
             </div>
           ) : (
-            <User className="h-3.5 w-3.5 text-muted-foreground/50" />
+            <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+              <span className="text-[9px] text-muted-foreground">—</span>
+            </div>
           )}
         </div>
       </div>

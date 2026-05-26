@@ -38,6 +38,7 @@ import { KanbanFilterBar, KANBAN_FILTROS_DEFAULT } from "./KanbanFilterBar";
 import type { KanbanFiltros } from "./KanbanFilterBar";
 import { SprintImpedimentsBanner } from "./SprintImpedimentsBanner";
 import { supabase } from "@/integrations/supabase/client";
+import { HUEditDrawer } from "./HUEditDrawer";
 
 // ─── Chaves de sessionStorage ─────────────────────────────────────────────────
 const SS_FILTROS_KEY   = "kanban_board_filtros";
@@ -65,12 +66,10 @@ function clearKanbanSession() {
 function loadExpandedCols(allKeys: string[]): Set<string> {
   try {
     const raw = sessionStorage.getItem(SS_EXPANDED_KEY);
-    if (!raw) return new Set(allKeys); // padrão: tudo expandido
+    if (!raw) return new Set(allKeys);
     const parsed = JSON.parse(raw) as string[];
-    // Garante que novas colunas adicionadas após salvar apareçam expandidas
     const saved = new Set(parsed);
     allKeys.forEach((k) => { if (!parsed.includes(k) && !parsed.includes(`__hidden__${k}`)) saved.add(k); });
-    // Remove prefixo de colunas explicitamente recolhidas
     const hiddenKeys = parsed.filter((k) => k.startsWith("__hidden__")).map((k) => k.replace("__hidden__", ""));
     hiddenKeys.forEach((k) => saved.delete(k));
     return saved;
@@ -79,7 +78,6 @@ function loadExpandedCols(allKeys: string[]): Set<string> {
 
 function saveExpandedCols(expanded: Set<string>, allKeys: string[]) {
   try {
-    // Salva expanded + marca os recolhidos com prefixo para distinguir "nunca visto" de "recolhido"
     const payload: string[] = [
       ...Array.from(expanded),
       ...allKeys.filter((k) => !expanded.has(k)).map((k) => `__hidden__${k}`),
@@ -111,12 +109,18 @@ const DroppableColumn = React.memo(function DroppableColumn({
   isOver,
   activeId,
   colItems,
+  workflowColumns,
+  onSelect,
+  onMoveCard,
 }: {
   colKey: string;
   colHex: string;
   isOver: boolean;
   activeId: string | null;
   colItems: any[];
+  workflowColumns: WorkflowColumn[];
+  onSelect: (hu: any) => void;
+  onMoveCard: (huId: string, targetStatus: string) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: colKey });
 
@@ -130,7 +134,14 @@ const DroppableColumn = React.memo(function DroppableColumn({
           const isDragging = hu.id === activeId;
           return (
             <div key={hu.id} style={{ opacity: isDragging ? 0.3 : 1, transition: "opacity 0.15s" }}>
-              <KanbanCard hu={hu} colHex={colHex} />
+              <KanbanCard
+                hu={hu}
+                columnKey={colKey}
+                colHex={colHex}
+                workflowColumns={workflowColumns}
+                onSelect={onSelect}
+                onMoveCard={onMoveCard}
+              />
             </div>
           );
         })}
@@ -154,9 +165,10 @@ const DroppableColumn = React.memo(function DroppableColumn({
 interface Props {
   sprintId?: string;
   currentUserId?: string;
+  onSelectHU?: (hu: any) => void;
 }
 
-export function KanbanBoard({ sprintId, currentUserId }: Props) {
+export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
   const {
     userStories,
     workflowColumns,
@@ -175,29 +187,28 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     [sprints],
   );
 
-  // ── Reset filtros ao trocar de time (limpa sessionStorage contaminado) ───────────
   const prevTeamIdRef = useRef<string | null>(null);
 
-  // ── #4: Filtros persistidos em sessionStorage ─────────────────────────────
   const [filtros, setFiltros] = useState<KanbanFiltros>(() => {
     const saved = loadFiltros();
     if (saved) return saved;
     return { ...KANBAN_FILTROS_DEFAULT, sprintId: "all" };
   });
 
+  // ─── Estado interno para abrir HUEditDrawer ───────────────────────────────
+  const [selectedHU, setSelectedHU] = useState<any | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const handleFiltrosChange = useCallback((next: KanbanFiltros) => {
     setFiltros(next);
     saveFiltros(next);
   }, []);
 
-  // Auto-seleciona sprint ativa apenas se filtro ainda estiver em "all" e não houver filtro salvo
   useEffect(() => {
-    // Na primeira montagem registra o time sem resetar
     if (prevTeamIdRef.current === null) {
       prevTeamIdRef.current = currentTeamId;
       return;
     }
-    // Time mudou: limpa sessionStorage e volta para "all"
     if (prevTeamIdRef.current !== currentTeamId) {
       prevTeamIdRef.current = currentTeamId;
       clearKanbanSession();
@@ -206,9 +217,7 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       setExpandedCols(new Set(allColKeys));
     }
   }, [currentTeamId]);
-  // ─────────────────────────────────────────────────────────────────────────────
 
-  // Só ativa o filtro de sprint ativa se o usuário ainda está em "all"
   useEffect(() => {
     if (!activeSprint) return;
     setFiltros((prev) => {
@@ -220,7 +229,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       return prev;
     });
   }, [activeSprint?.id]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const canMove = true;
 
@@ -245,7 +253,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
   const [activeId, setActiveId]       = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
-  // ── #5: Colunas expandidas persistidas em sessionStorage ─────────────────
   const allColKeys = useMemo(
     () => (workflowColumns ?? []).map((c: WorkflowColumn) => c.key),
     [workflowColumns],
@@ -255,11 +262,10 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     () => loadExpandedCols(allColKeys),
   );
 
-  // Quando workflowColumns chegar (assíncrono), re-hidrata se o estado ainda for vazio
   useEffect(() => {
     if (allColKeys.length === 0) return;
     setExpandedCols((prev) => {
-      if (prev.size > 0) return prev; // já hidratado
+      if (prev.size > 0) return prev;
       return loadExpandedCols(allColKeys);
     });
   }, [allColKeys.join(",")]);
@@ -273,7 +279,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
       return next;
     });
   }, [allColKeys]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const [localPositions, setLocalPositions] = useState<Record<string, number>>({});
   const [finalizeOpen, setFinalizeOpen]     = useState(false);
@@ -295,7 +300,6 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
 
   const sprintBase = useMemo(() => {
     if (filtros.sprintId === "all") {
-      // Mostra todas as HUs do time (sem filtro de sprint)
       return sprintId ? userStories.filter((h: any) => h.sprintId === sprintId) : userStories;
     }
     return userStories.filter(
@@ -472,6 +476,31 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
     [canMove, sprintStories, workflowColumns, reorderUserStories, updateUserStoryStatus],
   );
 
+  // ─── Handler para mover via context menu ─────────────────────────────────
+  const handleMoveCard = useCallback(
+    async (huId: string, targetStatus: string) => {
+      try {
+        await updateUserStoryStatus(huId, targetStatus as KanbanStatus);
+      } catch {
+        toast.error("Erro ao mover card");
+      }
+    },
+    [updateUserStoryStatus],
+  );
+
+  // ─── Handler para abrir detalhes: busca HU completa do contexto ───────────
+  // Garante que o HUEditDrawer receba sempre o objeto completo em camelCase,
+  // evitando campos undefined quando o card passa um objeto parcial.
+  const handleSelectHU = useCallback(
+    (huFromCard: any) => {
+      const fullHU = (userStories ?? []).find((s: any) => s.id === huFromCard.id) ?? huFromCard;
+      setSelectedHU(fullHU);
+      setDrawerOpen(true);
+      onSelectHU?.(fullHU);
+    },
+    [onSelectHU, userStories],
+  );
+
   const activeHu = activeId ? sprintStories.find((h: any) => h.id === activeId) : null;
 
   return (
@@ -600,6 +629,9 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
                   isOver={isOver}
                   activeId={activeId}
                   colItems={colItems}
+                  workflowColumns={workflowColumns ?? []}
+                  onSelect={handleSelectHU}
+                  onMoveCard={handleMoveCard}
                 />
               </div>
             );
@@ -609,11 +641,24 @@ export function KanbanBoard({ sprintId, currentUserId }: Props) {
         <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
           {activeHu && (
             <div className="rotate-1 scale-105 shadow-2xl rounded-xl opacity-95 pointer-events-none" style={{ width: 252 }}>
-              <KanbanCard hu={activeHu} />
+              <KanbanCard
+                hu={activeHu}
+                columnKey={activeHu.status ?? ""}
+                onSelect={() => {}}
+              />
             </div>
           )}
         </DragOverlay>
       </DndContext>
+
+      {/* ─── HUEditDrawer: abre ao clicar/Detalhar ──── */}
+      {selectedHU && (
+        <HUEditDrawer
+          huId={selectedHU.id}
+          open={drawerOpen}
+          onClose={() => { setDrawerOpen(false); setSelectedHU(null); }}
+        />
+      )}
 
       <AlertDialog open={finalizeOpen} onOpenChange={(o) => { if (!finalizing) setFinalizeOpen(o); }}>
         <AlertDialogContent>

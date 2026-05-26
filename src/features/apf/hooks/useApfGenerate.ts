@@ -57,11 +57,10 @@ const DEFAULT_DB_CHANGE_QUESTION: InteractiveQuestion = {
   allowSqlFiles: true,
 };
 
+// Apenas IAs gratuitas são oferecidas ao usuário final.
+// Hoje, isso significa exclusivamente a Lovable AI (gateway gerenciado).
 const INLINE_AI_PROVIDERS: AIProvider[] = [
-  { id: "inline:lovable", name: "Lovable AI (Gemini/GPT) — recomendado", provider_type: "lovable", model: "google/gemini-2.5-flash", is_recommended: true, is_active: true, has_key: true, created_at: "", updated_at: "" },
-  { id: "inline:openai", name: "OpenAI — informar chave agora", provider_type: "openai", model: "gpt-4o-mini", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
-  { id: "inline:gemini", name: "Google Gemini — informar chave agora", provider_type: "gemini", model: "gemini-2.0-flash", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
-  { id: "inline:anthropic", name: "Anthropic Claude — informar chave agora", provider_type: "anthropic", model: "claude-3-5-sonnet-20241022", is_recommended: false, is_active: true, has_key: false, created_at: "", updated_at: "" },
+  { id: "inline:lovable", name: "Lovable AI (Gratuita) — recomendada", provider_type: "lovable", model: "google/gemini-2.5-flash", is_recommended: true, is_active: true, has_key: true, created_at: "", updated_at: "" },
 ];
 
 export const YESNO_REGEX =
@@ -161,9 +160,12 @@ export function useApfGenerate() {
   useEffect(() => {
     listAIProviders({ onlyActive: true })
       .then((list) => {
+        // Mantém somente provedores gratuitos (Lovable). Provedores pagos
+        // cadastrados no admin são ocultados desta tela por regra de negócio.
+        const freeFromDb = list.filter((p) => p.provider_type === "lovable");
         const merged = [
-          ...list,
-          ...INLINE_AI_PROVIDERS.filter((inline) => !list.some((p) => p.provider_type === inline.provider_type)),
+          ...freeFromDb,
+          ...INLINE_AI_PROVIDERS.filter((inline) => !freeFromDb.some((p) => p.provider_type === inline.provider_type)),
         ];
         setAiProviders(merged);
         if (merged.length > 0) {

@@ -1,63 +1,66 @@
-import { Badge }  from "@/components/ui/badge";
+import { useRef } from "react";
+import { Badge }          from "@/components/ui/badge";
 import { KanbanCardItem } from "./KanbanCardItem";
-import type { KanbanColumn as KanbanColumnType, KanbanCard } from "../hooks/useKanbanBoard";
+import type { KanbanCard, KanbanColumn } from "../hooks/useKanbanBoard";
 
 interface Props {
-  column:      KanbanColumnType;
+  column:      KanbanColumn;
   cards:       KanbanCard[];
   wipCount:    number;
   draggingId:  string | null;
   onDragStart: (id: string) => void;
   onDragEnd:   () => void;
   onDrop:      (cardId: string, colKey: string) => void;
+  onCardClick?: (card: KanbanCard) => void;
 }
 
-export function KanbanColumnItem({ column, cards, wipCount, draggingId, onDragStart, onDragEnd, onDrop }: Props) {
-  const isOverLimit = column.wip_limit !== null && wipCount > column.wip_limit;
-  const isAtLimit   = column.wip_limit !== null && wipCount === column.wip_limit;
+export function KanbanColumnItem({
+  column, cards, wipCount, draggingId,
+  onDragStart, onDragEnd, onDrop, onCardClick,
+}: Props) {
+  const ref = useRef<HTMLDivElement>(null);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
+  const wipOver = column.wip_limit !== null && wipCount > column.wip_limit;
+  const wipWarn = column.wip_limit !== null && wipCount === column.wip_limit;
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
+  const handleDrop     = (e: React.DragEvent) => {
     e.preventDefault();
-    const cardId = e.dataTransfer.getData("text/plain");
-    if (cardId) onDrop(cardId, column.key);
+    const id = e.dataTransfer.getData("text/plain");
+    if (id) onDrop(id, column.key);
   };
 
   return (
     <div
-      className={`flex flex-col rounded-xl border-2 min-h-[400px] min-w-[220px] w-full transition-colors ${
-        isOverLimit ? "border-destructive/60 bg-destructive/5" :
-        isAtLimit   ? "border-orange-400/60 bg-orange-50/30 dark:bg-orange-950/10" :
-        "border-border bg-muted/20"
-      }`}
+      ref={ref}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
+      className="flex flex-col min-w-[220px] max-w-[260px] w-full"
     >
-      {/* Header da coluna */}
-      <div className="px-3 py-2.5 border-b border-border flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      {/* Column header */}
+      <div className="flex items-center justify-between px-2 py-2 mb-2">
+        <div className="flex items-center gap-1.5">
           <span
             className="h-2.5 w-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: column.hex ?? column.dot_color }}
+            style={{ backgroundColor: column.hex ?? "#94a3b8" }}
           />
-          <span className="text-xs font-semibold">{column.label}</span>
+          <span className="text-xs font-semibold truncate">{column.label}</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <Badge
-            variant={isOverLimit ? "destructive" : isAtLimit ? "secondary" : "outline"}
-            className="text-[10px] px-1.5"
+            variant="outline"
+            className={`text-[9px] px-1.5 py-0 ${
+              wipOver ? "border-destructive text-destructive" :
+              wipWarn ? "border-yellow-500 text-yellow-600" : ""
+            }`}
           >
             {wipCount}{column.wip_limit !== null ? `/${column.wip_limit}` : ""}
           </Badge>
         </div>
       </div>
 
-      {/* Cards */}
-      <div className="flex-1 p-2.5 space-y-2 overflow-y-auto">
+      {/* Drop zone */}
+      <div className="flex-1 space-y-2 rounded-xl bg-muted/40 p-2 min-h-[120px] transition-colors">
         {cards.map(card => (
           <KanbanCardItem
             key={card.id}
@@ -65,11 +68,12 @@ export function KanbanColumnItem({ column, cards, wipCount, draggingId, onDragSt
             isDragging={draggingId === card.id}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
+            onClick={onCardClick}
           />
         ))}
         {cards.length === 0 && (
-          <div className="flex items-center justify-center h-20 text-xs text-muted-foreground opacity-50">
-            Arraste um card aqui
+          <div className="flex items-center justify-center h-16 text-[10px] text-muted-foreground/50">
+            Sem HUs
           </div>
         )}
       </div>

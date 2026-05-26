@@ -667,7 +667,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const shouldMoveHuToTeste =
       act.activityType === "bug" && hu?.status === "bug" && remainingOpenBugs.length === 0;
     const targetCol = shouldMoveHuToTeste ? workflowColumns.find((c) => c.key === "em_teste") : null;
-    const ops: Promise<any>[] = [
+    const ops: PromiseLike<any>[] = [
       supabase.from("activities").update({ is_closed: true, closed_at: closedAt, end_date: today }).eq("id", id),
     ];
     if (shouldMoveHuToTeste && targetCol) {
@@ -791,7 +791,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const setActiveSprintFn = useCallback(async (id: string) => {
     if (!teamId) return;
     const currentActive = sprints.find((s) => s.isActive);
-    const ops: Promise<any>[] = [];
+    const ops: PromiseLike<any>[] = [];
     if (currentActive && currentActive.id !== id) {
       ops.push(supabase.from("sprints").update({ is_active: false }).eq("id", currentActive.id));
     }
@@ -835,8 +835,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (error) { toast.error("Erro ao criar campo"); return; }
     if (data) setCustomFields((prev) =>
       prev.some((f) => f.id === data.id) ? prev : [...prev, {
-        id: data.id, key: data.key || data.id, name: data.name || data.label || "",
-        label: data.label || data.name || "", type: data.field_type as any,
+        id: data.id, key: (data as any).key || data.id, name: data.name || "",
+        label: (data as any).label || data.name || "", type: data.field_type as any,
         options: data.options ?? null, required: data.required ?? false,
       }]
     );
@@ -867,7 +867,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .insert({
         team_id: teamId, name: rule.name,
         enabled: rule.enabled ?? (rule as any).isActive ?? true,
-        is_active: rule.enabled ?? (rule as any).isActive ?? true,
         trigger_type: rule.trigger.type, trigger_from_status: rule.trigger.fromStatus || null,
         trigger_to_status: rule.trigger.toStatus, action_type: rule.action.type,
         action_target_status: rule.action.targetStatus || null, action_message: rule.action.message || null,
@@ -876,8 +875,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (error) { toast.error("Erro ao criar automação"); return; }
     if (data) setAutomationRules((prev) =>
       prev.some((r) => r.id === data.id) ? prev : [...prev, {
-        id: data.id, name: data.name, enabled: data.enabled ?? data.is_active ?? false,
-        isActive: data.is_active ?? data.enabled ?? false,
+        id: data.id, name: data.name, enabled: data.enabled ?? false,
+        isActive: data.enabled ?? false,
         trigger: { type: data.trigger_type, fromStatus: data.trigger_from_status ?? null, toStatus: data.trigger_to_status },
         action: { type: data.action_type, targetStatus: data.action_target_status ?? null, message: data.action_message ?? null },
         createdAt: data.created_at,

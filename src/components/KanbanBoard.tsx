@@ -651,10 +651,10 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
         </DragOverlay>
       </DndContext>
 
-      {/* ─── HUEditDrawer: abre ao clicar em Abrir detalhes ou no card ──── */}
+      {/* ─── HUEditDrawer: abre ao clicar/Detalhar ──── */}
       {selectedHU && (
         <HUEditDrawer
-          hu={selectedHU}
+          huId={selectedHU.id}
           open={drawerOpen}
           onClose={() => { setDrawerOpen(false); setSelectedHU(null); }}
         />

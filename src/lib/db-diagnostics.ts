@@ -294,7 +294,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport | null> {
 
   try {
     const runQuery = async (sql: string): Promise<unknown[]> => {
-      const { data, error } = await supabase.rpc('run_diagnostic_query', { sql_query: sql });
+      const { data, error } = await (supabase as any).rpc('run_diagnostic_query', { sql_query: sql });
       if (error) { console.error('Query error:', error); return []; }
       return (data as unknown[]) ?? [];
     };
@@ -356,6 +356,6 @@ export async function runDiagnostics(): Promise<DiagnosticReport | null> {
 
 // Expõe no window em DEV para uso via console do browser
 if (import.meta.env.DEV) {
-  (window as Window & { __sprintflowDiagnostics?: typeof runDiagnostics }).___sprintflowDiagnostics = runDiagnostics;
+  (window as Window & { __sprintflowDiagnostics?: typeof runDiagnostics }).__sprintflowDiagnostics = runDiagnostics;
   console.info('[DB Diagnostics] Disponível via: window.__sprintflowDiagnostics()');
 }

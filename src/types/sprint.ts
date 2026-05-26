@@ -80,6 +80,7 @@ export interface Impediment {
   hasTicket?: boolean;
   ticketId?: string | null;
   ticketUrl?: string | null;
+  startedAt?: string | null;
 }
 
 // ── Custom Fields ─────────────────────────────────────────────────────────────
@@ -228,7 +229,11 @@ export interface UserStory {
   tags?: string[];
   createdAt?: string;
   updatedAt?: string;
+  statusChangedAt?: string | null;
 }
+
+/** Alias de compatibilidade — usado em diversos componentes legados. */
+export type HU = UserStory;
 
 // ── WorkflowColumn ────────────────────────────────────────────────────────────
 

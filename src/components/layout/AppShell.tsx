@@ -100,7 +100,6 @@ function PlayingCardIcon({ className }: { className?: string }) {
   );
 }
 
-// Grupos da Sala Ágil divididos semanticamente
 const GROUP_LABELS: Record<NavItem["group"], string> = {
   sprints:    "Sprints",
   cerimonias: "Cerimônias",
@@ -110,20 +109,16 @@ const GROUP_LABELS: Record<NavItem["group"], string> = {
 };
 
 const NAV_SALA_AGIL: NavItem[] = [
-  // Sprints
   { key: "dashboard", label: "Dashboard",     icon: LayoutDashboard, path: "/sala-agil",              group: "sprints" },
   { key: "board",     label: "Board Kanban",   icon: Kanban,          path: "/sala-agil/board",        group: "sprints" },
   { key: "backlog",   label: "Backlog",         icon: ListTodo,        path: "/sala-agil/backlog",      group: "sprints" },
   { key: "epicos",    label: "Épicos",           icon: Layers,          path: "/sala-agil/epicos",       group: "sprints" },
-  // Cerimônias
   { key: "planning-poker", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning-poker", group: "cerimonias" },
   { key: "retrospectiva",  label: "Retrospectiva",  icon: Repeat,          path: "/sala-agil/retrospectiva",  group: "cerimonias" },
   { key: "impedimentos",   label: "Impedimentos",   icon: AlertTriangle,   path: "/sala-agil/impedimentos",   group: "cerimonias" },
-  // Operações
   { key: "calendario", label: "Calendário", icon: Calendar,  path: "/sala-agil/calendario", group: "operacoes" },
   { key: "equipe",     label: "Equipe",     icon: Users,     path: "/sala-agil/equipe",     group: "operacoes" },
   { key: "atividades", label: "Atividades", icon: Activity,  path: "/sala-agil/atividades", group: "operacoes" },
-  // Relatórios
   { key: "metricas",    label: "Métricas",               icon: BarChart3, path: "/sala-agil/metricas",    group: "org" },
   { key: "historico",   label: "Histórico",               icon: History,   path: "/sala-agil/historico",   group: "org" },
   {
@@ -134,7 +129,6 @@ const NAV_SALA_AGIL: NavItem[] = [
     group: "org",
     roles: ["scrum_master", "analyst"],
   },
-  // Configurações
   { key: "times",      label: "Times",         icon: Users,       path: "/sala-agil/times",      group: "config" },
   { key: "membros",    label: "Membros",        icon: User,        path: "/sala-agil/membros",    group: "config" },
   { key: "perfis",     label: "Perfis (RBAC)",  icon: ShieldCheck, path: "/sala-agil/perfis",     group: "config" },
@@ -206,7 +200,6 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
   const moduleTeams = teams.filter((t) => t.module === module);
   const activeTeam  = moduleTeams.find((t) => t.id === currentTeamId);
 
-  // Espaço sempre reservado — label estática se 1 time, dropdown se 2+
   if (moduleTeams.length <= 1) {
     if (collapsed) {
       return (
@@ -427,7 +420,7 @@ function SidebarNav({
   );
 }
 
-// ─── ModuleSwitcher — tabs com borda ativa ────────────────────────────────────
+// ─── ModuleSwitcher ───────────────────────────────────────────────────────────
 function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const navigate = useNavigate();
   const modules: { key: ActiveModule; path: string; shortLabel: string }[] = [
@@ -466,7 +459,6 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
     );
   }
 
-  // Tabs com borda colorida na aba ativa
   return (
     <div className="mx-2 mb-0 flex items-end border-b border-border">
       {modules.map(({ key, path, shortLabel }) => {
@@ -599,7 +591,7 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
 
 // ─── AppShell ─────────────────────────────────────────────────────────────────
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, isAdmin, signOut, isSigningOut } = useAuth();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const moduleAccess = profile?.module_access ?? "sala_agil";
@@ -607,6 +599,12 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
   const accent = ACCENT[module];
   const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
   const sidebarWidth = collapsed ? "w-[56px]" : "w-[220px]";
+
+  // Handler explícito: e.preventDefault() evita conflito com eventos de rota
+  const handleSignOut = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await signOut();
+  };
 
   return (
     <TooltipProvider delayDuration={80}>
@@ -663,7 +661,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           </div>
 
-          {/* Module Switcher — tabs com borda ativa */}
+          {/* Module Switcher */}
           {canSwitch && (
             <div className="shrink-0">
               <ModuleSwitcher module={module} collapsed={collapsed} />
@@ -683,7 +681,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             </div>
           )}
 
-          {/* Team Switcher — espaço sempre reservado */}
+          {/* Team Switcher */}
           <div className="px-2 mt-1 shrink-0">
             <TeamSwitcher module={module} collapsed={collapsed} />
           </div>
@@ -729,11 +727,31 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                   <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {/* Botão Sair: debounce via isSigningOut + e.preventDefault() + spinner */}
                 <DropdownMenuItem
-                  onClick={() => signOut()}
-                  className="text-red-500 focus:text-red-500 gap-2 cursor-pointer"
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                  className="text-red-500 focus:text-red-500 gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <LogOut className="h-4 w-4" /> Sair
+                  {isSigningOut ? (
+                    <>
+                      <svg
+                        className="h-4 w-4 animate-spin"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
+                      </svg>
+                      Saindo...
+                    </>
+                  ) : (
+                    <>
+                      <LogOut className="h-4 w-4" /> Sair
+                    </>
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -4,9 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useDemandas } from "../hooks/useDemandas";
 import { useProjetos } from "../hooks/useProjetos";
-import { useAllTransitions, useProfiles } from "../hooks/useAllTransitions";
+import { useKpisSustentacao } from "../hooks/useKpisSustentacao";
 import { SITUACAO_LABELS } from "../types/demanda";
-import { calcAtendimento, calcTempos, calcSLA, formatHours } from "../utils/kpiCalculations";
+import { formatHours } from "../utils/kpiCalculations";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { ImrDashboard } from "./ImrDashboard";
 import { MetricasFilterBar, FILTROS_DEFAULT } from "./MetricasFilterBar";
@@ -29,12 +29,20 @@ import { Separator } from "@/components/ui/separator";
 const SEVERITY_ORDER = ["bloqueada", "aguardando_retorno"] as const;
 
 export function SustentacaoDashboard() {
-  const { demandas, loading } = useDemandas();
-  const { projetos } = useProjetos();
-  const { transitions } = useAllTransitions();
-  const profiles = useProfiles();
-
   const [filtros, setFiltros] = useState<MetricasFiltros>(FILTROS_DEFAULT);
+
+  // OTIMIZAÇÃO: Usa o hook que consome a RPC calc_kpis_sustentacao.
+  // Isso remove a lógica de cálculo pesada (atendimento, tempos, sla) do cliente.
+  const {
+    atendimento,
+    tempos,
+    sla,
+    loading: kpisLoading
+  } = useKpisSustentacao(filtros.periodo === "all" ? 30 : parseInt(filtros.periodo));
+
+  // useDemandas ainda é necessário para a barra de filtros e alertas operacionais.
+  const { demandas, loading: demandasLoading } = useDemandas();
+  const { projetos } = useProjetos();
 
   const filtered = useMemo(() => {
     let items = demandas;
@@ -67,10 +75,6 @@ export function SustentacaoDashboard() {
 
     return items;
   }, [demandas, filtros]);
-
-  const atendimento = useMemo(() => calcAtendimento(filtered), [filtered]);
-  const tempos      = useMemo(() => calcTempos(filtered, transitions), [filtered, transitions]);
-  const sla         = useMemo(() => calcSLA(filtered, transitions), [filtered, transitions]);
 
   const porSituacao = useMemo(() => {
     const acc: Record<string, number> = {};
@@ -108,7 +112,7 @@ export function SustentacaoDashboard() {
     [filtered],
   );
 
-  if (loading) return <SkeletonList count={4} />;
+  if (kpisLoading || demandasLoading) return <SkeletonList count={4} />;
 
   const maxCount = Math.max(...porSituacao.map(([, c]) => c), 1);
 

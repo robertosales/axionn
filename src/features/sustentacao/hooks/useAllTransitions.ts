@@ -1,71 +1,119 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { KEYS } from "@/lib/queryKeys";
+import { STALE } from "@/lib/queryClient";
 import type { DemandaTransition, DemandaHour } from "../types/demanda";
 
 export function useAllTransitions() {
   const { currentTeamId } = useAuth();
-  const [transitions, setTransitions] = useState<DemandaTransition[]>([]);
-  const [loading, setLoading] = useState(false);
+  const qc = useQueryClient();
 
-  const load = useCallback(async () => {
-    if (!currentTeamId) return;
-    setLoading(true);
-    try {
-      // OTIMIZAÇÃO: 1 única query usando inner join para filtrar por team_id
-      // (evita o round-trip extra para buscar IDs de demandas antes)
-      const { data } = await supabase
+  const { data, isLoading: loading, refetch } = useQuery({
+    queryKey: KEYS.demandas.allTransitions(currentTeamId ?? ""),
+    queryFn: async () => {
+      if (!currentTeamId) return [];
+      const { data, error } = await supabase
         .from("demanda_transitions" as any)
         .select("*, demandas!inner(team_id)")
         .eq("demandas.team_id", currentTeamId)
         .order("created_at", { ascending: true });
-      setTransitions((data || []) as unknown as DemandaTransition[]);
-    } catch {
-      setTransitions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentTeamId]);
 
-  useEffect(() => { load(); }, [load]);
-  return { transitions, loading, reload: load };
+      if (error) throw error;
+      return (data || []) as unknown as DemandaTransition[];
+    },
+    enabled: !!currentTeamId,
+    staleTime: STALE.REALTIME,
+  });
+
+  // Realtime debounce
+  useEffect(() => {
+    if (!currentTeamId) return;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const channel = supabase
+      .channel(`transitions-rt-${currentTeamId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'demanda_transitions' },
+        () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            qc.invalidateQueries({ queryKey: KEYS.demandas.allTransitions(currentTeamId) });
+          }, 2000);
+        }
+      )
+      .subscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      supabase.removeChannel(channel);
+    };
+  }, [currentTeamId, qc]);
+
+  return { transitions: data || [], loading, reload: refetch };
 }
 
 export function useAllHours() {
   const { currentTeamId } = useAuth();
-  const [hours, setHours] = useState<DemandaHour[]>([]);
-  const [loading, setLoading] = useState(false);
+  const qc = useQueryClient();
 
-  const load = useCallback(async () => {
-    if (!currentTeamId) return;
-    setLoading(true);
-    try {
-      // OTIMIZAÇÃO: 1 única query com inner join (evita N+1 / round-trip extra)
-      const { data } = await supabase
+  const { data, isLoading: loading, refetch } = useQuery({
+    queryKey: KEYS.demandas.allHours(currentTeamId ?? ""),
+    queryFn: async () => {
+      if (!currentTeamId) return [];
+      const { data, error } = await supabase
         .from("demanda_hours" as any)
         .select("*, demandas!inner(team_id)")
         .eq("demandas.team_id", currentTeamId)
         .order("created_at", { ascending: true });
-      setHours((data || []) as unknown as DemandaHour[]);
-    } catch {
-      setHours([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentTeamId]);
 
-  useEffect(() => { load(); }, [load]);
-  return { hours, loading, reload: load };
+      if (error) throw error;
+      return (data || []) as unknown as DemandaHour[];
+    },
+    enabled: !!currentTeamId,
+    staleTime: STALE.REALTIME,
+  });
+
+  // Realtime debounce
+  useEffect(() => {
+    if (!currentTeamId) return;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const channel = supabase
+      .channel(`hours-rt-${currentTeamId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'demanda_hours' },
+        () => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            qc.invalidateQueries({ queryKey: KEYS.demandas.allHours(currentTeamId) });
+          }, 2000);
+        }
+      )
+      .subscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      supabase.removeChannel(channel);
+    };
+  }, [currentTeamId, qc]);
+
+  return { hours: data || [], loading, reload: refetch };
 }
 
 export function useProfiles() {
-  const [profiles, setProfiles] = useState<Array<{ user_id: string; display_name: string; email: string }>>([]);
+  const { data } = useQuery({
+    queryKey: KEYS.profiles.active(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, email")
+        .eq("is_active", true);
 
-  useEffect(() => {
-    supabase.from("profiles").select("user_id, display_name, email").then(({ data }) => {
-      setProfiles((data || []) as any[]);
-    });
-  }, []);
+      if (error) throw error;
+      return (data || []) as Array<{ user_id: string; display_name: string; email: string }>;
+    },
+    staleTime: STALE.SESSION, // Profiles change rarely
+  });
 
-  return profiles;
+  return data || [];
 }

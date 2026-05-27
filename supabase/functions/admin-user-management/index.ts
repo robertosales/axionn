@@ -7,8 +7,14 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SITE_URL      = Deno.env.get("SITE_URL") ?? "*";
+// SITE_URL deve ser a URL do frontend em produção (ex: https://axion.lovable.app)
+const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:8080";
 const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
+
+// Fallback de produção quando origin/referer não estão disponíveis (proxy/firewall/anônimo)
+const PUBLIC_SITE_URL =
+  Deno.env.get("PUBLIC_SITE_URL") ??
+  (SITE_URL && SITE_URL !== "*" ? SITE_URL : "https://usesprintflow.lovable.app");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  SITE_URL,
@@ -22,12 +28,30 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
 const _secretKeys   = Deno.env.get("SUPABASE_SECRET_KEYS");
 const _publishKeys  = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
-const SERVICE_KEY   = _secretKeys
-  ? JSON.parse(_secretKeys).service_role
-  : Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON_KEY      = _publishKeys
-  ? JSON.parse(_publishKeys).anon
-  : Deno.env.get("SUPABASE_ANON_KEY")!;
+let SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+let ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY");
+
+if (_secretKeys) {
+  try {
+    const keys = JSON.parse(_secretKeys);
+    if (keys.service_role) SERVICE_KEY = keys.service_role;
+  } catch (e) {
+    console.error("[admin-user-management] Falha ao parsear SUPABASE_SECRET_KEYS:", e);
+  }
+}
+
+if (_publishKeys) {
+  try {
+    const pKeys = JSON.parse(_publishKeys);
+    if (pKeys.anon) ANON_KEY = pKeys.anon;
+  } catch (e) {
+    console.error("[admin-user-management] Falha ao parsear SUPABASE_PUBLISHABLE_KEYS:", e);
+  }
+}
+
+if (!SERVICE_KEY || !ANON_KEY) {
+  throw new Error("Credenciais do Supabase (SERVICE_KEY/ANON_KEY) não encontradas.");
+}
 
 function generateTempPassword(): string {
   const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -116,17 +140,23 @@ Deno.serve(async (req: Request) => {
 
     const auditLog = async (
       auditAction: string,
-      oldData: Record<string, unknown> | null,
-      newData:  Record<string, unknown> | null
+      payload: Record<string, unknown> = {}
     ) => {
-      await adminClient.rpc("fn_audit_log_insert", {
-        p_action:       auditAction,
-        p_target_table: "profiles",
-        p_target_id:    user_id,
-        p_actor_id:     caller.id,
-        p_old_data:     oldData,
-        p_new_data:     newData,
-      });
+      try {
+        // CORREÇÃO: Tabela user_management_audit_log tem estrutura diferente da fn_audit_log_insert genérica.
+        // Inserimos diretamente para evitar falhas de schema/RPC em produção.
+        const { error } = await adminClient
+          .from("user_management_audit_log")
+          .insert({
+            actor_id:  caller.id,
+            target_id: user_id,
+            action:    auditAction,
+            payload:   payload,
+          });
+        if (error) console.error("[admin-user-management] Erro Auditoria:", error.message);
+      } catch (e) {
+        console.error("[admin-user-management] Falha na auditoria (best-effort):", e);
+      }
     };
 
     // ── 5. AÇÃO: change_email ──────────────────────────────────────────────
@@ -156,11 +186,11 @@ Deno.serve(async (req: Request) => {
         await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
       }
 
-      await auditLog(
-        "EMAIL_CHANGED",
-        { email: currentProfile?.email ?? null, mode: isDirect ? "direct" : "confirm" },
-        { email: new_email, mode: isDirect ? "direct" : "confirm" }
-      );
+      await auditLog("change_email", {
+        old_email: currentProfile?.email ?? null,
+        new_email: new_email,
+        mode: isDirect ? "direct" : "confirm"
+      });
 
       return new Response(
         JSON.stringify({
@@ -186,9 +216,21 @@ Deno.serve(async (req: Request) => {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const origin      = req.headers.get("origin") ?? req.headers.get("referer") ?? "";
-        const cleanOrigin = origin.replace(/\/$/, "").replace(/\/auth.*$/, "");
-        const redirectTo  = `${cleanOrigin}/reset-password`;
+        // Resolve origem com fallbacks robustos — headers podem ser omitidos por proxy/firewall
+        const rawOrigin =
+          req.headers.get("origin") ??
+          req.headers.get("referer") ??
+          PUBLIC_SITE_URL;
+
+        let cleanOrigin = PUBLIC_SITE_URL;
+        try {
+          const u = new URL(rawOrigin);
+          cleanOrigin = `${u.protocol}//${u.host}`;
+        } catch {
+          // rawOrigin inválido (ex.: "*"); usa fallback
+          cleanOrigin = PUBLIC_SITE_URL;
+        }
+        const redirectTo = `${cleanOrigin}/reset-password`;
 
         const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
           type: "recovery",
@@ -197,7 +239,7 @@ Deno.serve(async (req: Request) => {
         });
         if (linkErr) throw linkErr;
 
-        await auditLog("PASSWORD_RESET_LINK", null, { mode: "send_link", email: targetEmail });
+        await auditLog("reset_password", { mode: "send_link", email: targetEmail });
 
         return new Response(
           JSON.stringify({
@@ -218,7 +260,7 @@ Deno.serve(async (req: Request) => {
         .update({ must_change_password: true })
         .eq("user_id", user_id);
 
-      await auditLog("PASSWORD_RESET_TEMP", null, { mode: "temp_password", must_change_password: true });
+      await auditLog("reset_password", { mode: "temp_password", must_change_password: true });
 
       return new Response(
         JSON.stringify({

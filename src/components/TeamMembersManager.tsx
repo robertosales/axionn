@@ -93,7 +93,8 @@ export function TeamMembersManager() {
     if (!isAdmin) return;
     const { data } = await supabase
       .from("profiles")
-      .select("user_id, display_name, email");
+      .select("user_id, display_name, email")
+      .eq("is_active", true); // Filtra apenas ativos para novas adições
     setAllProfiles(data || []);
   };
 

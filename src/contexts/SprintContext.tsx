@@ -50,6 +50,51 @@ export interface ImpedimentTarget {
   sprintId?: string;
 }
 
+// ─── Ação 1.4: LoadingSlices — loading granular por entidade ──────────────────
+/**
+ * Cada chave representa o estado de carregamento de uma entidade específica.
+ * Componentes que consomem apenas `developers`, por exemplo, só re-renderizam
+ * quando `loadingSlices.developers` muda — não quando `userStories` carrega.
+ *
+ * A chave `any` é computada automaticamente pelo provider como
+ * `Object.values(loadingSlices).some(Boolean)` e substitui o antigo `loading: boolean`.
+ */
+export interface LoadingSlices {
+  developers: boolean;
+  userStories: boolean;
+  activities: boolean;
+  sprints: boolean;
+  epics: boolean;
+  customFields: boolean;
+  automationRules: boolean;
+  workflowColumns: boolean;
+  impediments: boolean;
+}
+
+const INITIAL_LOADING_SLICES: LoadingSlices = {
+  developers: false,
+  userStories: false,
+  activities: false,
+  sprints: false,
+  epics: false,
+  customFields: false,
+  automationRules: false,
+  workflowColumns: false,
+  impediments: false,
+};
+
+const ALL_LOADING_SLICES: LoadingSlices = {
+  developers: true,
+  userStories: true,
+  activities: true,
+  sprints: true,
+  epics: true,
+  customFields: true,
+  automationRules: true,
+  workflowColumns: true,
+  impediments: true,
+};
+
 interface SprintContextType {
   developers: Developer[];
   userStories: UserStory[];
@@ -60,7 +105,10 @@ interface SprintContextType {
   automationRules: AutomationRule[];
   workflowColumns: WorkflowColumn[];
   activeSprint: Sprint | null;
+  /** @deprecated Use `loadingSlices` para granularidade. Mantido para compatibilidade. */
   loading: boolean;
+  /** Ação 1.4 — loading granular por entidade. */
+  loadingSlices: LoadingSlices;
   addDeveloper: (dev: Omit<Developer, "id">) => Promise<void>;
   updateDeveloper: (id: string, dev: Partial<Omit<Developer, "id">>) => Promise<void>;
   removeDeveloper: (id: string) => Promise<void>;
@@ -153,26 +201,50 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
   const [workflowColumns, setWorkflowColumnsState] = useState<WorkflowColumn[]>(DEFAULT_KANBAN_COLUMNS);
   const [impediments, setImpediments] = useState<Impediment[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  // ── Ação 1.4: loadingSlices — substitui o boolean global ──────────────────────
+  // Cada entidade tem seu próprio flag de loading. Componentes que consomem
+  // apenas `developers` (ex.: DeveloperPicker) só re-renderizam quando
+  // `loadingSlices.developers` muda — não quando `userStories` carrega.
+  const [loadingSlices, setLoadingSlices] = useState<LoadingSlices>(INITIAL_LOADING_SLICES);
+
+  // Helper: atualiza um ou mais slices atomicamente
+  const setSlice = useCallback(
+    (patch: Partial<LoadingSlices>) =>
+      setLoadingSlices((prev) => ({ ...prev, ...patch })),
+    [],
+  );
+
+  // `loading` computado — true quando qualquer slice está carregando.
+  // Mantido no contexto para retrocompatibilidade com consumidores que
+  // ainda usam `const { loading } = useSprint()`.
+  const loading = useMemo(
+    () => Object.values(loadingSlices).some(Boolean),
+    [loadingSlices],
+  );
 
   const teamId = currentTeamId;
 
-  // ── PRIORIDADE #2: AbortController — race condition guard ─────────────────────
+  // ── AbortController — race condition guard ─────────────────────────────────
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, []);
 
-  // ── refreshAll: carga inicial + operações que precisam de IDs do banco ─────────
+  // ── refreshAll: ativa TODOS os slices de uma vez, carrega em paralelo ─────────
   const refreshAll = useCallback(async () => {
     if (!teamId) {
       setDevelopers([]); setUserStories([]); setActivities([]); setSprints([]);
       setEpics([]); setCustomFields([]); setAutomationRules([]);
       setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS); setImpediments([]);
+      setLoadingSlices(INITIAL_LOADING_SLICES);
       return;
     }
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setLoading(true);
+
+    // Ativa todos os slices simultaneamente (1 setState, 1 re-render)
+    setLoadingSlices(ALL_LOADING_SLICES);
+
     try {
       const [devRes, sprintRes, epicRes, huRes, actRes, impRes, cfRes, arRes, wcRes] = await Promise.all([
         supabase.from("developers").select("*").eq("team_id", teamId).limit(200),
@@ -185,26 +257,43 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         supabase.from("automation_rules").select("*").eq("team_id", teamId).limit(50),
         supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order").limit(50),
       ]);
+
       if (controller.signal.aborted) return;
+
+      // ── Atualiza estado + desliga slice correspondente ─────────────────────
       setDevelopers((devRes.data || []).map((d: any) => ({ id: d.id, name: d.name, email: d.email, role: d.role, avatar: d.avatar })));
+      setSlice({ developers: false });
+
       setSprints((sprintRes.data || []).map((s: any) => ({
         id: s.id, name: s.name, startDate: s.start_date, endDate: s.end_date,
         goal: s.goal || "", isActive: s.is_active, createdAt: s.created_at,
         closedAt: s.closed_at ?? null, delayDays: s.delay_days ?? null,
       })));
+      setSlice({ sprints: false });
+
       setEpics((epicRes.data || []).map((e: any) => ({
         id: e.id, name: e.name, description: e.description || "", color: e.color, createdAt: e.created_at,
       })));
+      setSlice({ epics: false });
+
       const impData = (impRes.data || []) as any[];
       setImpediments(impData.map(mapImpediment));
+      setSlice({ impediments: false });
+
       const huData = (huRes.data || []) as any[];
       setUserStories(huData.map((h: any) => mapUserStory(h, impData)));
+      setSlice({ userStories: false });
+
       setActivities((actRes.data || []).map(mapActivity));
+      setSlice({ activities: false });
+
       setCustomFields((cfRes.data || []).map((f: any) => ({
         id: f.id, key: f.key || f.id, name: f.name || f.label || "",
         label: f.label || f.name || "", type: f.field_type as any,
         options: f.options ?? null, required: f.required ?? false,
       })));
+      setSlice({ customFields: false });
+
       setAutomationRules((arRes.data || []).map((r: any) => ({
         id: r.id, name: r.name, enabled: r.enabled ?? r.is_active ?? false,
         isActive: r.is_active ?? r.enabled ?? false,
@@ -212,6 +301,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         action: { type: r.action_type, targetStatus: r.action_target_status ?? null, message: r.action_message ?? null },
         createdAt: r.created_at,
       })));
+      setSlice({ automationRules: false });
+
       const wc = (wcRes.data || []) as any[];
       if (wc.length > 0) {
         setWorkflowColumnsState(normalizeWorkflowColumns(wc.map((c: any) => ({
@@ -222,18 +313,20 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       } else {
         setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS);
       }
+      setSlice({ workflowColumns: false });
+
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error("Error loading data:", err);
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
+      // Em caso de erro, desliga todos os slices para não travar a UI
+      setLoadingSlices(INITIAL_LOADING_SLICES);
     }
-  }, [teamId]);
+  }, [teamId, setSlice]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // PRIORIDADE #5 — Realtime channels
+  // Realtime channels
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!teamId) return;
@@ -986,7 +1079,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   return (
     <SprintContext.Provider value={{
       developers, userStories, activities, sprints, epics, customFields, automationRules,
-      workflowColumns, activeSprint, loading, impediments,
+      workflowColumns, activeSprint, loading, loadingSlices, impediments,
       addDeveloper, updateDeveloper, removeDeveloper,
       addUserStory, updateUserStory, removeUserStory, updateUserStoryStatus, reorderUserStories,
       addActivity, updateActivity, removeActivity, closeActivity, reopenActivity,
@@ -1009,18 +1102,14 @@ export function useSprint() {
   return ctx;
 }
 
-// ─── PROBLEMA 3: Selectors — hooks granulares para evitar re-renders globais ──
+// ─── Selectors — hooks granulares para evitar re-renders globais ──────────────
 //
-// Uso: em vez de const { activities } = useSprint() em todo componente,
-// use o selector específico. O componente só re-renderiza quando aquele
-// slice de estado muda — não quando outros arrays do contexto mudam.
+// Migração recomendada nos componentes:
+//   ANTES:  const { loading } = useSprint();
+//   DEPOIS: const { loadingSlices } = useSprint();
+//           // e use loadingSlices.userStories, loadingSlices.developers, etc.
 //
-// Exemplo de migração em KanbanCard:
-//   ANTES: const { developers, epics, activities, workflowColumns } = useSprint();
-//   DEPOIS: const developers     = useDevelopers();
-//           const epics          = useEpics();
-//           const huActivities   = useActivitiesForHU(hu.id);  // já filtrado!
-//           const workflowCols   = useWorkflowColumns();
+//   Ou use os hooks prontos abaixo para leitura direta por entidade.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Retorna apenas o sprint ativo. Re-renderiza só quando o sprint ativo muda. */
@@ -1087,4 +1176,42 @@ export function useSprintMetrics() {
       completionPct,
     };
   }, [userStories, activities, sprints]);
+}
+
+// ─── Ação 1.4 — Hooks de loading granular por entidade ───────────────────────
+//
+// Use estes hooks em componentes que exibem skeletons ou spinners
+// por entidade específica — sem depender do `loading` global.
+//
+// Exemplos:
+//   const isDevelopersLoading = useLoadingSlice("developers");
+//   const isKanbanLoading     = useLoadingSlice("userStories");
+//   const isAnyLoading        = useIsLoading(); // equivalente ao antigo `loading`
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retorna o estado de loading de uma entidade específica.
+ * O componente só re-renderiza quando o slice dessa entidade muda.
+ *
+ * @example
+ * const isDevelopersLoading = useLoadingSlice("developers");
+ * if (isDevelopersLoading) return <DevelopersSkeleton />;
+ */
+export function useLoadingSlice(entity: keyof LoadingSlices): boolean {
+  const { loadingSlices } = useSprint();
+  return loadingSlices[entity];
+}
+
+/**
+ * Retorna true se qualquer entidade ainda está carregando.
+ * Equivalente ao antigo `loading` — use para telas de splash ou
+ * bloqueio global de interação.
+ *
+ * @example
+ * const isLoading = useIsLoading();
+ * if (isLoading) return <FullPageSpinner />;
+ */
+export function useIsLoading(): boolean {
+  const { loading } = useSprint();
+  return loading;
 }

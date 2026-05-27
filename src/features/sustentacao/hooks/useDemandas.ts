@@ -118,10 +118,11 @@ export function useDemandas() {
       const created = await svc.createDemanda({ ...d, team_id: currentTeamId, rhm: d.rhm! });
       if (user) {
         await svc.addTransition({
-          demanda_id:   created.id,
-          from_status:  null,
-          to_status:    'nova',
-          user_id:      user.id,
+          demanda_id:    created.id,
+          from_status:   null,
+          // 'nova' não existe em ALL_SITUACOES — usa 'fila_atendimento' (status inicial correto)
+          to_status:     'fila_atendimento',
+          user_id:       user.id,
           justificativa: null,
         });
       }
@@ -153,10 +154,10 @@ export function useDemandas() {
       await svc.updateDemanda(demanda.id, { situacao: newStatus });
       if (user) {
         await svc.addTransition({
-          demanda_id:   demanda.id,
-          from_status:  demanda.situacao,
-          to_status:    newStatus,
-          user_id:      user.id,
+          demanda_id:    demanda.id,
+          from_status:   demanda.situacao,
+          to_status:     newStatus,
+          user_id:       user.id,
           justificativa: justificativa || null,
         });
       }

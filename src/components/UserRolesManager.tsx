@@ -509,7 +509,7 @@ export function UserRolesManager() {
 
     setDeleteState(prev => ({ ...prev, deleting: true }));
     try {
-      const { data, error: rpcError } = await supabase.rpc("fn_inactivate_user_with_migration", {
+      const { data, error: rpcError } = await (supabase.rpc as any)("fn_inactivate_user_with_migration", {
         p_old_user_id: user.user_id,
         p_new_user_id: reassignToId
       });

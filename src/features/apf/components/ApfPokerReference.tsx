@@ -64,7 +64,7 @@ export function ApfPokerReference({
       .then(({ data }) => {
         if (data) {
           setEntries(
-            data.map((d: any) => ({
+            data.map((d: { id: string; sprints: { name: string } | null; apf_templates: { name: string } | null; created_at: string; pf_total: number | null; pf_breakdown: Record<string, number> | null; output_filename: string | null; storage_path: string | null }) => ({
               id: d.id,
               sprintName: d.sprints?.name ?? "",
               templateName: d.apf_templates?.name ?? "Sem template",

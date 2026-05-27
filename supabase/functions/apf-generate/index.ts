@@ -121,7 +121,7 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
 
   // ── FIX-001: Busca a key no Vault capturando o erro corretamente ──
   let apiKey: string | null = null;
-  const { data: keyData, error: vaultErr } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id });
+  const { data: keyData, error: vaultErr } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id as any });
   if (vaultErr) {
     console.error(`[VAULT] Falha ao buscar key para provider "${row.name}" (${row.id}):`, vaultErr.message);
   } else if (keyData && typeof keyData === "string" && keyData.trim().length > 0) {

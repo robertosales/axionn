@@ -161,11 +161,7 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
   }
 
   if (!apiKey) {
-<<<<<<< HEAD
-    throw new Error(`API key não configurada para "${row.name}". Cadastre no painel admin ou informe a chave na tela.`);
-=======
     throw new Error(`API key não configurada para "${row.name}". Configure a chave no painel administrativo (Vault).`);
->>>>>>> origin/main
   }
 
   return { providerType: row.provider_type, apiKey, model: row.model, name: row.name };
@@ -639,11 +635,7 @@ Deno.serve(async (req: Request) => {
       processedFiles.push({ name: extracted.name, content: extracted.content });
     }
 
-<<<<<<< HEAD
-    // ── 5. Chama a IA com fallback automático ──
-=======
     // ── 5. Chama a IA (guard anti-regressão: garante key válida antes de chamar) ──
->>>>>>> origin/main
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
 
     let aiText = "";
@@ -736,12 +728,6 @@ Deno.serve(async (req: Request) => {
 
   } catch (e: unknown) {
     console.error("apf-generate error:", e);
-<<<<<<< HEAD
-    const { reason, userMessage, status } = mapErrorToReason(e);
-    // Para erros recuperáveis (402/429/5xx) devolvemos 200 com payload tipado, evitando
-    // Runtime Error no cliente. Outros erros mantém status apropriado.
-    const httpStatus = isFallbackableStatus(status) ? 200 : (status >= 400 && status < 600 ? status : 500);
-=======
     const raw = e instanceof Error ? e.message : "Erro desconhecido";
     let friendly = raw;
     if (/credit balance is too low/i.test(raw))
@@ -754,7 +740,6 @@ Deno.serve(async (req: Request) => {
       friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
     else if (/não configurada/i.test(raw))
       friendly = raw;
->>>>>>> origin/main
     return new Response(
       JSON.stringify({ success: false, reason, userMessage }),
       { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },

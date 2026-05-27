@@ -135,19 +135,20 @@ Deno.serve(async (req: Request) => {
 
     const auditLog = async (
       auditAction: string,
-      oldData: Record<string, unknown> | null,
-      newData:  Record<string, unknown> | null
+      payload: Record<string, unknown> = {}
     ) => {
       try {
-        const { error } = await adminClient.rpc("fn_audit_log_insert", {
-          p_action:       auditAction,
-          p_target_table: "profiles",
-          p_target_id:    user_id,
-          p_actor_id:     caller.id,
-          p_old_data:     oldData,
-          p_new_data:     newData,
-        });
-        if (error) console.error("[admin-user-management] Erro RPC Auditoria:", error.message);
+        // CORREÇÃO: Tabela user_management_audit_log tem estrutura diferente da fn_audit_log_insert genérica.
+        // Inserimos diretamente para evitar falhas de schema/RPC em produção.
+        const { error } = await adminClient
+          .from("user_management_audit_log")
+          .insert({
+            actor_id:  caller.id,
+            target_id: user_id,
+            action:    auditAction,
+            payload:   payload,
+          });
+        if (error) console.error("[admin-user-management] Erro Auditoria:", error.message);
       } catch (e) {
         console.error("[admin-user-management] Falha na auditoria (best-effort):", e);
       }
@@ -180,11 +181,11 @@ Deno.serve(async (req: Request) => {
         await adminClient.from("profiles").update(profileUpdate).eq("user_id", user_id);
       }
 
-      await auditLog(
-        "EMAIL_CHANGED",
-        { email: currentProfile?.email ?? null, mode: isDirect ? "direct" : "confirm" },
-        { email: new_email, mode: isDirect ? "direct" : "confirm" }
-      );
+      await auditLog("change_email", {
+        old_email: currentProfile?.email ?? null,
+        new_email: new_email,
+        mode: isDirect ? "direct" : "confirm"
+      });
 
       return new Response(
         JSON.stringify({
@@ -223,7 +224,7 @@ Deno.serve(async (req: Request) => {
         });
         if (linkErr) throw linkErr;
 
-        await auditLog("PASSWORD_RESET_LINK", null, { mode: "send_link", email: targetEmail });
+        await auditLog("reset_password", { mode: "send_link", email: targetEmail });
 
         return new Response(
           JSON.stringify({
@@ -244,7 +245,7 @@ Deno.serve(async (req: Request) => {
         .update({ must_change_password: true })
         .eq("user_id", user_id);
 
-      await auditLog("PASSWORD_RESET_TEMP", null, { mode: "temp_password", must_change_password: true });
+      await auditLog("reset_password", { mode: "temp_password", must_change_password: true });
 
       return new Response(
         JSON.stringify({

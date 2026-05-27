@@ -15,6 +15,8 @@ export const KEYS = {
     detail: (id: string)     => ['demandas', 'detail', id]       as const,
     transitions: (id: string)=> ['demandas', 'transitions', id]  as const,
     hours:  (id: string)     => ['demandas', 'hours', id]        as const,
+    allTransitions: (teamId: string) => ['demandas', teamId, 'all-transitions'] as const,
+    allHours: (teamId: string) => ['demandas', teamId, 'all-hours'] as const,
   },
 
   // ── Kanban / User Stories ────────────────────────────────────
@@ -40,5 +42,8 @@ export const KEYS = {
 
   // ── Perfil / Auth ────────────────────────────────────────────
   profile:    (userId: string) => ['profile', userId]            as const,
+  profiles: {
+    active:   ()               => ['profiles', 'active']         as const,
+  },
   teams:      ()               => ['teams']                      as const,
 } as const;

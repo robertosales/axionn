@@ -45,7 +45,8 @@ export function useTeamMembers(teamId: string | null) {
       const { data: profData, error: profError } = await supabase
         .from("profiles")
         .select("id, user_id, display_name, email, avatar_url")
-        .in("user_id", userIds);
+        .in("user_id", userIds)
+        .eq("is_active", true); // Filtra apenas membros ativos
       if (profError) throw profError;
 
       // Une profile com o role do time

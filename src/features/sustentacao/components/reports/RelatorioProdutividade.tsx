@@ -37,11 +37,18 @@ import {
 } from "@/components/ui/dialog";
 
 function useDemandaResponsaveis() {
+  const { currentTeamId } = useAuth();
   const [responsaveis, setResponsaveis] = useState<Array<{ demanda_id: string; user_id: string; papel: string }>>([])
+
   useEffect(() => {
-    supabase.from("demanda_responsaveis").select("demanda_id, user_id, papel")
-      .then(({ data }) => setResponsaveis(data || []));
-  }, []);
+    if (!currentTeamId) return;
+    // OTIMIZAÇÃO: Filtra por time usando inner join para evitar carregar registros de outros times
+    supabase.from("demanda_responsaveis" as any)
+      .select("demanda_id, user_id, papel, demandas!inner(team_id)")
+      .eq("demandas.team_id", currentTeamId)
+      .then(({ data }) => setResponsaveis((data || []) as any[]));
+  }, [currentTeamId]);
+
   return { responsaveis };
 }
 

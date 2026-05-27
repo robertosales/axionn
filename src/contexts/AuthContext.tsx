@@ -183,6 +183,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data: profileData } = await supabase
         .from("profiles").select("*").eq("user_id", userId).single();
+
+      // BLOQUEIO DE INATIVOS: Se o perfil estiver inativo, encerra a sessão imediatamente.
+      if (profileData && profileData.is_active === false) {
+        console.warn("[Auth] Bloqueio: Usuário inativo detectado.");
+        await forceLocalClear();
+        return;
+      }
+
       if (profileData && mountedRef.current) setProfile(profileData as Profile);
 
       await Promise.all([

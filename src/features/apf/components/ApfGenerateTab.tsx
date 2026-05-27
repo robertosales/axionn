@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   FileSpreadsheet, FileText, File, Upload, X, Download, Loader2,
-  Sparkles, KeyRound, Plus, HelpCircle, Eye, CheckCircle2,
+  Sparkles, KeyRound, HelpCircle, Eye, CheckCircle2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -22,6 +22,7 @@ import {
   PROGRESS_LABELS,
   type OutputFormat,
 } from "../hooks/useApfGenerate";
+import { markdownToDocxBlob, triggerDownload, downloadMarkdownAsFile } from "../utils/markdownToDocx";
 
 interface FileField {
   label: string;
@@ -30,29 +31,11 @@ interface FileField {
   icon: React.ElementType;
 }
 
-const BASELINE_FIELD: FileField = { label: "Baseline", description: "Planilha com colunas Item e Tipo", accept: ".xlsx,.xls,.csv,.pdf", icon: FileSpreadsheet };
-const HU_FIELD: FileField = { label: "HUs da Sprint", description: "Lista de HUs (pode anexar várias)", accept: ".docx,.pdf,.md,.txt", icon: FileText };
-const MODEL_FIELD: FileField = { label: "Modelo de Contagem", description: "Template do documento de saída", accept: ".docx,.xlsx,.pdf", icon: File };
+const BASELINE_FIELD: FileField = { label: "Baseline (opcional)", description: "Planilha xlsx com Item/Tipo — convertida em Markdown localmente", accept: ".xlsx,.xls", icon: FileSpreadsheet };
 
-function downloadDocxFromBase64(base64: string, filename: string) {
-  const byteChars = atob(base64);
-  const byteArr = new Uint8Array(byteChars.length);
-  for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-  const blob = new Blob([byteArr], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function downloadMarkdown(content: string, filename: string) {
-  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+async function downloadDocxFromMarkdown(markdown: string, filename: string) {
+  const blob = await markdownToDocxBlob(markdown);
+  triggerDownload(blob, filename);
 }
 
 function FileUploadField({ field, file, onSelect, onRemove }: {
@@ -125,8 +108,6 @@ export function ApfGenerateTab() {
     selectedTemplateId, setSelectedTemplateId,
     templates, selectedTemplate,
     baselineFile, setBaselineFile,
-    huFiles, setHuFiles,
-    modelFile, setModelFile,
     providerCfg,
     aiProviders, selectedProviderId, setSelectedProviderId,
     apiKey, setApiKey,

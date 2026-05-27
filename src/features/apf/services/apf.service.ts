@@ -222,6 +222,8 @@ export async function invokeApfGeneration(body: {
   model?: string;
   files: Array<{ name: string; content: string; encoding?: "base64" | "text"; mimeType?: string }>;
   generationId?: string;
+  /** Pula geração de .docx no servidor (frontend converte). */
+  skipDocx?: boolean;
 }): Promise<{
   docxBase64: string;
   markdown: string;
@@ -248,11 +250,11 @@ export async function invokeApfGeneration(body: {
       : "";
     throw new Error(`${data.userMessage ?? "Não foi possível gerar o documento agora. Tente novamente em instantes."}${details}`);
   }
-  if (!data?.docxBase64) {
+  if (!data?.markdown) {
     throw new Error(data?.userMessage ?? data?.error ?? "A IA não retornou conteúdo");
   }
   return {
-    docxBase64: data.docxBase64,
+    docxBase64: data.docxBase64 ?? "",
     markdown: data.markdown ?? "",
     pfBreakdown: data.pfBreakdown ?? {},
     pfTotal: data.pfTotal ?? null,

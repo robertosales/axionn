@@ -7,38 +7,32 @@ import {
   fetchGenerations,
   createGeneration,
   invokeApfGeneration,
-  prepareFilesForEdgeFunction,
   type ApfTemplate,
   type ApfGeneration,
 } from "../services/apf.service";
 import { supabase } from "@/integrations/supabase/client";
 import { listAIProviders, type AIProvider } from "@/features/admin/services/aiProviders.service";
+import { baselineFileToMarkdown } from "../utils/baselineXlsxToMd";
+import { fetchSprintHusAsMarkdown } from "../utils/husToMarkdown";
 
 export type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
 export type OutputFormat = "docx" | "markdown";
 
-/** Etapas visíveis de progresso (P5) */
 export type ProgressStep =
   | "idle"
-  | "reading_files"    // Etapa 1: lendo xlsx + docx
-  | "calling_ai"       // Etapa 2: chamando a IA
-  | "saving"           // Etapa 3: salvando resultado
+  | "collecting"
+  | "calling_ai"
+  | "saving"
   | "done";
 
 export const PROGRESS_LABELS: Record<ProgressStep, string> = {
   idle: "",
-  reading_files: "Lendo arquivos (Baseline + Modelo)...",
+  collecting: "Coletando HUs e baseline do banco...",
   calling_ai: "Gerando documento com IA...",
   saving: "Salvando resultado...",
-  done: "Concluído!",
+  done: "Concluido!",
 };
 
-/**
- * SEC-005: needsKey REMOVIDO de todos os providers.
- * As API keys são gerenciadas pelo admin via Supabase Vault.
- * O usuário final nunca precisa inserir ou conhecer as keys.
- */
-// Mantido apenas para fallback/legado — a lista real vem do banco
 export const PROVIDERS: { value: Provider; label: string }[] = [];
 
 export type InteractiveQuestion = {
@@ -51,16 +45,14 @@ export type InteractiveQuestion = {
 
 const DEFAULT_DB_CHANGE_QUESTION: InteractiveQuestion = {
   id: "q_db_changes",
-  text: "Houve alteração de banco de dados?",
+  text: "Houve alteracao de banco de dados?",
   kind: "yesno",
-  followUp: "Descreva as alterações de banco e anexe os scripts SQL Server, se houver.",
+  followUp: "Descreva as alteracoes de banco e anexe os scripts SQL Server, se houver.",
   allowSqlFiles: true,
 };
 
-// Apenas IAs gratuitas são oferecidas ao usuário final.
-// Hoje, isso significa exclusivamente a Lovable AI (gateway gerenciado).
 const INLINE_AI_PROVIDERS: AIProvider[] = [
-  { id: "inline:lovable", name: "Lovable AI (Gratuita) — recomendada", provider_type: "lovable", model: "google/gemini-2.5-flash", is_recommended: true, is_active: true, has_key: true, created_at: "", updated_at: "" },
+  { id: "inline:lovable", name: "Lovable AI (Gratuita) \u2014 recomendada", provider_type: "lovable", model: "google/gemini-2.5-flash", is_recommended: true, is_active: true, has_key: true, created_at: "", updated_at: "" },
 ];
 
 export const YESNO_REGEX =
@@ -100,14 +92,14 @@ export function applyAnswersToPrompt(
   const summary = questions
     .map((q) => {
       const a = answers[q.id];
-      if (!a) return `- ${q.text}\n  Resposta: (n\u00e3o informada)`;
+      if (!a) return `- ${q.text}\n  Resposta: (nao informada)`;
       if (q.kind === "yesno") {
         const isYes = a.value === "sim";
         const detail = isYes && a.detail?.trim() ? `\n  Detalhes: ${a.detail.trim()}` : "";
         const scripts = isYes && q.allowSqlFiles && sqlFileNames.length > 0
           ? `\n  Scripts SQL Server anexados: ${sqlFileNames.join(", ")}`
           : "";
-        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "N\u00e3o"}${detail}${scripts}`;
+        return `- ${q.text}\n  Resposta: ${isYes ? "Sim" : "Nao"}${detail}${scripts}`;
       }
       return `- ${q.text}\n  Resposta: ${a.value || "(vazio)"}`;
     })
@@ -116,7 +108,7 @@ export function applyAnswersToPrompt(
     .split(/\r?\n/)
     .filter((l) => !YESNO_REGEX.test(l) && !/\{\{\s*pergunta\s*:/i.test(l))
     .join("\n");
-  return `${stripped}\n\n=== RESPOSTAS DO USU\u00c1RIO ===\n${summary}\n=== FIM DAS RESPOSTAS ===\n\nIMPORTANTE: Use as respostas acima como dados confirmados pelo usu\u00e1rio. N\u00c3O repita as perguntas no documento \u2014 incorpore as respostas naturalmente no conte\u00fado gerado.`;
+  return `${stripped}\n\n=== RESPOSTAS DO USUARIO ===\n${summary}\n=== FIM DAS RESPOSTAS ===\n\nIMPORTANTE: Use as respostas acima como dados confirmados pelo usuario. NAO repita as perguntas no documento \u2014 incorpore as respostas naturalmente no conteudo gerado.`;
 }
 
 export function useApfGenerate() {
@@ -127,8 +119,6 @@ export function useApfGenerate() {
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templates, setTemplates]                   = useState<ApfTemplate[]>([]);
   const [baselineFile, setBaselineFile]             = useState<File | null>(null);
-  const [huFiles, setHuFiles]                       = useState<File[]>([]);
-  const [modelFile, setModelFile]                   = useState<File | null>(null);
   const [generating, setGenerating]                 = useState(false);
   const [progressStep, setProgressStep]             = useState<ProgressStep>("idle");
   const [generations, setGenerations]               = useState<(ApfGeneration & { template_name?: string })[]>([]);
@@ -139,7 +129,6 @@ export function useApfGenerate() {
   const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
   const [sqlFiles, setSqlFiles]                     = useState<File[]>([]);
   const [lastResult, setLastResult] = useState<{
-    base64: string;
     markdown: string;
     baseFilename: string;
     pfBreakdown: Record<string, number>;
@@ -150,18 +139,14 @@ export function useApfGenerate() {
   const [answers, setAnswers]           = useState<Record<string, { value: string; detail?: string }>>({});
   const [showQuestions, setShowQuestions] = useState(false);
 
-  // Carregar templates
   useEffect(() => {
     if (!currentTeamId) return;
     fetchActiveTemplates(currentTeamId).then(setTemplates).catch(() => {});
   }, [currentTeamId]);
 
-  // Carregar provedores de IA ativos
   useEffect(() => {
     listAIProviders({ onlyActive: true })
       .then((list) => {
-        // Mantém somente provedores gratuitos (Lovable). Provedores pagos
-        // cadastrados no admin são ocultados desta tela por regra de negócio.
         const freeFromDb = list.filter((p) => p.provider_type === "lovable");
         const merged = [
           ...freeFromDb,
@@ -179,7 +164,6 @@ export function useApfGenerate() {
       });
   }, []);
 
-  // Recarregar hist\u00f3rico quando sprint muda
   useEffect(() => {
     if (!currentTeamId || !selectedSprintId) { setGenerations([]); return; }
     setLoadingHistory(true);
@@ -198,24 +182,16 @@ export function useApfGenerate() {
     () => aiProviders.find((p) => p.id === selectedProviderId) ?? null,
     [aiProviders, selectedProviderId],
   );
-  // Modelo híbrido: pede a chave inline quando o provider NÃO é Lovable
-  // e ainda não tem chave cadastrada no Vault.
   const providerCfg = useMemo(() => {
     if (!selectedProvider) return { needsKey: false, placeholder: "" };
     const isLovable = selectedProvider.provider_type === "lovable";
     const needsKey = !isLovable && !selectedProvider.has_key;
     const placeholderByType: Record<string, string> = {
-      openai: "sk-...",
-      gemini: "AIza...",
-      anthropic: "sk-ant-...",
-      perplexity: "pplx-...",
-      lovable: "",
+      openai: "sk-...", gemini: "AIza...", anthropic: "sk-ant-...", perplexity: "pplx-...", lovable: "",
     };
     return { needsKey, placeholder: placeholderByType[selectedProvider.provider_type] ?? "Cole sua API key" };
   }, [selectedProvider]);
-  // Limpa apiKey ao trocar de provider
   useEffect(() => { setApiKey(""); }, [selectedProviderId]);
-  // Compat com a UI antiga
   const provider: Provider = (selectedProvider?.provider_type ?? "lovable") as Provider;
   const setProvider = (_: Provider) => {};
 
@@ -225,9 +201,8 @@ export function useApfGenerate() {
     setAnswers({});
   }, [selectedTemplate]);
 
-  // canGenerate: exige apiKey somente quando o provider escolhido precisa de uma chave inline
-  const canGenerate = !!selectedSprintId && !!selectedTemplateId && !!baselineFile
-    && huFiles.length > 0 && !!modelFile && !!selectedProviderId
+  // Baseline e HUs vem do banco automaticamente. Baseline pode ser sobrescrita por upload opcional.
+  const canGenerate = !!selectedSprintId && !!selectedTemplateId && !!selectedProviderId
     && (!providerCfg.needsKey || apiKey.trim().length >= 10);
 
   const allQuestionsAnswered = questions.every((q) => {
@@ -238,14 +213,11 @@ export function useApfGenerate() {
   });
 
   const runGeneration = useCallback(async () => {
-    if (!currentTeamId || !user) { toast.error("Sess\u00e3o inv\u00e1lida. Fa\u00e7a login novamente."); return; }
+    if (!currentTeamId || !user) { toast.error("Sessao invalida. Faca login novamente."); return; }
 
     const missing: string[] = [];
     if (!selectedSprintId)    missing.push("Sprint");
     if (!selectedTemplateId)  missing.push("Template");
-    if (!baselineFile)        missing.push("Baseline");
-    if (huFiles.length === 0) missing.push("HUs da Sprint");
-    if (!modelFile)           missing.push("Modelo de Contagem");
     if (!selectedProviderId)  missing.push("Provedor de IA");
     if (missing.length > 0) { toast.error(`Preencha antes de gerar: ${missing.join(", ")}`); return; }
 
@@ -257,35 +229,47 @@ export function useApfGenerate() {
       const baseFilename = `APF_${(sprint?.name ?? "Sprint").replace(/\s+/g, "_")}_${Date.now()}`;
       const filename     = `${baseFilename}.${outputFormat === "docx" ? "docx" : "md"}`;
 
-      // \u2500\u2500 ETAPA 1: Criar registro no banco com status=pending \u2500\u2500
+      // 1. Coleta automatica de HUs e baseline a partir do banco
+      setProgressStep("collecting");
+      const { markdown: husMd, count: huCount } = await fetchSprintHusAsMarkdown(selectedSprintId);
+      if (huCount === 0) {
+        toast.warning("Esta sprint nao possui HUs no banco. A IA recebera apenas o template.");
+      }
+      let baselineMd: string | null = null;
+      if (baselineFile) {
+        baselineMd = await baselineFileToMarkdown(baselineFile);
+        if (!baselineMd) toast.warning("Nao foi possivel interpretar a planilha de baseline; ela sera ignorada.");
+      }
+      const templateMd = selectedTemplate!.prompt_content;
+
+      // 2. Cria registro pending
       const gen = await createGeneration({
         team_id:       currentTeamId,
         template_id:   selectedTemplateId,
         sprint_id:     selectedSprintId,
         generated_by:  user.id,
-        baseline_file: baselineFile!.name,
-        hu_file:       huFiles.map((f) => f.name).join(", "),
-        model_file:    modelFile!.name,
+        baseline_file: baselineFile?.name ?? "(banco)",
+        hu_file:       `(${huCount} HU(s) da sprint)`,
+        model_file:    "(template do banco)",
         output_filename: filename,
         status: "pending",
       });
       generationId = gen.id;
 
-      // \u2500\u2500 ETAPA 2: Ler e converter arquivos \u2500\u2500
-      setProgressStep("reading_files");
-      const hasDbChanges = questions.some((q) => q.allowSqlFiles && answers[q.id]?.value === "sim");
-      const allFiles    = [baselineFile!, ...huFiles, modelFile!, ...(hasDbChanges ? sqlFiles : [])];
-      const filePayload = await prepareFilesForEdgeFunction(allFiles);
-
-      const finalPrompt = applyAnswersToPrompt(
-        selectedTemplate!.prompt_content,
-        questions,
-        answers,
-        sqlFiles.map((file) => file.name),
+      // 3. Monta prompt unico em markdown
+      const promptWithAnswers = applyAnswersToPrompt(
+        templateMd, questions, answers, sqlFiles.map((file) => file.name),
       );
+      const finalPrompt = [
+        promptWithAnswers,
+        "",
+        "=== HUs DA SPRINT (extraidas do banco) ===",
+        husMd,
+        "=== FIM DAS HUs ===",
+        baselineMd ? `\n=== BASELINE APF (tabela enxuta) ===\n${baselineMd}\n=== FIM DA BASELINE ===` : "",
+      ].join("\n");
 
-      // \u2500\u2500 ETAPA 3: Chamar a IA \u2500\u2500
-      // SEC-005: apiKey n\u00e3o \u00e9 mais passada \u2014 a Edge Function busca no Vault
+      // 4. Chama a IA sem upload binario
       setProgressStep("calling_ai");
       const isInlineProvider = selectedProviderId.startsWith("inline:");
       const result = await invokeApfGeneration({
@@ -293,15 +277,15 @@ export function useApfGenerate() {
         providerId:   isInlineProvider ? undefined : selectedProviderId,
         provider:     isInlineProvider ? selectedProvider?.provider_type : undefined,
         model:        undefined,
-        files:        filePayload,
+        files:        [],
         generationId,
         apiKey:       providerCfg.needsKey ? apiKey.trim() : undefined,
+        skipDocx:     true,
       });
 
-      // \u2500\u2500 ETAPA 4: Finalizar \u2500\u2500
+      // 5. Finaliza
       setProgressStep("saving");
       setLastResult({
-        base64:      result.docxBase64,
         markdown:    result.markdown,
         baseFilename,
         pfBreakdown: result.pfBreakdown,
@@ -333,7 +317,7 @@ export function useApfGenerate() {
   }, [
     currentTeamId, user,
     selectedSprintId, selectedTemplateId,
-    baselineFile, huFiles, modelFile,
+    baselineFile,
     sprints, outputFormat,
     selectedTemplate, questions, answers,
     selectedProviderId, selectedProvider?.provider_type, apiKey, providerCfg.needsKey, sqlFiles,
@@ -351,8 +335,6 @@ export function useApfGenerate() {
     selectedTemplateId, setSelectedTemplateId,
     templates, selectedTemplate,
     baselineFile, setBaselineFile,
-    huFiles, setHuFiles,
-    modelFile, setModelFile,
     provider, setProvider, providerCfg,
     aiProviders, selectedProviderId, setSelectedProviderId,
     apiKey, setApiKey,

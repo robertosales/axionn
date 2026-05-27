@@ -161,11 +161,7 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
   }
 
   if (!apiKey) {
-<<<<<<< HEAD
     throw new Error(`API key não configurada para "${row.name}". Cadastre no painel admin ou informe a chave na tela.`);
-=======
-    throw new Error(`API key não configurada para "${row.name}". Configure a chave no painel administrativo (Vault).`);
->>>>>>> origin/main
   }
 
   return { providerType: row.provider_type, apiKey, model: row.model, name: row.name };
@@ -639,11 +635,7 @@ Deno.serve(async (req: Request) => {
       processedFiles.push({ name: extracted.name, content: extracted.content });
     }
 
-<<<<<<< HEAD
     // ── 5. Chama a IA com fallback automático ──
-=======
-    // ── 5. Chama a IA (guard anti-regressão: garante key válida antes de chamar) ──
->>>>>>> origin/main
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
 
     let aiText = "";

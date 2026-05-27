@@ -11,6 +11,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:8080";
 const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
 
+// Fallback de produção quando origin/referer não estão disponíveis (proxy/firewall/anônimo)
+const PUBLIC_SITE_URL =
+  Deno.env.get("PUBLIC_SITE_URL") ??
+  (SITE_URL && SITE_URL !== "*" ? SITE_URL : "https://usesprintflow.lovable.app");
+
 const corsHeaders = {
   "Access-Control-Allow-Origin":  SITE_URL,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -211,11 +216,21 @@ Deno.serve(async (req: Request) => {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const origin      = req.headers.get("origin") ?? req.headers.get("referer") ?? SITE_URL;
-        const cleanOrigin = origin.replace(/\/$/, "").replace(/\/auth.*$/, "");
-        // Garante que a URL de redirecionamento seja válida mesmo que cleanOrigin seja "*" ou malformado
-        const baseHost    = (cleanOrigin && cleanOrigin !== "*") ? cleanOrigin : SITE_URL;
-        const redirectTo  = `${baseHost.replace(/\/$/, "")}/reset-password`;
+        // Resolve origem com fallbacks robustos — headers podem ser omitidos por proxy/firewall
+        const rawOrigin =
+          req.headers.get("origin") ??
+          req.headers.get("referer") ??
+          PUBLIC_SITE_URL;
+
+        let cleanOrigin = PUBLIC_SITE_URL;
+        try {
+          const u = new URL(rawOrigin);
+          cleanOrigin = `${u.protocol}//${u.host}`;
+        } catch {
+          // rawOrigin inválido (ex.: "*"); usa fallback
+          cleanOrigin = PUBLIC_SITE_URL;
+        }
+        const redirectTo = `${cleanOrigin}/reset-password`;
 
         const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
           type: "recovery",

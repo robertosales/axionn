@@ -55,6 +55,7 @@ export async function searchProfiles(query: string) {
   const { data, error } = await supabase
     .from("profiles")
     .select("user_id, display_name, email")
+    .eq("is_active", true)
     .or(`display_name.ilike.%${query}%,email.ilike.%${query}%`)
     .limit(10);
   if (error) throw error;

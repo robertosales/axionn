@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { AppRole, Permission, getPermissionsForRoles } from "@/hooks/usePermissions";
+import { toast } from "sonner";
 
 interface Profile {
   id:                   string;

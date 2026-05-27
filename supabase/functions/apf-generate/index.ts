@@ -60,6 +60,8 @@ interface RequestBody {
    * e o provider não é o Lovable AI.
    */
   apiKey?: string;
+  /** Quando true, pula geração de .docx no servidor (frontend faz a conversão). */
+  skipDocx?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -162,6 +164,7 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
 
   if (!apiKey) {
     throw new Error(`API key não configurada para "${row.name}". Configure a chave no painel administrativo (Vault).`);
+    throw new Error(`API key não configurada para "${row.name}". Cadastre no painel admin ou informe a chave na tela.`);
   }
 
   return { providerType: row.provider_type, apiKey, model: row.model, name: row.name };
@@ -636,6 +639,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 5. Chama a IA (guard anti-regressão: garante key válida antes de chamar) ──
+    // ── 5. Chama a IA com fallback automático ──
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
 
     let aiText = "";
@@ -708,7 +712,7 @@ Deno.serve(async (req: Request) => {
     if (!aiText.trim()) throw new Error("A IA retornou conteúdo vazio");
 
     // ── 6. Gera docx + persiste ──
-    const docxBase64     = await generateDocxBase64(aiText);
+    const docxBase64     = body.skipDocx ? "" : await generateDocxBase64(aiText);
     const pfBreakdown    = extractPfBreakdown(aiText);
     const pfTotal        = pfBreakdown["__total"] ?? null;
     const outputFilename = `Evidencia_APF_${new Date().toISOString().slice(0, 10)}.docx`;
@@ -740,6 +744,10 @@ Deno.serve(async (req: Request) => {
       friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
     else if (/não configurada/i.test(raw))
       friendly = raw;
+    const { reason, userMessage, status } = mapErrorToReason(e);
+    // Para erros recuperáveis (402/429/5xx) devolvemos 200 com payload tipado, evitando
+    // Runtime Error no cliente. Outros erros mantém status apropriado.
+    const httpStatus = isFallbackableStatus(status) ? 200 : (status >= 400 && status < 600 ? status : 500);
     return new Response(
       JSON.stringify({ success: false, reason, userMessage }),
       { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },

@@ -489,6 +489,8 @@ export function UserRolesManager() {
   async function handleInactivateClick(user: UserRow) {
     setInactivateState({ ...INACTIVATE_INITIAL, user, checking: true });
     try {
+      // Busca contagem de vínculos ativos usando a nova lógica de migração global
+      // Para fins de interface, mantemos a checagem em demandas como indicador de carga
       const orFilter = DEMANDAS_USER_COLS.map(col => `${col}.eq.${user.user_id}`).join(",");
       const [directRes, relationalRes, storiesRes, activitiesRes] = await Promise.all([
         supabase.from(DEMANDAS_TABLE).select("*", { count: "exact", head: true }).or(orFilter),
@@ -917,7 +919,7 @@ export function UserRolesManager() {
                           <SelectValue placeholder="Selecione um sucessor ativo..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {reassignOptions.map(u => (
+                          {reassignOptions.filter(u => u.is_active).map(u => (
                             <SelectItem key={u.user_id} value={u.user_id}>
                               {u.display_name} ({u.email})
                             </SelectItem>

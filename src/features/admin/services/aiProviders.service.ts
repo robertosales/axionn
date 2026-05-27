@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type ProviderType = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
+export type ProviderType = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity" | "manus";
 
 export interface AIProvider {
   id: string;
@@ -20,6 +20,7 @@ export const PROVIDER_TYPE_LABEL: Record<ProviderType, string> = {
   gemini: "Google Gemini",
   anthropic: "Anthropic Claude",
   perplexity: "Perplexity",
+  manus: "Manus AI",
 };
 
 export async function listAIProviders(opts: { onlyActive?: boolean } = {}): Promise<AIProvider[]> {

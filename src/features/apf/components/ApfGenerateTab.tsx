@@ -1,105 +1,27 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  FileSpreadsheet, FileText, File, Upload, X, Download, Loader2,
-  Sparkles, KeyRound, HelpCircle, Eye, CheckCircle2,
-} from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  useApfGenerate,
-  YESNO_REGEX,
-  PROGRESS_LABELS,
-  type OutputFormat,
-} from "../hooks/useApfGenerate";
-import { markdownToDocxBlob, triggerDownload, downloadMarkdownAsFile } from "../utils/markdownToDocx";
+  FileText, Upload, Download, Eye, Loader2, HelpCircle, X, ChevronRight, History, Settings2, Sparkles
+} from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { useApfGenerate } from "../hooks/useApfGenerate";
+import { AIProviderSelector } from "./shared/AIProviderSelector";
+import { downloadDocxFromMarkdown } from "../utils/markdownToDocx";
+import { downloadMarkdownAsFile } from "../utils/markdownToDocx";
+import { cn } from "@/lib/utils";
 
-interface FileField {
-  label: string;
-  description: string;
-  accept: string;
-  icon: React.ElementType;
-}
-
-const BASELINE_FIELD: FileField = { label: "Baseline (opcional)", description: "Planilha xlsx com Item/Tipo — convertida em Markdown localmente", accept: ".xlsx,.xls", icon: FileSpreadsheet };
-
-async function downloadDocxFromMarkdown(markdown: string, filename: string) {
-  const blob = await markdownToDocxBlob(markdown);
-  triggerDownload(blob, filename);
-}
-
-function FileUploadField({ field, file, onSelect, onRemove }: {
-  field: FileField; file: File | null;
-  onSelect: (f: File) => void; onRemove: () => void;
-}) {
-  const Icon = field.icon;
-  const handleDrop = (e: React.DragEvent) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) onSelect(f); };
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium">{field.label}</Label>
-      {file ? (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
-          <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="text-xs text-foreground truncate flex-1">{file.name}</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onRemove}><X className="h-3.5 w-3.5" /></Button>
-        </div>
-      ) : (
-        <label
-          className="flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-border hover:border-primary/50 transition-colors cursor-pointer py-4"
-          onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}
-        >
-          <Upload className="h-5 w-5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">{field.description}</span>
-          <span className="text-[10px] text-muted-foreground/60">{field.accept}</span>
-          <input type="file" accept={field.accept} className="hidden" onChange={(e) => e.target.files?.[0] && onSelect(e.target.files[0])} />
-        </label>
-      )}
-    </div>
-  );
-}
-
-const STEPS = [
-  { step: "reading_files", label: "Lendo arquivos" },
-  { step: "calling_ai",    label: "Gerando com IA" },
-  { step: "saving",        label: "Salvando" },
-];
-
-function ProgressSteps({ currentStep }: { currentStep: string }) {
-  const currentIdx = STEPS.findIndex((s) => s.step === currentStep);
-  return (
-    <div className="flex items-center justify-center gap-3 py-2">
-      {STEPS.map((s, i) => {
-        const done   = currentIdx > i;
-        const active = currentIdx === i;
-        return (
-          <div key={s.step} className="flex items-center gap-1.5">
-            {i > 0 && <div className={`h-px w-6 ${done ? "bg-primary" : "bg-border"}`} />}
-            <div className={`flex items-center gap-1.5 text-[11px] font-medium ${
-              active ? "text-primary" : done ? "text-primary/60" : "text-muted-foreground/40"
-            }`}>
-              {done
-                ? <CheckCircle2 className="h-3.5 w-3.5 text-primary/60" />
-                : active
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <div className="h-3.5 w-3.5 rounded-full border border-current" />}
-              {s.label}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+const YESNO_REGEX = /\(sim\/nao\)/gi;
 
 export function ApfGenerateTab() {
   const {
@@ -107,11 +29,8 @@ export function ApfGenerateTab() {
     selectedSprintId, setSelectedSprintId,
     selectedTemplateId, setSelectedTemplateId,
     templates, selectedTemplate,
-    baselineFile, setBaselineFile,
-    providerCfg,
     aiProviders, selectedProviderId, setSelectedProviderId,
     apiKey, setApiKey,
-    outputFormat, setOutputFormat,
     generating, canGenerate,
     progressStep,
     handleGenerateClick, runGeneration,
@@ -124,169 +43,156 @@ export function ApfGenerateTab() {
   } = useApfGenerate();
 
   const statusBadge = (status: string) => {
-    switch (status) {
-      case "success": return <Badge className="bg-green-600/20 text-green-400 border-green-600/30 text-[10px]">Concluído</Badge>;
-      case "error":   return <Badge variant="destructive" className="text-[10px]">Erro</Badge>;
-      default:        return <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 text-[10px]">Processando</Badge>;
-    }
+    const map: Record<string, { label: string; className: string }> = {
+      pending: { label: "Pendente", className: "bg-amber-500/10 text-amber-600 border-amber-200" },
+      success: { label: "Sucesso", className: "bg-emerald-500/10 text-emerald-600 border-emerald-200" },
+      error:   { label: "Erro", className: "bg-rose-500/10 text-rose-600 border-rose-200" },
+    };
+    const s = map[status] || { label: status, className: "" };
+    return <Badge variant="outline" className={cn("text-[9px] uppercase font-bold px-1.5 h-4", s.className)}>{s.label}</Badge>;
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-      <div className="lg:col-span-3 space-y-5">
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Seleção</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Sprint <span className="text-destructive">*</span></Label>
-              <Select value={selectedSprintId} onValueChange={setSelectedSprintId}>
-                <SelectTrigger><SelectValue placeholder="Selecione uma sprint" /></SelectTrigger>
-                <SelectContent>{sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Template <span className="text-destructive">*</span></Label>
-              <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-                <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
-                <SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            {selectedTemplate && (
-              <div className="rounded-md bg-muted/50 border border-border p-3 max-h-[150px] overflow-y-auto">
-                <pre className="text-[11px] font-mono text-muted-foreground whitespace-pre-wrap break-words">
-                  {selectedTemplate.prompt_content}
-                </pre>
+    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 animate-in fade-in duration-500">
+      <div className="xl:col-span-3 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="border-none shadow-md">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Settings2 className="h-4 w-4 text-primary" />
+                Configuração da Geração
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Sprint Alvo</Label>
+                <Select value={selectedSprintId} onValueChange={setSelectedSprintId}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Selecione a sprint" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sprints.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> Provedor de IA
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Escolha qual IA gerará o documento <span className="text-destructive">*</span></Label>
-              <Select value={selectedProviderId} onValueChange={setSelectedProviderId}>
-                <SelectTrigger>
-                  <SelectValue placeholder={aiProviders.length === 0 ? "Nenhuma IA cadastrada — configure no painel admin" : "Selecione uma IA"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {aiProviders.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {aiProviders.length === 0 && (
-                <p className="text-[11px] text-destructive">
-                  Nenhum provedor de IA ativo. Peça ao administrador para cadastrar em <strong>Admin → IAs</strong>.
-                </p>
-              )}
-            </div>
-            {providerCfg.needsKey ? (
-              <div className="space-y-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
-                <Label className="text-xs flex items-center gap-1.5">
-                  <KeyRound className="h-3.5 w-3.5" /> Sua API Key <span className="text-destructive">*</span>
-                </Label>
-                <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={providerCfg.placeholder} autoComplete="off" />
-                <p className="text-[11px] text-muted-foreground">
-                  Esta IA ainda não tem chave cadastrada. A chave informada será usada apenas nesta requisição e <strong>não será armazenada</strong>.
-                </p>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Template de Prompt</Label>
+                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Selecione o template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">✅ Provedor pronto para uso — sem necessidade de informar chave.</p>
-            )}
-            <div className="space-y-1.5 pt-2 border-t border-border/60">
-              <Label className="text-xs">Formato de saída <span className="text-destructive">*</span></Label>
-              <RadioGroup value={outputFormat} onValueChange={(v) => setOutputFormat(v as OutputFormat)} className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <RadioGroupItem value="docx" id="fmt-docx" />
-                  <span className="text-sm flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Word (.docx)</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <RadioGroupItem value="markdown" id="fmt-md" />
-                  <span className="text-sm flex items-center gap-1.5"><File className="h-3.5 w-3.5" /> Markdown (.md)</span>
-                </label>
-              </RadioGroup>
-              <p className="text-[11px] text-muted-foreground">Você poderá visualizar antes de baixar e escolher qualquer formato no preview.</p>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Arquivos de Entrada</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <FileUploadField field={BASELINE_FIELD} file={baselineFile} onSelect={setBaselineFile} onRemove={() => setBaselineFile(null)} />
-            <div className="rounded-md border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground space-y-1">
-              <p>✅ <strong>HUs da Sprint:</strong> coletadas automaticamente do banco quando você clica em Gerar.</p>
-              <p>✅ <strong>Modelo de contagem:</strong> usado o conteúdo Markdown do Template selecionado acima.</p>
-              <p>📎 <strong>Baseline:</strong> opcional — se anexada, é convertida em tabela Markdown localmente (sem envio binário à IA).</p>
-            </div>
-          </CardContent>
-        </Card>
+          <AIProviderSelector
+            providers={aiProviders}
+            selectedProviderId={selectedProviderId}
+            onProviderChange={setSelectedProviderId}
+            apiKey={apiKey}
+            onApiKeyChange={setApiKey}
+          />
+        </div>
 
-        <div className="space-y-2">
-          <Button className="w-full" size="lg" disabled={!canGenerate || generating} onClick={handleGenerateClick}>
+        <div className="flex flex-col items-center justify-center pt-4">
+          <Button
+            size="lg"
+            className="w-full md:w-64 h-12 text-base font-bold shadow-xl shadow-primary/20 gap-2"
+            disabled={!canGenerate || generating}
+            onClick={handleGenerateClick}
+          >
             {generating ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {PROGRESS_LABELS[progressStep] || "Gerando com IA..."}</>
-            ) : questions.length > 0 && !allQuestionsAnswered ? (
-              <><HelpCircle className="h-4 w-4 mr-2" /> Responder {questions.length} pergunta{questions.length > 1 ? "s" : ""} e gerar</>
+              <><Loader2 className="h-5 w-5 animate-spin" /> Gerando...</>
             ) : (
-              <><Eye className="h-4 w-4 mr-2" /> Gerar e visualizar documento</>
+              <><Sparkles className="h-5 w-5" /> Iniciar Geração</>
             )}
           </Button>
-          {generating && progressStep !== "idle" && (
-            <ProgressSteps currentStep={progressStep} />
-          )}
-          {questions.length > 0 && (
-            <p className="text-[11px] text-muted-foreground px-1">
-              ⓘ Este template contém {questions.length} pergunta{questions.length > 1 ? "s" : ""} interativa{questions.length > 1 ? "s" : ""} que você precisa responder antes da geração.
+          {progressStep !== "idle" && (
+            <p className="mt-3 text-xs font-medium text-primary animate-pulse">
+              {progressStep === "collecting" && "📑 Coletando HUs e dados da sprint..."}
+              {progressStep === "calling_ai" && "🤖 IA processando o documento..."}
+              {progressStep === "saving" && "💾 Salvando resultado..."}
             </p>
           )}
         </div>
+
+        {lastResult && (
+          <Card className="border-emerald-500/20 bg-emerald-500/5 overflow-hidden animate-in zoom-in-95 duration-300">
+            <CardContent className="p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                  <FileText className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-900 dark:text-emerald-400">Documento Gerado!</h4>
+                  <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/60 uppercase tracking-tight font-medium">
+                    {lastResult.baseFilename}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 w-full md:w-auto">
+                <Button variant="outline" size="sm" className="flex-1 md:flex-none h-9 bg-background" onClick={() => setShowPreview(true)}>
+                  <Eye className="h-4 w-4 mr-2" /> Visualizar
+                </Button>
+                <Button size="sm" className="flex-1 md:flex-none h-9 bg-emerald-600 hover:bg-emerald-700" onClick={() => downloadDocxFromMarkdown(lastResult.markdown, `${lastResult.baseFilename}.docx`)}>
+                  <Download className="h-4 w-4 mr-2" /> Word (.docx)
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <div className="lg:col-span-2">
-        <Card className="h-full">
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Histórico desta Sprint</CardTitle></CardHeader>
-          <CardContent>
+      <div className="space-y-6">
+        <Card className="border-none shadow-md h-full min-h-[400px]">
+          <CardHeader className="pb-2 border-b border-border/50">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <History className="h-4 w-4 text-muted-foreground" />
+              Histórico da Sprint
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
             {!selectedSprintId ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Selecione uma sprint para ver o histórico</p>
+              <div className="flex flex-col items-center justify-center py-12 text-center space-y-2 opacity-40">
+                <History className="h-8 w-8 text-muted-foreground" />
+                <p className="text-xs font-medium">Selecione uma sprint para ver o histórico</p>
+              </div>
             ) : loadingHistory ? (
-              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>
+              <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
             ) : generations.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Nenhuma geração para esta sprint ainda</p>
+              <p className="text-xs text-muted-foreground text-center py-12">Nenhuma geração para esta sprint ainda</p>
             ) : (
-              <ScrollArea className="max-h-[500px]">
-                <div className="space-y-3">
+              <ScrollArea className="h-[calc(100vh-450px)] min-h-[300px]">
+                <div className="space-y-3 pr-3">
                   {generations.map((g) => (
-                    <div key={g.id} className="rounded-md border border-border p-3 space-y-1.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs font-medium text-foreground">{g.template_name}</p>
+                    <div key={g.id} className="group rounded-xl border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-[11px] font-bold text-foreground line-clamp-1">{g.template_name}</p>
                         {statusBadge(g.status)}
                       </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        {new Date(g.created_at).toLocaleString("pt-BR")}
-                      </p>
-                      {g.pf_total != null && (
-                        <p className="text-[10px] font-semibold text-primary">📊 PF Total: {g.pf_total}</p>
-                      )}
-                      {g.status === "success" && lastResult && g.output_filename?.startsWith(lastResult.baseFilename) && (
-                        <div className="flex gap-1.5 mt-1">
-                          <Button variant="outline" size="sm" className="h-7 text-xs flex-1" onClick={() => setShowPreview(true)}>
-                            <Eye className="h-3 w-3 mr-1" /> Visualizar
+                      <div className="flex items-center justify-between text-[9px] text-muted-foreground uppercase font-semibold">
+                        <span>{new Date(g.created_at).toLocaleDateString("pt-BR")}</span>
+                        {g.pf_total != null && <span className="text-primary">📊 {g.pf_total} PF</span>}
+                      </div>
+
+                      {g.status === "success" && (
+                        <div className="flex gap-1.5 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Preview" onClick={() => { /* set last result and show preview */ }}>
+                            <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="outline" size="sm" className="h-7 text-xs flex-1"
-                            onClick={() => lastResult && downloadDocxFromMarkdown(lastResult.markdown, `${lastResult.baseFilename}.docx`)}>
-                            <Download className="h-3 w-3 mr-1" /> DOCX
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="Download Word">
+                            <Download className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                      )}
-                      {g.status === "error" && g.error_message && (
-                        <p className="text-[10px] text-destructive">{g.error_message}</p>
                       )}
                     </div>
                   ))}
@@ -300,56 +206,34 @@ export function ApfGenerateTab() {
       <Dialog open={showQuestions} onOpenChange={setShowQuestions}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><HelpCircle className="h-5 w-5 text-primary" /> Responda antes de gerar</DialogTitle>
-            <DialogDescription>O template selecionado contém perguntas. Suas respostas serão enviadas à IA — as perguntas <strong>não</strong> aparecerão no arquivo final.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><HelpCircle className="h-5 w-5 text-primary" /> Perguntas Adicionais</DialogTitle>
+            <DialogDescription>Responda para refinar o contexto que será enviado à IA.</DialogDescription>
           </DialogHeader>
           <div className="space-y-5 max-h-[55vh] overflow-y-auto pr-1">
             {questions.map((q) => {
               const a = answers[q.id];
               if (q.kind === "yesno") {
                 return (
-                  <div key={q.id} className="space-y-2">
-                    <Label className="text-xs font-medium leading-relaxed">{q.text.replace(YESNO_REGEX, "").replace(/\?$/, "?").trim()}</Label>
+                  <div key={q.id} className="space-y-2 p-3 rounded-lg bg-muted/30 border border-border/50">
+                    <Label className="text-xs font-semibold leading-relaxed">{q.text.replace(YESNO_REGEX, "").replace(/\?$/, "?").trim()}</Label>
                     <RadioGroup value={a?.value ?? ""} onValueChange={(v) => setAnswers((prev) => ({ ...prev, [q.id]: { value: v, detail: prev[q.id]?.detail ?? "" } }))} className="flex gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="sim" id={`${q.id}-sim`} /><span className="text-sm">Sim</span></label>
-                      <label className="flex items-center gap-2 cursor-pointer"><RadioGroupItem value="nao" id={`${q.id}-nao`} /><span className="text-sm">Não</span></label>
+                      <label className="flex items-center gap-2 cursor-pointer p-1"><RadioGroupItem value="sim" id={`${q.id}-sim`} /><span className="text-sm">Sim</span></label>
+                      <label className="flex items-center gap-2 cursor-pointer p-1"><RadioGroupItem value="nao" id={`${q.id}-nao`} /><span className="text-sm">Não</span></label>
                     </RadioGroup>
                     {a?.value === "sim" && (
-                      <div className="space-y-1.5 pt-1 border-l-2 border-primary/40 pl-3">
-                        <Label className="text-[11px] text-muted-foreground">{q.followUp ?? "Descreva os detalhes"} <span className="text-destructive">*</span></Label>
-                        <Textarea rows={3} placeholder="Informe aqui o que foi alterado..." value={a.detail ?? ""}
-                          onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: { value: "sim", detail: e.target.value } }))} />
-                        {q.allowSqlFiles && (
-                          <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
-                            <Label className="text-[11px] font-medium">Scripts SQL Server</Label>
-                            {sqlFiles.length > 0 && (
-                              <div className="space-y-1">
-                                {sqlFiles.map((file, idx) => (
-                                  <div key={`${file.name}-${idx}`} className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5">
-                                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className="min-w-0 flex-1 truncate text-[11px]">{file.name}</span>
-                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSqlFiles((prev) => prev.filter((_, i) => i !== idx))}>
-                                      <X className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground hover:border-primary/50">
-                              <Upload className="h-3.5 w-3.5" /> Anexar .sql ou .txt
-                              <input type="file" multiple accept=".sql,.txt" className="hidden" onChange={(e) => { const selected = Array.from(e.target.files ?? []); if (selected.length) setSqlFiles((prev) => [...prev, ...selected]); e.target.value = ""; }} />
-                            </label>
-                          </div>
-                        )}
+                      <div className="space-y-1.5 pt-2 border-t border-border mt-2">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">{q.followUp ?? "Detalhes"} <span className="text-destructive">*</span></Label>
+                        <Textarea rows={3} placeholder="Descreva aqui..." value={a.detail ?? ""}
+                          onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: { value: "sim", detail: e.target.value } }))} className="bg-background text-xs" />
                       </div>
                     )}
                   </div>
                 );
               }
               return (
-                <div key={q.id} className="space-y-1.5">
-                  <Label className="text-xs font-medium">{q.text}</Label>
-                  <Textarea rows={3} value={a?.value ?? ""} onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: { value: e.target.value } }))} />
+                <div key={q.id} className="space-y-1.5 p-3 rounded-lg bg-muted/30 border border-border/50">
+                  <Label className="text-xs font-semibold">{q.text}</Label>
+                  <Textarea rows={3} value={a?.value ?? ""} onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: { value: e.target.value } }))} className="bg-background text-xs" />
                 </div>
               );
             })}
@@ -357,40 +241,30 @@ export function ApfGenerateTab() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowQuestions(false)} disabled={generating}>Cancelar</Button>
             <Button onClick={runGeneration} disabled={!allQuestionsAnswered || generating}>
-              {generating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando...</> : "Confirmar e gerar"}
+              {generating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Gerando...</> : "Confirmar e Gerar"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Eye className="h-5 w-5 text-primary" /> Pré-visualização do documento</DialogTitle>
-            <DialogDescription>Confira o conteúdo gerado pela IA antes de baixar. Você pode escolher o formato de download abaixo.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><Eye className="h-5 w-5 text-primary" /> Pré-visualização</DialogTitle>
+            <DialogDescription>Confira o conteúdo gerado antes de baixar.</DialogDescription>
           </DialogHeader>
-          {lastResult?.pfTotal != null && (
-            <div className="rounded-md bg-primary/5 border border-primary/20 px-4 py-2 flex items-center gap-2">
-              <span className="text-xs font-semibold text-primary">📊 PF Total extraído: {lastResult.pfTotal}</span>
-              <span className="text-[10px] text-muted-foreground">(disponivel no Planning Poker)</span>
-            </div>
-          )}
-          <div className="rounded-md border border-border bg-background p-5 max-h-[55vh] overflow-y-auto">
-            {lastResult?.markdown ? (
-              <article className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-h1:text-xl prose-h1:mt-4 prose-h1:mb-3 prose-h2:text-lg prose-h2:mt-4 prose-h2:mb-2 prose-h3:text-base prose-p:text-sm prose-p:leading-relaxed prose-li:text-sm prose-table:text-xs prose-table:border prose-table:border-border prose-th:bg-[#1F4E78] prose-th:text-white prose-th:p-2 prose-th:text-left prose-th:font-semibold prose-td:p-2 prose-td:border prose-td:border-border">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{lastResult.markdown}</ReactMarkdown>
-              </article>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">Nenhum conteúdo para exibir.</p>
-            )}
+          <div className="flex-1 overflow-y-auto min-h-0 rounded-md border border-border bg-background p-6">
+            <article className="prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-table:border prose-th:bg-primary/10 prose-th:p-2 prose-td:p-2 prose-td:border">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{lastResult?.markdown || ""}</ReactMarkdown>
+            </article>
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter className="gap-2 sm:gap-2 mt-4">
             <Button variant="outline" onClick={() => setShowPreview(false)}>Fechar</Button>
-            <Button variant="outline" disabled={!lastResult} onClick={() => lastResult && downloadMarkdownAsFile(lastResult.markdown, `${lastResult.baseFilename}.md`)}>
-              <Download className="h-4 w-4 mr-2" /> Baixar Markdown (.md)
+            <Button variant="outline" onClick={() => lastResult && downloadMarkdownAsFile(lastResult.markdown, `${lastResult.baseFilename}.md`)}>
+              <Download className="h-4 w-4 mr-2" /> Markdown (.md)
             </Button>
-            <Button disabled={!lastResult} onClick={() => lastResult && downloadDocxFromMarkdown(lastResult.markdown, `${lastResult.baseFilename}.docx`)}>
-              <Download className="h-4 w-4 mr-2" /> Baixar Word (.docx)
+            <Button onClick={() => lastResult && downloadDocxFromMarkdown(lastResult.markdown, `${lastResult.baseFilename}.docx`)}>
+              <Download className="h-4 w-4 mr-2" /> Word (.docx)
             </Button>
           </DialogFooter>
         </DialogContent>

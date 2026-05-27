@@ -7,7 +7,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SITE_URL      = Deno.env.get("SITE_URL") ?? "*";
+// SITE_URL deve ser a URL do frontend em produção (ex: https://axion.lovable.app)
+const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:8080";
 const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
 
 const corsHeaders = {
@@ -211,7 +212,9 @@ Deno.serve(async (req: Request) => {
         }
         const origin      = req.headers.get("origin") ?? req.headers.get("referer") ?? SITE_URL;
         const cleanOrigin = origin.replace(/\/$/, "").replace(/\/auth.*$/, "");
-        const redirectTo  = `${cleanOrigin}/reset-password`.replace("/*", "");
+        // Garante que a URL de redirecionamento seja válida mesmo que cleanOrigin seja "*" ou malformado
+        const baseHost    = (cleanOrigin && cleanOrigin !== "*") ? cleanOrigin : SITE_URL;
+        const redirectTo  = `${baseHost.replace(/\/$/, "")}/reset-password`;
 
         const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
           type: "recovery",

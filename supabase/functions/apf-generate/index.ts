@@ -728,25 +728,10 @@ Deno.serve(async (req: Request) => {
 
   } catch (e: unknown) {
     console.error("apf-generate error:", e);
-<<<<<<< HEAD
     const { reason, userMessage, status } = mapErrorToReason(e);
     // Para erros recuperáveis (402/429/5xx) devolvemos 200 com payload tipado, evitando
     // Runtime Error no cliente. Outros erros mantém status apropriado.
     const httpStatus = isFallbackableStatus(status) ? 200 : (status >= 400 && status < 600 ? status : 500);
-=======
-    const raw = e instanceof Error ? e.message : "Erro desconhecido";
-    let friendly = raw;
-    if (/credit balance is too low/i.test(raw))
-      friendly = "A conta associada à chave configurada está sem créditos. Contate o administrador.";
-    else if (/invalid.*api.key|incorrect api key/i.test(raw))
-      friendly = "Chave de API inválida para o provider. Contate o administrador.";
-    else if (/401/i.test(raw))
-      friendly = "Chave de API recusada pelo provider (401). Verifique a chave configurada no Vault ou na variável de ambiente.";
-    else if (/rate limit|429/i.test(raw))
-      friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
-    else if (/não configurada/i.test(raw))
-      friendly = raw;
->>>>>>> origin/main
     return new Response(
       JSON.stringify({ success: false, reason, userMessage }),
       { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },

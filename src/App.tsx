@@ -10,6 +10,7 @@ import { SprintProvider } from "@/contexts/SprintContext";
 import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAlert";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useOnboarding } from "@/hooks/useOnboarding";
+import { useAppResilience } from "@/hooks/useAppResilience";
 
 // ─── Páginas leves (críticas — carregadas imediatamente) ──────────────────────
 // Auth é a primeira tela que o usuário vê: não pode ser lazy
@@ -48,6 +49,7 @@ function PageLoader() {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, refreshProfile } = useAuth();
   const { showWizard, completeOnboarding } = useOnboarding();
+  useAppResilience(); // Injeta lógica de performance e logout automático
 
   if (loading) return <PageLoader />;
   if (!session) return <Navigate to="/auth" replace />;

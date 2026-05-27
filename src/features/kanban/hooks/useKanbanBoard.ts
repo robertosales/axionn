@@ -66,14 +66,34 @@ export function useKanbanBoard() {
     if (!teamId) return;
     setLoading(true);
     try {
-      const [colRes, huRes, devRes, epicRes, spRes] = await Promise.all([
-        supabase.from("workflow_columns").select("*").eq("team_id", teamId).order("sort_order"),
-        supabase.from("user_stories").select(
-          "id, code, title, status, priority, story_points, estimated_hours, assignee_id, epic_id, sprint_id, position, team_id"
-        ).eq("team_id", teamId).limit(500),
+      // Otimização: Fetch inicial de sprints para saber qual é a ativa
+      const { data: sprintData } = await supabase
+        .from("sprints")
+        .select("id, name, is_active")
+        .eq("team_id", teamId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      const activeSprint = sprintData?.find(s => s.is_active);
+      const targetSprintId = filters.sprintId === "active" ? activeSprint?.id : (filters.sprintId === "all" ? null : filters.sprintId);
+
+      // Otimização: Fetch paralelo com filtros estritos e select reduzido
+      const [colRes, huRes, devRes, epicRes] = await Promise.all([
+        supabase.from("workflow_columns")
+          .select("id, key, label, color_class, dot_color, hex, sort_order, wip_limit")
+          .eq("team_id", teamId)
+          .order("sort_order"),
+
+        (() => {
+          let q = supabase.from("user_stories").select(
+            "id, code, title, status, priority, story_points, estimated_hours, assignee_id, epic_id, sprint_id, position, team_id"
+          ).eq("team_id", teamId);
+          if (targetSprintId) q = q.eq("sprint_id", targetSprintId);
+          return q.limit(500);
+        })(),
+
         supabase.from("developers").select("id, name, avatar").eq("team_id", teamId),
         supabase.from("epics").select("id, name, color").eq("team_id", teamId),
-        supabase.from("sprints").select("id, name, is_active").eq("team_id", teamId).order("created_at", { ascending: false }).limit(20),
       ]);
 
       const devMap:  Record<string, { name: string; avatar: string | null }> = {};
@@ -84,7 +104,7 @@ export function useKanbanBoard() {
       setColumns((colRes.data ?? []) as KanbanColumn[]);
       setDevs((devRes.data ?? []).map((d: any) => ({ id: d.id, name: d.name, avatar: d.avatar })));
       setEpics((epicRes.data ?? []).map((e: any) => ({ id: e.id, name: e.name, color: e.color })));
-      setSprints((spRes.data ?? []).map((s: any) => ({ id: s.id, name: s.name, is_active: s.is_active })) as any);
+      setSprints((sprintData ?? []).map((s: any) => ({ id: s.id, name: s.name, is_active: s.is_active })) as any);
 
       setCards(((huRes.data ?? []) as any[]).map(h => ({
         ...h,
@@ -101,13 +121,32 @@ export function useKanbanBoard() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Realtime
+  // Realtime com Debounce para reduzir estresse de CPU no banco
   useEffect(() => {
     if (!teamId) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const debouncedLoad = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        console.log("[Kanban] Realtime: Executando refetch debounced...");
+        load();
+      }, 2000); // 2 segundos de silêncio antes de recarregar
+    };
+
     const ch = supabase.channel(`kanban-${teamId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_stories", filter: `team_id=eq.${teamId}` }, () => load())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_stories", filter: `team_id=eq.${teamId}` },
+        debouncedLoad
+      )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    return () => {
+      clearTimeout(timeoutId);
+      supabase.removeChannel(ch);
+    };
   }, [teamId, load]);
 
   const moveCard = useCallback(async (cardId: string, newStatus: string) => {

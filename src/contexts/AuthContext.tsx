@@ -185,17 +185,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: profileData } = await supabase
         .from("profiles").select("*").eq("user_id", userId).single();
 
-      if (!profileData) return;
-
-      // Bloqueio de segurança: se o usuário estiver inativo, desloga imediatamente
-      if (profileData.is_active === false) {
-        console.warn("[Auth] Usuário inativo tentando acesso. Forçando logout.");
-        toast.error("Sua conta está inativa. Entre em contato com o administrador.");
-        await signOut();
+      // BLOQUEIO DE INATIVOS: Se o perfil estiver inativo, encerra a sessão imediatamente.
+      if (profileData && profileData.is_active === false) {
+        console.warn("[Auth] Bloqueio: Usuário inativo detectado.");
+        await forceLocalClear();
         return;
       }
 
-      if (mountedRef.current) setProfile(profileData as Profile);
+      if (profileData && mountedRef.current) setProfile(profileData as Profile);
 
       await Promise.all([
         fetchRoles(userId),

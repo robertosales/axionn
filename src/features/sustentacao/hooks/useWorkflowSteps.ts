@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEffect } from "react";
 import { ALL_SITUACOES, SITUACAO_LABELS } from "../types/demanda";
+import { STALE } from "@/lib/queryClient";
 
 export interface WorkflowStep {
   id?: string;
@@ -17,18 +19,13 @@ const SITUACAO_HEX: Record<string, string> = {
   homologada: "#10b981", fila_producao: "#14b8a6", producao: "#22c55e", aceite_final: "#84cc16",
 };
 
-/**
- * Converte um nome de etapa (com acentos/espaços) em chave snake_case sem acentos.
- * Ex: "Em Execução" → "em_execucao"
- *     "Fila de Atendimento" → "fila_de_atendimento"
- */
 export function nomeToKey(nome: string): string {
   return nome
-    .normalize("NFD")               // decompor caracteres acentuados
-    .replace(/[\u0300-\u036f]/g, "") // remover diacríticos
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/\s+/g, "_")           // espaços → underscore
-    .replace(/[^a-z0-9_]/g, "");    // remover qualquer outro carácter especial
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
 }
 
 function buildDefaultSteps(): WorkflowStep[] {
@@ -40,61 +37,48 @@ function buildDefaultSteps(): WorkflowStep[] {
   }));
 }
 
-/**
- * Global workflow steps hook — NOT filtered by team.
- * The workflow is unique and shared across all teams.
- */
 export function useWorkflowSteps() {
-  const [steps, setSteps] = useState<WorkflowStep[]>(buildDefaultSteps);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const queryKey = ['workflow-steps'];
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data: steps = buildDefaultSteps(), isLoading: loading } = useQuery({
+    queryKey,
+    queryFn: async () => {
       const { data, error } = await supabase
-        .from("sustentacao_workflow_steps" as any)
+        .from("sustentacao_workflow_steps")
         .select("*")
         .eq("ativo", true)
         .order("ordem");
       if (error) throw error;
-      if (data && (data as any[]).length > 0) {
-        // Deduplicate by key normalizada
+      if (data && data.length > 0) {
         const seen = new Set<string>();
-        const unique = (data as any[]).filter((d: any) => {
-          const key = nomeToKey(d.nome);
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        setSteps(unique.map((d: any) => ({
-          id: d.id,
-          key: nomeToKey(d.nome),  // sem acentos, sem espaços
-          label: d.nome,           // rótulo original com acentuação correta para exibir
-          hex: d.cor,
-          ordem: d.ordem,
-        })));
-      } else {
-        setSteps(buildDefaultSteps());
+        return data
+          .map((d: any) => ({
+            id: d.id,
+            key: nomeToKey(d.nome),
+            label: d.nome,
+            hex: d.cor,
+            ordem: d.ordem,
+          }))
+          .filter((s) => {
+            if (seen.has(s.key)) return false;
+            seen.add(s.key);
+            return true;
+          });
       }
-    } catch {
-      setSteps(buildDefaultSteps());
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+      return buildDefaultSteps();
+    },
+    staleTime: STALE.REFERENCE,
+  });
 
   useEffect(() => {
-    const channel = supabase
-      .channel("workflow-steps-global")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "sustentacao_workflow_steps" },
-        () => { load(); }
+    const sub = supabase.channel("workflow-steps-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sustentacao_workflow_steps" },
+        () => qc.invalidateQueries({ queryKey })
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [load]);
+    return () => { supabase.removeChannel(sub); };
+  }, [qc]);
 
-  return { steps, loading, reload: load, buildDefaultSteps };
+  return { steps, loading, reload: () => qc.invalidateQueries({ queryKey }), buildDefaultSteps };
 }

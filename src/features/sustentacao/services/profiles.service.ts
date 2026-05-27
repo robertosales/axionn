@@ -90,6 +90,7 @@ export async function searchProfilesByName(
     .select("id, user_id, display_name")
     .eq("is_active", true)
     .ilike("display_name", `%${query}%`)
+    .eq("is_active", true) // Filtra apenas perfis ativos para busca
     .limit(limit);
   return (data ?? []) as any[];
 }

@@ -99,7 +99,7 @@ interface DeleteState {
   checking: boolean;
   deleting: boolean;
 }
-const DELETE_INITIAL: DeleteState = { user: null, affectedCount: 0, reassignToId: "", checking: false, deleting: false };
+const INACTIVATE_INITIAL: DeleteState = { user: null, affectedCount: 0, reassignToId: "", checking: false, deleting: false };
 
 interface EmailState { user: UserRow | null; newEmail: string; saving: boolean; }
 const EMAIL_INITIAL: EmailState = { user: null, newEmail: "", saving: false };
@@ -181,7 +181,7 @@ function AuditLog({ userId }: { userId: string }) {
       const rows = data || [];
       const actorIds = [...new Set(rows.map((r: any) => r.actor_id).filter(Boolean))];
 
-      let actorNames: Record<string, string> = {};
+      const actorNames: Record<string, string> = {};
       if (actorIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles")
@@ -287,7 +287,7 @@ export function UserRolesManager() {
   const [saving, setSaving]             = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
   const debouncedSearch                 = useDebounce(searchFilter);
-  const [deleteState, setDeleteState]   = useState<DeleteState>(DELETE_INITIAL);
+  const [inactivateState, setInactivateState] = useState<DeleteState>(INACTIVATE_INITIAL);
   const [emailState, setEmailState]     = useState<EmailState>(EMAIL_INITIAL);
   const [resetState, setResetState]     = useState<ResetState>(RESET_INITIAL);
   const [toggleState, setToggleState]   = useState<ToggleActiveState>(TOGGLE_INITIAL);
@@ -486,58 +486,73 @@ export function UserRolesManager() {
     }
   }
 
-  async function handleDeleteClick(user: UserRow) {
-    setDeleteState({ ...DELETE_INITIAL, user, checking: true });
+  async function handleInactivateClick(user: UserRow) {
+    setInactivateState({ ...INACTIVATE_INITIAL, user, checking: true });
     try {
       // Busca contagem de vínculos ativos usando a nova lógica de migração global
       // Para fins de interface, mantemos a checagem em demandas como indicador de carga
       const orFilter = DEMANDAS_USER_COLS.map(col => `${col}.eq.${user.user_id}`).join(",");
-      const [directRes, relationalRes] = await Promise.all([
+      const [directRes, relationalRes, storiesRes, activitiesRes] = await Promise.all([
         supabase.from(DEMANDAS_TABLE).select("*", { count: "exact", head: true }).or(orFilter),
         supabase.from(DEMANDA_RESPONSAVEIS_TABLE).select("*", { count: "exact", head: true }).eq("user_id", user.user_id),
+        supabase.from("user_stories").select("*", { count: "exact", head: true }).eq("assignee_id", user.user_id),
+        supabase.from("activities").select("*", { count: "exact", head: true }).eq("assignee_id", user.user_id),
       ]);
-      if (directRes.error) throw directRes.error;
-      if (relationalRes.error) throw relationalRes.error;
-      setDeleteState(prev => ({ ...prev, affectedCount: (directRes.count ?? 0) + (relationalRes.count ?? 0), checking: false }));
-    } catch { toast.error("Erro ao verificar demandas"); setDeleteState(DELETE_INITIAL); }
+
+      const count = (directRes.count ?? 0) +
+                    (relationalRes.count ?? 0) +
+                    (storiesRes.count ?? 0) +
+                    (activitiesRes.count ?? 0);
+
+      setInactivateState(prev => ({ ...prev, affectedCount: count, checking: false }));
+    } catch {
+      toast.error("Erro ao verificar vínculos");
+      setInactivateState(INACTIVATE_INITIAL);
+    }
   }
 
-  async function confirmDelete() {
-    const { user, reassignToId } = deleteState;
+  async function confirmInactivate() {
+    const { user, reassignToId } = inactivateState;
     if (!user) return;
-    if (!reassignToId) { toast.error("Selecione um usuário para transferir as responsabilidades"); return; }
+    if (!reassignToId) { toast.error("Selecione um sucessor para transferir as responsabilidades"); return; }
 
-    setDeleteState(prev => ({ ...prev, deleting: true }));
+    setInactivateState(prev => ({ ...prev, deleting: true }));
     try {
-      const { data, error: rpcError } = await (supabase.rpc as any)("fn_inactivate_user_with_migration", {
-        p_old_user_id: user.user_id,
-        p_new_user_id: reassignToId
+      // Obter o profile_id do sucessor
+      const { data: succProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", reassignToId)
+        .single();
+
+      const { data: targetProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", user.user_id)
+        .single();
+
+      if (!succProfile || !targetProfile) throw new Error("Erro ao identificar perfis para migração.");
+
+      // Chama a RPC atômica que faz tudo (migration + inativar profile + audit log)
+      const { error: rpcErr } = await supabase.rpc("fn_inactivate_user_with_migration", {
+        p_target_profile_id:    targetProfile.id,
+        p_successor_profile_id: succProfile.id
       });
 
-      if (rpcError) throw rpcError;
+      if (rpcErr) throw rpcErr;
 
-      const { data: { user: actor } } = await supabase.auth.getUser();
-      if (actor) {
-        await writeAudit(actor.id, user.user_id, "delete_user", {
-          nome:  user.display_name,
-          email: user.email,
-          transferido_para: reassignToId,
-          resultado_migracao: (data as any)?.affected_counts
-        });
-      }
-
-      toast.success("Usuário inativado e vínculos transferidos com sucesso!");
-      setDeleteState(DELETE_INITIAL);
+      toast.success(`${user.display_name} foi inativado e suas tarefas transferidas!`);
+      setInactivateState(INACTIVATE_INITIAL);
       await fetchUsers();
     } catch (err: any) {
       toast.error(err?.message || "Erro ao inativar usuário");
-      setDeleteState(prev => ({ ...prev, deleting: false }));
+      setInactivateState(prev => ({ ...prev, deleting: false }));
     }
   }
 
   const reassignOptions = useMemo(
-    () => users.filter(u => u.user_id !== deleteState.user?.user_id),
-    [users, deleteState.user]
+    () => users.filter(u => u.user_id !== inactivateState.user?.user_id && u.is_active),
+    [users, inactivateState.user]
   );
 
   async function submitChangeEmail() {
@@ -713,8 +728,9 @@ export function UserRolesManager() {
                             : <UserCheck className="h-3.5 w-3.5" />}
                         </Button>
                         <Button size="sm" variant="outline"
+                          title="Inativar e Migrar"
                           className="text-destructive hover:bg-destructive/10 border-destructive/30"
-                          onClick={() => handleDeleteClick(user)}>
+                          onClick={() => handleInactivateClick(user)}>
                           <UserX className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -862,47 +878,50 @@ export function UserRolesManager() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!deleteState.user} onOpenChange={open => { if (!open && !deleteState.deleting) setDeleteState(DELETE_INITIAL); }}>
+      <Dialog open={!!inactivateState.user} onOpenChange={open => { if (!open && !inactivateState.deleting) setInactivateState(INACTIVATE_INITIAL); }}>
         <DialogContent className="max-w-md">
-          {deleteState.checking ? (
+          {inactivateState.checking ? (
             <>
               <DialogHeader>
                 <DialogTitle>Verificando vínculos</DialogTitle>
-                <DialogDescription>Verificando demandas atribuídas ao usuário...</DialogDescription>
+                <DialogDescription>Buscando atividades, demandas e RDMs atribuídos...</DialogDescription>
               </DialogHeader>
               <div className="flex justify-center py-6">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
               </div>
             </>
-          ) : deleteState.affectedCount > 0 ? (
+          ) : (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-amber-600">
-                  <ArrowRightLeft className="h-4 w-4" /> Inativar Usuário & Migrar Vínculos
+                <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <UserX className="h-4 w-4" /> Inativar e Migrar Usuário
                 </DialogTitle>
                 <DialogDescription asChild>
                   <div className="space-y-3 pt-1">
                     <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
                       <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-800 dark:text-amber-300">
-                        O usuário <span className="font-semibold">{deleteState.user?.display_name}</span> será{" "}
-                        <strong>inativado</strong>. Todos os seus vínculos ativos (Demandas, Atividades, RDMs e HUs) serão
-                        transferidos para o sucessor abaixo.
+                        O usuário <span className="font-semibold">{inactivateState.user?.display_name}</span> será inativado.
+                        {inactivateState.affectedCount > 0 ? (
+                          <> Ele possui <strong>{inactivateState.affectedCount} vínculo(s)</strong> pendentes que devem ser transferidos para um sucessor ativo.</>
+                        ) : (
+                          <> Selecione um sucessor para assumir futuras demandas e manter o histórico íntegro.</>
+                        )}
                       </p>
                     </div>
                     <div>
-                      <Label className="text-xs font-semibold">Transferir todas as responsabilidades para</Label>
+                      <Label className="text-xs font-semibold">Transferir responsabilidades para (Sucessor)</Label>
                       <Select
-                        value={deleteState.reassignToId}
-                        onValueChange={v => setDeleteState(prev => ({ ...prev, reassignToId: v }))}
+                        value={inactivateState.reassignToId}
+                        onValueChange={v => setInactivateState(prev => ({ ...prev, reassignToId: v }))}
                       >
-                        <SelectTrigger className="h-8 mt-1 text-xs">
+                        <SelectTrigger className="h-9 mt-1 text-xs">
                           <SelectValue placeholder="Selecione um sucessor ativo..." />
                         </SelectTrigger>
                         <SelectContent>
                           {reassignOptions.filter(u => u.is_active).map(u => (
                             <SelectItem key={u.user_id} value={u.user_id}>
-                              {u.display_name}{u.email ? ` — ${u.email}` : ""}
+                              {u.display_name} ({u.email})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -912,33 +931,12 @@ export function UserRolesManager() {
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="gap-2 pt-2">
-                <Button variant="ghost" size="sm" onClick={() => setDeleteState(DELETE_INITIAL)} disabled={deleteState.deleting}>Cancelar</Button>
-                <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmDelete} disabled={deleteState.deleting || !deleteState.reassignToId}>
-                  {deleteState.deleting
+                <Button variant="ghost" size="sm" onClick={() => setInactivateState(INACTIVATE_INITIAL)} disabled={inactivateState.deleting}>Cancelar</Button>
+                <Button variant="destructive" size="sm" onClick={confirmInactivate} disabled={inactivateState.deleting || !inactivateState.reassignToId}>
+                  {inactivateState.deleting
                     ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
-                    : <UserX className="h-3.5 w-3.5 mr-1" />}
-                  Confirmar Inativação
-                </Button>
-              </DialogFooter>
-            </>
-          ) : (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-amber-600">
-                  <UserX className="h-4 w-4" /> Inativar usuário
-                </DialogTitle>
-                <DialogDescription>
-                  Deseja inativar o usuário <span className="font-semibold text-foreground">{deleteState.user?.display_name}</span>?
-                  Esta ação impedirá novos acessos mas preservará o histórico.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="gap-2 pt-2">
-                <Button variant="ghost" size="sm" onClick={() => setDeleteState(DELETE_INITIAL)} disabled={deleteState.deleting}>Cancelar</Button>
-                <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={confirmDelete} disabled={deleteState.deleting}>
-                  {deleteState.deleting
-                    ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1" />
-                    : <UserX className="h-3.5 w-3.5 mr-1" />}
-                  Confirmar Inativação
+                    : <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />}
+                  Migrar e Inativar
                 </Button>
               </DialogFooter>
             </>

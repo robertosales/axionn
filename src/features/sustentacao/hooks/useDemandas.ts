@@ -82,9 +82,11 @@ export function useDemandas() {
 
   const error = queryError ? (queryError as Error).message : null;
 
-  // ── Realtime: invalida cache em vez de atualizar state local ──────────────
+  // ── Realtime: invalida cache com Debounce para poupar CPU ────────────────
   useEffect(() => {
     if (!currentTeamId) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const channel = supabase
       .channel(`demandas-rt-${currentTeamId}`)
@@ -92,14 +94,19 @@ export function useDemandas() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
         () => {
-          // Invalida a query → TanStack Query refaz fetch automaticamente
-          // para todos os componentes subscritos
-          qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId) });
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            console.log('[Sustentação] Realtime: Invalidando cache de demandas...');
+            qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId) });
+          }, 2000); // 2s de debounce
         },
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      clearTimeout(timeoutId);
+      supabase.removeChannel(channel);
+    };
   }, [currentTeamId, qc]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────

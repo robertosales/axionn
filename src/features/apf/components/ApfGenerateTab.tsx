@@ -280,7 +280,7 @@ export function ApfGenerateTab() {
                             <Eye className="h-3 w-3 mr-1" /> Visualizar
                           </Button>
                           <Button variant="outline" size="sm" className="h-7 text-xs flex-1"
-                            onClick={() => lastResult && downloadDocxFromBase64(lastResult.base64, `${lastResult.baseFilename}.docx`)}>
+                            onClick={() => lastResult && downloadDocxFromMarkdown(lastResult.markdown, `${lastResult.baseFilename}.docx`)}>
                             <Download className="h-3 w-3 mr-1" /> DOCX
                           </Button>
                         </div>
@@ -386,10 +386,10 @@ export function ApfGenerateTab() {
           </div>
           <DialogFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => setShowPreview(false)}>Fechar</Button>
-            <Button variant="outline" disabled={!lastResult} onClick={() => lastResult && downloadMarkdown(lastResult.markdown, `${lastResult.baseFilename}.md`)}>
+            <Button variant="outline" disabled={!lastResult} onClick={() => lastResult && downloadMarkdownAsFile(lastResult.markdown, `${lastResult.baseFilename}.md`)}>
               <Download className="h-4 w-4 mr-2" /> Baixar Markdown (.md)
             </Button>
-            <Button disabled={!lastResult} onClick={() => lastResult && downloadDocxFromBase64(lastResult.base64, `${lastResult.baseFilename}.docx`)}>
+            <Button disabled={!lastResult} onClick={() => lastResult && downloadDocxFromMarkdown(lastResult.markdown, `${lastResult.baseFilename}.docx`)}>
               <Download className="h-4 w-4 mr-2" /> Baixar Word (.docx)
             </Button>
           </DialogFooter>

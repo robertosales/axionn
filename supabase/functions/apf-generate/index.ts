@@ -60,6 +60,8 @@ interface RequestBody {
    * e o provider não é o Lovable AI.
    */
   apiKey?: string;
+  /** Quando true, pula geração de .docx no servidor (frontend faz a conversão). */
+  skipDocx?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -708,7 +710,7 @@ Deno.serve(async (req: Request) => {
     if (!aiText.trim()) throw new Error("A IA retornou conteúdo vazio");
 
     // ── 6. Gera docx + persiste ──
-    const docxBase64     = await generateDocxBase64(aiText);
+    const docxBase64     = body.skipDocx ? "" : await generateDocxBase64(aiText);
     const pfBreakdown    = extractPfBreakdown(aiText);
     const pfTotal        = pfBreakdown["__total"] ?? null;
     const outputFilename = `Evidencia_APF_${new Date().toISOString().slice(0, 10)}.docx`;

@@ -220,38 +220,11 @@ export function ApfGenerateTab() {
           <CardHeader className="pb-3"><CardTitle className="text-sm">Arquivos de Entrada</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <FileUploadField field={BASELINE_FIELD} file={baselineFile} onSelect={setBaselineFile} onRemove={() => setBaselineFile(null)} />
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">
-                {HU_FIELD.label} <span className="text-muted-foreground">({huFiles.length} anexada{huFiles.length === 1 ? "" : "s"})</span>
-              </Label>
-              {huFiles.length > 0 && (
-                <div className="space-y-1.5">
-                  {huFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-xs text-foreground truncate flex-1">{f.name}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setHuFiles((prev) => prev.filter((_, idx) => idx !== i))}>
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <label
-                className="flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-border hover:border-primary/50 transition-colors cursor-pointer py-4"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); const dropped = Array.from(e.dataTransfer.files); if (dropped.length) setHuFiles((prev) => [...prev, ...dropped]); }}
-              >
-                {huFiles.length === 0
-                  ? <><Upload className="h-5 w-5 text-muted-foreground" /><span className="text-xs text-muted-foreground">{HU_FIELD.description}</span></>
-                  : <><Plus className="h-5 w-5 text-muted-foreground" /><span className="text-xs text-muted-foreground">Adicionar mais HUs</span></>}
-                <span className="text-[10px] text-muted-foreground/60">{HU_FIELD.accept}</span>
-                <input type="file" multiple accept={HU_FIELD.accept} className="hidden"
-                  onChange={(e) => { const selected = Array.from(e.target.files ?? []); if (selected.length) setHuFiles((prev) => [...prev, ...selected]); e.target.value = ""; }}
-                />
-              </label>
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground space-y-1">
+              <p>✅ <strong>HUs da Sprint:</strong> coletadas automaticamente do banco quando você clica em Gerar.</p>
+              <p>✅ <strong>Modelo de contagem:</strong> usado o conteúdo Markdown do Template selecionado acima.</p>
+              <p>📎 <strong>Baseline:</strong> opcional — se anexada, é convertida em tabela Markdown localmente (sem envio binário à IA).</p>
             </div>
-            <FileUploadField field={MODEL_FIELD} file={modelFile} onSelect={setModelFile} onRemove={() => setModelFile(null)} />
           </CardContent>
         </Card>
 

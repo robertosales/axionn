@@ -6,7 +6,7 @@ export interface ApfTemplate {
   team_id: string;
   name: string;
   description: string | null;
-  output_type: "docx" | "xlsx";
+  output_type: "docx" | "xlsx" | "md";
   prompt_content: string;
   version: number;
   is_active: boolean;
@@ -102,6 +102,14 @@ export async function updateTemplate(
   return data as ApfTemplate;
 }
 
+export async function deleteTemplate(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("apf_templates")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function duplicateTemplate(template: ApfTemplate): Promise<ApfTemplate> {
   const { data, error } = await supabase
     .from("apf_templates")
@@ -164,23 +172,15 @@ export async function createGeneration(payload: {
   return data as ApfGeneration;
 }
 
-/**
- * Retorna a URL pública (signed) de um arquivo gerado no Storage
- */
 export async function getGenerationDownloadUrl(
   storagePath: string
 ): Promise<string | null> {
   const { data } = await supabase.storage
     .from("apf-documents")
-    .createSignedUrl(storagePath, 60 * 60); // 1 hora
+    .createSignedUrl(storagePath, 60 * 60);
   return data?.signedUrl ?? null;
 }
 
-/**
- * Prepara os arquivos do browser para envio à Edge Function.
- * Arquivos binários (xlsx, docx, pdf) são convertidos para base64.
- * Arquivos de texto são lidos como string.
- */
 export async function prepareFilesForEdgeFunction(
   files: File[]
 ): Promise<Array<{ name: string; content: string; encoding: "base64" | "text"; mimeType: string }>> {
@@ -208,21 +208,14 @@ export async function prepareFilesForEdgeFunction(
   return result;
 }
 
-/**
- * Invoca a Edge Function `apf-generate`.
- * SEC-005: apiKey removida — a Edge Function busca a key no Vault (Supabase).
- * O frontend nunca envia nem armazena API keys de providers de IA.
- */
 export async function invokeApfGeneration(body: {
   prompt: string;
   provider?: string;
   providerId?: string;
-  /** Chave inline (modelo híbrido) — usada quando o provider não tem chave no Vault. */
   apiKey?: string;
   model?: string;
   files: Array<{ name: string; content: string; encoding?: "base64" | "text"; mimeType?: string }>;
   generationId?: string;
-  /** Pula geração de .docx no servidor (frontend converte). */
   skipDocx?: boolean;
 }): Promise<{
   docxBase64: string;
@@ -236,10 +229,7 @@ export async function invokeApfGeneration(body: {
   const { data, error } = await supabase.functions.invoke("apf-generate", {
     body,
   });
-  // A Edge Function devolve { success:false, reason, userMessage } com HTTP 200
-  // para falhas recuperáveis (402, 429, 5xx) — evita Runtime Error no cliente.
   if (error) {
-    // Tenta extrair payload tipado do contexto, se disponível
     const ctx: any = (error as any)?.context;
     const friendly = ctx?.userMessage ?? error.message ?? "Não foi possível gerar o documento agora.";
     throw new Error(friendly);

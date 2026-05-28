@@ -22,13 +22,10 @@ import { FileDropzone } from "./hu-generation/FileDropzone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-/** Upload de arquivo único (Baseline e Modelo de Evidências) */
+const MODULE_EVIDENCE_ID = "ab9d0077-f455-41b9-887c-edb1c256bdea";
+
 function SingleFileUpload({
-  label,
-  icon,
-  file,
-  onFile,
-  onRemove,
+  label, icon, file, onFile, onRemove,
   accept = ".pdf,.docx,.doc,.xlsx,.xls,.txt,.md",
 }: {
   label: string;
@@ -77,15 +74,12 @@ function SingleFileUpload({
 }
 
 export function ApfGenerateTab() {
-  // HUs: múltiplos arquivos
   const huIngestion    = useFileIngestion();
-  // Baseline e Modelo: arquivo único cada
   const baseIngestion  = useFileIngestion();
   const modelIngestion = useFileIngestion();
 
   const baseFile  = baseIngestion.files[0] ?? null;
   const modelFile = modelIngestion.files[0] ?? null;
-
   const huFilesOk = huIngestion.files.filter(f => f.status === "success");
 
   const {
@@ -99,7 +93,7 @@ export function ApfGenerateTab() {
     lastResult, showPreview, setShowPreview,
     providerCfg,
     generateGeneric,
-  } = useApfGenerate();
+  } = useApfGenerate(MODULE_EVIDENCE_ID);
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === selectedTemplateId) ?? null,
@@ -116,27 +110,21 @@ export function ApfGenerateTab() {
 
   const handleGenerate = async () => {
     if (!canGenerate || !selectedTemplate) return;
-
     const parts: string[] = [];
     if (selectedTemplate.prompt_template) parts.push(selectedTemplate.prompt_template);
-
-    // Consolida todas as HUs
     const huConsolidado = huFilesOk
       .map(f => `## Origem: ${f.name}\n\n${f.content}`)
       .join("\n\n---\n\n");
     parts.push(`\n\n---\n### HUs do Projeto:\n${huConsolidado}`);
-
-    if (baseFile?.status === "success")  parts.push(`\n\n---\n### Baseline / Referência:\n${baseFile.content}`);
-    if (modelFile?.status === "success") parts.push(`\n\n---\n### Modelo de Evidências (estrutura esperada):\n${modelFile.content}`);
-
+    if (baseFile?.status === "success")  parts.push(`\n\n---\n### Baseline / Refer\u00eancia:\n${baseFile.content}`);
+    if (modelFile?.status === "success") parts.push(`\n\n---\n### Modelo de Evid\u00eancias (estrutura esperada):\n${modelFile.content}`);
     const prompt = parts.join("");
     const baseFilename = `Evidencias_${selectedTemplate.name}`.replace(/\s+/g, "_");
-
     try {
       await generateGeneric(prompt, baseFilename);
-      toast.success("Relatório de evidências gerado com sucesso!");
+      toast.success("Relat\u00f3rio de evid\u00eancias gerado com sucesso!");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erro ao gerar relatório");
+      toast.error(e instanceof Error ? e.message : "Erro ao gerar relat\u00f3rio");
     }
   };
 
@@ -152,11 +140,7 @@ export function ApfGenerateTab() {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-
-      {/* ── Coluna principal (2/3) ── */}
       <div className="xl:col-span-2 space-y-4">
-
-        {/* Card: HUs — múltiplos arquivos */}
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -193,24 +177,23 @@ export function ApfGenerateTab() {
           </CardContent>
         </Card>
 
-        {/* Card: Baseline e Modelo — arquivo único cada */}
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <FileText className="h-4 w-4 text-primary" />
-              Documentos de Referência
+              Documentos de Refer\u00eancia
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <SingleFileUpload
-              label="Baseline / Referência"
+              label="Baseline / Refer\u00eancia"
               icon={<FileText className="h-3.5 w-3.5" />}
               file={baseFile}
               onFile={(f) => baseIngestion.ingestFiles([f])}
               onRemove={() => baseIngestion.removeFile(baseFile!.name)}
             />
             <SingleFileUpload
-              label="Modelo de Evidências"
+              label="Modelo de Evid\u00eancias"
               icon={<FileText className="h-3.5 w-3.5" />}
               file={modelFile}
               onFile={(f) => modelIngestion.ingestFiles([f])}
@@ -219,12 +202,11 @@ export function ApfGenerateTab() {
           </CardContent>
         </Card>
 
-        {/* Card: Configuração */}
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-primary" />
-              Configuração da Geração
+              Configura\u00e7\u00e3o da Gera\u00e7\u00e3o
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -236,7 +218,7 @@ export function ApfGenerateTab() {
                 </SelectTrigger>
                 <SelectContent>
                   {templates.length === 0 ? (
-                    <div className="px-3 py-4 text-xs text-muted-foreground text-center">Nenhum template ativo. Crie um na aba Gerenciar Templates.</div>
+                    <div className="px-3 py-4 text-xs text-muted-foreground text-center">Nenhum template ativo para este m\u00f3dulo. Crie um em Gerenciar Templates.</div>
                   ) : (
                     templates.map((t) => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
@@ -245,7 +227,6 @@ export function ApfGenerateTab() {
                 </SelectContent>
               </Select>
             </div>
-
             <AIProviderSelector
               providers={aiProviders}
               selectedProviderId={selectedProviderId}
@@ -256,7 +237,6 @@ export function ApfGenerateTab() {
           </CardContent>
         </Card>
 
-        {/* Botão gerar */}
         <div className="flex flex-col items-center gap-2 pt-1">
           <Button
             size="lg"
@@ -267,27 +247,25 @@ export function ApfGenerateTab() {
             {generating ? (
               <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</>
             ) : (
-              <><Sparkles className="h-4 w-4" /> Gerar Relatório de Evidências</>
+              <><Sparkles className="h-4 w-4" /> Gerar Relat\u00f3rio de Evid\u00eancias</>
             )}
           </Button>
           {!canGenerate && !generating && (
             <p className="text-[11px] text-muted-foreground text-center">
-              {huIngestion.files.length === 0 ? "Faça upload de pelo menos uma HU para continuar" :
+              {huIngestion.files.length === 0 ? "Fa\u00e7a upload de pelo menos uma HU para continuar" :
                huIngestion.isProcessing ? "Aguarde o processamento dos arquivos..." :
                !selectedTemplateId ? "Selecione um template de prompt" :
-               providerCfg.needsKey && !apiKey.trim() ? "Informe sua API key do provedor selecionado" :
-               ""}
+               providerCfg.needsKey && !apiKey.trim() ? "Informe sua API key do provedor selecionado" : ""}
             </p>
           )}
           {progressStep !== "idle" && (
             <p className="text-xs font-medium text-primary animate-pulse">
-              {progressStep === "calling_ai" && "🤖 IA processando os documentos..."}
-              {progressStep === "saving" && "💾 Salvando resultado..."}
+              {progressStep === "calling_ai" && "\uD83E\uDD16 IA processando os documentos..."}
+              {progressStep === "saving" && "\uD83D\uDCBE Salvando resultado..."}
             </p>
           )}
         </div>
 
-        {/* Resultado */}
         {lastResult && (
           <Card className="border-emerald-500/20 bg-emerald-500/5">
             <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -314,13 +292,12 @@ export function ApfGenerateTab() {
         )}
       </div>
 
-      {/* ── Coluna lateral (1/3): Histórico ── */}
       <div>
         <Card className="shadow-sm h-full">
           <CardHeader className="pb-2 border-b border-border/50">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <History className="h-4 w-4 text-muted-foreground" />
-              Histórico de Gerações
+              Hist\u00f3rico de Gera\u00e7\u00f5es
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
@@ -329,7 +306,7 @@ export function ApfGenerateTab() {
             ) : (generations ?? []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center space-y-2 opacity-40">
                 <History className="h-7 w-7 text-muted-foreground" />
-                <p className="text-xs">Nenhuma geração ainda</p>
+                <p className="text-xs">Nenhuma gera\u00e7\u00e3o ainda</p>
               </div>
             ) : (
               <ScrollArea className="h-[500px]">
@@ -342,7 +319,7 @@ export function ApfGenerateTab() {
                       </div>
                       <div className="flex items-center justify-between text-[9px] text-muted-foreground uppercase font-semibold">
                         <span>{new Date(g.created_at).toLocaleDateString("pt-BR")}</span>
-                        {g.pf_total != null && <span className="text-primary">📊 {g.pf_total} PF</span>}
+                        {g.pf_total != null && <span className="text-primary">\uD83D\uDCCA {g.pf_total} PF</span>}
                       </div>
                     </div>
                   ))}
@@ -353,12 +330,11 @@ export function ApfGenerateTab() {
         </Card>
       </div>
 
-      {/* Dialog Preview */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Eye className="h-4 w-4 text-primary" /> Pré-visualização</DialogTitle>
-            <DialogDescription>Confira o conteúdo gerado antes de baixar.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2"><Eye className="h-4 w-4 text-primary" /> Pr\u00e9-visualiza\u00e7\u00e3o</DialogTitle>
+            <DialogDescription>Confira o conte\u00fado gerado antes de baixar.</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0 rounded-md border border-border bg-background p-6">
             <article className="prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-table:border prose-th:bg-primary/10 prose-th:p-2 prose-td:p-2 prose-td:border">

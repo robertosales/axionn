@@ -23,6 +23,8 @@ import { downloadMarkdownAsFile } from "../utils/markdownToDocx";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
+const MODULE_HU_ID = "9b8a28da-3de0-4af8-b2bb-a2e22df4ea9b";
+
 export function ApfHuGenerateTab() {
   const {
     files,
@@ -46,7 +48,7 @@ export function ApfHuGenerateTab() {
     lastResult,
     showPreview, setShowPreview,
     providerCfg,
-  } = useApfGenerate();
+  } = useApfGenerate(MODULE_HU_ID);
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === selectedTemplateId) ?? null,
@@ -75,25 +77,19 @@ export function ApfHuGenerateTab() {
 
   const handleGenerate = async () => {
     if (!canGenerate || !selectedTemplate) return;
-
     const prompt = `${selectedTemplate.prompt_template}\n\n---\nDADOS DE ENTRADA (CONSOLIDADO):\n${consolidatedMarkdown}`;
     const baseFilename = `HU_${selectedTemplate.name}_${Date.now()}`.replace(/\s+/g, "_");
-
     try {
       await generateGeneric(prompt, baseFilename);
       toast.success("User Stories geradas com sucesso!");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Falha na geração");
+      toast.error(e instanceof Error ? e.message : "Falha na gera\u00e7\u00e3o");
     }
   };
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-
-      {/* ── Coluna principal (2/3) ── */}
       <div className="xl:col-span-2 space-y-4">
-
-        {/* Card: Upload de arquivos */}
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -116,7 +112,6 @@ export function ApfHuGenerateTab() {
               onRemoveFile={removeFile}
               isProcessing={isIngesting}
             />
-
             {isIngesting && (
               <div className="space-y-2">
                 <div className="flex justify-between text-[11px] font-medium text-primary">
@@ -129,7 +124,6 @@ export function ApfHuGenerateTab() {
                 <Progress value={undefined} className="h-1" />
               </div>
             )}
-
             {files.length > 0 && (
               <DataPayloadSummary
                 totalChars={consolidatedMarkdown.length}
@@ -140,12 +134,11 @@ export function ApfHuGenerateTab() {
           </CardContent>
         </Card>
 
-        {/* Card: Configuração */}
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-primary" />
-              Configuração da Geração
+              Configura\u00e7\u00e3o da Gera\u00e7\u00e3o
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -160,7 +153,7 @@ export function ApfHuGenerateTab() {
                 <SelectContent>
                   {templates.length === 0 ? (
                     <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-                      Nenhum template ativo. Crie um na aba Gerenciar Templates.
+                      Nenhum template ativo para este m\u00f3dulo. Crie um em Gerenciar Templates.
                     </div>
                   ) : (
                     templates.map((t) => (
@@ -175,7 +168,6 @@ export function ApfHuGenerateTab() {
                 </p>
               )}
             </div>
-
             <AIProviderSelector
               providers={aiProviders}
               selectedProviderId={selectedProviderId}
@@ -186,7 +178,6 @@ export function ApfHuGenerateTab() {
           </CardContent>
         </Card>
 
-        {/* Botão gerar */}
         <div className="space-y-2">
           <Button
             size="lg"
@@ -222,7 +213,6 @@ export function ApfHuGenerateTab() {
           )}
         </div>
 
-        {/* Resultado */}
         {lastResult && (
           <Card className="border-emerald-500/20 bg-emerald-500/5">
             <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -231,7 +221,7 @@ export function ApfHuGenerateTab() {
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-emerald-900 dark:text-emerald-400">Geração Concluída!</p>
+                  <p className="text-sm font-bold text-emerald-900 dark:text-emerald-400">Gera\u00e7\u00e3o Conclu\u00edda!</p>
                   <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/60 font-medium">{lastResult.baseFilename}</p>
                 </div>
               </div>
@@ -250,7 +240,6 @@ export function ApfHuGenerateTab() {
         )}
       </div>
 
-      {/* ── Coluna lateral (1/3): Instruções ── */}
       <div className="space-y-4">
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
@@ -258,7 +247,7 @@ export function ApfHuGenerateTab() {
           </CardHeader>
           <CardContent className="space-y-3">
             {[
-              { step: "1", title: "Faça o upload", desc: "Carregue PDF, DOCX, Excel ou Markdown com os dados que servirão de base para as HUs." },
+              { step: "1", title: "Fa\u00e7a o upload", desc: "Carregue PDF, DOCX, Excel ou Markdown com os dados que servir\u00e3o de base para as HUs." },
               { step: "2", title: "Escolha o template", desc: "Selecione o template de prompt cadastrado em Gerenciar Templates. O prompt define o estilo das HUs geradas." },
               { step: "3", title: "Selecione a IA", desc: "Escolha o provedor de IA. Para grandes volumes de dados, prefira Gemini (1M tokens)." },
               { step: "4", title: "Gere e baixe", desc: "Clique em Gerar e baixe o resultado em Markdown para usar em qualquer ferramenta." },
@@ -299,14 +288,13 @@ export function ApfHuGenerateTab() {
         )}
       </div>
 
-      {/* Dialog Preview */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-4 w-4 text-primary" /> User Stories Geradas
             </DialogTitle>
-            <DialogDescription>Confira e refine o conteúdo antes do download.</DialogDescription>
+            <DialogDescription>Confira e refine o conte\u00fado antes do download.</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0 rounded-md border border-border bg-background p-6">
             <article className="prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-table:border prose-th:bg-primary/10 prose-th:p-2 prose-td:p-2 prose-td:border">

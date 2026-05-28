@@ -1,18 +1,42 @@
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
 
+// ─── Módulos ──────────────────────────────────────────────────────────────────
+export interface ApfModule {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export async function fetchModules(): Promise<ApfModule[]> {
+  const { data, error } = await supabase
+    .from("apf_modules")
+    .select("*")
+    .eq("is_active", true)
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as ApfModule[];
+}
+
+// ─── Templates ────────────────────────────────────────────────────────────────
 export interface ApfTemplate {
   id: string;
   team_id: string;
   name: string;
   description: string | null;
-  output_type: "docx" | "xlsx";
+  output_type: "docx" | "xlsx" | "md";
   prompt_content: string;
+  prompt_template?: string;
   version: number;
   is_active: boolean;
+  module_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  // join
+  apf_modules?: ApfModule | null;
 }
 
 export interface ApfGeneration {
@@ -34,7 +58,6 @@ export interface ApfGeneration {
   created_at: string;
 }
 
-// Converte File do browser para base64
 export async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -44,7 +67,6 @@ export async function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// Detecta se o arquivo precisa ser enviado como base64
 export function isBinaryFile(filename: string): boolean {
   const lower = filename.toLowerCase();
   return lower.endsWith(".xlsx") || lower.endsWith(".xls") ||
@@ -55,7 +77,7 @@ export function isBinaryFile(filename: string): boolean {
 export async function fetchTemplates(teamId: string): Promise<ApfTemplate[]> {
   const { data, error } = await supabase
     .from("apf_templates")
-    .select("*")
+    .select("*, apf_modules(id, name)")
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -65,7 +87,7 @@ export async function fetchTemplates(teamId: string): Promise<ApfTemplate[]> {
 export async function fetchActiveTemplates(teamId: string): Promise<ApfTemplate[]> {
   const { data, error } = await supabase
     .from("apf_templates")
-    .select("*")
+    .select("*, apf_modules(id, name)")
     .eq("team_id", teamId)
     .eq("is_active", true)
     .order("name");
@@ -76,12 +98,12 @@ export async function fetchActiveTemplates(teamId: string): Promise<ApfTemplate[
 export async function createTemplate(
   teamId: string,
   userId: string,
-  payload: { name: string; description?: string; output_type: string; prompt_content: string }
+  payload: { name: string; description?: string; output_type: string; prompt_content: string; module_id?: string | null }
 ): Promise<ApfTemplate> {
   const { data, error } = await supabase
     .from("apf_templates")
     .insert({ ...payload, team_id: teamId, created_by: userId })
-    .select()
+    .select("*, apf_modules(id, name)")
     .single();
   if (error) throw error;
   return data as ApfTemplate;
@@ -90,16 +112,24 @@ export async function createTemplate(
 export async function updateTemplate(
   id: string,
   currentVersion: number,
-  payload: { name: string; description?: string; output_type: string; prompt_content: string }
+  payload: { name: string; description?: string; output_type: string; prompt_content: string; module_id?: string | null }
 ): Promise<ApfTemplate> {
   const { data, error } = await supabase
     .from("apf_templates")
     .update({ ...payload, version: currentVersion + 1 })
     .eq("id", id)
-    .select()
+    .select("*, apf_modules(id, name)")
     .single();
   if (error) throw error;
   return data as ApfTemplate;
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("apf_templates")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function duplicateTemplate(template: ApfTemplate): Promise<ApfTemplate> {
@@ -111,9 +141,10 @@ export async function duplicateTemplate(template: ApfTemplate): Promise<ApfTempl
       description: template.description,
       output_type: template.output_type,
       prompt_content: template.prompt_content,
+      module_id: template.module_id,
       created_by: template.created_by,
     })
-    .select()
+    .select("*, apf_modules(id, name)")
     .single();
   if (error) throw error;
   return data as ApfTemplate;
@@ -164,23 +195,15 @@ export async function createGeneration(payload: {
   return data as ApfGeneration;
 }
 
-/**
- * Retorna a URL pública (signed) de um arquivo gerado no Storage
- */
 export async function getGenerationDownloadUrl(
   storagePath: string
 ): Promise<string | null> {
   const { data } = await supabase.storage
     .from("apf-documents")
-    .createSignedUrl(storagePath, 60 * 60); // 1 hora
+    .createSignedUrl(storagePath, 60 * 60);
   return data?.signedUrl ?? null;
 }
 
-/**
- * Prepara os arquivos do browser para envio à Edge Function.
- * Arquivos binários (xlsx, docx, pdf) são convertidos para base64.
- * Arquivos de texto são lidos como string.
- */
 export async function prepareFilesForEdgeFunction(
   files: File[]
 ): Promise<Array<{ name: string; content: string; encoding: "base64" | "text"; mimeType: string }>> {
@@ -189,40 +212,23 @@ export async function prepareFilesForEdgeFunction(
     const binary = isBinaryFile(file.name);
     if (binary) {
       const base64 = await fileToBase64(file);
-      result.push({
-        name: file.name,
-        content: base64,
-        encoding: "base64" as const,
-        mimeType: file.type || "application/octet-stream",
-      });
+      result.push({ name: file.name, content: base64, encoding: "base64" as const, mimeType: file.type || "application/octet-stream" });
     } else {
       const text = await file.text();
-      result.push({
-        name: file.name,
-        content: text,
-        encoding: "text" as const,
-        mimeType: file.type || "text/plain",
-      });
+      result.push({ name: file.name, content: text, encoding: "text" as const, mimeType: file.type || "text/plain" });
     }
   }
   return result;
 }
 
-/**
- * Invoca a Edge Function `apf-generate`.
- * SEC-005: apiKey removida — a Edge Function busca a key no Vault (Supabase).
- * O frontend nunca envia nem armazena API keys de providers de IA.
- */
 export async function invokeApfGeneration(body: {
   prompt: string;
   provider?: string;
   providerId?: string;
-  /** Chave inline (modelo híbrido) — usada quando o provider não tem chave no Vault. */
   apiKey?: string;
   model?: string;
   files: Array<{ name: string; content: string; encoding?: "base64" | "text"; mimeType?: string }>;
   generationId?: string;
-  /** Pula geração de .docx no servidor (frontend converte). */
   skipDocx?: boolean;
 }): Promise<{
   docxBase64: string;
@@ -233,26 +239,18 @@ export async function invokeApfGeneration(body: {
   providerUsed?: string;
   fallback?: { from: string; to: string; reason: string } | null;
 }> {
-  const { data, error } = await supabase.functions.invoke("apf-generate", {
-    body,
-  });
-  // A Edge Function devolve { success:false, reason, userMessage } com HTTP 200
-  // para falhas recuperáveis (402, 429, 5xx) — evita Runtime Error no cliente.
+  const { data, error } = await supabase.functions.invoke("apf-generate", { body });
   if (error) {
-    // Tenta extrair payload tipado do contexto, se disponível
     const ctx: any = (error as any)?.context;
-    const friendly = ctx?.userMessage ?? error.message ?? "Não foi possível gerar o documento agora.";
-    throw new Error(friendly);
+    throw new Error(ctx?.userMessage ?? error.message ?? "Não foi possível gerar o documento agora.");
   }
   if (data?.success === false) {
     const details = Array.isArray(data.attempts) && data.attempts.length > 0
       ? `\nTentativas: ${data.attempts.map((a: any) => `${a.name}${a.status ? ` (${a.status})` : ""}`).join(" → ")}`
       : "";
-    throw new Error(`${data.userMessage ?? "Não foi possível gerar o documento agora. Tente novamente em instantes."}${details}`);
+    throw new Error(`${data.userMessage ?? "Não foi possível gerar o documento agora."}${details}`);
   }
-  if (!data?.markdown) {
-    throw new Error(data?.userMessage ?? data?.error ?? "A IA não retornou conteúdo");
-  }
+  if (!data?.markdown) throw new Error(data?.userMessage ?? data?.error ?? "A IA não retornou conteúdo");
   return {
     docxBase64: data.docxBase64 ?? "",
     markdown: data.markdown ?? "",

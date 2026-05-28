@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
 import {
-  fetchActiveTemplates,
+  fetchTemplates,
   fetchGenerations,
   createGeneration,
   invokeApfGeneration,
@@ -16,17 +16,43 @@ import { supabase } from "@/integrations/supabase/client";
 export type ProgressStep = "idle" | "collecting" | "calling_ai" | "saving" | "done";
 export type OutputFormat = "docx" | "md";
 
+export type Question = {
+  id: string;
+  text: string;
+  kind: "yesno" | "text";
+  followUp?: string;
+};
+
+export type AnswerEntry = {
+  value: string;
+  detail?: string;
+};
+
 const INLINE_AI_PROVIDERS: AIProvider[] = [
-  { id: "inline:lovable", name: "Lovable AI (Gratuita) — recomendada", provider_type: "lovable", model: "google/gemini-2.0-flash", is_recommended: true, is_active: true, has_key: true, created_at: "", updated_at: "" },
+  {
+    id: "inline:lovable",
+    name: "Lovable AI (Gratuita) — recomendada",
+    provider_type: "lovable",
+    model: "google/gemini-2.0-flash",
+    is_recommended: true,
+    is_active: true,
+    has_key: true,
+    created_at: "",
+    updated_at: "",
+  },
 ];
 
-export function useApfGenerate() {
+/**
+ * moduleId: UUID do módulo para filtrar templates.
+ * Quando não informado, exibe todos os templates ativos (sem filtro de módulo).
+ */
+export function useApfGenerate(moduleId?: string) {
   const { currentTeamId, user } = useAuth();
   const { sprints } = useSprint();
 
   const [selectedSprintId, setSelectedSprintId]     = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [templates, setTemplates]                   = useState<ApfTemplate[]>([]);
+  const [allTemplates, setAllTemplates]             = useState<ApfTemplate[]>([]);
   const [generating, setGenerating]                 = useState(false);
   const [progressStep, setProgressStep]             = useState<ProgressStep>("idle");
   const [generations, setGenerations]               = useState<(ApfGeneration & { template_name?: string })[]>([]);
@@ -34,8 +60,16 @@ export function useApfGenerate() {
   const [aiProviders, setAiProviders]               = useState<AIProvider[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [apiKey, setApiKey] = useState(() => sessionStorage.getItem("apf_ai_api_key") || "");
-  useEffect(() => { if (apiKey) { sessionStorage.setItem("apf_ai_api_key", apiKey); } else { sessionStorage.removeItem("apf_ai_api_key"); } }, [apiKey]);
-  const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
+  useEffect(() => {
+    if (apiKey) sessionStorage.setItem("apf_ai_api_key", apiKey);
+    else sessionStorage.removeItem("apf_ai_api_key");
+  }, [apiKey]);
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>("docx");
+
+  const [questions, setQuestions]         = useState<Question[]>([]);
+  const [answers, setAnswers]             = useState<Record<string, AnswerEntry>>({});
+  const [showQuestions, setShowQuestions] = useState(false);
+  const [sqlFiles, setSqlFiles]           = useState<File[]>([]);
 
   const [lastResult, setLastResult] = useState<{
     markdown: string;
@@ -45,20 +79,37 @@ export function useApfGenerate() {
   } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Load templates
+  // Carrega todos os templates do time
   useEffect(() => {
     if (!currentTeamId) return;
-    fetchActiveTemplates(currentTeamId).then(setTemplates).catch(() => {});
+    fetchTemplates(currentTeamId)
+      .then(setAllTemplates)
+      .catch(() => {});
   }, [currentTeamId]);
 
-  // Load providers
+  /**
+   * Filtra: ativos + módulo correspondente.
+   * Templates sem module_id aparecem em todas as abas (retrocompatível).
+   */
+  const templates = useMemo(() => {
+    return allTemplates.filter((t) => {
+      if (!t.is_active) return false;
+      if (!moduleId) return true;
+      if (!t.module_id) return true; // sem módulo → aparece em todos
+      return t.module_id === moduleId;
+    });
+  }, [allTemplates, moduleId]);
+
+  // Carrega providers de IA
   useEffect(() => {
     listAIProviders({ onlyActive: true })
       .then((list) => {
         const freeFromDb = list.filter((p) => p.provider_type === "lovable");
         const merged = [
           ...freeFromDb,
-          ...INLINE_AI_PROVIDERS.filter((inline) => !freeFromDb.some((p) => p.provider_type === inline.provider_type)),
+          ...INLINE_AI_PROVIDERS.filter(
+            (inline) => !freeFromDb.some((p) => p.provider_type === inline.provider_type)
+          ),
         ];
         setAiProviders(merged);
         if (merged.length > 0) {
@@ -72,7 +123,7 @@ export function useApfGenerate() {
       });
   }, []);
 
-  // Load history
+  // Histórico de gerações
   useEffect(() => {
     if (!currentTeamId || !selectedSprintId) { setGenerations([]); return; }
     setLoadingHistory(true);
@@ -84,7 +135,12 @@ export function useApfGenerate() {
 
   const selectedProvider = useMemo(
     () => aiProviders.find((p) => p.id === selectedProviderId) ?? null,
-    [aiProviders, selectedProviderId],
+    [aiProviders, selectedProviderId]
+  );
+
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === selectedTemplateId) ?? null,
+    [templates, selectedTemplateId]
   );
 
   const providerCfg = useMemo(() => {
@@ -97,18 +153,31 @@ export function useApfGenerate() {
     return { needsKey, placeholder: placeholderByType[selectedProvider.provider_type] ?? "Cole sua API key" };
   }, [selectedProvider]);
 
-  // Reset API key when provider changes (unless it's the same type)
+  const canGenerate = useMemo(() => {
+    if (!selectedSprintId || !selectedTemplateId) return false;
+    if (!selectedProviderId) return false;
+    if (providerCfg.needsKey && !apiKey.trim()) return false;
+    return true;
+  }, [selectedSprintId, selectedTemplateId, selectedProviderId, providerCfg.needsKey, apiKey]);
+
+  const allQuestionsAnswered = useMemo(() => {
+    if (questions.length === 0) return true;
+    return questions.every((q) => {
+      const a = answers[q.id];
+      if (!a?.value) return false;
+      if (q.kind === "yesno" && a.value === "sim" && !a.detail?.trim()) return false;
+      return true;
+    });
+  }, [questions, answers]);
+
   useEffect(() => {
-    // Optional: Only clear if switching to a provider that needs a key
     if (providerCfg.needsKey) setApiKey("");
   }, [selectedProviderId, providerCfg.needsKey]);
 
   const generateGeneric = async (prompt: string, baseFilename: string) => {
     if (!currentTeamId || !user) throw new Error("Sessão inválida");
-
     setGenerating(true);
     setProgressStep("calling_ai");
-
     try {
       const isInlineProvider = selectedProviderId.startsWith("inline:");
       const result = await invokeApfGeneration({
@@ -119,7 +188,6 @@ export function useApfGenerate() {
         files: [],
         skipDocx: true,
       });
-
       setLastResult({
         markdown: result.markdown,
         baseFilename,
@@ -135,21 +203,67 @@ export function useApfGenerate() {
     }
   };
 
+  const handleGenerateClick = useCallback(() => {
+    if (!selectedTemplate) return;
+    const tplQuestions: Question[] = (selectedTemplate as any).questions ?? [];
+    if (tplQuestions.length > 0) {
+      setQuestions(tplQuestions);
+      setAnswers({});
+      setShowQuestions(true);
+    } else {
+      setQuestions([]);
+      setAnswers({});
+      runGeneration();
+    }
+  }, [selectedTemplate, selectedSprintId]);
+
+  const runGeneration = useCallback(async () => {
+    if (!selectedTemplate || !selectedSprintId) return;
+    setShowQuestions(false);
+    const sprintObj = (sprints ?? []).find((s) => s.id === selectedSprintId);
+    const sprintName = sprintObj?.name ?? selectedSprintId;
+    const baseFilename = `APF_${sprintName}_${selectedTemplate.name}`.replace(/\s+/g, "_");
+    let prompt = selectedTemplate.prompt_template ?? "";
+    if (Object.keys(answers).length > 0) {
+      prompt += "\n\n--- Contexto adicional ---\n";
+      questions.forEach((q) => {
+        const a = answers[q.id];
+        if (a?.value) {
+          prompt += `\n${q.text}\nResposta: ${a.value}`;
+          if (a.detail) prompt += ` — ${a.detail}`;
+        }
+      });
+    }
+    try {
+      await generateGeneric(prompt, baseFilename);
+      toast.success("Documento APF gerado com sucesso!");
+    } catch (err: any) {
+      toast.error(err?.message ?? "Erro ao gerar documento APF");
+    }
+  }, [selectedTemplate, selectedSprintId, sprints, answers, questions, generateGeneric]);
+
   return {
     sprints,
     selectedSprintId, setSelectedSprintId,
     selectedTemplateId, setSelectedTemplateId,
-    templates,
+    templates, selectedTemplate,
     aiProviders,
     selectedProviderId, setSelectedProviderId,
     apiKey, setApiKey,
     outputFormat, setOutputFormat,
     generating,
+    canGenerate,
     progressStep,
     generations, loadingHistory,
     lastResult, setLastResult,
     showPreview, setShowPreview,
+    questions, answers, setAnswers,
+    sqlFiles, setSqlFiles,
+    showQuestions, setShowQuestions,
+    allQuestionsAnswered,
+    handleGenerateClick,
+    runGeneration,
     generateGeneric,
-    providerCfg
+    providerCfg,
   };
 }

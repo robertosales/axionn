@@ -132,7 +132,14 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
 
   // ── FIX-001: Fallback env — valida formato antes de aceitar ──
     if (!apiKey) {
-    throw new Error(`API key não configurada para "${row.name}". Configure a chave no painel administrativo (Vault) ou forneça uma chave temporária.`);
+    // Fallback híbrido: aceita a chave informada inline pelo usuário na tela,
+    // mesmo quando o provider está cadastrado (providerId) mas sem chave no Vault.
+    if (bodyApiKey && bodyApiKey.trim().length >= 10) {
+      apiKey = bodyApiKey.trim();
+      console.log(`[VAULT] Usando chave inline informada pelo usuário para provider "${row.name}".`);
+    } else {
+      throw new Error(`API key não configurada para "${row.name}". Configure a chave no painel administrativo (Vault) ou forneça uma chave temporária na tela.`);
+    }
   }
 
   // Cleanup model name for Google/Gemini

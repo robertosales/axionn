@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSprint } from "@/contexts/SprintContext";
 import {
-  fetchActiveTemplates,
+  fetchTemplates,
   fetchGenerations,
   createGeneration,
   invokeApfGeneration,
@@ -38,7 +38,7 @@ export function useApfGenerate() {
 
   const [selectedSprintId, setSelectedSprintId]     = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [templates, setTemplates]                   = useState<ApfTemplate[]>([]);
+  const [allTemplates, setAllTemplates]             = useState<ApfTemplate[]>([]);
   const [generating, setGenerating]                 = useState(false);
   const [progressStep, setProgressStep]             = useState<ProgressStep>("idle");
   const [generations, setGenerations]               = useState<(ApfGeneration & { template_name?: string })[]>([]);
@@ -49,11 +49,10 @@ export function useApfGenerate() {
   useEffect(() => { if (apiKey) { sessionStorage.setItem("apf_ai_api_key", apiKey); } else { sessionStorage.removeItem("apf_ai_api_key"); } }, [apiKey]);
   const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
 
-  // Questions / answers state
-  const [questions, setQuestions]       = useState<Question[]>([]);
-  const [answers, setAnswers]           = useState<Record<string, AnswerEntry>>({});
+  const [questions, setQuestions]         = useState<Question[]>([]);
+  const [answers, setAnswers]             = useState<Record<string, AnswerEntry>>({});
   const [showQuestions, setShowQuestions] = useState(false);
-  const [sqlFiles, setSqlFiles]         = useState<File[]>([]);
+  const [sqlFiles, setSqlFiles]           = useState<File[]>([]);
 
   const [lastResult, setLastResult] = useState<{
     markdown: string;
@@ -63,11 +62,19 @@ export function useApfGenerate() {
   } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Load templates
+  // Carrega TODOS os templates e filtra os ativos no useMemo
   useEffect(() => {
     if (!currentTeamId) return;
-    fetchActiveTemplates(currentTeamId).then(setTemplates).catch(() => {});
+    fetchTemplates(currentTeamId)
+      .then(setAllTemplates)
+      .catch(() => {});
   }, [currentTeamId]);
+
+  // Apenas os ativos aparecem no select de geração
+  const templates = useMemo(
+    () => allTemplates.filter((t) => t.is_active),
+    [allTemplates]
+  );
 
   // Load providers
   useEffect(() => {
@@ -120,7 +127,6 @@ export function useApfGenerate() {
     return { needsKey, placeholder: placeholderByType[selectedProvider.provider_type] ?? "Cole sua API key" };
   }, [selectedProvider]);
 
-  // canGenerate: sprint e template selecionados, provedor disponível, e se precisar de key ela existe
   const canGenerate = useMemo(() => {
     if (!selectedSprintId || !selectedTemplateId) return false;
     if (!selectedProviderId) return false;
@@ -128,7 +134,6 @@ export function useApfGenerate() {
     return true;
   }, [selectedSprintId, selectedTemplateId, selectedProviderId, providerCfg.needsKey, apiKey]);
 
-  // allQuestionsAnswered: todas as perguntas obrigatórias respondidas
   const allQuestionsAnswered = useMemo(() => {
     if (questions.length === 0) return true;
     return questions.every((q) => {
@@ -139,7 +144,6 @@ export function useApfGenerate() {
     });
   }, [questions, answers]);
 
-  // Reset API key when provider changes
   useEffect(() => {
     if (providerCfg.needsKey) setApiKey("");
   }, [selectedProviderId, providerCfg.needsKey]);
@@ -176,11 +180,8 @@ export function useApfGenerate() {
     }
   };
 
-  // handleGenerateClick: abre o dialog de perguntas se o template tiver perguntas,
-  // caso contrário dispara a geração direto
   const handleGenerateClick = useCallback(() => {
     if (!selectedTemplate) return;
-    // Se o template tiver perguntas configuradas, abrir dialog
     const tplQuestions: Question[] = (selectedTemplate as any).questions ?? [];
     if (tplQuestions.length > 0) {
       setQuestions(tplQuestions);
@@ -193,7 +194,6 @@ export function useApfGenerate() {
     }
   }, [selectedTemplate, selectedSprintId]);
 
-  // runGeneration: executa a geração efetivamente (após responder perguntas ou direto)
   const runGeneration = useCallback(async () => {
     if (!selectedTemplate || !selectedSprintId) return;
     setShowQuestions(false);
@@ -202,7 +202,6 @@ export function useApfGenerate() {
     const sprintName = sprintObj?.name ?? selectedSprintId;
     const baseFilename = `APF_${sprintName}_${selectedTemplate.name}`.replace(/\s+/g, "_");
 
-    // Monta prompt com template + respostas das perguntas
     let prompt = selectedTemplate.prompt_template ?? "";
     if (Object.keys(answers).length > 0) {
       prompt += "\n\n--- Contexto adicional ---\n";

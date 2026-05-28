@@ -4,6 +4,7 @@ import {
   markNotificationRead,
   markNotificationsRead,
 } from "@/features/notifications/services/notifications.service";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import { Bell, CheckCheck, ShieldAlert, MessageCircle, AlertTriangle, Eye } from
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface Notification {
   id: string;
@@ -25,21 +27,66 @@ interface Notification {
 }
 
 export function NotificationBell() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
 
-  const fetchNotifications = useCallback(async () => {
-    if (!user) return;
-    const data = await fetchUserNotifications(user.id, 30);
-    setNotifications(data as any[]);
-  }, [user]);
+  // Usa profile.user_id quando disponível — é o ID correto na tabela notifications
+  const userId = profile?.user_id ?? user?.id ?? "";
 
+  const fetchNotifications = useCallback(async () => {
+    if (!userId) return;
+    const data = await fetchUserNotifications(userId, 30);
+    setNotifications(data as any[]);
+  }, [userId]);
+
+  // Carga inicial + polling de segurança a cada 30s
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000);
+    const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
+
+  // FIX: Supabase Realtime — atualiza o sino imediatamente ao receber nova notificação
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`notif-bell-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const raw = payload.new as any;
+          const newNotif: Notification = {
+            id: raw.id,
+            type: raw.type,
+            title: raw.title,
+            message: raw.message ?? "",
+            is_read: false,
+            created_at: raw.created_at,
+            link_type: raw.link_type ?? undefined,
+            link_id: raw.link_id ?? undefined,
+          };
+          setNotifications((prev) => [newNotif, ...prev]);
+          // Toast imediato para o usuário que está com a tela aberta
+          toast(newNotif.title, {
+            description: newNotif.message || undefined,
+            duration: 6000,
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -49,7 +96,7 @@ export function NotificationBell() {
   };
 
   const markAllAsRead = async () => {
-    if (!user) return;
+    if (!userId) return;
     const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id);
     if (unreadIds.length === 0) return;
     await markNotificationsRead(unreadIds);

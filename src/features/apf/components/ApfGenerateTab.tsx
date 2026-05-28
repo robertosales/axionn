@@ -71,7 +71,7 @@ export function ApfGenerateTab() {
                     <SelectValue placeholder="Selecione a sprint" />
                   </SelectTrigger>
                   <SelectContent>
-                    {sprints.map((s) => (
+                    {(sprints ?? []).map((s) => (
                       <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -85,7 +85,7 @@ export function ApfGenerateTab() {
                     <SelectValue placeholder="Selecione o template" />
                   </SelectTrigger>
                   <SelectContent>
-                    {templates.map((t) => (
+                    {(templates ?? []).map((t) => (
                       <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -168,12 +168,12 @@ export function ApfGenerateTab() {
               </div>
             ) : loadingHistory ? (
               <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-            ) : generations.length === 0 ? (
+            ) : (generations ?? []).length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-12">Nenhuma geração para esta sprint ainda</p>
             ) : (
               <ScrollArea className="h-[calc(100vh-450px)] min-h-[300px]">
                 <div className="space-y-3 pr-3">
-                  {generations.map((g) => (
+                  {(generations ?? []).map((g) => (
                     <div key={g.id} className="group rounded-xl border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm">
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <p className="text-[11px] font-bold text-foreground line-clamp-1">{g.template_name}</p>
@@ -210,7 +210,7 @@ export function ApfGenerateTab() {
             <DialogDescription>Responda para refinar o contexto que será enviado à IA.</DialogDescription>
           </DialogHeader>
           <div className="space-y-5 max-h-[55vh] overflow-y-auto pr-1">
-            {questions.map((q) => {
+            {(questions ?? []).map((q) => {
               const a = answers[q.id];
               if (q.kind === "yesno") {
                 return (

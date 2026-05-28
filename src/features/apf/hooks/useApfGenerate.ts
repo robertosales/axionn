@@ -104,13 +104,14 @@ export function useApfGenerate(moduleId?: string) {
   useEffect(() => {
     listAIProviders({ onlyActive: true })
       .then((list) => {
-        const freeFromDb = list.filter((p) => p.provider_type === "lovable");
-        const merged = [
-          ...freeFromDb,
-          ...INLINE_AI_PROVIDERS.filter(
-            (inline) => !freeFromDb.some((p) => p.provider_type === inline.provider_type)
-          ),
-        ];
+        // Exibe TODOS os provedores ativos cadastrados no Admin → IAs
+        // (Lovable, Gemini direto, OpenAI, Anthropic, Perplexity, etc.)
+        // Assim o usuário pode escolher uma IA FREE (ex: Gemini com chave própria)
+        // quando o provedor recomendado (Lovable) estiver sem créditos.
+        const hasLovable = list.some((p) => p.provider_type === "lovable");
+        const merged = hasLovable
+          ? list
+          : [...list, ...INLINE_AI_PROVIDERS];
         setAiProviders(merged);
         if (merged.length > 0) {
           const recommended = merged.find((p) => p.is_recommended) ?? merged[0];

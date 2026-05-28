@@ -14,16 +14,20 @@ export interface IngestedFile {
   content: string;
   status: "processing" | "success" | "error";
   error?: string;
+  progress?: number;
 }
 
 export function useFileIngestion() {
   const [files, setFiles] = useState<IngestedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [currentProcessingFile, setCurrentProcessingFile] = useState<string | null>(null);
 
   const processFile = async (file: File): Promise<IngestedFile> => {
     const name = file.name;
     const type = file.name.split(".").pop()?.toLowerCase() || "";
     const size = file.size;
+
+    setCurrentProcessingFile(name);
 
     try {
       let content = "";
@@ -39,34 +43,42 @@ export function useFileIngestion() {
         const workbook = XLSX.read(arrayBuffer);
 
         let sheetMarkdown = "";
+        // Support multiple sheets as requested (at least two or more)
         workbook.SheetNames.forEach((sheetName) => {
           const worksheet = workbook.Sheets[sheetName];
-          const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+          const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false }) as unknown[][];
 
           if (json.length > 0) {
             sheetMarkdown += `### Planilha: ${sheetName}\n\n`;
 
-            // Generate Markdown Table
-            const headers = json[0];
-            sheetMarkdown += "| " + headers.join(" | ") + " |\n";
-            sheetMarkdown += "| " + headers.map(() => "---").join(" | ") + " |\n";
+            // Filter out empty rows
+            const validRows = json.filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== ""));
 
-            for (let i = 1; i < json.length; i++) {
-              sheetMarkdown += "| " + json[i].join(" | ") + " |\n";
+            if (validRows.length > 0) {
+              const headers = validRows[0];
+              sheetMarkdown += "| " + headers.map(h => String(h || "").replace(/\|/g, "\\|")).join(" | ") + " |\n";
+              sheetMarkdown += "| " + headers.map(() => "---").join(" | ") + " |\n";
+
+              for (let i = 1; i < validRows.length; i++) {
+                sheetMarkdown += "| " + validRows[i].map(c => String(c || "").replace(/\|/g, "\\|")).join(" | ") + " |\n";
+              }
+              sheetMarkdown += "\n";
             }
-            sheetMarkdown += "\n";
           }
         });
         content = sheetMarkdown;
       } else if (type === "pdf") {
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
         let pdfText = "";
 
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          const pageText = textContent.items.map((item: { str?: string }) => item.str || "").join(" ");
+          const pageText = textContent.items
+            .map((item: any) => item.str || "")
+            .join(" ");
           pdfText += `--- Página ${i} ---\n${pageText}\n\n`;
         }
         content = pdfText;
@@ -79,6 +91,8 @@ export function useFileIngestion() {
       console.error(`Erro ao processar ${name}:`, err);
       const errorMessage = err instanceof Error ? err.message : String(err);
       return { name, size, type, content: "", status: "error", error: errorMessage };
+    } finally {
+      setCurrentProcessingFile(null);
     }
   };
 
@@ -87,14 +101,18 @@ export function useFileIngestion() {
     const results: IngestedFile[] = [];
 
     for (const file of newFiles) {
-      // Create initial processing entry
-      setFiles(prev => [...prev, {
-        name: file.name,
-        size: file.size,
-        type: file.name.split(".").pop() || "",
-        content: "",
-        status: "processing"
-      }]);
+      // Avoid duplicates in the same batch or existing
+      setFiles(prev => {
+        const filtered = prev.filter(f => f.name !== file.name);
+        return [...filtered, {
+          name: file.name,
+          size: file.size,
+          type: file.name.split(".").pop() || "",
+          content: "",
+          status: "processing",
+          progress: 0
+        }];
+      });
 
       const result = await processFile(file);
 
@@ -116,21 +134,25 @@ export function useFileIngestion() {
 
   const consolidatedMarkdown = files
     .filter(f => f.status === "success")
-    .map(f => `## Arquivo: ${f.name}\n\n${f.content}`)
+    .map(f => `## Origem: ${f.name}\n\n${f.content}`)
     .join("\n\n---\n\n");
 
   const totalCharacters = consolidatedMarkdown.length;
-  // Rough estimation: 1 token ~= 4 chars for English, maybe 3 for PT-BR but let's stick to a safe side
+  const totalBytes = new TextEncoder().encode(consolidatedMarkdown).length;
+
+  // Conservative estimate: 1 token ≈ 3.5 chars for mixed PT-BR/Technical text
   const estimatedTokens = Math.ceil(totalCharacters / 3.5);
 
   return {
     files,
     isProcessing,
+    currentProcessingFile,
     ingestFiles,
     removeFile,
     clearFiles,
     consolidatedMarkdown,
     totalCharacters,
+    totalBytes,
     estimatedTokens,
   };
 }

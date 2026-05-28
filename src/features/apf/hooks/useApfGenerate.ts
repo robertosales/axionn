@@ -33,7 +33,8 @@ export function useApfGenerate() {
   const [loadingHistory, setLoadingHistory]         = useState(false);
   const [aiProviders, setAiProviders]               = useState<AIProvider[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
-  const [apiKey, setApiKey]                         = useState("");
+  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem("apf_ai_api_key") || "");
+  useEffect(() => { if (apiKey) { sessionStorage.setItem("apf_ai_api_key", apiKey); } else { sessionStorage.removeItem("apf_ai_api_key"); } }, [apiKey]);
   const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
 
   const [lastResult, setLastResult] = useState<{

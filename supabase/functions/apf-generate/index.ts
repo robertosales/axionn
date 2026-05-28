@@ -131,43 +131,17 @@ async function resolveProvider(providerId?: string, providerLegacy?: string, bod
   }
 
   // ── FIX-001: Fallback env — valida formato antes de aceitar ──
-  if (!apiKey) {
-    const envKey = (Deno.env.get(`${row.provider_type.toUpperCase()}_API_KEY`) ?? "").trim();
-    if (envKey.length > 0) {
-      // Validação por provider: Lovable/OpenAI/Perplexity precisam de sk_; Gemini e Anthropic têm outros prefixos
-      const VALID_PREFIXES: Record<string, string[]> = {
-        lovable:    ["sk_"],
-        openai:     ["sk-"],
-        perplexity: ["pplx-"],
-        gemini:     ["AIza"],
-        anthropic:  ["sk-ant-"],
-      };
-      const prefixes = VALID_PREFIXES[row.provider_type] ?? [];
-      const isValidFormat = prefixes.length === 0 || prefixes.some(p => envKey.startsWith(p));
-      if (isValidFormat && envKey.length >= 20) {
-        apiKey = envKey;
-        console.warn(`[FALLBACK] Usando env var ${row.provider_type.toUpperCase()}_API_KEY para "${row.name}". Configure a key no Vault para produção.`);
-      } else {
-        console.error(
-          `[FALLBACK] Env var ${row.provider_type.toUpperCase()}_API_KEY presente mas com formato inválido.` +
-          ` Prefixo: "${envKey.slice(0, 10)}...". Esperado: ${prefixes.join(" ou ")}`
-        );
-      }
-    }
+    if (!apiKey) {
+    throw new Error(`API key não configurada para "${row.name}". Configure a chave no painel administrativo (Vault) ou forneça uma chave temporária.`);
   }
 
-  // Modelo híbrido: aceita chave inline informada pelo usuário quando o
-  // Vault não tem nada cadastrado (e o provider não é o Lovable).
-  if (!apiKey && row.provider_type !== "lovable" && bodyApiKey && bodyApiKey.trim().length >= 10) {
-    apiKey = bodyApiKey.trim();
+  // Cleanup model name for Google/Gemini
+  let finalModel = row.model;
+  if (row.provider_type === "gemini" && finalModel && finalModel.startsWith("google/")) {
+    finalModel = finalModel.replace("google/", "");
   }
 
-  if (!apiKey) {
-    throw new Error(`API key não configurada para "${row.name}". Configure a chave no painel administrativo (Vault).`);
-    throw new Error(`API key não configurada para "${row.name}". Cadastre no painel admin ou informe a chave na tela.`);
-  }
-
-  return { providerType: row.provider_type, apiKey, model: row.model, name: row.name };
+  return { providerType: row.provider_type, apiKey, model: finalModel, name: row.name };
 }
 
 // ─────────────────────────────────────────────────────────────

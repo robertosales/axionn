@@ -83,7 +83,7 @@ export function ApfHuGenerateTab() {
       await generateGeneric(prompt, baseFilename);
       toast.success("User Stories geradas com sucesso!");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Falha na gera\u00e7\u00e3o");
+      toast.error(e instanceof Error ? e.message : "Falha na geração");
     }
   };
 
@@ -138,7 +138,7 @@ export function ApfHuGenerateTab() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Settings2 className="h-4 w-4 text-primary" />
-              Configura\u00e7\u00e3o da Gera\u00e7\u00e3o
+              Configuração da Geração
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -153,7 +153,7 @@ export function ApfHuGenerateTab() {
                 <SelectContent>
                   {templates.length === 0 ? (
                     <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-                      Nenhum template ativo para este m\u00f3dulo. Crie um em Gerenciar Templates.
+                      Nenhum template ativo para este módulo. Crie um em Gerenciar Templates.
                     </div>
                   ) : (
                     templates.map((t) => (
@@ -221,7 +221,7 @@ export function ApfHuGenerateTab() {
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-emerald-900 dark:text-emerald-400">Gera\u00e7\u00e3o Conclu\u00edda!</p>
+                  <p className="text-sm font-bold text-emerald-900 dark:text-emerald-400">Geração Concluída!</p>
                   <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/60 font-medium">{lastResult.baseFilename}</p>
                 </div>
               </div>
@@ -247,7 +247,7 @@ export function ApfHuGenerateTab() {
           </CardHeader>
           <CardContent className="space-y-3">
             {[
-              { step: "1", title: "Fa\u00e7a o upload", desc: "Carregue PDF, DOCX, Excel ou Markdown com os dados que servir\u00e3o de base para as HUs." },
+              { step: "1", title: "Faça o upload", desc: "Carregue PDF, DOCX, Excel ou Markdown com os dados que servirão de base para as HUs." },
               { step: "2", title: "Escolha o template", desc: "Selecione o template de prompt cadastrado em Gerenciar Templates. O prompt define o estilo das HUs geradas." },
               { step: "3", title: "Selecione a IA", desc: "Escolha o provedor de IA. Para grandes volumes de dados, prefira Gemini (1M tokens)." },
               { step: "4", title: "Gere e baixe", desc: "Clique em Gerar e baixe o resultado em Markdown para usar em qualquer ferramenta." },
@@ -294,7 +294,7 @@ export function ApfHuGenerateTab() {
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-4 w-4 text-primary" /> User Stories Geradas
             </DialogTitle>
-            <DialogDescription>Confira e refine o conte\u00fado antes do download.</DialogDescription>
+            <DialogDescription>Confira e refine o conteúdo antes do download.</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0 rounded-md border border-border bg-background p-6">
             <article className="prose prose-sm max-w-none dark:prose-invert prose-table:text-xs prose-table:border prose-th:bg-primary/10 prose-th:p-2 prose-td:p-2 prose-td:border">

@@ -85,16 +85,16 @@ export function ApfTemplatesTab() {
   }) => {
     try {
       if (editing) {
-        await updateTemplate(editing.id, editing.version, data);
+        await updateTemplate(editing.id, editing.version, data); setModalOpen(false);
         toast.success("Template atualizado!");
       } else {
-        await createTemplate(currentTeamId!, user!.id, data);
+        if (!currentTeamId || !user?.id) throw new Error("Sessão ou time inválido"); await createTemplate(currentTeamId, user.id, data); setModalOpen(false);
         toast.success("Template criado!");
       }
       setEditing(null);
       load();
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erro ao salvar template");
+      console.error("Template Save Error:", e); toast.error(e instanceof Error ? e.message : "Erro ao salvar template");
       throw e;
     }
   };

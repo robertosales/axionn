@@ -76,6 +76,7 @@ export function ApfTemplateModal({ open, onClose, onSave, template }: Props) {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="docx">DOCX</SelectItem>
+                <SelectItem value="md">Markdown (.md)</SelectItem>
               </SelectContent>
             </Select>
           </div>

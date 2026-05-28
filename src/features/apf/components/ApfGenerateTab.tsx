@@ -9,7 +9,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   FileText, Download, Eye, Loader2, History, Settings2, Sparkles,
-  Upload, FileUp, X, CheckCircle2, AlertCircle
+  Upload, FileUp, X, CheckCircle2, AlertCircle, Trash2
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -18,16 +18,17 @@ import { useApfGenerate } from "../hooks/useApfGenerate";
 import { AIProviderSelector } from "./shared/AIProviderSelector";
 import { downloadDocxFromMarkdown, downloadMarkdownAsFile } from "../utils/markdownToDocx";
 import { useFileIngestion } from "../hooks/useFileIngestion";
+import { FileDropzone } from "./hu-generation/FileDropzone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+/** Upload de arquivo único (Baseline e Modelo de Evidências) */
 function SingleFileUpload({
   label,
   icon,
   file,
   onFile,
   onRemove,
-  isProcessing,
   accept = ".pdf,.docx,.doc,.xlsx,.xls,.txt,.md",
 }: {
   label: string;
@@ -35,7 +36,6 @@ function SingleFileUpload({
   file: import("../hooks/useFileIngestion").IngestedFile | null;
   onFile: (f: File) => void;
   onRemove: () => void;
-  isProcessing?: boolean;
   accept?: string;
 }) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,8 +47,8 @@ function SingleFileUpload({
         {icon}{label}
       </Label>
       {!file ? (
-        <label className="flex flex-col items-center justify-center gap-2 h-20 rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 cursor-pointer transition-all group">
-          <Upload className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+        <label className="flex flex-col items-center justify-center gap-2 h-16 rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-muted/30 cursor-pointer transition-all group">
+          <Upload className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           <span className="text-[11px] text-muted-foreground group-hover:text-foreground transition-colors">Clique para selecionar</span>
           <input type="file" accept={accept} className="hidden" onChange={handleChange} />
         </label>
@@ -67,11 +67,7 @@ function SingleFileUpload({
             )}
             <span className="text-xs font-medium truncate">{file.name}</span>
           </div>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-          >
+          <button type="button" onClick={onRemove} className="shrink-0 text-muted-foreground hover:text-destructive transition-colors">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -81,13 +77,16 @@ function SingleFileUpload({
 }
 
 export function ApfGenerateTab() {
+  // HUs: múltiplos arquivos
   const huIngestion    = useFileIngestion();
+  // Baseline e Modelo: arquivo único cada
   const baseIngestion  = useFileIngestion();
   const modelIngestion = useFileIngestion();
 
-  const huFile    = huIngestion.files[0] ?? null;
   const baseFile  = baseIngestion.files[0] ?? null;
   const modelFile = modelIngestion.files[0] ?? null;
+
+  const huFilesOk = huIngestion.files.filter(f => f.status === "success");
 
   const {
     selectedTemplateId, setSelectedTemplateId,
@@ -108,10 +107,11 @@ export function ApfGenerateTab() {
   );
 
   const canGenerate =
-    huFile?.status === "success" &&
+    huFilesOk.length > 0 &&
     !!selectedTemplateId &&
     !!selectedProviderId &&
     !generating &&
+    !huIngestion.isProcessing &&
     !(providerCfg.needsKey && !apiKey.trim());
 
   const handleGenerate = async () => {
@@ -119,7 +119,13 @@ export function ApfGenerateTab() {
 
     const parts: string[] = [];
     if (selectedTemplate.prompt_template) parts.push(selectedTemplate.prompt_template);
-    parts.push(`\n\n---\n### HUs do Projeto:\n${huFile!.content}`);
+
+    // Consolida todas as HUs
+    const huConsolidado = huFilesOk
+      .map(f => `## Origem: ${f.name}\n\n${f.content}`)
+      .join("\n\n---\n\n");
+    parts.push(`\n\n---\n### HUs do Projeto:\n${huConsolidado}`);
+
     if (baseFile?.status === "success")  parts.push(`\n\n---\n### Baseline / Referência:\n${baseFile.content}`);
     if (modelFile?.status === "success") parts.push(`\n\n---\n### Modelo de Evidências (estrutura esperada):\n${modelFile.content}`);
 
@@ -150,30 +156,58 @@ export function ApfGenerateTab() {
       {/* ── Coluna principal (2/3) ── */}
       <div className="xl:col-span-2 space-y-4">
 
-        {/* Card: Upload de documentos */}
+        {/* Card: HUs — múltiplos arquivos */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <FileUp className="h-4 w-4 text-primary" />
+                HUs do Projeto *
+                {huIngestion.files.length > 0 && (
+                  <Badge variant="secondary" className="text-[9px] h-4 px-1.5">
+                    {huIngestion.files.length} arquivo{huIngestion.files.length > 1 ? "s" : ""}
+                  </Badge>
+                )}
+              </CardTitle>
+              {huIngestion.files.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={huIngestion.clearFiles}
+                  className="h-7 text-[10px] font-semibold text-muted-foreground hover:text-destructive gap-1">
+                  <Trash2 className="h-3 w-3" /> Limpar
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <FileDropzone
+              files={huIngestion.files}
+              onFilesSelected={huIngestion.ingestFiles}
+              onRemoveFile={huIngestion.removeFile}
+              isProcessing={huIngestion.isProcessing}
+            />
+            {huIngestion.isProcessing && (
+              <p className="text-[11px] text-primary flex items-center gap-1.5 mt-2 animate-pulse">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Processando: {huIngestion.currentProcessingFile}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card: Baseline e Modelo — arquivo único cada */}
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <FileUp className="h-4 w-4 text-primary" />
-              Documentos de Entrada
+              <FileText className="h-4 w-4 text-primary" />
+              Documentos de Referência
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <SingleFileUpload
-              label="HUs do Projeto *"
-              icon={<FileText className="h-3.5 w-3.5" />}
-              file={huFile}
-              onFile={(f) => huIngestion.ingestFiles([f])}
-              onRemove={() => huIngestion.removeFile(huFile!.name)}
-              isProcessing={huIngestion.isProcessing}
-            />
             <SingleFileUpload
               label="Baseline / Referência"
               icon={<FileText className="h-3.5 w-3.5" />}
               file={baseFile}
               onFile={(f) => baseIngestion.ingestFiles([f])}
               onRemove={() => baseIngestion.removeFile(baseFile!.name)}
-              isProcessing={baseIngestion.isProcessing}
             />
             <SingleFileUpload
               label="Modelo de Evidências"
@@ -181,7 +215,6 @@ export function ApfGenerateTab() {
               file={modelFile}
               onFile={(f) => modelIngestion.ingestFiles([f])}
               onRemove={() => modelIngestion.removeFile(modelFile!.name)}
-              isProcessing={modelIngestion.isProcessing}
             />
           </CardContent>
         </Card>
@@ -224,7 +257,7 @@ export function ApfGenerateTab() {
         </Card>
 
         {/* Botão gerar */}
-        <div className="flex flex-col items-center gap-3 pt-1">
+        <div className="flex flex-col items-center gap-2 pt-1">
           <Button
             size="lg"
             className="w-full h-11 font-bold gap-2 shadow-md shadow-primary/20"
@@ -238,8 +271,9 @@ export function ApfGenerateTab() {
             )}
           </Button>
           {!canGenerate && !generating && (
-            <p className="text-[11px] text-muted-foreground">
-              {!huFile ? "Faça upload das HUs para continuar" :
+            <p className="text-[11px] text-muted-foreground text-center">
+              {huIngestion.files.length === 0 ? "Faça upload de pelo menos uma HU para continuar" :
+               huIngestion.isProcessing ? "Aguarde o processamento dos arquivos..." :
                !selectedTemplateId ? "Selecione um template de prompt" :
                providerCfg.needsKey && !apiKey.trim() ? "Informe sua API key do provedor selecionado" :
                ""}
@@ -247,7 +281,7 @@ export function ApfGenerateTab() {
           )}
           {progressStep !== "idle" && (
             <p className="text-xs font-medium text-primary animate-pulse">
-              {progressStep === "calling_ai" && "🤖 IA processando o documento..."}
+              {progressStep === "calling_ai" && "🤖 IA processando os documentos..."}
               {progressStep === "saving" && "💾 Salvando resultado..."}
             </p>
           )}

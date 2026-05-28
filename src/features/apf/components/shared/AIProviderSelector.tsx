@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, Key, Zap } from "lucide-react";
+import { ShieldCheck, Key, Zap, Info } from "lucide-react";
 import { AIProvider } from "@/features/admin/services/aiProviders.service";
 
 interface AIProviderSelectorProps {
@@ -14,13 +14,13 @@ interface AIProviderSelectorProps {
   onApiKeyChange: (key: string) => void;
 }
 
-const CONTEXT_LIMITS: Record<string, string> = {
-  openai: "~128k tokens",
-  anthropic: "~200k tokens",
-  gemini: "~1M - 2M tokens",
-  lovable: "~32k tokens (Recomendado)",
-  perplexity: "~32k tokens",
-  manus: "~128k tokens",
+const CONTEXT_LIMITS: Record<string, { label: string; color: string }> = {
+  openai: { label: "~128k Tokens", color: "bg-blue-500/10 text-blue-600 border-blue-200" },
+  anthropic: { label: "~200k Tokens", color: "bg-orange-500/10 text-orange-600 border-orange-200" },
+  gemini: { label: "~1M Tokens", color: "bg-emerald-500/10 text-emerald-600 border-emerald-200" },
+  lovable: { label: "Ilimitado (Recomendado)", color: "bg-primary/10 text-primary border-primary/20" },
+  perplexity: { label: "~32k Tokens", color: "bg-zinc-500/10 text-zinc-600 border-zinc-200" },
+  manus: { label: "~128k Tokens", color: "bg-purple-500/10 text-purple-600 border-purple-200" },
 };
 
 export function AIProviderSelector({
@@ -36,7 +36,7 @@ export function AIProviderSelector({
   );
 
   const providerCfg = useMemo(() => {
-    if (!selectedProvider) return { needsKey: false, placeholder: "", contextLimit: "" };
+    if (!selectedProvider) return { needsKey: false, placeholder: "", contextLimit: null };
     const isLovable = selectedProvider.provider_type === "lovable";
     const needsKey = !isLovable && !selectedProvider.has_key;
     const placeholderByType: Record<string, string> = {
@@ -50,37 +50,48 @@ export function AIProviderSelector({
     return {
       needsKey,
       placeholder: placeholderByType[selectedProvider.provider_type] ?? "Cole sua API key",
-      contextLimit: CONTEXT_LIMITS[selectedProvider.provider_type] ?? "",
+      contextLimit: CONTEXT_LIMITS[selectedProvider.provider_type] ?? null,
     };
   }, [selectedProvider]);
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-center gap-2 mb-2">
-        <Zap className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-semibold">Hub de IA</h3>
+    <div className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-bold uppercase tracking-tight">Hub de IA Multi-Provedor</h3>
+        </div>
+        {selectedProvider?.provider_type === "lovable" && (
+          <Badge variant="outline" className="text-[9px] bg-primary/5 text-primary border-primary/20 font-bold">
+            EMBUTIDO
+          </Badge>
+        )}
       </div>
 
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Provedor</Label>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+            Selecione o Provedor
+          </Label>
           <Select value={selectedProviderId} onValueChange={onProviderChange}>
-            <SelectTrigger className="h-9 text-sm">
-              <SelectValue placeholder="Selecione um provedor" />
+            <SelectTrigger className="h-10 text-sm font-medium focus:ring-primary/20">
+              <SelectValue placeholder="Escolha a inteligência artificial..." />
             </SelectTrigger>
             <SelectContent>
               {providers.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  <div className="flex items-center gap-2">
+                <SelectItem key={p.id} value={p.id} className="cursor-pointer">
+                  <div className="flex items-center gap-2 py-0.5">
                     {p.provider_type === "lovable" ? (
-                      <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                      <ShieldCheck className="h-4 w-4 text-primary" />
                     ) : (
-                      <Key className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Key className="h-4 w-4 text-muted-foreground/70" />
                     )}
-                    <span>{p.name}</span>
-                    {p.is_recommended && (
-                      <Badge variant="secondary" className="ml-1 text-[9px] px-1.5 py-0 h-4 uppercase">Rec</Badge>
-                    )}
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold">{p.name}</span>
+                      {p.provider_type === "lovable" && (
+                        <span className="text-[9px] text-muted-foreground leading-none">Gemini/GPT — Recomendado</span>
+                      )}
+                    </div>
                   </div>
                 </SelectItem>
               ))}
@@ -89,28 +100,38 @@ export function AIProviderSelector({
         </div>
 
         {providerCfg.needsKey && (
-          <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
-            <Label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground flex justify-between">
-              Sua API Key (BYOK)
-              <span className="text-[10px] lowercase font-normal italic">Salva apenas na sessão</span>
-            </Label>
+          <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Traga sua Própria Chave (BYOK)
+              </Label>
+              <div className="flex items-center gap-1 text-[9px] text-amber-600 font-bold uppercase">
+                <Info className="h-3 w-3" />
+                Sessão Segura
+              </div>
+            </div>
             <Input
               type="password"
               value={apiKey}
               onChange={(e) => onApiKeyChange(e.target.value)}
               placeholder={providerCfg.placeholder}
-              className="h-9 text-xs"
+              className="h-10 text-sm font-mono bg-muted/30 focus:bg-background transition-colors"
               autoComplete="off"
             />
+            <p className="text-[9px] text-muted-foreground leading-relaxed italic">
+              Sua chave é armazenada apenas no sessionStorage local e nunca toca nossos servidores permanentemente.
+            </p>
           </div>
         )}
 
         {providerCfg.contextLimit && (
-          <div className="flex items-center gap-1.5 pt-1">
-            <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
-            <span className="text-[10px] text-muted-foreground font-medium">
-              Limite de contexto: <span className="text-foreground">{providerCfg.contextLimit}</span>
+          <div className="pt-2 border-t border-border/50 flex flex-col gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              Limite de Contexto Recomendado:
             </span>
+            <Badge variant="outline" className={`w-fit py-1 px-3 text-[10px] font-bold uppercase tracking-tight ${providerCfg.contextLimit.color}`}>
+              {providerCfg.contextLimit.label}
+            </Badge>
           </div>
         )}
       </div>

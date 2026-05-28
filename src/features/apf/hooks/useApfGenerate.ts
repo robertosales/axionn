@@ -29,10 +29,24 @@ export type AnswerEntry = {
 };
 
 const INLINE_AI_PROVIDERS: AIProvider[] = [
-  { id: "inline:lovable", name: "Lovable AI (Gratuita) — recomendada", provider_type: "lovable", model: "google/gemini-2.0-flash", is_recommended: true, is_active: true, has_key: true, created_at: "", updated_at: "" },
+  {
+    id: "inline:lovable",
+    name: "Lovable AI (Gratuita) — recomendada",
+    provider_type: "lovable",
+    model: "google/gemini-2.0-flash",
+    is_recommended: true,
+    is_active: true,
+    has_key: true,
+    created_at: "",
+    updated_at: "",
+  },
 ];
 
-export function useApfGenerate() {
+/**
+ * moduleId: UUID do módulo para filtrar templates.
+ * Quando não informado, exibe todos os templates ativos (sem filtro de módulo).
+ */
+export function useApfGenerate(moduleId?: string) {
   const { currentTeamId, user } = useAuth();
   const { sprints } = useSprint();
 
@@ -46,8 +60,11 @@ export function useApfGenerate() {
   const [aiProviders, setAiProviders]               = useState<AIProvider[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const [apiKey, setApiKey] = useState(() => sessionStorage.getItem("apf_ai_api_key") || "");
-  useEffect(() => { if (apiKey) { sessionStorage.setItem("apf_ai_api_key", apiKey); } else { sessionStorage.removeItem("apf_ai_api_key"); } }, [apiKey]);
-  const [outputFormat, setOutputFormat]             = useState<OutputFormat>("docx");
+  useEffect(() => {
+    if (apiKey) sessionStorage.setItem("apf_ai_api_key", apiKey);
+    else sessionStorage.removeItem("apf_ai_api_key");
+  }, [apiKey]);
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>("docx");
 
   const [questions, setQuestions]         = useState<Question[]>([]);
   const [answers, setAnswers]             = useState<Record<string, AnswerEntry>>({});
@@ -62,7 +79,7 @@ export function useApfGenerate() {
   } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Carrega TODOS os templates e filtra os ativos no useMemo
+  // Carrega todos os templates do time
   useEffect(() => {
     if (!currentTeamId) return;
     fetchTemplates(currentTeamId)
@@ -70,20 +87,29 @@ export function useApfGenerate() {
       .catch(() => {});
   }, [currentTeamId]);
 
-  // Apenas os ativos aparecem no select de geração
-  const templates = useMemo(
-    () => allTemplates.filter((t) => t.is_active),
-    [allTemplates]
-  );
+  /**
+   * Filtra: ativos + módulo correspondente.
+   * Templates sem module_id aparecem em todas as abas (retrocompatível).
+   */
+  const templates = useMemo(() => {
+    return allTemplates.filter((t) => {
+      if (!t.is_active) return false;
+      if (!moduleId) return true;
+      if (!t.module_id) return true; // sem módulo → aparece em todos
+      return t.module_id === moduleId;
+    });
+  }, [allTemplates, moduleId]);
 
-  // Load providers
+  // Carrega providers de IA
   useEffect(() => {
     listAIProviders({ onlyActive: true })
       .then((list) => {
         const freeFromDb = list.filter((p) => p.provider_type === "lovable");
         const merged = [
           ...freeFromDb,
-          ...INLINE_AI_PROVIDERS.filter((inline) => !freeFromDb.some((p) => p.provider_type === inline.provider_type)),
+          ...INLINE_AI_PROVIDERS.filter(
+            (inline) => !freeFromDb.some((p) => p.provider_type === inline.provider_type)
+          ),
         ];
         setAiProviders(merged);
         if (merged.length > 0) {
@@ -97,7 +123,7 @@ export function useApfGenerate() {
       });
   }, []);
 
-  // Load history
+  // Histórico de gerações
   useEffect(() => {
     if (!currentTeamId || !selectedSprintId) { setGenerations([]); return; }
     setLoadingHistory(true);
@@ -109,12 +135,12 @@ export function useApfGenerate() {
 
   const selectedProvider = useMemo(
     () => aiProviders.find((p) => p.id === selectedProviderId) ?? null,
-    [aiProviders, selectedProviderId],
+    [aiProviders, selectedProviderId]
   );
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.id === selectedTemplateId) ?? null,
-    [templates, selectedTemplateId],
+    [templates, selectedTemplateId]
   );
 
   const providerCfg = useMemo(() => {
@@ -150,10 +176,8 @@ export function useApfGenerate() {
 
   const generateGeneric = async (prompt: string, baseFilename: string) => {
     if (!currentTeamId || !user) throw new Error("Sessão inválida");
-
     setGenerating(true);
     setProgressStep("calling_ai");
-
     try {
       const isInlineProvider = selectedProviderId.startsWith("inline:");
       const result = await invokeApfGeneration({
@@ -164,7 +188,6 @@ export function useApfGenerate() {
         files: [],
         skipDocx: true,
       });
-
       setLastResult({
         markdown: result.markdown,
         baseFilename,
@@ -197,11 +220,9 @@ export function useApfGenerate() {
   const runGeneration = useCallback(async () => {
     if (!selectedTemplate || !selectedSprintId) return;
     setShowQuestions(false);
-
     const sprintObj = (sprints ?? []).find((s) => s.id === selectedSprintId);
     const sprintName = sprintObj?.name ?? selectedSprintId;
     const baseFilename = `APF_${sprintName}_${selectedTemplate.name}`.replace(/\s+/g, "_");
-
     let prompt = selectedTemplate.prompt_template ?? "";
     if (Object.keys(answers).length > 0) {
       prompt += "\n\n--- Contexto adicional ---\n";
@@ -213,7 +234,6 @@ export function useApfGenerate() {
         }
       });
     }
-
     try {
       await generateGeneric(prompt, baseFilename);
       toast.success("Documento APF gerado com sucesso!");

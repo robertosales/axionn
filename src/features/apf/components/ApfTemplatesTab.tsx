@@ -1,27 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuTrigger, DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
   Plus, MoreVertical, FileText, Table2, Copy, Trash2,
-  Clock, FileCode, ShieldCheck, Zap, LayoutGrid, Wand2, Star, FileDown
+  Clock, FileCode, ShieldCheck, LayoutGrid, Wand2, Star, FileDown, Boxes
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -51,14 +42,28 @@ function OutputTypeBadge({ type }: { type: string }) {
   );
 }
 
+function ModuleBadge({ name }: { name?: string | null }) {
+  if (!name) return (
+    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-md">
+      <Boxes className="h-3 w-3" /> Todos
+    </div>
+  );
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-primary bg-primary/5 border border-primary/20 px-2 py-0.5 rounded-md max-w-[140px] truncate">
+      <Boxes className="h-3 w-3 shrink-0" />
+      <span className="truncate">{name}</span>
+    </div>
+  );
+}
+
 export function ApfTemplatesTab() {
   const { currentTeamId, user } = useAuth();
   const [templates, setTemplates] = useState<ApfTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]     = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<ApfTemplate | null>(null);
+  const [editing, setEditing]     = useState<ApfTemplate | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApfTemplate | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deleting, setDeleting]   = useState(false);
 
   const load = useCallback(async () => {
     if (!currentTeamId) return;
@@ -74,7 +79,10 @@ export function ApfTemplatesTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleSave = async (data: { name: string; description: string; output_type: string; prompt_content: string }) => {
+  const handleSave = async (data: {
+    name: string; description: string;
+    output_type: string; prompt_content: string; module_id: string | null;
+  }) => {
     try {
       if (editing) {
         await updateTemplate(editing.id, editing.version, data);
@@ -87,18 +95,13 @@ export function ApfTemplatesTab() {
       load();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar template");
-      throw e; // re-throw para manter o estado "Salvando..." travado
+      throw e;
     }
   };
 
   const handleDuplicate = async (t: ApfTemplate) => {
-    try {
-      await duplicateTemplate(t);
-      toast.success("Template duplicado!");
-      load();
-    } catch {
-      toast.error("Erro ao duplicar");
-    }
+    try { await duplicateTemplate(t); toast.success("Template duplicado!"); load(); }
+    catch { toast.error("Erro ao duplicar"); }
   };
 
   const handleToggle = async (t: ApfTemplate) => {
@@ -106,9 +109,7 @@ export function ApfTemplatesTab() {
       await toggleTemplateActive(t.id, t.is_active);
       toast.success(t.is_active ? "Template desativado" : "Template ativado");
       load();
-    } catch {
-      toast.error("Erro ao alterar status");
-    }
+    } catch { toast.error("Erro ao alterar status"); }
   };
 
   const handleDelete = async () => {
@@ -119,11 +120,8 @@ export function ApfTemplatesTab() {
       toast.success("Template excluído!");
       setDeleteTarget(null);
       load();
-    } catch {
-      toast.error("Erro ao excluir template");
-    } finally {
-      setDeleting(false);
-    }
+    } catch { toast.error("Erro ao excluir template"); }
+    finally { setDeleting(false); }
   };
 
   if (loading) {
@@ -137,7 +135,6 @@ export function ApfTemplatesTab() {
 
   return (
     <div className="space-y-6">
-      {/* Header — padrão do sistema */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-border">
         <div className="min-w-0">
           <h2 className="text-base font-semibold flex items-center gap-2">
@@ -158,7 +155,7 @@ export function ApfTemplatesTab() {
           <CardContent className="flex flex-col items-center justify-center py-16 space-y-4">
             <Wand2 className="h-8 w-8 text-muted-foreground/40" />
             <div className="text-center">
-              <p className="text-sm font-medium text-foreground">Nenhum template encontrado</p>
+              <p className="text-sm font-medium">Nenhum template encontrado</p>
               <p className="text-xs text-muted-foreground mt-1">Crie templates para padronizar a geração de documentos.</p>
             </div>
             <Button variant="outline" size="sm" onClick={() => { setEditing(null); setModalOpen(true); }}>
@@ -179,16 +176,14 @@ export function ApfTemplatesTab() {
                     <CardTitle className="text-sm font-semibold truncate flex items-center gap-1.5">
                       {t.is_active
                         ? <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 shrink-0" />
-                        : <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      }
+                        : <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                       {t.name}
                     </CardTitle>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant="outline" className="text-[10px] h-4 px-1.5">v{t.version}</Badge>
                       {t.is_active
                         ? <Badge className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-600 border-emerald-200 hover:bg-emerald-500/10">Ativo</Badge>
-                        : <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Inativo</Badge>
-                      }
+                        : <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Inativo</Badge>}
                     </div>
                   </div>
                   <DropdownMenu>
@@ -224,8 +219,11 @@ export function ApfTemplatesTab() {
                 {t.description && (
                   <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>
                 )}
-                <div className="flex items-center justify-between pt-2 border-t border-border">
-                  <OutputTypeBadge type={t.output_type} />
+                <div className="flex items-center justify-between pt-2 border-t border-border gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <OutputTypeBadge type={t.output_type} />
+                    <ModuleBadge name={t.apf_modules?.name} />
+                  </div>
                   <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                     <Clock className="h-2.5 w-2.5" />
                     {new Date(t.created_at).toLocaleDateString("pt-BR")}
@@ -244,7 +242,6 @@ export function ApfTemplatesTab() {
         template={editing}
       />
 
-      {/* Dialog de confirmação de exclusão */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

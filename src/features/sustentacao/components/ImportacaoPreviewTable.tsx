@@ -39,7 +39,6 @@ import { cn } from "@/lib/utils";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
-/** Espelho do ParsedRow de ImportacaoView — apenas os campos necessários aqui */
 export interface PreviewRow {
   rhm: string;
   projeto: string;
@@ -71,13 +70,9 @@ interface SystemRecord {
 }
 
 interface EnrichedRow extends PreviewRow {
-  /** situação encontrada no banco (null = não existe ainda) */
   situacaoSistema: string | null;
-  /** tipo de ação identificado pela comparação */
   tipoAcao: TipoAcao;
-  /** diferença textual para exibir */
   diferenca: string | null;
-  /** status de progresso durante/após a migração */
   status: RowStatus;
 }
 
@@ -110,22 +105,22 @@ const TIPO_ACAO_CONFIG: Record<
   novo: {
     label: "Novo registro",
     icon: PlusCircle,
-    badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300",
+    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
   },
   atualizacao: {
     label: "Atualização",
     icon: RefreshCw,
-    badgeClass: "bg-blue-100 text-blue-800 border-blue-300",
+    badgeClass: "bg-sky-50 text-sky-700 border-sky-200",
   },
   sem_alteracao: {
     label: "Sem alteração",
     icon: MinusCircle,
-    badgeClass: "bg-muted text-muted-foreground border-border",
+    badgeClass: "bg-gray-50 text-gray-500 border-gray-200",
   },
   erro_validacao: {
     label: "Erro de validação",
     icon: XCircle,
-    badgeClass: "bg-red-100 text-red-800 border-red-300",
+    badgeClass: "bg-red-50 text-red-600 border-red-200",
   },
 };
 
@@ -133,13 +128,13 @@ const ROW_STATUS_CONFIG: Record<
   RowStatus,
   { label: string; icon: React.ElementType; className: string }
 > = {
-  pendente:    { label: "Pendente",      icon: Clock,         className: "text-muted-foreground" },
-  validando:   { label: "Validando…",    icon: Loader2,       className: "text-amber-600" },
-  atualizando: { label: "Atualizando…",  icon: Loader2,       className: "text-blue-600" },
+  pendente:    { label: "Pendente",      icon: Clock,         className: "text-gray-400" },
+  validando:   { label: "Validando…",    icon: Loader2,       className: "text-amber-500" },
+  atualizando: { label: "Atualizando…",  icon: Loader2,       className: "text-sky-600" },
   criado:      { label: "Criado",        icon: CheckCircle2,  className: "text-emerald-600" },
-  atualizado:  { label: "Atualizado",    icon: CheckCircle2,  className: "text-blue-600" },
-  ignorado:    { label: "Ignorado",      icon: MinusCircle,   className: "text-muted-foreground" },
-  erro:        { label: "Erro",          icon: XCircle,       className: "text-destructive" },
+  atualizado:  { label: "Atualizado",    icon: CheckCircle2,  className: "text-sky-600" },
+  ignorado:    { label: "Ignorado",      icon: MinusCircle,   className: "text-gray-400" },
+  erro:        { label: "Erro",          icon: XCircle,       className: "text-red-500" },
 };
 
 // ─── Componente principal ────────────────────────────────────────────────────
@@ -149,7 +144,6 @@ interface Props {
   onConfirm: (selected: PreviewRow[]) => void;
   onCancel: () => void;
   loading: boolean;
-  /** Atualizado externamente pelo ImportacaoView durante o processamento */
   progressMap?: Map<string, RowStatus>;
 }
 
@@ -160,14 +154,10 @@ export function ImportacaoPreviewTable({
   loading,
   progressMap = new Map(),
 }: Props) {
-  // ── Estado de enriquecimento (busca situação atual no BD) ──────────────────
   const [enriched, setEnriched] = useState<EnrichedRow[]>([]);
   const [loadingEnrich, setLoadingEnrich] = useState(true);
-
-  // ── Estado de seleção ──────────────────────────────────────────────────────
   const [selectedRhms, setSelectedRhms] = useState<Set<string>>(new Set());
 
-  // ── Busca situação atual de todas as demandas no banco ─────────────────────
   useEffect(() => {
     if (rows.length === 0) {
       setLoadingEnrich(false);
@@ -177,7 +167,6 @@ export function ImportacaoPreviewTable({
     async function enrich() {
       setLoadingEnrich(true);
       try {
-        // Agrupa rhms por teamId para minimizar queries
         const byTeam = new Map<string, string[]>();
         for (const row of rows) {
           const list = byTeam.get(row.teamId) ?? [];
@@ -185,7 +174,6 @@ export function ImportacaoPreviewTable({
           byTeam.set(row.teamId, list);
         }
 
-        // Busca no banco: 1 query por time
         const systemMap = new Map<string, SystemRecord>();
         for (const [teamId, rhms] of byTeam) {
           const { data } = await supabase
@@ -201,7 +189,6 @@ export function ImportacaoPreviewTable({
           }
         }
 
-        // Enriquece cada linha com dados do sistema
         const result: EnrichedRow[] = rows.map((row) => {
           const key = `${row.teamId}:${row.rhm}`;
           const sys = systemMap.get(key) ?? null;
@@ -229,7 +216,6 @@ export function ImportacaoPreviewTable({
 
         setEnriched(result);
 
-        // Pré-seleciona: novos + atualizações (ignora sem_alteracao)
         const autoSelected = new Set(
           result
             .filter((r) => r.tipoAcao === "novo" || r.tipoAcao === "atualizacao")
@@ -245,7 +231,6 @@ export function ImportacaoPreviewTable({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
-  // ── Aplica progresso vindo do pai sobre as linhas enriquecidas ─────────────
   const displayRows: EnrichedRow[] = useMemo(
     () =>
       enriched.map((r) => ({
@@ -255,7 +240,6 @@ export function ImportacaoPreviewTable({
     [enriched, progressMap],
   );
 
-  // ── Contadores ─────────────────────────────────────────────────────────────
   const counts = useMemo(
     () => ({
       novos:        displayRows.filter((r) => r.tipoAcao === "novo").length,
@@ -276,7 +260,6 @@ export function ImportacaoPreviewTable({
     selectableRhms.length > 0 && selectableRhms.every((rhm) => selectedRhms.has(rhm));
   const someSelected = selectedRhms.size > 0 && !allSelected;
 
-  // ── Handlers de seleção ────────────────────────────────────────────────────
   function toggleAll() {
     if (allSelected) {
       setSelectedRhms(new Set());
@@ -294,7 +277,6 @@ export function ImportacaoPreviewTable({
     });
   }
 
-  // ── Handlers de ação ───────────────────────────────────────────────────────
   function handleMigrarSelecionados() {
     const selected = enriched.filter((r) => selectedRhms.has(r.rhm));
     onConfirm(selected);
@@ -306,34 +288,48 @@ export function ImportacaoPreviewTable({
     onConfirm(all);
   }
 
-  // ── Loading de enriquecimento ──────────────────────────────────────────────
   if (loadingEnrich) {
     return (
-      <div className="flex flex-col items-center justify-center py-10 gap-3 text-sm text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin text-info" />
+      <div className="flex flex-col items-center justify-center py-12 gap-3 text-sm text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
         <p>Comparando com o sistema… aguarde</p>
       </div>
     );
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* ── Chips de resumo ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <SummaryChip label="Novos"         count={counts.novos}        colorClass="bg-emerald-50 text-emerald-800 border-emerald-200" />
-        <SummaryChip label="Atualizações"  count={counts.atualizacoes} colorClass="bg-blue-50 text-blue-800 border-blue-200" />
-        <SummaryChip label="Sem alteração" count={counts.semAlteracao} colorClass="bg-muted text-muted-foreground border-border" />
-        <SummaryChip label="Erros"         count={counts.erros}        colorClass="bg-red-50 text-red-800 border-red-200" />
+      {/* ── Painel de indicadores: 4 colunas pastéis ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <SummaryChip
+          label="Novos"
+          count={counts.novos}
+          colorClass="bg-emerald-50 text-emerald-700 border-emerald-200"
+        />
+        <SummaryChip
+          label="Atualizações"
+          count={counts.atualizacoes}
+          colorClass="bg-sky-50 text-sky-700 border-sky-200"
+        />
+        <SummaryChip
+          label="Sem alteração"
+          count={counts.semAlteracao}
+          colorClass="bg-gray-50 text-gray-500 border-gray-200"
+        />
+        <SummaryChip
+          label="Erros"
+          count={counts.erros}
+          colorClass="bg-red-50 text-red-600 border-red-200"
+        />
       </div>
 
       {/* ── Tabela comparativa ── */}
-      <div className="border rounded-lg overflow-hidden">
+      <div className="rounded-xl border border-gray-100 overflow-hidden shadow-sm">
         <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
           <Table>
-            <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
-              <TableRow>
-                <TableHead className="w-10 text-center">
+            <TableHeader className="sticky top-0 bg-gray-50 backdrop-blur-sm z-10">
+              <TableRow className="border-b border-gray-100">
+                <TableHead className="w-10 text-center py-3">
                   <Checkbox
                     checked={allSelected}
                     data-state={someSelected ? "indeterminate" : allSelected ? "checked" : "unchecked"}
@@ -341,18 +337,18 @@ export function ImportacaoPreviewTable({
                     aria-label="Selecionar todos"
                   />
                 </TableHead>
-                <TableHead className="w-20">#</TableHead>
-                <TableHead className="min-w-[120px]">Projeto</TableHead>
-                <TableHead className="min-w-[130px]">Status Planilha</TableHead>
-                <TableHead className="min-w-[130px]">Status Sistema</TableHead>
-                <TableHead className="min-w-[200px]">Diferença</TableHead>
-                <TableHead className="min-w-[150px]">Ação</TableHead>
-                <TableHead className="min-w-[120px]">Progresso</TableHead>
+                <TableHead className="w-20 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">#</TableHead>
+                <TableHead className="min-w-[120px] py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Projeto</TableHead>
+                <TableHead className="min-w-[130px] py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Status Planilha</TableHead>
+                <TableHead className="min-w-[130px] py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Status Sistema</TableHead>
+                <TableHead className="min-w-[200px] py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Diferença</TableHead>
+                <TableHead className="min-w-[150px] py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Ação</TableHead>
+                <TableHead className="min-w-[120px] py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Progresso</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {displayRows.map((row) => {
-                const acaoCfg  = TIPO_ACAO_CONFIG[row.tipoAcao];
+                const acaoCfg   = TIPO_ACAO_CONFIG[row.tipoAcao];
                 const statusCfg = ROW_STATUS_CONFIG[row.status];
                 const AcaoIcon   = acaoCfg.icon;
                 const StatusIcon = statusCfg.icon;
@@ -366,14 +362,14 @@ export function ImportacaoPreviewTable({
                   <TableRow
                     key={row.rhm}
                     className={cn(
-                      "transition-colors",
-                      isSelected  && "bg-blue-50/40",
-                      !isSelectable && "opacity-60",
-                      hasDiff     && "border-l-2 border-l-amber-400",
+                      "transition-colors border-b border-gray-50",
+                      isSelected   && "bg-blue-50/30",
+                      !isSelectable && "opacity-55",
+                      hasDiff      && "border-l-2 border-l-amber-300",
                     )}
                   >
                     {/* Checkbox */}
-                    <TableCell className="text-center">
+                    <TableCell className="text-center py-3.5">
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => isSelectable && toggleRow(row.rhm)}
@@ -383,50 +379,55 @@ export function ImportacaoPreviewTable({
                     </TableCell>
 
                     {/* # */}
-                    <TableCell className="font-mono text-sm font-medium">#{row.rhm}</TableCell>
+                    <TableCell className="font-mono text-sm font-semibold text-gray-700 py-3.5">
+                      #{row.rhm}
+                    </TableCell>
 
                     {/* Projeto */}
                     <TableCell
-                      className="text-sm max-w-[140px] truncate"
+                      className="text-sm text-gray-700 max-w-[140px] truncate py-3.5"
                       title={row.projeto}
                     >
                       {row.projeto}
                     </TableCell>
 
                     {/* Status Planilha */}
-                    <TableCell>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-800 font-medium">
+                    <TableCell className="py-3.5">
+                      <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-medium">
                         {labelSituacao(row.situacao)}
                       </span>
                     </TableCell>
 
                     {/* Status Sistema */}
-                    <TableCell>
+                    <TableCell className="py-3.5">
                       {row.situacaoSistema ? (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 font-medium">
+                        <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-600 font-medium">
                           {labelSituacao(row.situacaoSistema)}
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground italic">Não existe</span>
+                        <span className="text-xs text-gray-400 italic">Não existe</span>
                       )}
                     </TableCell>
 
                     {/* Diferença */}
-                    <TableCell className="text-xs">
+                    <TableCell className="text-xs py-3.5">
                       {hasDiff && row.diferenca ? (
-                        <span className="text-amber-700 font-medium">{row.diferenca}</span>
+                        <span className="text-amber-600 font-medium">{row.diferenca}</span>
                       ) : row.tipoAcao === "novo" ? (
-                        <span className="text-emerald-700 font-medium">Será criado</span>
+                        <span className="text-emerald-600 font-medium">Será criado</span>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-gray-400">—</span>
                       )}
                     </TableCell>
 
                     {/* Tipo de Ação */}
-                    <TableCell>
+                    <TableCell className="py-3.5">
                       <Badge
                         variant="outline"
-                        className={cn("text-[11px] gap-1 px-1.5 py-0.5", acaoCfg.badgeClass)}
+                        className={cn(
+                          "text-[11px] gap-1 px-2.5 py-1 rounded-full font-medium border",
+                          acaoCfg.badgeClass
+                        )}
                       >
                         <AcaoIcon className="h-3 w-3 shrink-0" />
                         {acaoCfg.label}
@@ -434,10 +435,10 @@ export function ImportacaoPreviewTable({
                     </TableCell>
 
                     {/* Progresso */}
-                    <TableCell>
+                    <TableCell className="py-3.5">
                       <span
                         className={cn(
-                          "flex items-center gap-1 text-xs font-medium",
+                          "flex items-center gap-1.5 text-xs font-medium",
                           statusCfg.className,
                         )}
                       >
@@ -461,16 +462,15 @@ export function ImportacaoPreviewTable({
       {/* ── Legenda diferenças ── */}
       {counts.atualizacoes > 0 && (
         <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-          <span className="inline-block w-2.5 h-4 rounded-sm bg-amber-400 shrink-0" />
+          <span className="inline-block w-2.5 h-4 rounded-sm bg-amber-300 shrink-0" />
           Linhas com borda laranja possuem diferença de status entre a planilha e o sistema.
         </p>
       )}
 
-      {/* ── Ações de migração ── */}
-      <div className="flex flex-wrap items-center gap-3 pt-1">
+      {/* ── Barra de ações: hierarquia clara ── */}
+      <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
         <Button
-          style={{ backgroundColor: "#1a6fa8" }}
-          className="hover:opacity-90 text-white"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-5 h-9 rounded-lg text-sm font-medium transition-colors"
           onClick={handleMigrarSelecionados}
           disabled={loading || counts.selecionados === 0}
         >
@@ -486,13 +486,19 @@ export function ImportacaoPreviewTable({
 
         <Button
           variant="outline"
+          className="h-9 px-5 rounded-lg text-sm font-medium border-gray-200 hover:border-gray-300 hover:bg-gray-50"
           onClick={handleMigrarTodos}
           disabled={loading || selectableRhms.length === 0}
         >
           Migrar Todos ({selectableRhms.length})
         </Button>
 
-        <Button variant="ghost" onClick={onCancel} disabled={loading}>
+        <Button
+          variant="ghost"
+          className="h-9 px-4 rounded-lg text-sm text-gray-500 hover:text-gray-700"
+          onClick={onCancel}
+          disabled={loading}
+        >
           Cancelar
         </Button>
 
@@ -501,7 +507,6 @@ export function ImportacaoPreviewTable({
         </span>
       </div>
     </div>
-
   );
 }
 
@@ -517,9 +522,9 @@ function SummaryChip({
   colorClass: string;
 }) {
   return (
-    <div className={cn("rounded-lg border px-3 py-2 text-center", colorClass)}>
-      <p className="text-lg font-bold leading-none">{count}</p>
-      <p className="text-[11px] mt-0.5">{label}</p>
+    <div className={cn("rounded-xl border px-3 py-3 text-center", colorClass)}>
+      <p className="text-2xl font-bold leading-none">{count}</p>
+      <p className="text-[11px] mt-1.5 font-medium opacity-80">{label}</p>
     </div>
   );
 }

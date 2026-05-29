@@ -1,7 +1,10 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, FolderKanban, ArrowLeft, XCircle } from "lucide-react";
+import {
+  Upload, FileSpreadsheet, CheckCircle2, AlertCircle,
+  FolderKanban, ArrowLeft, XCircle, AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { upsertDemandas } from "../services/demandas.service";
@@ -14,6 +17,7 @@ import {
   type PreviewRow,
   type RowStatus,
 } from "./ImportacaoPreviewTable";
+import { cn } from "@/lib/utils";
 
 // ─── Mapas de normalização ───────────────────────────────────────────────────
 
@@ -124,20 +128,12 @@ interface ValidationError {
   mensagem: string;
 }
 
-/**
- * ParsedRow: interno ao ImportacaoView.
- * Estende PreviewRow adicionando data_inicio (necessário só aqui para cálculo de prazos).
- */
 interface ParsedRow extends PreviewRow {
   data_inicio: Date;
 }
 
 type ImportMode = null | "demandas" | "projetos";
 
-/**
- * Linha com erro registrado após tentativa de migração.
- * Usado apenas para exibição no log de falhas do resultado final.
- */
 interface FailedRow {
   rhm: string;
   projeto: string;
@@ -153,28 +149,19 @@ export function ImportacaoView() {
   const [mode, setMode] = useState<ImportMode>(null);
   const [loading, setLoading] = useState(false);
 
-  // ── estado de demandas ──
   const [validRows, setValidRows]               = useState<ParsedRow[]>([]);
   const [autoCreatedTypes, setAutoCreatedTypes] = useState<string[]>([]);
   const [errors, setErrors]                     = useState<ValidationError[]>([]);
   const [showPreview, setShowPreview]           = useState(false);
-  /**
-   * progressMap: Map<rhm, RowStatus>
-   * Chave: rhm da demanda.
-   * Valor: status individual da linha durante/após a migração.
-   * Atualizado de forma imutável (new Map) para acionar re-render do filho.
-   */
   const [progressMap, setProgressMap]           = useState<Map<string, RowStatus>>(new Map());
   const [result, setResult] = useState<{
     importados: number;
     atualizados: number;
     erros: number;
     tiposCriados?: string[];
-    /** RHMs que falharam na migração, com motivo */
     falhas?: FailedRow[];
   } | null>(null);
 
-  // ── estado de projetos ──
   const [projetoResult, setProjetoResult] = useState<{
     importados: number;
     existentes: number;
@@ -183,7 +170,6 @@ export function ImportacaoView() {
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // mapa nome-normalizado → { nome original, team_id }
   const projetoMap = new Map(
     projetos.map((p) => [normalize(p.nome), { nome: p.nome, teamId: p.team_id }]),
   );
@@ -377,45 +363,21 @@ export function ImportacaoView() {
     }
   };
 
-  // ─── Migração: recebe as linhas selecionadas pelo ImportacaoPreviewTable ───
-  //
-  // Estratégia de progresso granular SEM alterar a RPC:
-  //   1. Antes de chamar upsertDemandas, montamos um Set dos RHMs que JÁ EXISTEM
-  //      no banco (tipoAcao = "atualizacao") vs os que são novos.
-  //      Essa informação já foi calculada pelo ImportacaoPreviewTable durante o
-  //      enriquecimento — ela está embutida no próprio selectedRows via comparação
-  //      com o sistema. Para replicar aqui sem re-query, usamos o validRows local
-  //      que tem os mesmos dados, e cruzamos com o progressMap inicial (todos
-  //      partem de "pendente"; o componente já sabe quais são novos vs atualizações).
-  //
-  //      Como o filho não expõe tipoAcao, usamos uma heurística confiável:
-  //      fazemos 1 query de verificação APENAS para o lote selecionado (rhms IN),
-  //      agrupada por teamId — exatamente igual ao que o filho já fez. Como o
-  //      filho já buscou no mount, os dados estão no cache do Supabase (realtime).
-  //      Custo: 1 query leve por time, só para os RHMs do lote selecionado.
-  //
-  //   2. Após upsertDemandas, classificamos cada linha como:
-  //      - "atualizado" → estava no banco antes da chamada
-  //      - "criado"     → não estava
-  //      - "erro"       → o lote inteiro falhou (catch)
+  // ─── Migração ─────────────────────────────────────────────────────────────
 
   const handleImport = async (selectedRows: PreviewRow[]) => {
     if (!currentTeamId || selectedRows.length === 0) return;
     setLoading(true);
 
-    // Inicializa todas as selecionadas como "atualizando"
     setProgressMap(new Map(selectedRows.map((r) => [r.rhm, "atualizando" as RowStatus])));
 
-    // ── 1. Verifica quais RHMs já existem no banco (por time, 1 query/time) ──
-    // Isso nos permite distinguir "criado" de "atualizado" sem alterar a RPC.
-    const existsInDb = new Set<string>(); // chave: `${teamId}:${rhm}`
+    const existsInDb = new Set<string>();
     const byTeamCheck = new Map<string, string[]>();
     for (const row of selectedRows) {
       const list = byTeamCheck.get(row.teamId) ?? [];
       list.push(row.rhm);
       byTeamCheck.set(row.teamId, list);
     }
-    // Importação dinâmica do client para não criar dependência circular
     const { supabase } = await import("@/integrations/supabase/client");
     for (const [teamId, rhms] of byTeamCheck) {
       const { data } = await supabase
@@ -430,7 +392,6 @@ export function ImportacaoView() {
       }
     }
 
-    // ── 2. Executa upsert por time (1 RPC/time) ───────────────────────────────
     const totals = { importados: 0, atualizados: 0, erros: 0 };
     const falhas: FailedRow[] = [];
 
@@ -464,12 +425,10 @@ export function ImportacaoView() {
         totals.atualizados += res.atualizados;
         totals.erros       += res.erros;
 
-        // ── 3. Progresso granular: criado vs atualizado por linha ─────────────
         setProgressMap((prev) => {
           const next = new Map(prev);
           for (const row of rows) {
             const key = `${teamId}:${row.rhm}`;
-            // Se existia antes → foi atualizado; senão → foi criado
             next.set(row.rhm, existsInDb.has(key) ? "atualizado" : "criado");
           }
           return next;
@@ -477,13 +436,11 @@ export function ImportacaoView() {
       } catch (err: any) {
         totals.erros += rows.length;
         const motivo = err?.message ?? "Erro desconhecido";
-        // ── 4. Marca todas as linhas do lote como erro ────────────────────────
         setProgressMap((prev) => {
           const next = new Map(prev);
           for (const row of rows) next.set(row.rhm, "erro");
           return next;
         });
-        // Registra cada RHM que falhou para exibir no log do resultado
         for (const row of rows) {
           falhas.push({ rhm: row.rhm, projeto: row.projeto, motivo });
         }
@@ -503,8 +460,6 @@ export function ImportacaoView() {
     setLoading(false);
   };
 
-  // ─── Reset do estado de preview ───────────────────────────────────────────
-
   function cancelPreview() {
     setShowPreview(false);
     setValidRows([]);
@@ -518,28 +473,34 @@ export function ImportacaoView() {
   if (mode === null) {
     return (
       <div className="space-y-6 max-w-2xl">
-        <h2 className="text-lg font-semibold">Importação</h2>
-        <p className="text-sm text-muted-foreground">Selecione o tipo de importação que deseja realizar.</p>
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Importação</h2>
+          <p className="text-sm text-muted-foreground mt-1">Selecione o tipo de importação que deseja realizar.</p>
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <Card
-            className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-info/40"
+            className="cursor-pointer hover:shadow-md transition-all duration-200 border border-gray-100 hover:border-blue-300 rounded-xl"
             onClick={() => setMode("demandas")}
           >
-            <CardContent className="p-6 text-center space-y-3">
-              <FileSpreadsheet className="h-10 w-10 mx-auto text-info" />
-              <h3 className="font-semibold">📋 Demandas</h3>
+            <CardContent className="p-7 text-center space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mx-auto">
+                <FileSpreadsheet className="h-6 w-6 text-blue-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Demandas (Redmine)</h3>
               <p className="text-xs text-muted-foreground">
                 Importar do Redmine<br />(.csv / .xlsx)
               </p>
             </CardContent>
           </Card>
           <Card
-            className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-info/40"
+            className="cursor-pointer hover:shadow-md transition-all duration-200 border border-gray-100 hover:border-blue-300 rounded-xl"
             onClick={() => setMode("projetos")}
           >
-            <CardContent className="p-6 text-center space-y-3">
-              <FolderKanban className="h-10 w-10 mx-auto text-info" />
-              <h3 className="font-semibold">📁 Projetos</h3>
+            <CardContent className="p-7 text-center space-y-3">
+              <div className="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center mx-auto">
+                <FolderKanban className="h-6 w-6 text-violet-600" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Projetos</h3>
               <p className="text-xs text-muted-foreground">
                 Importar sistemas<br />de sustentação (.csv / .xlsx)
               </p>
@@ -569,39 +530,74 @@ export function ImportacaoView() {
           <ArrowLeft className="h-4 w-4 mr-1" />
           Voltar
         </Button>
-        <h2 className="text-lg font-semibold">
-          {mode === "demandas" ? "Importar Demandas" : "Importar Projetos"}
-        </h2>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5" />
-            {mode === "demandas" ? "Importar do Redmine" : "Importar Projetos"}
-          </CardTitle>
-          <CardDescription>
-            {mode === "demandas" ? (
-              <>
-                Faça upload do arquivo .csv exportado do Redmine.<br />
-                Colunas obrigatórias: <strong>#, Projeto, Tipo, Criado em</strong>.<br />
-                Colunas opcionais: <strong>Título, Situação, Regime de Atendimento, Defeito Impeditivo</strong>.
-              </>
-            ) : (
-              <>
-                Faça upload do arquivo .csv com as colunas: <strong>Nome, Descrição, Equipe, SLA</strong>.<br />
-                <span className="text-xs text-muted-foreground">Projetos já cadastrados serão ignorados.</span>
-              </>
-            )}
-          </CardDescription>
+      {/* ── Card principal ── */}
+      <Card className="rounded-xl border border-gray-100 shadow-sm">
+        <CardHeader className="p-8 pb-4">
+          <div className="flex items-start gap-4">
+            <div className={cn(
+              "w-11 h-11 rounded-xl flex items-center justify-center shrink-0",
+              mode === "demandas" ? "bg-blue-50" : "bg-violet-50"
+            )}>
+              {mode === "demandas"
+                ? <FileSpreadsheet className="h-5 w-5 text-blue-600" />
+                : <FolderKanban className="h-5 w-5 text-violet-600" />
+              }
+            </div>
+            <div className="space-y-1">
+              <CardTitle className="text-xl font-bold text-gray-900">
+                {mode === "demandas" ? "Importar Demandas (Redmine)" : "Importar Projetos"}
+              </CardTitle>
+              <CardDescription className="text-sm leading-relaxed">
+                {mode === "demandas" ? (
+                  <>
+                    Faça upload do arquivo <span className="font-medium text-gray-700">.csv</span> exportado do Redmine.<br />
+                    Colunas obrigatórias:{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">#</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Projeto</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Tipo</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Criado em</code>.<br />
+                    Colunas opcionais:{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Título</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Situação</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Regime de Atendimento</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Defeito Impeditivo</code>.
+                  </>
+                ) : (
+                  <>
+                    Faça upload do arquivo <span className="font-medium text-gray-700">.csv</span> com as colunas:{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Nome</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Descrição</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">Equipe</code>{" "}
+                    <code className="text-xs bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded font-mono">SLA</code>.
+                  </>
+                )}
+              </CardDescription>
+              {/* Alerta amarelo projetos */}
+              {mode === "projetos" && (
+                <div className="flex items-center gap-2 mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 w-fit">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span>Projetos já cadastrados serão ignorados</span>
+                </div>
+              )}
+            </div>
+          </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="px-8 pb-8 space-y-5">
           {/* ── Área de upload ── */}
           {!showPreview && (
-            <div className="border-2 border-dashed rounded-lg p-8 text-center space-y-3">
-              <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Arraste ou clique para selecionar</p>
+            <div
+              className="border-2 border-dashed border-gray-200 hover:border-blue-400 transition-colors duration-200 rounded-xl p-10 text-center space-y-4 bg-gray-50/50"
+            >
+              <div className="w-12 h-12 rounded-xl bg-white border border-gray-100 shadow-sm flex items-center justify-center mx-auto">
+                <Upload className="h-5 w-5 text-gray-400" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-gray-700">Arraste o arquivo aqui ou clique para selecionar</p>
+                <p className="text-xs text-muted-foreground">Suporta arquivos .csv</p>
+              </div>
               <input
                 ref={inputRef}
                 type="file"
@@ -611,6 +607,7 @@ export function ImportacaoView() {
               />
               <Button
                 variant="outline"
+                className="px-6 h-9 text-sm font-medium rounded-lg border-gray-200 hover:bg-white hover:border-blue-400 hover:text-blue-600 transition-colors"
                 onClick={() => inputRef.current?.click()}
                 disabled={loading}
               >
@@ -619,15 +616,15 @@ export function ImportacaoView() {
             </div>
           )}
 
-          {/* ── Erros de validação do CSV (linhas rejeitadas antes do preview) ── */}
+          {/* ── Erros de validação do CSV ── */}
           {mode === "demandas" && errors.length > 0 && (
-            <div className="border border-destructive/30 rounded-lg p-3 space-y-1.5 max-h-48 overflow-y-auto bg-destructive/5">
-              <p className="text-xs font-semibold text-destructive uppercase">
-                Linhas com erro (não serão importadas):
+            <div className="border border-red-200 rounded-xl p-4 space-y-2 max-h-48 overflow-y-auto bg-red-50/60">
+              <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">
+                Linhas com erro — não serão importadas
               </p>
               {errors.map((err, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
+                <div key={i} className="flex items-start gap-2 text-xs text-red-700">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   <span>Linha {err.linha}: {err.mensagem}</span>
                 </div>
               ))}
@@ -636,11 +633,11 @@ export function ImportacaoView() {
 
           {/* ── Aviso de tipos auto-criados ── */}
           {mode === "demandas" && autoCreatedTypes.length > 0 && (
-            <div className="border border-amber-300 rounded-lg p-3 space-y-1.5 bg-amber-50">
-              <p className="text-xs font-semibold text-amber-800 uppercase">
+            <div className="border border-amber-200 rounded-xl p-4 space-y-1.5 bg-amber-50">
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">
                 Tipos não encontrados (serão criados automaticamente):
               </p>
-              <ul className="list-disc pl-5 text-xs text-amber-700">
+              <ul className="list-disc pl-5 text-xs text-amber-700 space-y-0.5">
                 {autoCreatedTypes.map((t, i) => <li key={i}>{t}</li>)}
               </ul>
             </div>
@@ -659,55 +656,41 @@ export function ImportacaoView() {
 
           {/* ── Resultado final: demandas ── */}
           {mode === "demandas" && result && !showPreview && (
-            <div className="border rounded-lg p-4 space-y-3">
-              <p className="font-medium flex items-center gap-2">
+            <div className="border border-gray-100 rounded-xl p-6 space-y-4 bg-white">
+              <p className="font-semibold text-gray-900 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 Resultado da importação
               </p>
 
-              {/* Totais */}
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="text-center p-2 bg-emerald-50 rounded">
-                  <p className="text-lg font-bold text-emerald-700">{result.importados}</p>
-                  <p className="text-xs text-muted-foreground">Criados</p>
-                </div>
-                <div className="text-center p-2 rounded" style={{ backgroundColor: "#e8f2fa" }}>
-                  <p className="text-lg font-bold" style={{ color: "#1a6fa8" }}>{result.atualizados}</p>
-                  <p className="text-xs text-muted-foreground">Atualizados</p>
-                </div>
-                <div className="text-center p-2 bg-red-50 rounded">
-                  <p className="text-lg font-bold text-destructive">{result.erros}</p>
-                  <p className="text-xs text-muted-foreground">Erros</p>
-                </div>
+                <ResultCard value={result.importados} label="Criados" colorClass="bg-emerald-50 text-emerald-700" />
+                <ResultCard value={result.atualizados} label="Atualizados" colorClass="bg-blue-50 text-blue-700" />
+                <ResultCard value={result.erros} label="Erros" colorClass="bg-red-50 text-red-600" />
               </div>
 
-              {/* Tipos auto-criados */}
               {result.tiposCriados && result.tiposCriados.length > 0 && (
-                <div className="border border-amber-300 rounded-lg p-3 bg-amber-50">
+                <div className="border border-amber-200 rounded-xl p-3 bg-amber-50">
                   <p className="text-xs font-semibold text-amber-800">
                     Tipos criados automaticamente ({result.tiposCriados.length}):
                   </p>
-                  <ul className="list-disc pl-5 text-xs text-amber-700 mt-1">
+                  <ul className="list-disc pl-5 text-xs text-amber-700 mt-1 space-y-0.5">
                     {result.tiposCriados.map((t, i) => <li key={i}>{t}</li>)}
                   </ul>
                 </div>
               )}
 
-              {/* Log de falhas por RHM — só exibido se houve erros */}
               {result.falhas && result.falhas.length > 0 && (
-                <div className="border border-destructive/30 rounded-lg p-3 bg-destructive/5 space-y-2">
-                  <p className="text-xs font-semibold text-destructive uppercase flex items-center gap-1.5">
+                <div className="border border-red-200 rounded-xl p-3 bg-red-50/60 space-y-2">
+                  <p className="text-xs font-semibold text-red-700 uppercase tracking-wide flex items-center gap-1.5">
                     <XCircle className="h-3.5 w-3.5" />
                     Demandas que falharam na migração ({result.falhas.length})
                   </p>
                   <div className="max-h-40 overflow-y-auto space-y-1">
                     {result.falhas.map((f, i) => (
                       <div key={i} className="flex items-start gap-2 text-xs">
-                        <span className="font-mono font-bold text-destructive shrink-0">#{f.rhm}</span>
+                        <span className="font-mono font-bold text-red-700 shrink-0">#{f.rhm}</span>
                         <span className="text-muted-foreground shrink-0">{f.projeto}</span>
-                        <span className="text-destructive ml-auto truncate" title={f.motivo}>
-                          {f.motivo}
-                        </span>
+                        <span className="text-red-600 ml-auto truncate" title={f.motivo}>{f.motivo}</span>
                       </div>
                     ))}
                   </div>
@@ -717,6 +700,7 @@ export function ImportacaoView() {
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-lg"
                 onClick={() => {
                   setResult(null);
                   setProgressMap(new Map());
@@ -729,29 +713,41 @@ export function ImportacaoView() {
 
           {/* ── Resultado final: projetos ── */}
           {mode === "projetos" && projetoResult && (
-            <div className="border rounded-lg p-4 space-y-2">
-              <p className="font-medium flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                Resultado da importação
-              </p>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="text-center p-2 bg-emerald-50 rounded">
-                  <p className="text-lg font-bold text-emerald-700">{projetoResult.importados}</p>
-                  <p className="text-xs text-muted-foreground">Importados</p>
-                </div>
-                <div className="text-center p-2 rounded" style={{ backgroundColor: "#e8f2fa" }}>
-                  <p className="text-lg font-bold" style={{ color: "#1a6fa8" }}>{projetoResult.existentes}</p>
-                  <p className="text-xs text-muted-foreground">Já existentes</p>
-                </div>
-                <div className="text-center p-2 bg-red-50 rounded">
-                  <p className="text-lg font-bold text-destructive">{projetoResult.erros}</p>
-                  <p className="text-xs text-muted-foreground">Erros</p>
+            <>
+              <div className="border-t border-gray-100 pt-5">
+                <p className="font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  Resultado da importação
+                </p>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <ResultCard value={projetoResult.importados} label="Importados" colorClass="bg-emerald-50 text-emerald-700" />
+                  <ResultCard value={projetoResult.existentes} label="Já existentes" colorClass="bg-blue-50 text-blue-700" />
+                  <ResultCard value={projetoResult.erros} label="Erros" colorClass="bg-red-50 text-red-600" />
                 </div>
               </div>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ─── Sub-componente: card de resultado ───────────────────────────────────────
+
+function ResultCard({
+  value,
+  label,
+  colorClass,
+}: {
+  value: number;
+  label: string;
+  colorClass: string;
+}) {
+  return (
+    <div className={cn("text-center p-4 rounded-xl", colorClass)}>
+      <p className="text-2xl font-bold leading-none">{value}</p>
+      <p className="text-xs mt-1.5 opacity-80">{label}</p>
     </div>
   );
 }

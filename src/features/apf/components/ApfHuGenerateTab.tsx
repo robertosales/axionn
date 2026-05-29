@@ -77,7 +77,15 @@ export function ApfHuGenerateTab() {
 
   const handleGenerate = async () => {
     if (!canGenerate || !selectedTemplate) return;
-    const prompt = `${selectedTemplate.prompt_template}\n\n---\nDADOS DE ENTRADA (CONSOLIDADO):\n${consolidatedMarkdown}`;
+    const tplPrompt =
+      (selectedTemplate as any).prompt_template ??
+      (selectedTemplate as any).prompt_content ??
+      "";
+    if (!tplPrompt.trim()) {
+      toast.error("Template sem prompt configurado. Edite-o em Gerenciar Templates.");
+      return;
+    }
+    const prompt = `${tplPrompt}\n\n---\nDADOS DE ENTRADA (CONSOLIDADO):\n${consolidatedMarkdown}`;
     const baseFilename = `HU_${selectedTemplate.name}_${Date.now()}`.replace(/\s+/g, "_");
     try {
       await generateGeneric(prompt, baseFilename);

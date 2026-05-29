@@ -97,7 +97,7 @@ async function resolveProvider(
     return {
       providerType: "lovable",
       apiKey: lovableKey,
-      model: "google/gemini-1.5-flash",
+      model: "google/gemini-2.5-flash",
       name: "Lovable AI (Gemini/GPT) — recomendado",
     };
   }
@@ -444,7 +444,7 @@ class ProviderError extends Error {
 }
 
 // Chamadas aos providers (apiKey vem do Vault, não do body)
-async function callLovable(p: string, k: string, m = "google/gemini-1.5-flash") {
+async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") {
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
@@ -468,8 +468,12 @@ async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
   if (!text) throw new Error(`OpenAI retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
   return text;
 }
-async function callGemini(p: string, k: string, m = "gemini-1.5-flash") {
+async function callGemini(p: string, k: string, m = "gemini-2.0-flash") {
   if (m.startsWith("google/")) m = m.replace("google/", "");
+  // Saneamento: modelos antigos descontinuados → fallback para o atual estável
+  if (/^gemini-1\.5-(flash|pro)(-latest)?$/i.test(m)) {
+    m = "gemini-2.0-flash";
+  }
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -941,7 +945,7 @@ Deno.serve(async (req: Request) => {
     // Para erros recuperáveis (402/429/5xx) devolvemos 200 com payload tipado, evitando
     // Runtime Error no cliente. Outros erros mantém status apropriado.
     const httpStatus = isFallbackableStatus(status) ? 200 : status >= 400 && status < 600 ? status : 500;
-    return new Response(JSON.stringify({ success: false, reason, userMessage }), {
+    return new Response(JSON.stringify({ success: false, reason, userMessage: friendly !== raw ? friendly : userMessage, rawError: raw }), {
       status: httpStatus,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1,72 +1,178 @@
+## Diagnóstico do problema
 
-## Diagnóstico
+**Sei qual é o problema? Sim.** O módulo não está falhando por um único motivo; há uma combinação de configuração incorreta, fallback incompleto e pouca observabilidade na tela.
 
-O erro `GET https://uwjralsqmppgwemeymyw.supabase.co/auth/v1/user 403 (Forbidden)` acontece porque o frontend está apontando para um projeto Supabase **diferente** do backend real deste app.
+### 1. A última chamada não usou GPT
+Na requisição capturada do navegador, o módulo enviou este provedor:
 
-Evidências encontradas no código e nos logs:
+```text
+providerId: Gemini 1.5 Flash
+```
 
-1. **Backend real do app (Lovable Cloud)** — projeto `rgikyyazotqapaxijwui.supabase.co`
-   - É o projeto retornado por `project_info`.
-   - É onde rodam todas as Edge Functions (`admin-user-management`, `delete-user`, `apf-generate`).
-   - É onde estão configurados RLS, tabelas (`profiles`, `user_roles`, `teams`, etc.) e o provedor Google.
-   - Os logs de auth mostram logins Google bem-sucedidos AGORA neste projeto (ex.: Roberto Sales, 14/05 16:34, `login_method: oidc, provider: google`).
-   - É o `project_id` em `supabase/config.toml`.
+Ou seja: mesmo você tendo GPT cadastrado com chave paga, a chamada analisada foi para o **Gemini recomendado**, não para o GPT. Isso explica por que o erro visto nos logs é do Gemini e não da OpenAI.
 
-2. **Frontend** — `src/integrations/supabase/client.ts` (linhas 6–7)
-   - Aponta para `https://uwjralsqmppgwemeymyw.supabase.co` com a anon key desse outro projeto.
-   - Esse projeto **não é** o Lovable Cloud deste app.
+### 2. O Gemini recomendado está configurado com modelo que falha
+O backend registrou:
 
-### Por que isso causa o loop "processa e volta para o login"
+```text
+Gemini [404]: models/gemini-1.5-flash is not found for API version v1beta
+```
 
-O fluxo de Google é:
-1. Usuário clica em "Entrar com Google" → `lovable.auth.signInWithOAuth` redireciona para o broker do Lovable.
-2. Broker autentica no projeto Cloud real (`rgikyyazotqapaxijwui`) e devolve `access_token`/`refresh_token` emitidos por **esse** projeto.
-3. `AuthCallback` chama `supabase.auth.setSession({ access_token, refresh_token })`.
-4. O cliente `supabase` foi configurado com a URL de **outro** projeto (`uwjralsqmppgwemeymyw`).
-5. Toda chamada subsequente — `auth/v1/user`, `from('profiles')`, `from('user_roles')`, `from('teams')` — vai para `uwjralsqmppgwemeymyw` com um token assinado por `rgikyyazotqapaxijwui`.
-6. O servidor rejeita com **403 Forbidden** (token de outra issuer/projeto).
-7. `getSession`/`onAuthStateChange` perdem a sessão válida ou ela nunca persiste, e o `ProtectedRoute` devolve o usuário para `/auth`.
+Isso significa que o provedor ativo/recomendado está apontando para um modelo que a API atual do Gemini não aceita mais nessa rota. Enquanto esse provedor continuar recomendado, o sistema tende a escolher ele primeiro e falhar.
 
-Isso também explica por que o erro aparece em `lovable.js` no console: é a chamada `auth/v1/user` que o cliente faz após o setSession.
+### 3. O fallback para GPT não está confiável
+Pelo código, deveria haver fallback automático para outro provedor ativo. Porém, a resposta do backend voltou genérica:
 
-### Por que a sugestão de "trocar o client.ts" não resolveu
+```text
+Não foi possível gerar o documento agora. Tente novamente em alguns instantes.
+```
 
-A instrução anterior foi exatamente para fixar `uwjralsqmppgwemeymyw` no `client.ts` — esse é justamente o projeto **errado** para este app. Os tokens emitidos pelo Cloud (rgikyyazotqapaxijwui) nunca vão valer naquele endpoint.
+E não trouxe a lista detalhada de tentativas. Isso indica que a falha está sendo engolida pelo tratamento genérico de erro ou que a versão implantada da função ainda não está refletindo totalmente o fallback esperado.
+
+### 4. O prompt enviado começa com `undefined`
+A requisição capturada mostra:
+
+```text
+"prompt":"undefined\n\n---\nDADOS DE ENTRADA..."
+```
+
+Isso é grave: o módulo está tentando ler `prompt_template`, mas os templates do banco usam `prompt_content`. Resultado: a IA recebe os arquivos, mas pode ficar sem as instruções principais do template. Mesmo quando a IA responde, a qualidade do relatório fica comprometida.
+
+### 5. A tela pode ficar “Gerando...” sem saída clara
+O frontend não tem timeout/controlador de travamento para a chamada de geração. Se a API externa demora, trava, limita requisição ou o backend demora a responder, a tela fica esperando e o usuário não recebe uma mensagem operacional clara.
+
+### 6. O Admin mostra chave configurada, mas não testa se ela funciona
+Hoje o cadastro em **Admin → IAs** informa se existe uma chave salva, mas não valida:
+
+- se a chave é realmente aceita pela OpenAI/Gemini;
+- se o modelo existe;
+- se há crédito/quota;
+- se o provedor responde com sucesso.
+
+Por isso o painel pode passar a sensação de “está tudo configurado”, mas o módulo só descobre o problema na hora de gerar.
 
 ---
 
-## Pergunta antes de aplicar a correção
+## Plano de correção recomendado
 
-Existem dois cenários possíveis e preciso confirmar qual é o seu antes de mexer no código:
+### Etapa 1 — Corrigir configuração dos provedores
+- Atualizar o modelo Gemini recomendado para um modelo atual e suportado.
+- Garantir que o GPT cadastrado com chave paga possa ser selecionado e realmente enviado na geração.
+- Ajustar a ordem de recomendação para evitar que um Gemini quebrado seja escolhido automaticamente.
 
-**Cenário A — você quer continuar usando o Lovable Cloud atual (recomendado)**
-Os usuários, perfis, RLS, edge functions e configuração do Google já estão em `rgikyyazotqapaxijwui`. A correção é restaurar o `client.ts` para apontar para esse projeto. É o caminho rápido e mantém todos os dados existentes.
+### Etapa 2 — Corrigir o prompt do módulo Gerar HU / Relatório Enterprise
+- Trocar o uso direto de `prompt_template` por uma resolução segura:
 
-**Cenário B — você realmente migrou tudo para o projeto `uwjralsqmppgwemeymyw`**
-Nesse caso, o problema não está no `client.ts`, e sim no fato de que o Lovable Cloud (broker OAuth, edge functions, etc.) continua ligado ao projeto antigo. Migrar de provedor Cloud é um trabalho diferente e não é resolvido editando o `client.ts`.
+```text
+prompt_template ?? prompt_content ?? ""
+```
 
-Qual dos dois é o seu caso?
+- Impedir geração se o template estiver sem conteúdo real.
+- Exibir erro claro: “Template sem prompt configurado”.
+
+### Etapa 3 — Fortalecer o backend `apf-generate`
+- Normalizar modelos por provedor:
+  - Gemini: aceitar nomes atuais e remover prefixos incompatíveis quando necessário.
+  - OpenAI: usar modelo padrão seguro quando o campo estiver vazio.
+- Melhorar o fallback:
+  - se Gemini falhar com 404/429/402/5xx, tentar GPT ativo com chave válida;
+  - registrar cada tentativa;
+  - retornar ao frontend algo como:
+
+```text
+Tentativas: Gemini 1.5 Flash (404 modelo inválido) → GPT (sucesso)
+```
+
+ou, se tudo falhar:
+
+```text
+Tentativas: Gemini (404 modelo inválido) → GPT (401 chave inválida)
+```
+
+### Etapa 4 — Evitar travamento infinito na tela
+- Adicionar timeout por provedor no backend.
+- Adicionar timeout visual no frontend.
+- Trocar “Gerando...” infinito por estados claros:
+  - preparando dados;
+  - chamando IA;
+  - tentando fallback;
+  - finalizando;
+  - falhou com motivo.
+
+### Etapa 5 — Melhorar a tela Admin → IAs
+- Adicionar botão **Testar IA** por provedor.
+- O teste fará uma chamada curta e retornará:
+  - chave válida;
+  - modelo válido;
+  - sem crédito;
+  - limite atingido;
+  - modelo inexistente;
+  - erro de autenticação.
+- Mostrar um badge operacional separado de “Key configurada”, porque “chave salva” não significa “IA funcionando”.
+
+### Etapa 6 — Melhorar mensagens para o usuário final
+- Substituir mensagens genéricas por mensagens acionáveis:
+
+```text
+O modelo Gemini configurado não existe mais. Selecione GPT ou ajuste o modelo em Admin → IAs.
+```
+
+```text
+A chave OpenAI foi recusada. Atualize a chave do provedor GPT em Admin → IAs.
+```
+
+```text
+Gemini atingiu limite gratuito. Tentando GPT pago automaticamente.
+```
 
 ---
 
-## Plano de correção (assumindo Cenário A)
+## Alternativa Enterprise mais robusta
 
-### O que vou alterar
-- `src/integrations/supabase/client.ts`: trocar `SUPABASE_URL` e `SUPABASE_ANON_KEY` para os do projeto Cloud real:
-  - URL: `https://rgikyyazotqapaxijwui.supabase.co`
-  - Anon key: a chave anon válida do projeto (já disponível no system context).
-- Manter o resto do arquivo igual (opções `auth` com `localStorage`, `persistSession`, `autoRefreshToken`).
+Se você quiser algo mais confiável para relatórios grandes, eu recomendo evoluir esse módulo para uma **fila assíncrona de geração de relatórios**.
 
-### O que NÃO vou alterar
-- `AuthContext.tsx`, `Auth.tsx`, `AuthCallback.tsx`, `App.tsx`, rotas, `lovable/index.ts` — todo o fluxo OAuth está correto.
-- Edge functions, RLS, migrações.
-- `vite.config.ts` (os defines `APP_SUPABASE_URL/KEY` não são usados pelo `client.ts` e não interferem).
+Funcionaria assim:
 
-### Validação após o fix
-1. Recarregar `/auth`.
-2. Clicar em "Entrar com Google".
-3. Confirmar redirecionamento para `/auth/callback`, depois para `/dashboard-admin` ou módulo apropriado, sem loop.
-4. Conferir no console que não há mais 403 em `auth/v1/user`.
-5. Testar também login por email/senha, para garantir que perfis (`profiles`, `user_roles`, `teams`) carregam.
+```text
+Upload dos arquivos
+   ↓
+Cria uma tarefa de relatório
+   ↓
+Processa em partes menores
+   ↓
+Usa IA principal + fallback
+   ↓
+Salva histórico, erros e resultado
+   ↓
+Usuário baixa Markdown/DOCX quando concluir
+```
 
-Me confirme o cenário (A ou B) e eu aplico a correção.
+Vantagens:
+
+- a tela nunca fica travada;
+- o usuário pode sair e voltar depois;
+- relatórios grandes podem ser quebrados em partes;
+- cada etapa fica auditável;
+- se Gemini falhar, GPT continua;
+- se GPT falhar, o erro fica registrado com motivo real;
+- dá para reprocessar só a etapa que falhou.
+
+---
+
+## O que eu implementaria primeiro
+
+1. Corrigir `prompt_template`/`prompt_content`.
+2. Atualizar o modelo Gemini inválido.
+3. Corrigir fallback para GPT e retorno de tentativas.
+4. Adicionar timeout e mensagens claras na tela.
+5. Adicionar teste de provedor em Admin → IAs.
+
+Depois disso, se você quiser o nível Enterprise de verdade, implementamos a fila assíncrona de relatórios.
+
+<presentation-actions>
+  <presentation-open-history>View History</presentation-open-history>
+</presentation-actions>
+
+<presentation-actions>
+<presentation-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</presentation-link>
+</presentation-actions>

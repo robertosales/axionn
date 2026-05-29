@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,7 @@ export function ActivityManager() {
     loading,
   } = useSprint();
   const { currentTeamId, hasPermission } = useAuth();
+  const location = useLocation();
   const canUpdate = hasPermission("update_tasks");
 
   const [open, setOpen] = useState(false);
@@ -88,6 +90,9 @@ export function ActivityManager() {
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const isLimitado = ["task", "bug"].includes(activityType);
+
+  // Ref para scroll até a atividade destacada
+  const highlightRef = useRef<HTMLDivElement | null>(null);
 
   // Filters
   const [searchFilter, setSearchFilter] = useState("");
@@ -155,6 +160,33 @@ export function ActivityManager() {
     totalItems,
     pageSize,
   } = usePagination(filteredActivities, { pageSize: 10 });
+
+  /**
+   * Deep-link via navigation state.
+   * Quando o usuário chega vindo de uma notificação de menção, o NotificationBell
+   * passa { highlightActivityId } no state do React Router.
+   * Aqui lemos esse valor, limpamos filtros para garantir que a atividade apareça,
+   * expandimos os comentários e fazemos scroll até o card.
+   */
+  useEffect(() => {
+    const highlightId = (location.state as any)?.highlightActivityId as string | undefined;
+    if (!highlightId || loading || activities.length === 0) return;
+
+    // Limpa filtros para a atividade aparecer independentemente
+    clearFilters();
+    setCurrentPage(1);
+
+    // Expande a seção de comentários da atividade alvo
+    setExpandedComments(highlightId);
+
+    // Aguarda a próxima pintura para garantir que o card esteja no DOM
+    const timer = setTimeout(() => {
+      highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 300);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, loading, activities.length]);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -231,6 +263,9 @@ export function ActivityManager() {
   const noHUs  = allTeamStories.length === 0;
   const noDevs = developers.length === 0;
   const canCreate = !noHUs && !noDevs;
+
+  // ID da atividade que deve ser destacada (vinda da notificação)
+  const highlightActivityId = (location.state as any)?.highlightActivityId as string | undefined;
 
   return (
     <div className="space-y-4">
@@ -367,7 +402,6 @@ export function ActivityManager() {
           />
         </div>
 
-        {/* Filtro Responsável */}
         <Select value={assigneeFilter} onValueChange={(v) => { setAssigneeFilter(v); setCurrentPage(1); }}>
           <SelectTrigger className="h-8 w-[150px] text-xs">
             <User className="h-3 w-3 mr-1 shrink-0 text-muted-foreground" />
@@ -381,7 +415,6 @@ export function ActivityManager() {
           </SelectContent>
         </Select>
 
-        {/* Filtro Sprint */}
         <Select value={sprintFilter} onValueChange={(v) => { setSprintFilter(v); setCurrentPage(1); }}>
           <SelectTrigger className="h-8 w-[145px] text-xs">
             <SelectValue placeholder="Sprint" />
@@ -395,7 +428,6 @@ export function ActivityManager() {
           </SelectContent>
         </Select>
 
-        {/* Filtro Tipo */}
         <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setCurrentPage(1); }}>
           <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
           <SelectContent>
@@ -406,7 +438,6 @@ export function ActivityManager() {
           </SelectContent>
         </Select>
 
-        {/* Filtro Status */}
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
           <SelectTrigger className="h-8 w-[115px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
@@ -446,9 +477,20 @@ export function ActivityManager() {
           const typeInfo = ACTIVITY_TYPE_LABELS[act.activityType || "task"];
           const isClosed = !!act.isClosed;
           const isExpanded = expandedComments === act.id;
+          const isHighlighted = act.id === highlightActivityId;
 
           return (
-            <Card key={act.id} className={`group hover:shadow-md transition-shadow ${isClosed ? "opacity-60" : ""}`}>
+            <Card
+              key={act.id}
+              ref={isHighlighted ? (el) => { (highlightRef as any).current = el; } : undefined}
+              className={`group hover:shadow-md transition-all ${
+                isClosed ? "opacity-60" : ""
+              } ${
+                isHighlighted
+                  ? "ring-2 ring-primary shadow-md"
+                  : ""
+              }`}
+            >
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -456,6 +498,11 @@ export function ActivityManager() {
                       <Badge variant="outline" className="font-mono text-xs font-bold">{hu?.code}</Badge>
                       <Badge className={`text-[10px] border ${typeInfo.color}`}>{typeInfo.label}</Badge>
                       {isClosed && <Badge className="bg-success/15 text-success border-success/30 text-[10px]">✓ Concluída</Badge>}
+                      {isHighlighted && (
+                        <Badge className="bg-primary/15 text-primary border-primary/30 text-[10px] animate-pulse">
+                          💬 Você foi mencionado
+                        </Badge>
+                      )}
                     </div>
                     <span className={`text-sm font-semibold ${isClosed ? "line-through" : ""}`}>{act.title}</span>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">

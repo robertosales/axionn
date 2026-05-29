@@ -284,6 +284,30 @@ export type Database = {
           },
         ]
       }
+      apf_modules: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
       apf_templates: {
         Row: {
           created_at: string
@@ -291,6 +315,7 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          module_id: string | null
           name: string
           output_type: string
           prompt_content: string
@@ -304,6 +329,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          module_id?: string | null
           name: string
           output_type: string
           prompt_content: string
@@ -317,6 +343,7 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          module_id?: string | null
           name?: string
           output_type?: string
           prompt_content?: string
@@ -331,6 +358,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "apf_templates_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "apf_modules"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "apf_templates_team_id_fkey"

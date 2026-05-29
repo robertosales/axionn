@@ -30,7 +30,7 @@ interface MentionSuggestion {
 }
 
 export function ActivityComments({ activityId, teamId }: { activityId: string; teamId: string }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [content, setContent] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
@@ -58,7 +58,6 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
 
   const handleContentChange = (value: string) => {
     setContent(value);
-    // Detect @ mentions
     const cursorPos = textareaRef.current?.selectionStart || value.length;
     const textBeforeCursor = value.substring(0, cursorPos);
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
@@ -66,9 +65,13 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
       const query = mentionMatch[1].toLowerCase();
       setMentionQuery(query);
       setSuggestions(
-        allMembers.filter(
-          (m) => m.display_name.toLowerCase().includes(query) && m.user_id !== user?.id
-        ).slice(0, 5)
+        allMembers
+          .filter(
+            (m) =>
+              m.display_name.toLowerCase().includes(query) &&
+              m.user_id !== (profile?.user_id ?? user?.id)
+          )
+          .slice(0, 5)
       );
     } else {
       setMentionQuery(null);
@@ -80,21 +83,38 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
     const cursorPos = textareaRef.current?.selectionStart || content.length;
     const textBeforeCursor = content.substring(0, cursorPos);
     const textAfterCursor = content.substring(cursorPos);
+    // FIX: usa \w* para remover apenas a parte já digitada após @
     const beforeMention = textBeforeCursor.replace(/@\w*$/, "");
-    const newContent = `${beforeMention}@${member.display_name} ${textAfterCursor}`;
+    // Codifica o display_name substituindo espaços por underscore no texto do comentário
+    // para que o regex de extração consiga recuperar sem ambiguidade
+    const encodedName = member.display_name.replace(/\s+/g, "_");
+    const newContent = `${beforeMention}@${encodedName} ${textAfterCursor}`;
     setContent(newContent);
     setMentionQuery(null);
     setSuggestions([]);
     textareaRef.current?.focus();
   };
 
+  /**
+   * Extrai user_ids mencionados no texto.
+   * Estratégia: para cada token @xxx encontrado, tenta match contra display_name
+   * tanto literal quanto com espaços restaurados (underscore → espaço).
+   */
   const extractMentions = (text: string): string[] => {
     const mentionRegex = /@(\S+)/g;
     const mentions: string[] = [];
     let match;
     while ((match = mentionRegex.exec(text)) !== null) {
-      const name = match[1];
-      const member = allMembers.find((m) => m.display_name === name);
+      const token = match[1];
+      // Tenta match direto e com underscore → espaço
+      const tokenNormalized = token.replace(/_/g, " ");
+      const member = allMembers.find(
+        (m) =>
+          m.display_name === token ||
+          m.display_name === tokenNormalized ||
+          m.display_name.toLowerCase() === token.toLowerCase() ||
+          m.display_name.toLowerCase() === tokenNormalized.toLowerCase()
+      );
       if (member) mentions.push(member.user_id);
     }
     return [...new Set(mentions)];
@@ -103,15 +123,30 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
   const createMentionNotifications = async (text: string) => {
     const mentionedUserIds = extractMentions(text);
     if (mentionedUserIds.length === 0) return;
-    const notifications = mentionedUserIds.map((uid) => ({
-      user_id: uid,
-      team_id: teamId,
-      type: "mention",
-      title: `${user?.email?.split("@")[0] || "Alguém"} mencionou você em um comentário`,
-      message: text.substring(0, 120),
-      link_type: "activity",
-      link_id: activityId,
-    }));
+
+    // FIX: usa display_name do perfil; fallback para parte do e-mail
+    const senderName =
+      profile?.display_name ||
+      profile?.full_name ||
+      user?.email?.split("@")[0] ||
+      "Alguém";
+
+    // FIX: usa profile.user_id que é o ID correto na tabela notifications
+    const senderId = profile?.user_id ?? user?.id ?? "";
+
+    const notifications = mentionedUserIds
+      .filter((uid) => uid !== senderId) // nunca notifica o próprio remetente
+      .map((uid) => ({
+        user_id: uid,
+        team_id: teamId,
+        type: "mention",
+        title: `${senderName} mencionou você em um comentário`,
+        message: text.substring(0, 120),
+        link_type: "activity",
+        link_id: activityId,
+      }));
+
+    if (notifications.length === 0) return;
     await createNotifications(notifications);
   };
 
@@ -148,13 +183,19 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
     toast.info("Comentário removido");
   };
 
+  /**
+   * Renderiza o conteúdo do comentário destacando menções.
+   * Suporta tanto @Nome_Sobrenome (com underscore) quanto @Nome direto.
+   */
   const renderContent = (text: string) => {
     const parts = text.split(/(@\S+)/g);
     return parts.map((part, i) => {
       if (part.startsWith("@")) {
+        // Converte underscore de volta para espaço na exibição
+        const displayPart = part.replace(/_/g, " ");
         return (
           <span key={i} className="text-primary font-semibold bg-primary/10 rounded px-0.5">
-            {part}
+            {displayPart}
           </span>
         );
       }

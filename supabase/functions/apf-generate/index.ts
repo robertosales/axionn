@@ -97,7 +97,7 @@ async function resolveProvider(
     return {
       providerType: "lovable",
       apiKey: lovableKey,
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-1.5-flash",
       name: "Lovable AI (Gemini/GPT) — recomendado",
     };
   }
@@ -444,7 +444,7 @@ class ProviderError extends Error {
 }
 
 // Chamadas aos providers (apiKey vem do Vault, não do body)
-async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") {
+async function callLovable(p: string, k: string, m = "google/gemini-1.5-flash") {
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
@@ -468,7 +468,8 @@ async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
   if (!text) throw new Error(`OpenAI retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
   return text;
 }
-async function callGemini(p: string, k: string, m = "gemini-1.5-flash-latest") {
+async function callGemini(p: string, k: string, m = "gemini-1.5-flash") {
+  if (m.startsWith("google/")) m = m.replace("google/", "");
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${k}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -550,7 +551,7 @@ async function getProviderKey(id: string, type: Provider): Promise<string | null
 
 // Erros recuperáveis → tentamos fallback
 function isFallbackableStatus(status: number): boolean {
-  return status === 402 || status === 429 || (status >= 500 && status < 600);
+  return status === 402 || status === 404 || status === 429 || (status >= 500 && status < 600);
 }
 
 function mapErrorToReason(err: unknown): { reason: string; userMessage: string; status: number } {
@@ -567,6 +568,12 @@ function mapErrorToReason(err: unknown): { reason: string; userMessage: string; 
         reason: "AI_PROVIDER_RATE_LIMITED",
         status: 429,
         userMessage: "Muitas requisições em sequência. Aguarde alguns segundos e tente novamente.",
+      };
+    if (err.status === 404)
+      return {
+        reason: "AI_PROVIDER_MODEL_NOT_FOUND",
+        status: 404,
+        userMessage: `O modelo de IA configurado para "${err.providerName}" não foi encontrado ou não é suportado. Tente outro provedor.`,
       };
     if (err.status === 401 || err.status === 403)
       return {

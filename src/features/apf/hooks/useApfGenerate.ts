@@ -13,8 +13,18 @@ import { listAIProviders, type AIProvider } from "@/features/admin/services/aiPr
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-export type ProgressStep = "idle" | "collecting" | "calling_ai" | "saving" | "done";
+export type ProgressStep =
+  | "idle"
+  | "collecting"
+  | "calling_ai"
+  | "trying_fallback"
+  | "saving"
+  | "done"
+  | "failed"
+  | "timeout";
 export type OutputFormat = "docx" | "md";
+
+const GENERATION_TIMEOUT_MS = 120_000; // 2 min — corta o "infinito" do gerando
 
 export type Question = {
   id: string;
@@ -55,6 +65,8 @@ export function useApfGenerate(moduleId?: string) {
   const [allTemplates, setAllTemplates]             = useState<ApfTemplate[]>([]);
   const [generating, setGenerating]                 = useState(false);
   const [progressStep, setProgressStep]             = useState<ProgressStep>("idle");
+  const [elapsedSeconds, setElapsedSeconds]         = useState(0);
+  const [lastError, setLastError]                   = useState<{ message: string; reason?: string } | null>(null);
   const [generations, setGenerations]               = useState<(ApfGeneration & { template_name?: string })[]>([]);
   const [loadingHistory, setLoadingHistory]         = useState(false);
   const [aiProviders, setAiProviders]               = useState<AIProvider[]>([]);
@@ -178,10 +190,21 @@ export function useApfGenerate(moduleId?: string) {
   const generateGeneric = async (prompt: string, baseFilename: string) => {
     if (!currentTeamId || !user) throw new Error("Sessão inválida");
     setGenerating(true);
+    setLastError(null);
+    setElapsedSeconds(0);
+    setProgressStep("collecting");
+    const startTs = Date.now();
+    const tick = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startTs) / 1000));
+    }, 500);
+    // Após 8s sem resposta, troca o rótulo para "tentando provedor de fallback"
+    const fallbackHintTimer = setTimeout(() => {
+      setProgressStep((s) => (s === "calling_ai" ? "trying_fallback" : s));
+    }, 45_000);
     setProgressStep("calling_ai");
     try {
       const isInlineProvider = selectedProviderId.startsWith("inline:");
-      const result = await invokeApfGeneration({
+      const invocation = invokeApfGeneration({
         prompt,
         providerId: isInlineProvider ? undefined : selectedProviderId,
         provider: isInlineProvider ? selectedProvider?.provider_type : undefined,
@@ -189,6 +212,18 @@ export function useApfGenerate(moduleId?: string) {
         files: [],
         skipDocx: true,
       });
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `Tempo limite de ${Math.round(GENERATION_TIMEOUT_MS / 1000)}s atingido. O provedor de IA não respondeu — tente outro provedor ou reduza o volume de dados.`,
+              ),
+            ),
+          GENERATION_TIMEOUT_MS,
+        ),
+      );
+      const result = await Promise.race([invocation, timeout]);
       setLastResult({
         markdown: result.markdown,
         baseFilename,
@@ -198,9 +233,17 @@ export function useApfGenerate(moduleId?: string) {
       setShowPreview(true);
       setProgressStep("done");
       return result;
+    } catch (err: any) {
+      const msg = err?.message ?? "Falha desconhecida";
+      const isTimeout = /tempo limite/i.test(msg);
+      setLastError({ message: msg, reason: isTimeout ? "TIMEOUT" : undefined });
+      setProgressStep(isTimeout ? "timeout" : "failed");
+      throw err;
     } finally {
+      clearInterval(tick);
+      clearTimeout(fallbackHintTimer);
       setGenerating(false);
-      setTimeout(() => setProgressStep("idle"), 2000);
+      setTimeout(() => setProgressStep((s) => (s === "done" ? "idle" : s)), 3000);
     }
   };
 
@@ -262,6 +305,8 @@ export function useApfGenerate(moduleId?: string) {
     generating,
     canGenerate,
     progressStep,
+    elapsedSeconds,
+    lastError,
     generations, loadingHistory,
     lastResult, setLastResult,
     showPreview, setShowPreview,

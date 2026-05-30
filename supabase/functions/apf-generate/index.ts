@@ -781,9 +781,10 @@ Deno.serve(async (req: Request) => {
 
     // ── 2. Parse e validação do body ──
     const body = (await req.json().catch(() => ({}))) as RequestBody;
-    const { prompt, provider, providerId, model, files, generationId } = body;
+    const { prompt, provider, providerId, model, files, generationId, testMode } = body;
 
-    if (!prompt?.trim()) {
+    // Em testMode, o prompt é opcional e substituído por um ping mínimo.
+    if (!testMode && !prompt?.trim()) {
       return new Response(JSON.stringify({ error: "Prompt é obrigatório" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -810,6 +811,47 @@ Deno.serve(async (req: Request) => {
 
     // ── 3. Resolve o provider + busca a API key (Vault → env → body) ──
     const resolved = await resolveProvider(providerId, provider, body.apiKey);
+
+    // ── 3b. MODO TESTE: ping rápido, sem fallback nem persistência ──
+    if (testMode) {
+      const t0 = Date.now();
+      try {
+        const sample = await callProvider(
+          resolved.providerType,
+          "Responda apenas com a palavra: OK",
+          resolved.apiKey,
+          model ?? resolved.model ?? undefined,
+        );
+        return new Response(
+          JSON.stringify({
+            success: true,
+            providerUsed: resolved.name,
+            providerType: resolved.providerType,
+            model: resolved.model,
+            latencyMs: Date.now() - t0,
+            sample: (sample || "").slice(0, 200),
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      } catch (e) {
+        const status = e instanceof ProviderError ? e.status : 500;
+        const { reason, userMessage } = mapErrorToReason(e);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            testMode: true,
+            providerUsed: resolved.name,
+            providerType: resolved.providerType,
+            status,
+            reason,
+            userMessage,
+            rawError: e instanceof Error ? e.message : String(e),
+            latencyMs: Date.now() - t0,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     // ── 4. Processa arquivos ──
     const processedFiles: { name: string; content: string }[] = [];

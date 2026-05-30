@@ -10,7 +10,7 @@ import { useFileIngestion } from "../hooks/useFileIngestion";
 import { useApfGenerate } from "../hooks/useApfGenerate";
 import {
   Loader2, Wand2, FileText, Download, Eye,
-  AlertCircle, Settings2, Trash2, CheckCircle2
+  AlertCircle, Settings2, Trash2, CheckCircle2, Clock, Zap, AlertTriangle
 } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -48,6 +48,9 @@ export function ApfHuGenerateTab() {
     lastResult,
     showPreview, setShowPreview,
     providerCfg,
+    progressStep,
+    elapsedSeconds,
+    lastError,
   } = useApfGenerate(MODULE_HU_ID);
 
   const selectedTemplate = useMemo(
@@ -91,8 +94,33 @@ export function ApfHuGenerateTab() {
       await generateGeneric(prompt, baseFilename);
       toast.success("User Stories geradas com sucesso!");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Falha na geração");
+      const msg = e instanceof Error ? e.message : "Falha na geração";
+      const isTimeout = /tempo limite/i.test(msg);
+      const isNoCredit = /sem créditos|402/i.test(msg);
+      const isRate = /429|muitas requisições|rate limit/i.test(msg);
+      const isAuth = /401|403|chave.*inválid|invalid.*api/i.test(msg);
+      const desc = isTimeout
+        ? "Troque para outro provedor de IA no Hub, ou reduza o volume de dados anexados."
+        : isNoCredit
+        ? "O provedor recomendado está sem créditos. Selecione outra IA no Hub (GPT/Gemini com chave própria)."
+        : isRate
+        ? "Aguarde alguns segundos e tente novamente, ou troque de provedor."
+        : isAuth
+        ? "Verifique a chave em Admin → IAs (use o botão Testar) ou cole uma chave temporária aqui."
+        : "Troque de provedor de IA no Hub abaixo e tente novamente.";
+      toast.error(msg, { description: desc, duration: 8000 });
     }
+  };
+
+  const stageLabel: Record<string, string> = {
+    idle: "",
+    collecting: "Preparando dados...",
+    calling_ai: "Chamando a IA...",
+    trying_fallback: "Tentando provedor alternativo...",
+    saving: "Finalizando...",
+    done: "Concluído!",
+    failed: "Falhou",
+    timeout: "Tempo esgotado",
   };
 
   return (
@@ -197,11 +225,47 @@ export function ApfHuGenerateTab() {
             onClick={handleGenerate}
           >
             {generating ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</>
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {stageLabel[progressStep] || "Gerando..."}
+                {elapsedSeconds > 0 && <span className="text-[11px] opacity-80">({elapsedSeconds}s)</span>}
+              </>
             ) : (
               <><Wand2 className="h-4 w-4" /> Gerar User Stories</>
             )}
           </Button>
+
+          {generating && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2 animate-in fade-in">
+              <div className="flex items-center justify-between text-[11px] font-semibold">
+                <span className="flex items-center gap-1.5 text-primary">
+                  <Zap className="h-3 w-3" /> {stageLabel[progressStep]}
+                </span>
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <Clock className="h-3 w-3" /> {elapsedSeconds}s / 120s
+                </span>
+              </div>
+              <Progress value={Math.min(100, (elapsedSeconds / 120) * 100)} className="h-1" />
+              {progressStep === "trying_fallback" && (
+                <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                  O provedor principal demorou — o sistema está tentando um fallback automático.
+                </p>
+              )}
+            </div>
+          )}
+
+          {!generating && lastError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-semibold">{lastError.reason === "TIMEOUT" ? "Tempo limite excedido" : "Falha na geração"}</p>
+                <p className="opacity-90">{lastError.message}</p>
+                <p className="text-[10px] opacity-80">
+                  Dica: troque o provedor de IA no Hub acima e tente novamente.
+                </p>
+              </div>
+            </div>
+          )}
 
           {!canGenerate && files.length > 0 && !generating && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/5 border border-destructive/20 text-destructive">

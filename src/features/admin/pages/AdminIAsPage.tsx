@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Loader2, Plus, KeyRound, Trash2, Edit3, Sparkles, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Plus, KeyRound, Trash2, Edit3, Sparkles, CheckCircle2, XCircle, Zap } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   listAIProviders, createAIProvider, updateAIProvider, deleteAIProvider, setAIProviderKey,
   type AIProvider, type ProviderType, PROVIDER_TYPE_LABEL,
@@ -41,6 +42,8 @@ export function AdminIAsPage() {
   const [keyTarget, setKeyTarget] = useState<AIProvider | null>(null);
   const [keyValue, setKeyValue] = useState("");
   const [saving, setSaving] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; latencyMs?: number; message: string }>>({});
 
   const load = async () => {
     setLoading(true);
@@ -108,6 +111,43 @@ export function AdminIAsPage() {
     catch (e: any) { toast.error(e?.message ?? "Erro ao remover"); }
   };
 
+  const testProvider = async (p: AIProvider) => {
+    setTestingId(p.id);
+    const t0 = Date.now();
+    try {
+      const { data, error } = await supabase.functions.invoke("apf-generate", {
+        body: { testMode: true, providerId: p.id },
+      });
+      const elapsed = Date.now() - t0;
+      if (error) {
+        const msg = (error as any)?.context?.userMessage ?? error.message ?? "Falha ao testar";
+        setTestResult((s) => ({ ...s, [p.id]: { ok: false, latencyMs: elapsed, message: msg } }));
+        toast.error(`${p.name}: ${msg}`, { duration: 7000 });
+        return;
+      }
+      if (data?.success) {
+        const latency = data.latencyMs ?? elapsed;
+        setTestResult((s) => ({ ...s, [p.id]: { ok: true, latencyMs: latency, message: `OK (${latency}ms)` } }));
+        toast.success(`${p.name} respondeu em ${latency}ms`, {
+          description: data.sample ? `Resposta: ${String(data.sample).slice(0, 80)}` : undefined,
+        });
+      } else {
+        const msg = data?.userMessage ?? data?.rawError ?? "Falha desconhecida";
+        setTestResult((s) => ({ ...s, [p.id]: { ok: false, latencyMs: data?.latencyMs ?? elapsed, message: msg } }));
+        toast.error(`${p.name}: ${msg}`, {
+          description: data?.reason ? `Motivo: ${data.reason}` : undefined,
+          duration: 8000,
+        });
+      }
+    } catch (e: any) {
+      const msg = e?.message ?? "Erro ao chamar provedor";
+      setTestResult((s) => ({ ...s, [p.id]: { ok: false, message: msg } }));
+      toast.error(`${p.name}: ${msg}`);
+    } finally {
+      setTestingId(null);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -130,6 +170,7 @@ export function AdminIAsPage() {
                 <TableHead className="text-xs">Modelo</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs">Key</TableHead>
+                <TableHead className="text-xs">Teste</TableHead>
                 <TableHead className="text-xs text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -154,8 +195,38 @@ export function AdminIAsPage() {
                       ? <span className="inline-flex items-center gap-1 text-green-600"><CheckCircle2 className="h-3.5 w-3.5" /> Configurada</span>
                       : <span className="inline-flex items-center gap-1 text-muted-foreground"><XCircle className="h-3.5 w-3.5" /> Não configurada</span>}
                   </TableCell>
+                  <TableCell className="text-xs">
+                    {testResult[p.id] ? (
+                      testResult[p.id].ok ? (
+                        <span className="inline-flex items-center gap-1 text-green-600">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> {testResult[p.id].latencyMs}ms
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 text-destructive max-w-[180px] truncate"
+                          title={testResult[p.id].message}
+                        >
+                          <XCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{testResult[p.id].message}</span>
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => testProvider(p)}
+                        disabled={testingId === p.id}
+                        title="Testar provedor (envia um ping curto)"
+                      >
+                        {testingId === p.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Zap className="h-3.5 w-3.5 text-primary" />}
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => openKey(p)} title="Definir API key">
                         <KeyRound className="h-3.5 w-3.5" />
                       </Button>

@@ -72,6 +72,11 @@ interface RequestBody {
   apiKey?: string;
   /** Quando true, pula geração de .docx no servidor (frontend faz a conversão). */
   skipDocx?: boolean;
+  /**
+   * Modo de teste do provedor: usa um prompt fixo mínimo, ignora persistência,
+   * sem fallback automático — retorna { success, providerUsed, latencyMs, sample }.
+   */
+  testMode?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -353,37 +353,38 @@ export function ImportacaoView() {
 
   if (mode === null) {
     return (
-      <div className="w-full max-w-lg pt-8 space-y-5">
-        <div className="space-y-1 pb-2">
-          <h2 className="text-xl font-bold text-gray-900">Importação de Dados</h2>
+      // FIX: mx-auto restaurado — centraliza os cards de seleção como estava antes
+      <div className="w-full max-w-xl mx-auto pt-8 space-y-5">
+        <div className="text-center space-y-1 pb-2">
+          <h2 className="text-2xl font-bold text-gray-900">Importação de Dados</h2>
           <p className="text-sm text-gray-500">Escolha o tipo de importação para continuar</p>
         </div>
         <div className="space-y-3">
           <button
             onClick={() => setMode("demandas")}
-            className="w-full group flex items-center gap-4 p-5 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 text-left"
+            className="w-full group flex items-center gap-5 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 text-left"
           >
-            <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
-              <FileSpreadsheet className="h-6 w-6 text-blue-600" />
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+              <FileSpreadsheet className="h-7 w-7 text-blue-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900">Demandas (Redmine)</p>
-              <p className="text-xs text-gray-500 mt-0.5">Importar planilha .csv exportada do Redmine</p>
+              <p className="text-base font-semibold text-gray-900">Demandas (Redmine)</p>
+              <p className="text-sm text-gray-500 mt-0.5">Importar planilha .csv exportada do Redmine</p>
             </div>
-            <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+            <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
           <button
             onClick={() => setMode("projetos")}
-            className="w-full group flex items-center gap-4 p-5 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-violet-200 transition-all duration-200 text-left"
+            className="w-full group flex items-center gap-5 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-violet-200 transition-all duration-200 text-left"
           >
-            <div className="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition-colors">
-              <FolderKanban className="h-6 w-6 text-violet-600" />
+            <div className="w-14 h-14 rounded-2xl bg-violet-50 flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition-colors">
+              <FolderKanban className="h-7 w-7 text-violet-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900">Projetos de Sustentação</p>
-              <p className="text-xs text-gray-500 mt-0.5">Importar sistemas de sustentação via .csv</p>
+              <p className="text-base font-semibold text-gray-900">Projetos de Sustentação</p>
+              <p className="text-sm text-gray-500 mt-0.5">Importar sistemas de sustentação via .csv</p>
             </div>
-            <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+            <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
         </div>
       </div>
@@ -395,8 +396,8 @@ export function ImportacaoView() {
   const isDemandas = mode === "demandas";
 
   return (
-    // • w-full sem max-w: herda a área disponível do wrapper da feature (~880px após o sidebar)
-    <div className="w-full space-y-4">
+    // FIX: max-w-5xl mx-auto contém os contadores sem comprimir a tabela
+    <div className="w-full max-w-5xl space-y-4">
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2">
@@ -413,10 +414,10 @@ export function ImportacaoView() {
         </span>
       </div>
 
-      {/* Card principal — overflow-hidden para a tabela ocupar largura total */}
+      {/* Card principal */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
-        {/* ── HEADER: fundo pastel + instruções ── */}
+        {/* ── HEADER ── */}
         <div className={cn(
           "px-8 py-6 border-b border-gray-100",
           isDemandas
@@ -446,7 +447,6 @@ export function ImportacaoView() {
             </div>
           </div>
 
-          {/* Chips de colunas */}
           <div className="mt-4 space-y-2">
             {isDemandas ? (
               <>
@@ -480,12 +480,9 @@ export function ImportacaoView() {
           </div>
         </div>
 
-        {/* ── CORPO: dropzone / erros / tipos ──
-             Nota: o <ImportacaoPreviewTable> fica FORA deste p-8
-             para que a tabela ocupe a largura total do card. */}
+        {/* ── CORPO: dropzone / erros / resultados ── */}
         {!showPreview && (
           <div className="p-8 space-y-5">
-            {/* Dropzone */}
             <label className={cn(
               "relative flex flex-col items-center justify-center gap-4",
               "min-h-[180px] rounded-xl cursor-pointer",
@@ -524,7 +521,6 @@ export function ImportacaoView() {
               )}
             </label>
 
-            {/* Erros de validação */}
             {isDemandas && errors.length > 0 && (
               <div className="rounded-xl border border-red-100 bg-red-50 p-4 space-y-2 max-h-44 overflow-y-auto">
                 <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">Linhas rejeitadas</p>
@@ -537,7 +533,6 @@ export function ImportacaoView() {
               </div>
             )}
 
-            {/* Tipos auto-criados */}
             {isDemandas && autoCreatedTypes.length > 0 && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1.5">
                 <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Tipos criados automaticamente</p>
@@ -547,7 +542,6 @@ export function ImportacaoView() {
               </div>
             )}
 
-            {/* Resultado demandas */}
             {isDemandas && result && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -555,9 +549,9 @@ export function ImportacaoView() {
                   <span className="font-semibold text-gray-800 text-sm">Importação concluída</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <ResultCard value={result.importados}  label="Criados"      colorClass="bg-emerald-50 text-emerald-700 border-emerald-100" />
-                  <ResultCard value={result.atualizados} label="Atualizados"  colorClass="bg-sky-50 text-sky-700 border-sky-100" />
-                  <ResultCard value={result.erros}       label="Erros"        colorClass="bg-red-50 text-red-600 border-red-100" />
+                  <ResultCard value={result.importados}  label="Criados"     colorClass="bg-emerald-50 text-emerald-700 border-emerald-100" />
+                  <ResultCard value={result.atualizados} label="Atualizados" colorClass="bg-sky-50 text-sky-700 border-sky-100" />
+                  <ResultCard value={result.erros}       label="Erros"       colorClass="bg-red-50 text-red-600 border-red-100" />
                 </div>
                 {result.tiposCriados && result.tiposCriados.length > 0 && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -593,7 +587,6 @@ export function ImportacaoView() {
               </div>
             )}
 
-            {/* Resultado projetos */}
             {!isDemandas && projetoResult && (
               <div className="space-y-4 pt-4 border-t border-gray-100">
                 <div className="flex items-center gap-2">
@@ -610,9 +603,7 @@ export function ImportacaoView() {
           </div>
         )}
 
-        {/* ── PREVIEW TABLE: fora do p-8, sem padding lateral ──
-             Os contadores e a tabela tocam as bordas laterais do card.
-             O componente gerencia seu próprio padding interno apenas onde necessário. */}
+        {/* ── PREVIEW TABLE: fora do p-8 para ocupar largura total do card ── */}
         {isDemandas && showPreview && (
           <ImportacaoPreviewTable
             rows={validRows}

@@ -18,7 +18,7 @@ import {
 } from "./ImportacaoPreviewTable";
 import { cn } from "@/lib/utils";
 
-// ─── Mapas de normalização (inalterados) ─────────────────────────────────────
+// ─── Mapas de normalização ─────────────────────────────────────────────────
 
 const SITUACAO_MAP: Record<string, string> = {
   fila_atendimento: "fila_atendimento",
@@ -353,38 +353,37 @@ export function ImportacaoView() {
 
   if (mode === null) {
     return (
-      // FIX: mx-auto restaurado — centraliza os cards de seleção como estava antes
       <div className="w-full max-w-xl mx-auto pt-8 space-y-5">
         <div className="text-center space-y-1 pb-2">
-          <h2 className="text-2xl font-bold text-gray-900">Importação de Dados</h2>
-          <p className="text-sm text-gray-500">Escolha o tipo de importação para continuar</p>
+          <h2 className="text-2xl font-bold text-foreground">Importação de Dados</h2>
+          <p className="text-sm text-muted-foreground">Escolha o tipo de importação para continuar</p>
         </div>
         <div className="space-y-3">
           <button
             onClick={() => setMode("demandas")}
-            className="w-full group flex items-center gap-5 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 text-left"
+            className="w-full group flex items-center gap-5 p-5 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 text-left"
           >
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
-              <FileSpreadsheet className="h-7 w-7 text-blue-600" />
+            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 dark:bg-blue-500/15 flex items-center justify-center shrink-0 group-hover:bg-blue-500/20 transition-colors">
+              <FileSpreadsheet className="h-7 w-7 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-base font-semibold text-gray-900">Demandas (Redmine)</p>
-              <p className="text-sm text-gray-500 mt-0.5">Importar planilha .csv exportada do Redmine</p>
+              <p className="text-base font-semibold text-foreground">Demandas (Redmine)</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Importar planilha .csv exportada do Redmine</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+            <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
           <button
             onClick={() => setMode("projetos")}
-            className="w-full group flex items-center gap-5 p-5 rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-md hover:border-violet-200 transition-all duration-200 text-left"
+            className="w-full group flex items-center gap-5 p-5 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:border-violet-400 dark:hover:border-violet-500 transition-all duration-200 text-left"
           >
-            <div className="w-14 h-14 rounded-2xl bg-violet-50 flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition-colors">
-              <FolderKanban className="h-7 w-7 text-violet-600" />
+            <div className="w-14 h-14 rounded-2xl bg-violet-500/10 dark:bg-violet-500/15 flex items-center justify-center shrink-0 group-hover:bg-violet-500/20 transition-colors">
+              <FolderKanban className="h-7 w-7 text-violet-600 dark:text-violet-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-base font-semibold text-gray-900">Projetos de Sustentação</p>
-              <p className="text-sm text-gray-500 mt-0.5">Importar sistemas de sustentação via .csv</p>
+              <p className="text-base font-semibold text-foreground">Projetos de Sustentação</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Importar sistemas de sustentação via .csv</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+            <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
         </div>
       </div>
@@ -396,49 +395,48 @@ export function ImportacaoView() {
   const isDemandas = mode === "demandas";
 
   return (
-    // FIX: max-w-5xl mx-auto contém os contadores sem comprimir a tabela
     <div className="w-full max-w-5xl space-y-4">
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2">
         <button
           onClick={() => { setMode(null); setResult(null); setProjetoResult(null); cancelPreview(); }}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Voltar
         </button>
-        <span className="text-gray-300 select-none">/</span>
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-border select-none">/</span>
+        <span className="text-sm font-medium text-foreground">
           {isDemandas ? "Importar Demandas (Redmine)" : "Importar Projetos"}
         </span>
       </div>
 
       {/* Card principal */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
 
         {/* ── HEADER ── */}
         <div className={cn(
-          "px-8 py-6 border-b border-gray-100",
+          "px-8 py-6 border-b border-border",
           isDemandas
-            ? "bg-gradient-to-r from-blue-50/70 to-white"
-            : "bg-gradient-to-r from-violet-50/70 to-white",
+            ? "bg-gradient-to-r from-blue-500/5 dark:from-blue-500/10 to-transparent"
+            : "bg-gradient-to-r from-violet-500/5 dark:from-violet-500/10 to-transparent",
         )}>
           <div className="flex items-center gap-4">
             <div className={cn(
               "w-11 h-11 rounded-xl flex items-center justify-center shrink-0",
-              isDemandas ? "bg-blue-100" : "bg-violet-100",
+              isDemandas ? "bg-blue-500/10 dark:bg-blue-500/15" : "bg-violet-500/10 dark:bg-violet-500/15",
             )}>
               {isDemandas
-                ? <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                : <FolderKanban    className="h-5 w-5 text-violet-600" />
+                ? <FileSpreadsheet className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                : <FolderKanban    className="h-5 w-5 text-violet-600 dark:text-violet-400" />
               }
             </div>
             <div>
-              <h1 className="text-base font-bold text-gray-900">
+              <h1 className="text-base font-bold text-foreground">
                 {isDemandas ? "Importar Demandas (Redmine)" : "Importar Projetos de Sustentação"}
               </h1>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {isDemandas
                   ? "Faça upload do arquivo .csv exportado do Redmine para revisar e migrar as demandas."
                   : "Faça upload do arquivo .csv com os projetos de sustentação a serem cadastrados."
@@ -451,27 +449,27 @@ export function ImportacaoView() {
             {isDemandas ? (
               <>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                  <span className="text-xs font-semibold text-gray-600 shrink-0">Obrigatórias:</span>
+                  <span className="text-xs font-semibold text-foreground/70 shrink-0">Obrigatórias:</span>
                   {["#", "Projeto", "Tipo", "Criado em"].map((col) => (
-                    <code key={col} className="text-[11px] bg-white border border-gray-200 text-gray-700 px-2 py-0.5 rounded font-mono shadow-sm">{col}</code>
+                    <code key={col} className="text-[11px] bg-background border border-border text-foreground/80 px-2 py-0.5 rounded font-mono shadow-sm">{col}</code>
                   ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                  <span className="text-xs font-semibold text-gray-400 shrink-0">Opcionais:</span>
+                  <span className="text-xs font-semibold text-muted-foreground shrink-0">Opcionais:</span>
                   {["Título", "Situação", "Regime de Atendimento", "Defeito Impeditivo"].map((col) => (
-                    <code key={col} className="text-[11px] bg-white/70 border border-gray-100 text-gray-400 px-2 py-0.5 rounded font-mono">{col}</code>
+                    <code key={col} className="text-[11px] bg-muted border border-border text-muted-foreground px-2 py-0.5 rounded font-mono">{col}</code>
                   ))}
                 </div>
               </>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                  <span className="text-xs font-semibold text-gray-600 shrink-0">Colunas:</span>
+                  <span className="text-xs font-semibold text-foreground/70 shrink-0">Colunas:</span>
                   {["Nome", "Descrição", "Equipe", "SLA"].map((col) => (
-                    <code key={col} className="text-[11px] bg-white border border-gray-200 text-gray-700 px-2 py-0.5 rounded font-mono shadow-sm">{col}</code>
+                    <code key={col} className="text-[11px] bg-background border border-border text-foreground/80 px-2 py-0.5 rounded font-mono shadow-sm">{col}</code>
                   ))}
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 w-fit">
+                <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/20 rounded-lg px-3 py-1.5 w-fit">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                   Projetos já cadastrados serão ignorados automaticamente
                 </div>
@@ -486,8 +484,8 @@ export function ImportacaoView() {
             <label className={cn(
               "relative flex flex-col items-center justify-center gap-4",
               "min-h-[180px] rounded-xl cursor-pointer",
-              "border-2 border-dashed border-gray-200 bg-gray-50/50",
-              "hover:border-blue-400 hover:bg-blue-50/20 transition-all duration-200 group",
+              "border-2 border-dashed border-border bg-muted/30",
+              "hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-500/5 transition-all duration-200 group",
             )}>
               <input
                 ref={inputRef}
@@ -499,22 +497,24 @@ export function ImportacaoView() {
               />
               <div className={cn(
                 "w-12 h-12 rounded-xl flex items-center justify-center shadow-sm transition-colors",
-                isDemandas ? "bg-blue-50 group-hover:bg-blue-100" : "bg-violet-50 group-hover:bg-violet-100",
+                isDemandas
+                  ? "bg-blue-500/10 dark:bg-blue-500/15 group-hover:bg-blue-500/20"
+                  : "bg-violet-500/10 dark:bg-violet-500/15 group-hover:bg-violet-500/20",
               )}>
                 <Upload className={cn("h-5 w-5", isDemandas ? "text-blue-500" : "text-violet-500")} />
               </div>
               <div className="text-center pointer-events-none space-y-1">
-                <p className="text-sm font-semibold text-gray-700">
+                <p className="text-sm font-semibold text-foreground">
                   {loading ? "Processando arquivo…" : "Arraste o arquivo aqui"}
                 </p>
-                <p className="text-xs text-gray-400">ou clique para selecionar um arquivo .csv</p>
+                <p className="text-xs text-muted-foreground">ou clique para selecionar um arquivo .csv</p>
               </div>
               {!loading && (
                 <span className={cn(
                   "text-xs font-medium px-4 py-1.5 rounded-full pointer-events-none",
                   isDemandas
-                    ? "bg-blue-600 text-white group-hover:bg-blue-700"
-                    : "bg-violet-600 text-white group-hover:bg-violet-700",
+                    ? "bg-blue-600 dark:bg-blue-500 text-white group-hover:bg-blue-700 dark:group-hover:bg-blue-600"
+                    : "bg-violet-600 dark:bg-violet-500 text-white group-hover:bg-violet-700 dark:group-hover:bg-violet-600",
                 )}>
                   Selecionar Arquivo
                 </span>
@@ -522,10 +522,10 @@ export function ImportacaoView() {
             </label>
 
             {isDemandas && errors.length > 0 && (
-              <div className="rounded-xl border border-red-100 bg-red-50 p-4 space-y-2 max-h-44 overflow-y-auto">
-                <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">Linhas rejeitadas</p>
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 dark:bg-destructive/10 p-4 space-y-2 max-h-44 overflow-y-auto">
+                <p className="text-xs font-semibold text-destructive uppercase tracking-wide">Linhas rejeitadas</p>
                 {errors.map((err, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs text-red-600">
+                  <div key={i} className="flex items-start gap-2 text-xs text-destructive">
                     <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                     <span>Linha {err.linha}: {err.mensagem}</span>
                   </div>
@@ -534,9 +534,9 @@ export function ImportacaoView() {
             )}
 
             {isDemandas && autoCreatedTypes.length > 0 && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-1.5">
-                <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Tipos criados automaticamente</p>
-                <ul className="list-disc pl-5 text-xs text-amber-600 space-y-0.5">
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/15 p-4 space-y-1.5">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Tipos criados automaticamente</p>
+                <ul className="list-disc pl-5 text-xs text-amber-600 dark:text-amber-400 space-y-0.5">
                   {autoCreatedTypes.map((t, i) => <li key={i}>{t}</li>)}
                 </ul>
               </div>
@@ -546,33 +546,33 @@ export function ImportacaoView() {
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="font-semibold text-gray-800 text-sm">Importação concluída</span>
+                  <span className="font-semibold text-foreground text-sm">Importação concluída</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <ResultCard value={result.importados}  label="Criados"     colorClass="bg-emerald-50 text-emerald-700 border-emerald-100" />
-                  <ResultCard value={result.atualizados} label="Atualizados" colorClass="bg-sky-50 text-sky-700 border-sky-100" />
-                  <ResultCard value={result.erros}       label="Erros"       colorClass="bg-red-50 text-red-600 border-red-100" />
+                  <ResultCard value={result.importados}  label="Criados"     colorClass="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" />
+                  <ResultCard value={result.atualizados} label="Atualizados" colorClass="bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" />
+                  <ResultCard value={result.erros}       label="Erros"       colorClass="bg-destructive/10 text-destructive border-destructive/20" />
                 </div>
                 {result.tiposCriados && result.tiposCriados.length > 0 && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                    <p className="text-xs font-semibold text-amber-700">Tipos criados automaticamente ({result.tiposCriados.length}):</p>
-                    <ul className="list-disc pl-5 text-xs text-amber-600 mt-1 space-y-0.5">
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 dark:bg-amber-500/15 p-3">
+                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Tipos criados automaticamente ({result.tiposCriados.length}):</p>
+                    <ul className="list-disc pl-5 text-xs text-amber-600 dark:text-amber-400 mt-1 space-y-0.5">
                       {result.tiposCriados.map((t, i) => <li key={i}>{t}</li>)}
                     </ul>
                   </div>
                 )}
                 {result.falhas && result.falhas.length > 0 && (
-                  <div className="rounded-xl border border-red-100 bg-red-50 p-3 space-y-2">
-                    <p className="text-xs font-semibold text-red-600 flex items-center gap-1.5">
+                  <div className="rounded-xl border border-destructive/20 bg-destructive/5 dark:bg-destructive/10 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-destructive flex items-center gap-1.5">
                       <XCircle className="h-3.5 w-3.5" />
                       Falhas na migração ({result.falhas.length})
                     </p>
                     <div className="max-h-36 overflow-y-auto space-y-1">
                       {result.falhas.map((f, i) => (
                         <div key={i} className="flex items-start gap-2 text-xs">
-                          <span className="font-mono font-bold text-red-600 shrink-0">#{f.rhm}</span>
-                          <span className="text-gray-500 shrink-0">{f.projeto}</span>
-                          <span className="text-red-500 ml-auto truncate" title={f.motivo}>{f.motivo}</span>
+                          <span className="font-mono font-bold text-destructive shrink-0">#{f.rhm}</span>
+                          <span className="text-muted-foreground shrink-0">{f.projeto}</span>
+                          <span className="text-destructive ml-auto truncate" title={f.motivo}>{f.motivo}</span>
                         </div>
                       ))}
                     </div>
@@ -588,22 +588,22 @@ export function ImportacaoView() {
             )}
 
             {!isDemandas && projetoResult && (
-              <div className="space-y-4 pt-4 border-t border-gray-100">
+              <div className="space-y-4 pt-4 border-t border-border">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="font-semibold text-gray-800 text-sm">Importação concluída</span>
+                  <span className="font-semibold text-foreground text-sm">Importação concluída</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <ResultCard value={projetoResult.importados} label="Importados"    colorClass="bg-emerald-50 text-emerald-700 border-emerald-100" />
-                  <ResultCard value={projetoResult.existentes} label="Já existentes" colorClass="bg-sky-50 text-sky-700 border-sky-100" />
-                  <ResultCard value={projetoResult.erros}      label="Erros"         colorClass="bg-red-50 text-red-600 border-red-100" />
+                  <ResultCard value={projetoResult.importados} label="Importados"    colorClass="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" />
+                  <ResultCard value={projetoResult.existentes} label="Já existentes" colorClass="bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" />
+                  <ResultCard value={projetoResult.erros}      label="Erros"         colorClass="bg-destructive/10 text-destructive border-destructive/20" />
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* ── PREVIEW TABLE: fora do p-8 para ocupar largura total do card ── */}
+        {/* ── PREVIEW TABLE ── */}
         {isDemandas && showPreview && (
           <ImportacaoPreviewTable
             rows={validRows}

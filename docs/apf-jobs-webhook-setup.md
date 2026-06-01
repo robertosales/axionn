@@ -1,17 +1,34 @@
-# Configurar Webhook: apf_jobs INSERT → process-apf-job
+# Configurar a fila APF no Lovable
 
-O webhook é o mecanismo **primário** para disparar o worker imediatamente quando um job é inserido. O safety net via pg_cron (a cada 1 min) é o fallback.
+O sistema de fila assíncrona (`apf_jobs`) precisa de 2 configurações que não podem ser feitas via SQL: os Secrets no Lovable e o Webhook de banco.
 
-## Por que não está no SQL
+---
 
-Webhooks do Supabase são configurados via API interna do painel. Não há SQL equivalente que rode em migrations padrão.
+## 1. Adicionar Secrets no Lovable
 
-## Passo a passo
+No painel do **Lovable**:
 
-1. Acesse o **Dashboard do Supabase** → projeto usesprintflow
-2. Menu lateral: **Database** → **Webhooks**
-3. Clique em **Create a new hook**
-4. Preencha:
+1. Acesse **Settings** (engrenagem) → **Secrets** (ou **Environment Variables**)
+2. Adicione os dois secrets abaixo:
+
+| Nome | Valor |
+|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | A service role key do projeto (já usada pelas Edge Functions) |
+| `SUPABASE_URL` | A URL do projeto, ex: `https://xyzxyz.supabase.co` |
+
+> **Onde encontrar esses valores:** no Lovable, vá em **Settings → Supabase** ou abra qualquer Edge Function e veja os valores de `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` que já estão injetados automaticamente.
+
+---
+
+## 2. Configurar o Webhook de banco
+
+O webhook é o mecanismo que dispara o worker (`process-apf-job`) **imediatamente** quando um job é inserido na fila. Sem ele, o job aguarda até 1 minuto (safety net do cron).
+
+No painel do **Lovable**:
+
+1. Acesse **Database** → **Webhooks** (ou **Supabase Dashboard → Database → Webhooks**)
+2. Clique em **Create a new hook**
+3. Preencha:
 
 | Campo | Valor |
 |---|---|
@@ -20,31 +37,57 @@ Webhooks do Supabase são configurados via API interna do painel. Não há SQL e
 | Events | `INSERT` |
 | Type | **Supabase Edge Functions** |
 | Edge Function | `process-apf-job` |
-| HTTP Method | `POST` |
-| Timeout | `5000 ms` |
+| Method | `POST` |
+| Timeout | `5000` ms |
 
-5. Em **HTTP Headers**, adicione:
-   - `Content-Type: application/json`
+4. Confirme.
 
-6. Clique em **Confirm**
+---
 
-## Verificar se está funcionando
+## 3. Verificar se está funcionando
 
-Após configurar, gere um APF pelo sistema. No Dashboard:
-- **Database → Webhooks → apf-job-inserted → Logs**
-- Deve aparecer uma chamada com status `200` para cada job inserido
+Apresentamos no SQL Editor do Lovable:
 
-## Safety net (backup automático)
+```sql
+-- Ver jobs recentes
+SELECT id, status, attempts, created_at, started_at, finished_at
+FROM apf_jobs
+ORDER BY created_at DESC
+LIMIT 10;
 
-A migration `20260601030000_apf_jobs_cron.sql` já configurou um pg_cron a cada 1 minuto que verifica se há jobs `pending` presos e dispara o worker. Mesmo se o webhook falhar, nenhum job fica perdido por mais de 1 minuto.
+-- Ver crons registrados
+SELECT jobname, schedule, active
+FROM cron.job;
 
-## Configuração das variáveis do cron
+-- Ver se há jobs presos
+SELECT count(*)
+FROM apf_jobs
+WHERE status = 'pending'
+  AND next_attempt_at < now() - INTERVAL '2 minutes';
+```
 
-Para o safety net funcionar, configure em **Database → Settings → Configuration → Custom config**:
+---
+
+## 4. Fallback automático (já está ativo)
+
+Mesmo sem o webhook configurado, o cron `apf-jobs-safety-net` (a cada 1 minuto) processa qualquer job pendente preso. Nenhum job fica perdido.
+
+---
+
+## Resumo do fluxo
 
 ```
-app.supabase_url = https://<seu-projeto>.supabase.co
-app.service_role_key = <service_role_key>
+Frontend clica "Gerar APF"
+  ↓
+INSERT apf_jobs (status=pending)  <-- retorna job_id em <100ms
+  ↓
+Webhook dispara process-apf-job  (se configurado: <1s)
+  OU
+Cron safety net (fallback: até 60s)
+  ↓
+Worker chama apf-generate → IA processa (3-15s)
+  ↓
+apf_jobs.status = 'done'
+  ↓
+Realtime notifica frontend → exibe resultado
 ```
-
-Ou, alternativamente, substitua `current_setting('app.supabase_url')` pelo valor hardcoded na migration se preferir simplicidade.

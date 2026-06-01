@@ -11,14 +11,14 @@
  *   e8Glosa   : number — dias de atraso para glosa  E8 (default 60)
  *
  * Cache: staleTime: 60s (STALE.KPI) — pesado, não precisa de refresh
- * contínuo. Invalida quando demandas do time mudam via Realtime.
+ * contínuo. Invalida com debounce 2s quando demandas do time mudam via Realtime.
  *
  * API pública compatível com imrCalculations.ts:
  *   { iap, iqs, ict, iss, glosas, e8Alerts, loading, error, refetch }
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { STALE } from '@/lib/queryClient';
@@ -40,11 +40,11 @@ export interface ImrE8Alert {
   demandaId:   string;
   rhm:         string;
   projeto:     string;
-  tipo:        string;        // tipo da demanda (ex: 'manutencao_corretiva')
+  tipo:        string;
   situacao:    string;
   prazo:       string | null;
   diasAtraso:  number;
-  tipo_alerta: 'alerta' | 'glosa';  // classificação do alerta E8
+  tipo_alerta: 'alerta' | 'glosa';
 }
 
 export interface ImrPeriodo {
@@ -112,7 +112,6 @@ export function useImrPeriodo({
   const { currentTeamId } = useAuth();
   const qc = useQueryClient();
 
-  // Serializa datas para compor a cache key (ISO date, sem milissegundos)
   const inicioISO = inicio.toISOString().slice(0, 10);
   const fimISO    = fim.toISOString().slice(0, 10);
 
@@ -123,34 +122,43 @@ export function useImrPeriodo({
     staleTime: STALE.KPI,   // 60s — agregação pesada
   });
 
-  // Invalida IMR quando qualquer demanda do time mudar
+  // Debounce 2s: evita recálculo em cascata com muitos usuários simultâneos
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!currentTeamId) return;
+
     const channel = supabase
       .channel(`imr-rt-${currentTeamId}-${inicioISO}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
-        () => qc.invalidateQueries({ queryKey: imrKey(currentTeamId, inicioISO, fimISO) }),
+        () => {
+          if (typeof document !== 'undefined' && document.hidden) return;
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => {
+            qc.invalidateQueries({ queryKey: imrKey(currentTeamId, inicioISO, fimISO) });
+          }, 2000);
+        },
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      supabase.removeChannel(channel);
+    };
   }, [currentTeamId, inicioISO, fimISO, qc]);
 
   const error = queryError ? (queryError as Error).message : null;
   const imr   = data ?? EMPTY;
 
   return {
-    // Índices
     iap:      imr.iap,
     iqs:      imr.iqs,
     ict:      imr.ict,
     iss:      imr.iss,
-    // Glosas
     glosas:   imr.glosas,
-    // Alertas E8
     e8Alerts: imr.e8Alerts,
-    // Estado
     loading,
     error,
     refetch,

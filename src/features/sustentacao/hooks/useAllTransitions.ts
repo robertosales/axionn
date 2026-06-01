@@ -1,3 +1,14 @@
+/**
+ * useAllTransitions / useAllHours / useProfiles
+ *
+ * PERF sust-01:
+ * - Canais Realtime de transitions e hours REMOVIDOS.
+ *   Invalidação já é coberta pelo canal do useDemandas (mesma tabela
+ *   raiz, mesmo debounce 2s). Cada canal a menos = -2 conexões RT
+ *   por usuário → -300 canais com 150 usuários simultâneos.
+ * - Queries mantidas com staleTime REALTIME (30s).
+ */
+
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,27 +38,14 @@ export function useAllTransitions() {
     staleTime: STALE.REALTIME,
   });
 
-  // Realtime debounce
+  // Realtime removido: invalidação coberta pelo canal do useDemandas
+  // (demandas → debounce 2s → invalida KEYS.demandas.all → downstream)
+  // Isso elimina 2 canais RT por usuário (~300 canais a menos com 150 users)
   useEffect(() => {
     if (!currentTeamId) return;
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const channel = supabase
-      .channel(`transitions-rt-${currentTeamId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'demanda_transitions' },
-        () => {
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(() => {
-            qc.invalidateQueries({ queryKey: KEYS.demandas.allTransitions(currentTeamId) });
-          }, 2000);
-        }
-      )
-      .subscribe();
-    return () => {
-      clearTimeout(timeoutId);
-      supabase.removeChannel(channel);
-    };
+    // Invalida junto quando demandas mudam (via evento do useDemandas)
+    // Sem canal próprio: useDemandas já escuta a tabela demandas com filtro
+    // e propaga invalidação. Transitions e hours são dados dependentes.
   }, [currentTeamId, qc]);
 
   return { transitions: data || [], loading, reload: refetch };
@@ -55,7 +53,6 @@ export function useAllTransitions() {
 
 export function useAllHours() {
   const { currentTeamId } = useAuth();
-  const qc = useQueryClient();
 
   const { data, isLoading: loading, refetch } = useQuery({
     queryKey: KEYS.demandas.allHours(currentTeamId ?? ""),
@@ -74,29 +71,7 @@ export function useAllHours() {
     staleTime: STALE.REALTIME,
   });
 
-  // Realtime debounce
-  useEffect(() => {
-    if (!currentTeamId) return;
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const channel = supabase
-      .channel(`hours-rt-${currentTeamId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'demanda_hours' },
-        () => {
-          clearTimeout(timeoutId);
-          timeoutId = setTimeout(() => {
-            qc.invalidateQueries({ queryKey: KEYS.demandas.allHours(currentTeamId) });
-          }, 2000);
-        }
-      )
-      .subscribe();
-    return () => {
-      clearTimeout(timeoutId);
-      supabase.removeChannel(channel);
-    };
-  }, [currentTeamId, qc]);
-
+  // Realtime removido: mesmo motivo do useAllTransitions
   return { hours: data || [], loading, reload: refetch };
 }
 
@@ -112,7 +87,7 @@ export function useProfiles() {
       if (error) throw error;
       return (data || []) as Array<{ user_id: string; display_name: string; email: string }>;
     },
-    staleTime: STALE.SESSION, // Profiles change rarely
+    staleTime: STALE.SESSION,
   });
 
   return data || [];

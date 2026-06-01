@@ -7,16 +7,15 @@
  * Cache: staleTime: 60s (STALE.KPI) — agregação pesada, não precisa de
  * atualização tão frequente quanto o Kanban.
  *
- * Invalidação: quando o Realtime de demandas dispara (via useDemandas),
- * o caller pode chamar refetch() ou o hook invalida automaticamente
- * após o staleTime.
+ * Invalidação: debounce 2s no canal Realtime (igual ao useDemandas)
+ * para evitar recálculo imediato em cascata com 150 usuários simultâneos.
  *
  * API pública compatível com o retorno de kpiCalculations.ts:
  *   { atendimento, tempos, sla, kpiGeral, produtividade, loading, error, refetch }
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { KEYS } from '@/lib/queryKeys';
@@ -78,8 +77,6 @@ export interface KpisSustentacao {
 }
 
 // ─── Chave de query dedicada ─────────────────────────────────────────────────────────
-// Adicionado em queryKeys.ts como KEYS.kpisSustentacao — declarado inline
-// aqui para não exigir alteração de queryKeys.ts neste commit.
 const kpisKey = (teamId: string, backlogDias: number) =>
   ['kpis-sustentacao', teamId, backlogDias] as const;
 
@@ -106,19 +103,32 @@ export function useKpisSustentacao(backlogDias = 30) {
     staleTime: STALE.KPI,   // 60s — agregação pesada
   });
 
-  // Invalida KPIs quando qualquer demanda do time mudar
-  // (mesmo canal do useDemandas — Supabase deduplica subscrições)
+  // Debounce 2s: evita recálculo imediato em cascata com muitos usuários
+  // (mesmo padrão do useDemandas)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!currentTeamId) return;
+
     const channel = supabase
       .channel(`kpis-sustentacao-rt-${currentTeamId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
-        () => qc.invalidateQueries({ queryKey: kpisKey(currentTeamId, backlogDias) }),
+        () => {
+          if (typeof document !== 'undefined' && document.hidden) return;
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => {
+            qc.invalidateQueries({ queryKey: kpisKey(currentTeamId, backlogDias) });
+          }, 2000);
+        },
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      supabase.removeChannel(channel);
+    };
   }, [currentTeamId, backlogDias, qc]);
 
   const error = queryError ? (queryError as Error).message : null;

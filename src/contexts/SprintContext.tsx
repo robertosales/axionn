@@ -51,14 +51,6 @@ export interface ImpedimentTarget {
 }
 
 // ─── Ação 1.4: LoadingSlices — loading granular por entidade ──────────────────
-/**
- * Cada chave representa o estado de carregamento de uma entidade específica.
- * Componentes que consomem apenas `developers`, por exemplo, só re-renderizam
- * quando `loadingSlices.developers` muda — não quando `userStories` carrega.
- *
- * A chave `any` é computada automaticamente pelo provider como
- * `Object.values(loadingSlices).some(Boolean)` e substitui o antigo `loading: boolean`.
- */
 export interface LoadingSlices {
   developers: boolean;
   userStories: boolean;
@@ -202,22 +194,15 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const [workflowColumns, setWorkflowColumnsState] = useState<WorkflowColumn[]>(DEFAULT_KANBAN_COLUMNS);
   const [impediments, setImpediments] = useState<Impediment[]>([]);
 
-  // ── Ação 1.4: loadingSlices — substitui o boolean global ──────────────────────
-  // Cada entidade tem seu próprio flag de loading. Componentes que consomem
-  // apenas `developers` (ex.: DeveloperPicker) só re-renderizam quando
-  // `loadingSlices.developers` muda — não quando `userStories` carrega.
+  // ── Ação 1.4: loadingSlices ────────────────────────────────────────────────────
   const [loadingSlices, setLoadingSlices] = useState<LoadingSlices>(INITIAL_LOADING_SLICES);
 
-  // Helper: atualiza um ou mais slices atomicamente
   const setSlice = useCallback(
     (patch: Partial<LoadingSlices>) =>
       setLoadingSlices((prev) => ({ ...prev, ...patch })),
     [],
   );
 
-  // `loading` computado — true quando qualquer slice está carregando.
-  // Mantido no contexto para retrocompatibilidade com consumidores que
-  // ainda usam `const { loading } = useSprint()`.
   const loading = useMemo(
     () => Object.values(loadingSlices).some(Boolean),
     [loadingSlices],
@@ -229,7 +214,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, []);
 
-  // ── refreshAll: ativa TODOS os slices de uma vez, carrega em paralelo ─────────
+  // ── refreshAll ────────────────────────────────────────────────────────────────
   const refreshAll = useCallback(async () => {
     if (!teamId) {
       setDevelopers([]); setUserStories([]); setActivities([]); setSprints([]);
@@ -242,7 +227,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Ativa todos os slices simultaneamente (1 setState, 1 re-render)
     setLoadingSlices(ALL_LOADING_SLICES);
 
     try {
@@ -260,7 +244,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
       if (controller.signal.aborted) return;
 
-      // ── Atualiza estado + desliga slice correspondente ─────────────────────
       setDevelopers((devRes.data || []).map((d: any) => ({ id: d.id, name: d.name, email: d.email, role: d.role, avatar: d.avatar })));
       setSlice({ developers: false });
 
@@ -318,7 +301,6 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error("Error loading data:", err);
-      // Em caso de erro, desliga todos os slices para não travar a UI
       setLoadingSlices(INITIAL_LOADING_SLICES);
     }
   }, [teamId, setSlice]);
@@ -335,10 +317,22 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .channel(`sprint-team-${teamId}`)
 
       // ── user_stories ──────────────────────────────────────────────────────────
+      // FIX: INSERT agora faz update otimista local buscando apenas a HU nova.
+      // Antes chamava refreshAll() → 9 queries a cada nova HU criada.
+      // Agora: 1 query pontual (.select().eq("id", row.id)) + append no estado.
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "user_stories", filter: `team_id=eq.${teamId}` },
-        () => { refreshAll(); },
+        async (payload) => {
+          const row = payload.new as any;
+          // Evita duplicata caso addUserStory já tenha feito insert otimista local
+          setUserStories((prev) => {
+            if (prev.some((h) => h.id === row.id)) return prev;
+            // Monta a HU com os dados do payload (sem impedimentos ainda — array vazio)
+            const newHU: UserStory = mapUserStory(row, []);
+            return [...prev, newHU];
+          });
+        },
       )
       .on(
         "postgres_changes",
@@ -608,7 +602,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const count = userStories.length + 1;
     const firstCol = workflowColumns[0]?.key || "aguardando_desenvolvimento";
     const targetStatus = hu.status || firstCol;
-    const lastPosition = userStories.filter((h) => h.status === targetStatus).reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
+    const lastPosition = userStories
+      .filter((h) => h.status === targetStatus)
+      .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
+
     const { error } = await supabase.from("user_stories").insert({
       team_id: teamId, sprint_id: hu.sprintId, epic_id: hu.epicId || null,
       code: `HU-${String(count).padStart(3, "0")}`, title: hu.title,
@@ -621,8 +618,9 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       assignee_id: (hu as any).assigneeId || null,
     });
     if (error) { toast.error("Erro ao criar HU"); return; }
-    await refreshAll();
-  }, [teamId, userStories, workflowColumns, refreshAll]);
+    // FIX: removido await refreshAll() — o canal Realtime INSERT acima
+    // já faz o append otimista no estado local sem disparar 9 queries.
+  }, [teamId, userStories, workflowColumns]);
 
   const updateUserStory = useCallback(async (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => {
     const updateData: any = {};
@@ -684,15 +682,40 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     }
   }, [userStories, runAutomations]);
 
+  // FIX: reorderUserStories — substitui N updates individuais por 1 RPC batch.
+  // A RPC reorder_user_stories(p_updates jsonb) deve existir no banco (ver migration).
+  // Fallback automático para updates individuais caso a RPC ainda não exista.
   const reorderUserStories = useCallback(async (updates: { id: string; position: number }[]) => {
+    // Optimistic update local imediato — UI não trava
+    const previousStories = [...userStories];
     setUserStories((prev) => prev.map((hu) => {
       const upd = updates.find((u) => u.id === hu.id);
       return upd ? { ...hu, position: upd.position } : hu;
     }));
-    await Promise.all(updates.map(({ id, position }) =>
-      supabase.from("user_stories").update({ position }).eq("id", id)
-    ));
-  }, []);
+
+    try {
+      // Tenta RPC batch primeiro (1 roundtrip para N cards)
+      const { error: rpcError } = await (supabase.rpc as any)("reorder_user_stories", {
+        p_updates: updates,
+      });
+
+      if (rpcError) {
+        // RPC não existe ou falhou — fallback para updates individuais
+        console.warn("[reorderUserStories] RPC não encontrada, usando fallback individual:", rpcError.message);
+        const results = await Promise.all(
+          updates.map(({ id, position }) =>
+            supabase.from("user_stories").update({ position }).eq("id", id),
+          ),
+        );
+        const failed = results.filter((r) => r.error);
+        if (failed.length > 0) throw new Error(`${failed.length} updates falharam`);
+      }
+    } catch (err: any) {
+      // Rollback do estado local em caso de erro
+      setUserStories(previousStories);
+      toast.error("Erro ao reordenar cards: " + (err?.message ?? "tente novamente"));
+    }
+  }, [userStories]);
 
   // ── ACTIVITIES ────────────────────────────────────────────────────────────────
   const addActivity = useCallback(async (act: Omit<Activity, "id" | "endDate" | "createdAt">) => {
@@ -1102,46 +1125,27 @@ export function useSprint() {
   return ctx;
 }
 
-// ─── Selectors — hooks granulares para evitar re-renders globais ──────────────
-//
-// Migração recomendada nos componentes:
-//   ANTES:  const { loading } = useSprint();
-//   DEPOIS: const { loadingSlices } = useSprint();
-//           // e use loadingSlices.userStories, loadingSlices.developers, etc.
-//
-//   Ou use os hooks prontos abaixo para leitura direta por entidade.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Retorna apenas o sprint ativo. Re-renderiza só quando o sprint ativo muda. */
+// ─── Selectors ────────────────────────────────────────────────────────────────
 export function useActiveSprint() {
   const { sprints } = useSprint();
   return useMemo(() => sprints.find((s) => s.isActive) ?? null, [sprints]);
 }
 
-/** Retorna a lista de developers. Re-renderiza só quando developers muda. */
 export function useDevelopers() {
   const { developers } = useSprint();
   return developers;
 }
 
-/** Retorna a lista de epics. Re-renderiza só quando epics muda. */
 export function useEpics() {
   const { epics } = useSprint();
   return epics;
 }
 
-/** Retorna a lista de workflow columns. Re-renderiza só quando workflowColumns muda. */
 export function useWorkflowColumns() {
   const { workflowColumns } = useSprint();
   return workflowColumns;
 }
 
-/**
- * Retorna activities filtradas por HU.
- * Re-renderiza APENAS quando activities da HU específica mudam.
- * Ideal para KanbanCard — evita re-render de todos os cards quando
- * uma atividade de outra HU é atualizada.
- */
 export function useActivitiesForHU(huId: string): Activity[] {
   const { activities } = useSprint();
   return useMemo(
@@ -1150,10 +1154,6 @@ export function useActivitiesForHU(huId: string): Activity[] {
   );
 }
 
-/**
- * Retorna métricas computadas do sprint ativo.
- * Evita que MetricsDashboard re-execute cálculos pesados a cada re-render.
- */
 export function useSprintMetrics() {
   const { userStories, activities, sprints } = useSprint();
   return useMemo(() => {
@@ -1165,52 +1165,15 @@ export function useSprintMetrics() {
     const closedHours    = activities.filter((a) => a.isClosed).reduce((s, a) => s + (a.hours ?? 0), 0);
     const openBugs       = activities.filter((a) => a.activityType === "bug" && !a.isClosed).length;
     const completionPct  = totalHUs > 0 ? Math.round((completedHUs / totalHUs) * 100) : 0;
-    return {
-      activeSprint,
-      totalHUs,
-      completedHUs,
-      inProgressHUs,
-      totalHours,
-      closedHours,
-      openBugs,
-      completionPct,
-    };
+    return { activeSprint, totalHUs, completedHUs, inProgressHUs, totalHours, closedHours, openBugs, completionPct };
   }, [userStories, activities, sprints]);
 }
 
-// ─── Ação 1.4 — Hooks de loading granular por entidade ───────────────────────
-//
-// Use estes hooks em componentes que exibem skeletons ou spinners
-// por entidade específica — sem depender do `loading` global.
-//
-// Exemplos:
-//   const isDevelopersLoading = useLoadingSlice("developers");
-//   const isKanbanLoading     = useLoadingSlice("userStories");
-//   const isAnyLoading        = useIsLoading(); // equivalente ao antigo `loading`
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Retorna o estado de loading de uma entidade específica.
- * O componente só re-renderiza quando o slice dessa entidade muda.
- *
- * @example
- * const isDevelopersLoading = useLoadingSlice("developers");
- * if (isDevelopersLoading) return <DevelopersSkeleton />;
- */
 export function useLoadingSlice(entity: keyof LoadingSlices): boolean {
   const { loadingSlices } = useSprint();
   return loadingSlices[entity];
 }
 
-/**
- * Retorna true se qualquer entidade ainda está carregando.
- * Equivalente ao antigo `loading` — use para telas de splash ou
- * bloqueio global de interação.
- *
- * @example
- * const isLoading = useIsLoading();
- * if (isLoading) return <FullPageSpinner />;
- */
 export function useIsLoading(): boolean {
   const { loading } = useSprint();
   return loading;

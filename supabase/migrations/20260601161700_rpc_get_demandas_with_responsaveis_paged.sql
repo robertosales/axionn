@@ -14,8 +14,8 @@ AS $$
   FROM (
     SELECT
       d.id,
-      d.title,
-      d.description,
+      d.titulo,
+      d.descricao,
       d.status,
       d.priority,
       d.team_id,

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -28,11 +28,47 @@ import { Separator } from "@/components/ui/separator";
 
 const SEVERITY_ORDER = ["bloqueada", "aguardando_retorno"] as const;
 
+// ─── LazySection ──────────────────────────────────────────────────────────────
+// Monta o children apenas quando o elemento entra no viewport (once).
+// Isso evita que RPCs pesadas (calc_imr_periodo) sejam disparadas no
+// carregamento inicial quando o usuário ainda não rolou até a seção.
+function LazySection({ children, placeholder }: {
+  children: React.ReactNode;
+  placeholder?: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect(); // once: true
+        }
+      },
+      { rootMargin: "200px" }, // começa a montar 200px antes de chegar no viewport
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref}>
+      {visible ? children : (placeholder ?? <SkeletonList count={2} />)}
+    </div>
+  );
+}
+
+// ─── SustentacaoDashboard ────────────────────────────────────────────────────
+
 export function SustentacaoDashboard() {
   const [filtros, setFiltros] = useState<MetricasFiltros>(FILTROS_DEFAULT);
 
-  // OTIMIZAÇÃO: Usa o hook que consome a RPC calc_kpis_sustentacao.
-  // Isso remove a lógica de cálculo pesada (atendimento, tempos, sla) do cliente.
   const {
     atendimento,
     tempos,
@@ -40,7 +76,6 @@ export function SustentacaoDashboard() {
     loading: kpisLoading
   } = useKpisSustentacao(filtros.periodo === "all" ? 30 : parseInt(filtros.periodo));
 
-  // useDemandas ainda é necessário para a barra de filtros e alertas operacionais.
   const { demandas, loading: demandasLoading } = useDemandas();
   const { projetos } = useProjetos();
 
@@ -143,7 +178,7 @@ export function SustentacaoDashboard() {
           <KPICard icon={CheckCircle2} label="Resolvidos Hoje"  value={atendimento.resolvidosHoje} color="info" />
           <KPICard
             icon={Activity}
-            label={`Backlog (>${atendimento.backlogDays}d)`}
+            label={`Backlog (>${atendimento.backlogDias}d)`}
             value={atendimento.backlog}
             color={atendimento.backlog > 0 ? "destructive" : "muted"}
           />
@@ -271,12 +306,19 @@ export function SustentacaoDashboard() {
       </div>
 
       <Separator />
-      <ImrDashboard />
+
+      {/* ── IMR: lazy mount via IntersectionObserver ──
+          A RPC calc_imr_periodo só é chamada quando o usuário
+          rola até esta seção (ou 200px antes dela).
+          Após montar, permanece montado (once: true). */}
+      <LazySection>
+        <ImrDashboard />
+      </LazySection>
     </div>
   );
 }
 
-// ─── Sub-componentes ──────────────────────────────────────────────────────────
+// ─── Sub-componentes ──────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

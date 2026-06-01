@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, Plus, Search, ListTodo, LayoutGrid, LayoutList, User, Tag } from "lucide-react";
+import { MoreHorizontal, Plus, Search, ListTodo, LayoutGrid, LayoutList, User, Tag, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,16 +15,15 @@ import {
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { EmptyState } from "@/shared/components/common/EmptyState";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
-import { PaginationControls } from "@/shared/components/common/Pagination";
-import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
+import { useDemandasPaginadas } from "../hooks/useDemandasPaginadas";
 import { useDemandas } from "../hooks/useDemandas";
 import { toast } from "sonner";
 import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
 import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
-import { getTipoLabel, TIPOS_DEMANDA_IMR } from "../types/imr";
+import { getTipoLabel } from "../types/imr";
 import { fetchResponsaveisWithPapelByDemandaIds } from "../services/profiles.service";
 import { cn } from "@/lib/utils";
 
@@ -40,13 +39,17 @@ const SITUACAO_PAPEL_MAP: Record<string, string> = {
   hom_homologada: "arquiteto",
 };
 
-const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const fetchResponsaveisBatch = fetchResponsaveisWithPapelByDemandaIds;
 
 type ViewMode = "cards" | "table";
 
 export function DemandasList() {
-  const { demandas, loading, error, create, update, moveTo, remove, reload } = useDemandas();
+  // ── Data: lazy load paginado (substitui useDemandas para esta view) ───────────
+  const { demandas, loading, loadingMore, hasMore, loadMore, error } = useDemandasPaginadas();
+
+  // useDemandas mantido apenas para mutations (create, update, moveTo, remove)
+  const { create, update, moveTo, remove } = useDemandas();
+
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Demanda | null>(null);
   const [selected, setSelected] = useState<Demanda | null>(null);
@@ -56,17 +59,13 @@ export function DemandasList() {
   const [filterTipo, setFilterTipo] = useState("all");
   const [filterSituacao, setFilterSituacao] = useState("all");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
-  const [pageSize, setPageSize] = useState(20);
   const debouncedSearch = useDebounce(search, 300);
 
   const [responsaveisMap, setResponsaveisMap] = useState<Map<string, { papel: string; display_name: string }[]>>(
     new Map(),
   );
 
-  // FIX (item 5): hash estável dos IDs das demandas.
-  // O fetchResponsaveisBatch só re-executa quando o CONJUNTO de IDs muda
-  // (nova demanda criada, demanda removida). Mudanças de status, título ou
-  // outros campos não disparam uma nova busca de responsáveis.
+  // Hash estável: só re-busca responsaveis quando o CONJUNTO de IDs muda
   const demandaIdsHash = useMemo(
     () => demandas.map((d) => d.id).sort().join(","),
     [demandas],
@@ -75,10 +74,20 @@ export function DemandasList() {
   useEffect(() => {
     if (!demandas.length) return;
     fetchResponsaveisBatch(demandas.map((d) => d.id)).then(setResponsaveisMap);
-    // Dependência: demandaIdsHash em vez de demandas — só re-busca quando
-    // o conjunto de IDs muda, não quando qualquer campo de qualquer demanda muda.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demandaIdsHash]);
+
+  // ── Intersection Observer: dispara loadMore quando sentinela é visível ───────
+  const sentinelaRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!sentinelaRef.current || !hasMore) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMore(); },
+      { threshold: 0.1 },
+    );
+    obs.observe(sentinelaRef.current);
+    return () => obs.disconnect();
+  }, [hasMore, loadMore]);
 
   function getResponsavel(d: Demanda): string | null {
     const papelEsperado = SITUACAO_PAPEL_MAP[d.situacao];
@@ -89,6 +98,7 @@ export function DemandasList() {
   const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
   const tiposUnicos = useMemo(() => [...new Set(demandas.map((d) => d.tipo))], [demandas]);
 
+  // Filtros aplicados client-side sobre as páginas já carregadas
   const filtered = useMemo(
     () =>
       demandas.filter((d) => {
@@ -107,15 +117,9 @@ export function DemandasList() {
     [demandas, debouncedSearch, filterTipo, filterSituacao],
   );
 
-  const { paginatedItems, currentPage, setCurrentPage, totalItems } = usePagination(filtered, { pageSize });
-
   function openDemanda(d: Demanda, tab?: string) {
     setSelectedTab(tab);
     setSelected(d);
-  }
-
-  function handleEdit(d: Demanda) {
-    setEditTarget(d);
   }
 
   async function handleEditSubmit(data: Record<string, any>) {
@@ -128,7 +132,7 @@ export function DemandasList() {
     }
   }
 
-  // ── Detail view ──────────────────────────────────────────────────────────────────────
+  // ── Detail view ──────────────────────────────────────────────────────────────
   if (selected) {
     const current = demandas.find((d) => d.id === selected.id) || selected;
     return (
@@ -146,8 +150,7 @@ export function DemandasList() {
   if (error)
     return (
       <div className="text-center py-10 text-destructive">
-        {error}{" "}
-        <button onClick={reload} className="underline ml-2">Tentar novamente</button>
+        {error}
       </div>
     );
 
@@ -161,12 +164,13 @@ export function DemandasList() {
 
   return (
     <div className="space-y-4">
-      {/* ── Header ─────────────────────────────────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Demandas</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {totalItems} demanda{totalItems !== 1 ? "s" : ""} encontrada{totalItems !== 1 ? "s" : ""}
+            {filtered.length} demanda{filtered.length !== 1 ? "s" : ""} carregada{filtered.length !== 1 ? "s" : ""}
+            {hasMore && " (mais disponíveis)"}
           </p>
         </div>
         <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5" onClick={() => setShowForm(true)}>
@@ -174,7 +178,7 @@ export function DemandasList() {
         </Button>
       </div>
 
-      {/* ── Filtros ─────────────────────────────────────────────────────────────────── */}
+      {/* ── Filtros ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -211,25 +215,33 @@ export function DemandasList() {
         </div>
       </div>
 
-      {/* ── Conteúdo ──────────────────────────────────────────────────────────────────── */}
-      {filtered.length === 0 ? (
+      {/* ── Conteúdo ────────────────────────────────────────────────────────── */}
+      {filtered.length === 0 && !loading ? (
         <EmptyState icon={ListTodo} title="Nenhuma demanda encontrada" />
       ) : (
         <>
           {viewMode === "cards" ? (
-            <CardView items={paginatedItems} getResponsavel={getResponsavel} onSelect={(d) => openDemanda(d)} onDelete={handleDelete} onEdit={handleEdit} onNovaAtividade={(d) => openDemanda(d, "horas")} />
+            <CardView items={filtered} getResponsavel={getResponsavel} onSelect={(d) => openDemanda(d)} onDelete={handleDelete} onEdit={(d) => setEditTarget(d)} onNovaAtividade={(d) => openDemanda(d, "horas")} />
           ) : (
-            <TableView items={paginatedItems} getResponsavel={getResponsavel} onSelect={(d) => openDemanda(d)} onDelete={handleDelete} onEdit={handleEdit} onNovaAtividade={(d) => openDemanda(d, "horas")} />
+            <TableView items={filtered} getResponsavel={getResponsavel} onSelect={(d) => openDemanda(d)} onDelete={handleDelete} onEdit={(d) => setEditTarget(d)} onNovaAtividade={(d) => openDemanda(d, "horas")} />
           )}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Itens por página:</span>
-              <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
-                <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
-                <SelectContent>{PAGE_SIZE_OPTIONS.map((opt) => (<SelectItem key={opt} value={String(opt)}>{opt}</SelectItem>))}</SelectContent>
-              </Select>
-            </div>
-            <PaginationControls currentPage={currentPage} totalItems={totalItems} pageSize={pageSize} onPageChange={setCurrentPage} />
+
+          {/* Sentinela de scroll infinito */}
+          <div ref={sentinelaRef} className="py-2 flex justify-center">
+            {loadingMore && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Carregando mais demandas…
+              </div>
+            )}
+            {!loadingMore && hasMore && (
+              <Button variant="outline" size="sm" onClick={() => loadMore()}>
+                Carregar mais
+              </Button>
+            )}
+            {!hasMore && demandas.length > 0 && (
+              <p className="text-xs text-muted-foreground">Todas as demandas carregadas</p>
+            )}
           </div>
         </>
       )}
@@ -254,7 +266,7 @@ export function DemandasList() {
   );
 }
 
-// ─── CardView ─────────────────────────────────────────────────────────────────
+// ─── CardView ────────────────────────────────────────────────────────────────────────────────
 function CardView({
   items, getResponsavel, onSelect, onDelete, onEdit, onNovaAtividade,
 }: {
@@ -322,7 +334,7 @@ function CardView({
   );
 }
 
-// ─── TableView ────────────────────────────────────────────────────────────────
+// ─── TableView ───────────────────────────────────────────────────────────────────────────────
 function TableView({
   items, getResponsavel, onSelect, onDelete, onEdit, onNovaAtividade,
 }: {

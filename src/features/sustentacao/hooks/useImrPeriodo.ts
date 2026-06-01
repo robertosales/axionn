@@ -13,6 +13,12 @@
  * Cache: staleTime: 60s (STALE.KPI) — pesado, não precisa de refresh
  * contínuo. Invalida com debounce 2s quando demandas do time mudam via Realtime.
  *
+ * FIX (fix/sustentacao-realtime — item 4):
+ *   Canal Realtime agora escuta também demanda_transitions e demanda_hours,
+ *   garantindo que o IMR seja recalculado quando:
+ *   - uma demanda muda de situação (nova transição registrada)
+ *   - horas são lançadas, editadas ou removidas
+ *
  * API pública compatível com imrCalculations.ts:
  *   { iap, iqs, ict, iss, glosas, e8Alerts, loading, error, refetch }
  */
@@ -128,18 +134,38 @@ export function useImrPeriodo({
   useEffect(() => {
     if (!currentTeamId) return;
 
+    // FIX (item 4): canal unificado escuta 3 tabelas que afetam o IMR:
+    //   1. demandas          — criação, atualização ou remoção de demandas
+    //   2. demanda_transitions — cada mudança de situação (base dos índices IAP/IQS)
+    //   3. demanda_hours       — lançamento/edição de horas (base do índice ICT)
+    // Todos compartilham o mesmo debounce de 2s para evitar recálculos em cascata.
+    const invalidate = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        qc.invalidateQueries({ queryKey: imrKey(currentTeamId, inicioISO, fimISO) });
+      }, 2000);
+    };
+
     const channel = supabase
       .channel(`imr-rt-${currentTeamId}-${inicioISO}`)
+      // Tabela principal de demandas
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
-        () => {
-          if (typeof document !== 'undefined' && document.hidden) return;
-          if (timerRef.current) clearTimeout(timerRef.current);
-          timerRef.current = setTimeout(() => {
-            qc.invalidateQueries({ queryKey: imrKey(currentTeamId, inicioISO, fimISO) });
-          }, 2000);
-        },
+        invalidate,
+      )
+      // FIX: mudanças de situação — afetam IAP e IQS diretamente
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'demanda_transitions', filter: `team_id=eq.${currentTeamId}` },
+        invalidate,
+      )
+      // FIX: lançamentos de horas — afetam ICT diretamente
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'demanda_hours', filter: `team_id=eq.${currentTeamId}` },
+        invalidate,
       )
       .subscribe();
 

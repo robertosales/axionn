@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -63,10 +63,22 @@ export function DemandasList() {
     new Map(),
   );
 
+  // FIX (item 5): hash estável dos IDs das demandas.
+  // O fetchResponsaveisBatch só re-executa quando o CONJUNTO de IDs muda
+  // (nova demanda criada, demanda removida). Mudanças de status, título ou
+  // outros campos não disparam uma nova busca de responsáveis.
+  const demandaIdsHash = useMemo(
+    () => demandas.map((d) => d.id).sort().join(","),
+    [demandas],
+  );
+
   useEffect(() => {
     if (!demandas.length) return;
     fetchResponsaveisBatch(demandas.map((d) => d.id)).then(setResponsaveisMap);
-  }, [demandas]);
+    // Dependência: demandaIdsHash em vez de demandas — só re-busca quando
+    // o conjunto de IDs muda, não quando qualquer campo de qualquer demanda muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demandaIdsHash]);
 
   function getResponsavel(d: Demanda): string | null {
     const papelEsperado = SITUACAO_PAPEL_MAP[d.situacao];
@@ -75,7 +87,6 @@ export function DemandasList() {
   }
 
   const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
-  // Tipos únicos presentes nas demandas carregadas (para o filtro)
   const tiposUnicos = useMemo(() => [...new Set(demandas.map((d) => d.tipo))], [demandas]);
 
   const filtered = useMemo(

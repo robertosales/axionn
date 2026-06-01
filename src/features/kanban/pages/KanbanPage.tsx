@@ -1,17 +1,68 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useKanbanBoard }          from "../hooks/useKanbanBoard";
 import { useFinalizeSprint }       from "../hooks/useFinalizeSprint";
 import { KanbanFiltersBar }        from "../components/KanbanFilters";
 import { KanbanColumnItem }        from "../components/KanbanColumn";
 import { FinalizeSprintModal }     from "../components/FinalizeSprintModal";
 import { UserStoryDetailModal }    from "../components/UserStoryDetailModal";
-import { Skeleton }  from "@/components/ui/skeleton";
-import { Badge }     from "@/components/ui/badge";
-import { Button }    from "@/components/ui/button";
-import { RefreshCw, Layers } from "lucide-react";
-import { useAuth }   from "@/contexts/AuthContext";
+import { Skeleton }   from "@/components/ui/skeleton";
+import { Badge }      from "@/components/ui/badge";
+import { Button }     from "@/components/ui/button";
+import { RefreshCw, Layers, Loader2, ChevronDown } from "lucide-react";
+import { useAuth }    from "@/contexts/AuthContext";
 import type { KanbanCard } from "../hooks/useKanbanBoard";
 
+// ── KanbanLoadMoreTrigger ─────────────────────────────────────────────────────
+// Sentinela invisível + botão de fallback para carregar próxima página.
+// Só renderizado quando filters.sprintId === 'all'.
+interface LoadMoreProps {
+  hasMore:     boolean;
+  loading:     boolean;
+  onLoadMore:  () => void;
+}
+
+function KanbanLoadMoreTrigger({ hasMore, loading, onLoadMore }: LoadMoreProps) {
+  const sentinelaRef = useRef<HTMLDivElement>(null);
+
+  // IntersectionObserver: dispara fetchMoreCards quando o sentinela entra no viewport
+  useEffect(() => {
+    if (!hasMore || loading) return;
+    const el = sentinelaRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) onLoadMore(); },
+      { rootMargin: "200px" }, // antecipa 200px antes de chegar no elemento
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, onLoadMore]);
+
+  if (!hasMore) return null;
+
+  return (
+    <div className="flex flex-col items-center gap-2 py-4">
+      {/* Sentinela invisível — alvo do IntersectionObserver */}
+      <div ref={sentinelaRef} aria-hidden className="h-1 w-full" />
+
+      {/* Botão de fallback explícito */}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onLoadMore}
+        disabled={loading}
+        className="gap-2 text-xs text-muted-foreground"
+      >
+        {loading
+          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          : <ChevronDown className="h-3.5 w-3.5" />}
+        {loading ? "Carregando..." : "Carregar mais cards"}
+      </Button>
+    </div>
+  );
+}
+
+// ── KanbanPage ────────────────────────────────────────────────────────────────
 export function KanbanPage() {
   const { isAdmin, profile } = useAuth();
   const canFinalizeSprint = isAdmin
@@ -20,7 +71,8 @@ export function KanbanPage() {
 
   const {
     columns, filteredCards, cards, devs, epics, sprints,
-    loading, filters, setFilters,
+    loading, loadingMore, hasMoreCards, fetchMoreCards,
+    filters, setFilters,
     dragging, setDragging,
     moveCard, wipCounts, swimlaneDevs,
     reload,
@@ -36,23 +88,17 @@ export function KanbanPage() {
     activeSprint,
   } = useFinalizeSprint(cards, columns, sprints as any, reload);
 
-  // ── Estado do modal de detalhe da HU ─────────────────────────────────────
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [detailOpen,   setDetailOpen]   = useState(false);
 
-  const handleCardClick = (card: KanbanCard) => {
-    setSelectedCard(card);
-    setDetailOpen(true);
-  };
+  const handleCardClick  = (card: KanbanCard) => { setSelectedCard(card); setDetailOpen(true); };
+  const handleDetailClose = () => { setDetailOpen(false); setSelectedCard(null); };
+  const handleCardMoved  = (cardId: string, newStatus: string) => moveCard(cardId, newStatus);
 
-  const handleDetailClose = () => {
-    setDetailOpen(false);
-    setSelectedCard(null);
-  };
-
-  const handleCardMoved = (cardId: string, newStatus: string) => {
-    moveCard(cardId, newStatus);
-  };
+  // Estabiliza referência de fetchMoreCards para o IntersectionObserver
+  const fetchMoreRef = useRef(fetchMoreCards);
+  useEffect(() => { fetchMoreRef.current = fetchMoreCards; }, [fetchMoreCards]);
+  const stableFetchMore = useCallback(() => fetchMoreRef.current?.(), []);
 
   if (loading) return (
     <div className="space-y-4 p-4">
@@ -81,10 +127,7 @@ export function KanbanPage() {
             draggingId={dragging}
             onDragStart={id => setDragging(id)}
             onDragEnd={() => setDragging(null)}
-            onDrop={(cardId, colKey) => {
-              moveCard(cardId, colKey);
-              setDragging(null);
-            }}
+            onDrop={(cardId, colKey) => { moveCard(cardId, colKey); setDragging(null); }}
             onCardClick={handleCardClick}
           />
         );
@@ -105,6 +148,12 @@ export function KanbanPage() {
           {activeSprint && (
             <Badge variant="secondary" className="text-[10px]">
               {activeSprint.name}
+            </Badge>
+          )}
+          {/* Badge de paginação: só aparece no modo all com mais páginas */}
+          {filters.sprintId === "all" && hasMoreCards && (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+              parcial
             </Badge>
           )}
         </div>
@@ -134,7 +183,9 @@ export function KanbanPage() {
                 </div>
                 <span className="text-sm font-semibold">{dev.name}</span>
                 <Badge variant="outline" className="text-[10px]">
-                  {filteredCards.filter(c => (dev.id === "__unassigned__" ? !c.assignee_id : c.assignee_id === dev.id)).length} HUs
+                  {filteredCards.filter(c =>
+                    dev.id === "__unassigned__" ? !c.assignee_id : c.assignee_id === dev.id
+                  ).length} HUs
                 </Badge>
               </div>
               {renderBoard(dev.id)}
@@ -143,6 +194,15 @@ export function KanbanPage() {
         </div>
       ) : (
         renderBoard()
+      )}
+
+      {/* Trigger de carregar mais — só no modo sprintFilter=all */}
+      {filters.sprintId === "all" && (
+        <KanbanLoadMoreTrigger
+          hasMore={hasMoreCards ?? false}
+          loading={loadingMore ?? false}
+          onLoadMore={stableFetchMore}
+        />
       )}
 
       <FinalizeSprintModal
@@ -154,7 +214,6 @@ export function KanbanPage() {
         onConfirm={finalize}
       />
 
-      {/* Modal de Detalhe da HU */}
       <UserStoryDetailModal
         card={selectedCard}
         columns={columns}

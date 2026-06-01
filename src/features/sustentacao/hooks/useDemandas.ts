@@ -1,17 +1,15 @@
 /**
- * useDemandas — Onda 2: enriquecimento de responsáveis movido para o servidor
+ * useDemandas — P0-fix: RT canal invalida também KPIs e infinite query
  *
- * ANTES (Onda 1):
- *   queryFn = fetchDemandas(teamId) + enrichComResponsaveis(data)
- *   = 2 roundtrips HTTP + filtro JS em memória
- *   150 usuários = 150 x 2 = 300 queries paralelas ao banco por cache miss
+ * ANTES: invalidação cobria apenas KEYS.demandas.all
+ *   → KPIs do Dashboard ficavam desatualizados até seu próprio canal RT disparar
+ *   → useDemandasPaginadas precisava de canal RT próprio para ser notificado
  *
- * DEPOIS (Onda 2):
- *   queryFn = fetchDemandasEnriched(teamId)
- *   = 1 RPC get_demandas_with_responsaveis (LEFT JOIN no banco)
- *   150 usuários no mesmo time = 1 query a cada 30s (TanStack Query cache)
- *
- * API pública idêntica — nenhum componente consumidor alterado.
+ * DEPOIS: invalidação em cascata cobre:
+ *   1. KEYS.demandas.all(teamId)  → lista completa (Kanban)
+ *   2. KEYS.kpis.all(teamId)      → KPIs do Dashboard (sincronismo garantido)
+ *   3. KEYS.demandas.infinite(teamId) reset → infinite query da página Demandas
+ *      (elimina a necessidade de canal RT duplicado em useDemandasPaginadas)
  */
 
 import { useEffect } from 'react';
@@ -34,7 +32,6 @@ export function useDemandas() {
 
   const { data: demandas = [], isLoading: loading, error: queryError } = useQuery({
     queryKey,
-    // Onda 2: 1 RPC server-side em vez de 2 roundtrips + enriquecimento JS
     queryFn:   () => svc.fetchDemandasEnriched(currentTeamId!),
     enabled:   !!currentTeamId,
     staleTime: STALE.REALTIME,
@@ -42,7 +39,10 @@ export function useDemandas() {
 
   const error = queryError ? (queryError as Error).message : null;
 
-  // ── Realtime: invalida cache com debounce ─────────────────────────────────
+  // ── Realtime: invalida cache em cascata ───────────────────────────────────
+  // P0-fix: além de KEYS.demandas.all, invalida também:
+  //   - KEYS.kpis.all → KPIs do Dashboard ficam sincronizados sem canal extra
+  //   - KEYS.demandas.infinite → useDemandasPaginadas não precisa de canal próprio
   useEffect(() => {
     if (!currentTeamId) return;
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -56,7 +56,12 @@ export function useDemandas() {
           if (typeof document !== 'undefined' && document.hidden) return;
           clearTimeout(timeoutId);
           timeoutId = setTimeout(() => {
+            // 1. Lista completa (Kanban, SustentacaoDashboard)
             qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId) });
+            // 2. KPIs (Dashboard) — P0-fix: consistência sem canal RT extra
+            qc.invalidateQueries({ queryKey: KEYS.kpis.all(currentTeamId) });
+            // 3. Infinite query (página Demandas) — P0-fix: elimina canal duplicado
+            qc.resetQueries({ queryKey: KEYS.demandas.infinite(currentTeamId) });
           }, 2000);
         },
       )

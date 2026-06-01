@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,14 +17,17 @@ import { EmptyState } from "@/shared/components/common/EmptyState";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useDemandasPaginadas } from "../hooks/useDemandasPaginadas";
-import { useDemandas } from "../hooks/useDemandas";
+// P0-B: useDemandas substituído por useDemandaMutations (sem fetch interno)
+import { useDemandaMutations } from "../hooks/useDemandaMutations";
+// P1: responsáveis agora gerenciados via useQuery com cache (staleTime 5min)
+import { useResponsaveis } from "../hooks/useResponsaveis";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
 import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
 import type { Demanda } from "../types/demanda";
 import { getTipoLabel } from "../types/imr";
-import { fetchResponsaveisWithPapelByDemandaIds } from "../services/profiles.service";
 import { cn } from "@/lib/utils";
 
 const SITUACAO_PAPEL_MAP: Record<string, string> = {
@@ -39,16 +42,18 @@ const SITUACAO_PAPEL_MAP: Record<string, string> = {
   hom_homologada: "arquiteto",
 };
 
-const fetchResponsaveisBatch = fetchResponsaveisWithPapelByDemandaIds;
-
 type ViewMode = "cards" | "table";
 
 export function DemandasList() {
-  // ── Data: lazy load paginado (substitui useDemandas para esta view) ───────────
+  // ── Dados paginados (InfiniteQuery) ──────────────────────────────────────────
   const { demandas, loading, loadingMore, hasMore, loadMore, error } = useDemandasPaginadas();
 
-  // useDemandas mantido apenas para mutations (create, update, moveTo, remove)
-  const { create, update, moveTo, remove } = useDemandas();
+  // P0-B: mutations sem fetch — não dispara RPC de dataset completo
+  const { create, update, moveTo, remove } = useDemandaMutations();
+
+  // P1: responsáveis com cache TanStack Query (staleTime 5min, deduplicado)
+  const { currentTeamId } = useAuth();
+  const { responsaveisMap } = useResponsaveis(currentTeamId, demandas);
 
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Demanda | null>(null);
@@ -60,22 +65,6 @@ export function DemandasList() {
   const [filterSituacao, setFilterSituacao] = useState("all");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
   const debouncedSearch = useDebounce(search, 300);
-
-  const [responsaveisMap, setResponsaveisMap] = useState<Map<string, { papel: string; display_name: string }[]>>(
-    new Map(),
-  );
-
-  // Hash estável: só re-busca responsaveis quando o CONJUNTO de IDs muda
-  const demandaIdsHash = useMemo(
-    () => demandas.map((d) => d.id).sort().join(","),
-    [demandas],
-  );
-
-  useEffect(() => {
-    if (!demandas.length) return;
-    fetchResponsaveisBatch(demandas.map((d) => d.id)).then(setResponsaveisMap);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demandaIdsHash]);
 
   // ── Intersection Observer: dispara loadMore quando sentinela é visível ───────
   const sentinelaRef = useRef<HTMLDivElement | null>(null);
@@ -91,14 +80,13 @@ export function DemandasList() {
 
   function getResponsavel(d: Demanda): string | null {
     const papelEsperado = SITUACAO_PAPEL_MAP[d.situacao];
-    const lista = responsaveisMap.get(d.id) || [];
-    return lista.find((r) => r.papel === papelEsperado)?.display_name || lista[0]?.display_name || null;
+    const lista = responsaveisMap.get(d.id) ?? [];
+    return lista.find((r) => r.papel === papelEsperado)?.display_name ?? lista[0]?.display_name ?? null;
   }
 
   const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
   const tiposUnicos = useMemo(() => [...new Set(demandas.map((d) => d.tipo))], [demandas]);
 
-  // Filtros aplicados client-side sobre as páginas já carregadas
   const filtered = useMemo(
     () =>
       demandas.filter((d) => {
@@ -132,7 +120,6 @@ export function DemandasList() {
     }
   }
 
-  // ── Detail view ──────────────────────────────────────────────────────────────
   if (selected) {
     const current = demandas.find((d) => d.id === selected.id) || selected;
     return (
@@ -246,10 +233,8 @@ export function DemandasList() {
         </>
       )}
 
-      {/* Form criação */}
       <DemandaForm open={showForm} onClose={() => setShowForm(false)} onSubmit={(d) => create(d as any)} />
 
-      {/* Form edição */}
       <DemandaForm
         open={!!editTarget}
         demanda={editTarget}
@@ -266,7 +251,7 @@ export function DemandasList() {
   );
 }
 
-// ─── CardView ────────────────────────────────────────────────────────────────────────────────
+// ─── CardView ─────────────────────────────────────────────────────────────────
 function CardView({
   items, getResponsavel, onSelect, onDelete, onEdit, onNovaAtividade,
 }: {
@@ -334,7 +319,7 @@ function CardView({
   );
 }
 
-// ─── TableView ───────────────────────────────────────────────────────────────────────────────
+// ─── TableView ────────────────────────────────────────────────────────────────
 function TableView({
   items, getResponsavel, onSelect, onDelete, onEdit, onNovaAtividade,
 }: {

@@ -6,7 +6,7 @@ import { toast }                                              from "sonner";
 import { KEYS }                                               from "@/lib/queryKeys";
 import { STALE }                                              from "@/lib/queryClient";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────────
 export interface KanbanColumn {
   id:          string;
   key:         string;
@@ -40,17 +40,16 @@ export interface KanbanCard {
 }
 
 export interface KanbanFilters {
-  assigneeId: string;   // "all" | devId
-  priority:   string;   // "all" | "high" | "medium" | "low"
-  epicId:     string;   // "all" | epicId
-  sprintId:   string;   // "all" | "active" | sprintId
+  assigneeId: string;
+  priority:   string;
+  epicId:     string;
+  sprintId:   string;
   swimlane:   boolean;
 }
 
 const BLOCKED_STATUSES = ["bloqueada", "bloqueado"];
 
-// ── Fetchers (fora do hook — sem recriação a cada render) ─────────────────────
-
+// ── Fetchers (fora do hook) ─────────────────────────────────────────────────────────
 async function fetchColumns(teamId: string): Promise<KanbanColumn[]> {
   const { data, error } = await supabase
     .from("workflow_columns")
@@ -109,18 +108,25 @@ async function fetchCards(
       "id, code, title, status, priority, story_points, estimated_hours, " +
       "assignee_id, epic_id, sprint_id, position, team_id"
     )
-    .eq("team_id", teamId)
-    .limit(500);
+    .eq("team_id", teamId);
 
-  if (targetSprintId) q = q.eq("sprint_id", targetSprintId);
+  if (targetSprintId) {
+    // Sprint específico ou ativo: filtro no banco, limite conservador
+    q = q.eq("sprint_id", targetSprintId).limit(200);
+  } else {
+    // Filtro "all sprints": sem filtro de sprint — limita a 200 por enquanto.
+    // TODO(P2-follow-up): implementar cursor-based pagination para boards
+    // com muitos sprints históricos. Ver AUDIT_CONSOLIDADA_FASE1.md #10.
+    q = q.limit(200);
+  }
 
   const { data, error } = await q;
   if (error) throw error;
 
   const devMap:  Record<string, { name: string; avatar: string | null }> = {};
   const epicMap: Record<string, { name: string; color: string }>         = {};
-  devs.forEach(d  => { devMap[d.id]   = { name: d.name,  avatar: d.avatar }; });
-  epics.forEach(e => { epicMap[e.id]  = { name: e.name,  color:  e.color  }; });
+  devs.forEach(d  => { devMap[d.id]  = { name: d.name,  avatar: d.avatar }; });
+  epics.forEach(e => { epicMap[e.id] = { name: e.name,  color:  e.color  }; });
 
   return ((data ?? []) as any[]).map(h => ({
     ...h,
@@ -146,48 +152,45 @@ export function useKanbanBoard() {
   const draggingRef    = useRef(false);
   const lastLocalWrite = useRef<number>(0);
 
-  // ── Dados estáticos — cache longo, não mudam durante uma sessão ──────────
   const { data: columns = [] } = useQuery({
     queryKey: [...KEYS.kanban.all(teamId), "columns"],
     queryFn:  () => fetchColumns(teamId),
     enabled:  !!teamId,
-    staleTime: STALE.REFERENCE,   // 5 min
+    staleTime: STALE.REFERENCE,
   });
 
   const { data: devs = [] } = useQuery({
     queryKey: [...KEYS.kanban.all(teamId), "devs"],
     queryFn:  () => fetchDevs(teamId),
     enabled:  !!teamId,
-    staleTime: STALE.REFERENCE,   // 5 min
+    staleTime: STALE.REFERENCE,
   });
 
   const { data: epics = [] } = useQuery({
     queryKey: [...KEYS.kanban.all(teamId), "epics"],
     queryFn:  () => fetchEpics(teamId),
     enabled:  !!teamId,
-    staleTime: STALE.REFERENCE,   // 5 min
+    staleTime: STALE.REFERENCE,
   });
 
   const { data: sprints = [] } = useQuery({
     queryKey: KEYS.sprints.all(teamId),
     queryFn:  () => fetchSprints(teamId),
     enabled:  !!teamId,
-    staleTime: STALE.SESSION,     // 10 min — lista de sprints muda pouco
+    staleTime: STALE.SESSION,
   });
 
-  // ── Cards — cache curto, invalidado pelo Realtime ────────────────────────
   const boardKey = KEYS.kanban.board(teamId, filters.sprintId);
 
   const { data: cards = [], isLoading: loadingCards } = useQuery({
     queryKey: boardKey,
     queryFn:  () => fetchCards(teamId, sprints, filters.sprintId, devs, epics),
     enabled:  !!teamId && sprints.length > 0,
-    staleTime: STALE.REALTIME,    // 30 s
+    staleTime: STALE.REALTIME,
   });
 
   const loading = loadingCards;
 
-  // ── Realtime: invalida boardKey com debounce ──────────────────────────────
   useEffect(() => {
     if (!teamId) return;
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -198,9 +201,9 @@ export function useKanbanBoard() {
         "postgres_changes",
         { event: "*", schema: "public", table: "user_stories", filter: `team_id=eq.${teamId}` },
         () => {
-          if (draggingRef.current)                                         return;
-          if (Date.now() - lastLocalWrite.current < 3000)                  return;
-          if (typeof document !== "undefined" && document.hidden)          return;
+          if (draggingRef.current)                                        return;
+          if (Date.now() - lastLocalWrite.current < 3000)                 return;
+          if (typeof document !== "undefined" && document.hidden)         return;
           clearTimeout(timeoutId);
           timeoutId = setTimeout(() => {
             qc.invalidateQueries({ queryKey: boardKey });
@@ -212,7 +215,6 @@ export function useKanbanBoard() {
     return () => { clearTimeout(timeoutId); supabase.removeChannel(channel); };
   }, [teamId, boardKey, qc]);
 
-  // ── moveCard: optimistic update + write no banco ──────────────────────────
   const moveCard = useCallback(async (cardId: string, newStatus: string) => {
     const allCards = qc.getQueryData<KanbanCard[]>(boardKey) ?? [];
     const card     = allCards.find(c => c.id === cardId);
@@ -227,7 +229,6 @@ export function useKanbanBoard() {
       }
     }
 
-    // Optimistic update — UI responde imediatamente
     qc.setQueryData<KanbanCard[]>(boardKey, prev =>
       (prev ?? []).map(c =>
         c.id === cardId
@@ -244,12 +245,10 @@ export function useKanbanBoard() {
 
     if (error) {
       toast.error("Erro ao mover card");
-      // Reverte o optimistic update
       qc.invalidateQueries({ queryKey: boardKey });
     }
   }, [boardKey, columns, qc]);
 
-  // ── updateWipLimit ────────────────────────────────────────────────────────
   const updateWipLimit = useCallback(async (colId: string, limit: number | null) => {
     const { error } = await supabase
       .from("workflow_columns")
@@ -260,7 +259,6 @@ export function useKanbanBoard() {
     }
   }, [teamId, qc]);
 
-  // ── Dados derivados (memoizados) ──────────────────────────────────────────
   const activeSprint = useMemo(() => sprints.find(s => s.is_active), [sprints]);
 
   const filteredCards = useMemo(() => {
@@ -294,7 +292,6 @@ export function useKanbanBoard() {
     }));
   }, [filteredCards, devs, filters.swimlane]);
 
-  // ── API pública (idêntica ao hook original) ───────────────────────────────
   return {
     columns,
     cards,

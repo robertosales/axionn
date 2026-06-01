@@ -21,6 +21,23 @@ export const KEYS = {
     infinite: (teamId: string) => ['demandas', teamId, 'infinite'] as const,
   },
 
+  // ── KPIs ─────────────────────────────────────────────────────
+  // P0-fix: chaves centralizadas para KPIs (antes eram literais avulsas em cada hook)
+  // Permite que useDemandas invalide KPIs em cascata via KEYS.kpis.all(teamId)
+  kpis: {
+    all:         (teamId: string) => ['kpis', teamId]                              as const,
+    sustentacao: (teamId: string, backlogDias: number) =>
+                   ['kpis', teamId, 'sustentacao', backlogDias]                    as const,
+  },
+
+  // ── Responsáveis ─────────────────────────────────────────────
+  // P1-fix: chave para cache do fetch batch de responsáveis por demanda
+  // (antes era feito fora do TanStack Query em useEffect direto)
+  responsaveis: {
+    byDemandas: (teamId: string, idsHash: string) =>
+                  ['responsaveis', teamId, 'by-demandas', idsHash]                 as const,
+  },
+
   // ── Kanban / User Stories ────────────────────────────────────
   kanban: {
     all:    (teamId: string) => ['kanban', teamId]               as const,

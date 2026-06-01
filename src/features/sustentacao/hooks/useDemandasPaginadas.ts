@@ -1,66 +1,50 @@
 /**
- * useDemandasPaginadas — Fase 4 (feat/backlog-lazy-load)
+ * useDemandasPaginadas — P0-fix: remoção do canal Realtime duplicado
  *
- * Hook de lazy load para listas de demandas com muitos registros.
- * Usa useInfiniteQuery com cursor-based pagination (updated_at DESC).
+ * ANTES: criava canal 'demandas-paginadas-rt-{teamId}' próprio
+ *   → junto com o canal 'demandas-rt-{teamId}' do useDemandas,
+ *     resultava em 2 canais WebSocket por usuário na página Demandas.
+ *   → Com 150 usuários: 300 canais (limite Pro do Supabase: 200 por padrão)
  *
- * Motivação:
- *   useDemandas carrega TODO o dataset em uma query. Funciona bem para
- *   o Kanban (precisa de todas as demandas para montar colunas), mas é
- *   excessivo para vistas de backlog/listagem onde o usuário raramente
- *   chega ao final. PAGE_SIZE=50 reduz o payload inicial em ~75% para
- *   times com 200+ demandas.
+ * DEPOIS: canal RT removido deste hook.
+ *   → O canal único do useDemandas agora chama
+ *     qc.resetQueries({ queryKey: KEYS.demandas.infinite(teamId) })
+ *     garantindo que a infinite query seja reiniciada quando houver mudanças.
+ *   → 150 usuários = 150 canais (dentro do limite)
  *
- * API pública:
- *   demandas   — array flat de todas as demandas carregadas até agora
- *   loadMore   — função para buscar a próxima página
- *   hasMore    — true enquanto houver mais páginas
- *   loading    — true durante a primeira carga
- *   loadingMore — true durante carregamento de páginas adicionais
- *   error      — mensagem de erro ou null
- *
- * Realtime:
- *   Compartilha o mesmo canal `demandas-rt-*` do useDemandas (não cria
- *   um canal extra). Quando detecta mudanças, reseta para a primeira
- *   página (resetPages) com debounce de 2s — garante consistência sem
- *   acumular páginas desatualizadas.
- *
- * Prerequisito no banco:
- *   RPC get_demandas_with_responsaveis_paged(p_team_id, p_cursor, p_limit)
- *   com a mesma lógica de get_demandas_with_responsaveis + LIMIT/OFFSET
- *   via cursor em updated_at.
+ * O debounce de 2s e a lógica de reset (pág 1) continuam funcionando,
+ * agora orquestrados centralmente pelo useDemandas.
  */
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useMemo }       from 'react';
-import { supabase }                          from '@/integrations/supabase/client';
-import { useAuth }                           from '@/contexts/AuthContext';
-import { STALE }                             from '@/lib/queryClient';
-import { KEYS }                              from '@/lib/queryKeys';
-import { fetchDemandasPage }                 from '../services/demandas.service';
-import type { Demanda }                      from '../types/demanda';
+import { useMemo }                          from 'react';
+import { useAuth }                          from '@/contexts/AuthContext';
+import { STALE }                            from '@/lib/queryClient';
+import { KEYS }                             from '@/lib/queryKeys';
+import { fetchDemandasPage }                from '../services/demandas.service';
+import type { Demanda }                     from '../types/demanda';
 
 export function useDemandasPaginadas() {
   const { currentTeamId } = useAuth();
-  const qc = useQueryClient();
+  const qc = useQueryClient(); // eslint-disable-line @typescript-eslint/no-unused-vars
 
   const queryKey = KEYS.demandas.infinite(currentTeamId ?? '');
 
   const {
     data,
-    isLoading:       loading,
+    isLoading:          loading,
     isFetchingNextPage: loadingMore,
     fetchNextPage,
     hasNextPage,
     error: queryError,
   } = useInfiniteQuery({
     queryKey,
-    queryFn:              ({ pageParam }) =>
+    queryFn:          ({ pageParam }) =>
       fetchDemandasPage(currentTeamId!, pageParam as string | null),
-    initialPageParam:     null as string | null,
-    getNextPageParam:     (lastPage) => lastPage.nextCursor ?? undefined,
-    enabled:              !!currentTeamId,
-    staleTime:            STALE.REALTIME,  // 30s — mesmo que useDemandas
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled:          !!currentTeamId,
+    staleTime:        STALE.REALTIME,  // 30s
   });
 
   // Flat array de todos os itens carregados (todas as páginas concatenadas)
@@ -69,34 +53,10 @@ export function useDemandasPaginadas() {
     [data],
   );
 
-  // Debounce 2s: quando demandas mudam via RT, reseta para pág 1
-  // para evitar acúmulo de páginas desatualizadas
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!currentTeamId) return;
-
-    const channel = supabase
-      .channel(`demandas-paginadas-rt-${currentTeamId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
-        () => {
-          if (typeof document !== 'undefined' && document.hidden) return;
-          if (timerRef.current) clearTimeout(timerRef.current);
-          timerRef.current = setTimeout(() => {
-            // Reseta o infinite query: descarta páginas acumuladas e rebusca pág 1
-            qc.resetQueries({ queryKey });
-          }, 2000);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, [currentTeamId, qc, queryKey]);
+  // P0-fix: canal RT removido.
+  // O canal 'demandas-rt-{teamId}' em useDemandas chama:
+  //   qc.resetQueries({ queryKey: KEYS.demandas.infinite(teamId) })
+  // ...garantindo reset para pág 1 com debounce de 2s, sem canal duplicado.
 
   const error = queryError ? (queryError as Error).message : null;
 

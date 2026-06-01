@@ -8,7 +8,7 @@
  */
 
 export const KEYS = {
-  // ── Demandas ────────────────────────────────────────────────
+  // ── Demandas ───────────────────────────────────────────────────────────
   demandas: {
     all:    (teamId: string) => ['demandas', teamId]             as const,
     list:   (teamId: string) => ['demandas', teamId, 'list']     as const,
@@ -21,45 +21,48 @@ export const KEYS = {
     infinite: (teamId: string) => ['demandas', teamId, 'infinite'] as const,
   },
 
-  // ── KPIs ─────────────────────────────────────────────────────
-  // P0-fix: chaves centralizadas para KPIs (antes eram literais avulsas em cada hook)
-  // Permite que useDemandas invalide KPIs em cascata via KEYS.kpis.all(teamId)
+  // ── KPIs ──────────────────────────────────────────────────────────────────
   kpis: {
     all:         (teamId: string) => ['kpis', teamId]                              as const,
     sustentacao: (teamId: string, backlogDias: number) =>
                    ['kpis', teamId, 'sustentacao', backlogDias]                    as const,
   },
 
-  // ── Responsáveis ─────────────────────────────────────────────
-  // P1-fix: chave para cache do fetch batch de responsáveis por demanda
-  // (antes era feito fora do TanStack Query em useEffect direto)
+  // ── Responsáveis ───────────────────────────────────────────────────────────
   responsaveis: {
+    // Cache do fetch batch por IDs de demanda (P1-fix)
     byDemandas: (teamId: string, idsHash: string) =>
                   ['responsaveis', teamId, 'by-demandas', idsHash]                 as const,
+    // F3-B: cache de responsáveis enriquecidos por time (RPC enriquecimento)
+    byTeam:     (teamId: string) =>
+                  ['responsaveis', teamId, 'by-team']                              as const,
   },
 
-  // ── Kanban / User Stories ────────────────────────────────────
+  // ── Kanban / User Stories ────────────────────────────────────────────────
   kanban: {
     all:    (teamId: string) => ['kanban', teamId]               as const,
     board:  (teamId: string, sprintId?: string | null) =>
               ['kanban', teamId, 'board', sprintId ?? 'all']     as const,
+    // F3-A: chave separada para infinite query de cards (sprintFilter=all)
+    // Não colide com KEYS.kanban.board que é usado por sprint específico/ativo
+    infinite: (teamId: string) => ['kanban', teamId, 'infinite'] as const,
   },
 
-  // ── Sprints ─────────────────────────────────────────────────
+  // ── Sprints ───────────────────────────────────────────────────────────────────
   sprints: {
     all:    (teamId: string) => ['sprints', teamId]              as const,
     active: (teamId: string) => ['sprints', teamId, 'active']    as const,
   },
 
-  // ── Referência ──────────────────────────────────────────────
+  // ── Referência ─────────────────────────────────────────────────────────────────
   projetos:   (teamId: string) => ['projetos', teamId]           as const,
   fases:      (teamId: string) => ['fases', teamId]              as const,
   workflow:   (teamId: string) => ['workflow', teamId]           as const,
 
-  // ── Admin / KPIs ─────────────────────────────────────────────
+  // ── Admin / KPIs ─────────────────────────────────────────────────────────────
   adminKpis:  (teamIds: string[]) => ['admin', 'kpis', ...teamIds] as const,
 
-  // ── Perfil / Auth ────────────────────────────────────────────
+  // ── Perfil / Auth ────────────────────────────────────────────────────────────
   profile:    (userId: string) => ['profile', userId]            as const,
   profiles: {
     active:   ()               => ['profiles', 'active']         as const,

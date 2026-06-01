@@ -17,16 +17,26 @@ function toDecimalHours(value: unknown): number {
   return isNaN(parsed) ? 0 : parsed;
 }
 
-export async function fetchDemandas(teamId: string): Promise<Demanda[]> {
+/**
+ * fetchDemandasEnriched — substitui fetchDemandas + enrichComResponsaveis.
+ *
+ * ANTES: 2 roundtrips HTTP por cache miss
+ *   1. SELECT * FROM demandas WHERE team_id = ?
+ *   2. SELECT FROM demanda_responsaveis WHERE demanda_id IN (...)
+ *
+ * DEPOIS: 1 RPC = 1 roundtrip, retorno já enriquecido.
+ *   Com TanStack Query staleTime: 30s, 150 usuários no mesmo time
+ *   geram 1 query ao banco a cada 30s (em vez de 150 paralelas).
+ */
+export async function fetchDemandasEnriched(teamId: string): Promise<Demanda[]> {
   const { data, error } = await supabase
-    .from("demandas" as any)
-    .select("*")
-    .eq("team_id", teamId)
-    .order("updated_at", { ascending: false });
-
+    .rpc("get_demandas_with_responsaveis", { p_team_id: teamId } as any);
   if (error) throw error;
-  return (data || []) as unknown as Demanda[];
+  return (data as unknown as Demanda[]) ?? [];
 }
+
+// Mantido para compatibilidade com imports existentes que usem fetchDemandas diretamente
+export const fetchDemandas = fetchDemandasEnriched;
 
 export async function createDemanda(demanda: Partial<Demanda> & { team_id: string; rhm: string }) {
   const { data, error } = await supabase
@@ -78,10 +88,6 @@ export async function addHours(h: Omit<DemandaHour, "id" | "created_at"> & { cre
   if (error) throw error;
 }
 
-/**
- * fetchHours — lê direto da tabela demanda_hours.
- * RLS já permite SELECT para membros do time da demanda e admins.
- */
 export async function fetchHours(demandaId: string): Promise<DemandaHour[]> {
   const { data, error } = await supabase
     .from("demanda_hours" as any)
@@ -126,22 +132,15 @@ export type UpsertDemandaRow = {
   prazo_solucao?: string;
 };
 
-/**
- * Upsert em lote via RPC upsert_demandas_batch.
- * Substitui o antigo loop N+1 (SELECT + INSERT/UPDATE por linha).
- * 100 linhas = 1 roundtrip HTTP no lugar de ~200 requests sequenciais.
- */
 export async function upsertDemandas(
   teamId: string,
   rows: UpsertDemandaRow[],
 ): Promise<{ importados: number; atualizados: number; erros: number }> {
   if (rows.length === 0) return { importados: 0, atualizados: 0, erros: 0 };
-
   const { data, error } = await supabase.rpc("upsert_demandas_batch" as any, {
     p_team_id: teamId,
     p_rows:    rows,
   });
-
   if (error) throw error;
   return data as { importados: number; atualizados: number; erros: number };
 }

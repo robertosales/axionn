@@ -1,91 +1,50 @@
 /**
- * useDemandas — migrado para TanStack Query (Semana 2)
+ * useDemandas — Onda 2: enriquecimento de responsáveis movido para o servidor
  *
- * ANTES: useState + useEffect + loadingRef manual
- *   - fetch em todo mount, sem cache, sem deduplicação
- *   - realtime atualizava state local (não compartilhado)
+ * ANTES (Onda 1):
+ *   queryFn = fetchDemandas(teamId) + enrichComResponsaveis(data)
+ *   = 2 roundtrips HTTP + filtro JS em memória
+ *   150 usuários = 150 x 2 = 300 queries paralelas ao banco por cache miss
  *
- * DEPOIS: useQuery com staleTime: 30s
- *   - cache compartilhado entre todos os componentes
- *   - realtime invalida queryClient → todos os subscribers atualizam
- *   - mutations usam invalidateQueries para coerência
- *   - API pública idêntica (demandas, loading, error, reload, create, update, moveTo, remove)
+ * DEPOIS (Onda 2):
+ *   queryFn = fetchDemandasEnriched(teamId)
+ *   = 1 RPC get_demandas_with_responsaveis (LEFT JOIN no banco)
+ *   150 usuários no mesmo time = 1 query a cada 30s (TanStack Query cache)
+ *
+ * API pública idêntica — nenhum componente consumidor alterado.
  */
 
 import { useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
-import * as svc from '../services/demandas.service';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth }                  from '@/contexts/AuthContext';
+import { toast }                    from 'sonner';
+import { supabase }                 from '@/integrations/supabase/client';
+import * as svc                     from '../services/demandas.service';
 import type { Demanda, DemandaTransition, DemandaHour } from '../types/demanda';
-import { REQUIRES_JUSTIFICATIVA } from '../types/demanda';
-import { KEYS } from '@/lib/queryKeys';
-import { STALE } from '@/lib/queryClient';
+import { REQUIRES_JUSTIFICATIVA }   from '../types/demanda';
+import { KEYS }                     from '@/lib/queryKeys';
+import { STALE }                    from '@/lib/queryClient';
 
-// ─── Enrich responsáveis (inalterado) ────────────────────────────────────────
-async function enrichComResponsaveis(demandas: Demanda[]): Promise<Demanda[]> {
-  if (demandas.length === 0) return demandas;
-  const ids = demandas.map((d) => d.id);
-
-  const { data } = await supabase
-    .from('demanda_responsaveis')
-    .select('demanda_id, papel, created_at, profiles(display_name)')
-    .in('demanda_id', ids)
-    .order('created_at', { ascending: true });
-
-  const rows = (data || []) as any[];
-
-  return demandas.map((d) => {
-    const resp = rows.filter((r) => r.demanda_id === d.id);
-    const getPorPapel = (papel: string) =>
-      resp.find((r) => r.papel === papel)?.profiles?.display_name ?? null;
-    const responsaveis_list = resp
-      .map((r) => ({
-        papel:      r.papel as string,
-        nome:       (r.profiles?.display_name ?? '') as string,
-        created_at: r.created_at as string,
-      }))
-      .filter((r) => !!r.nome);
-
-    return {
-      ...d,
-      responsavel_dev:        getPorPapel('desenvolvedor') ?? d.responsavel_dev,
-      responsavel_requisitos: getPorPapel('analista')      ?? d.responsavel_requisitos,
-      responsavel_arquiteto:  getPorPapel('arquiteto')     ?? d.responsavel_arquiteto,
-      responsavel_teste:      getPorPapel('testador')      ?? d.responsavel_teste,
-      responsaveis_list,
-    } as Demanda & { responsaveis_list: { papel: string; nome: string; created_at: string }[] };
-  });
-}
-
-// ─── Fetch principal ──────────────────────────────────────────────────────────
-async function fetchDemandasEnriched(teamId: string): Promise<Demanda[]> {
-  const data = await svc.fetchDemandas(teamId);
-  return enrichComResponsaveis(data);
-}
-
-// ─── Hook principal ───────────────────────────────────────────────────────────
+// ── Hook principal ────────────────────────────────────────────────────────────
 export function useDemandas() {
   const { currentTeamId, user } = useAuth();
   const qc = useQueryClient();
 
-  // ── Query ──────────────────────────────────────────────────────────────────
   const queryKey = KEYS.demandas.list(currentTeamId ?? '');
 
   const { data: demandas = [], isLoading: loading, error: queryError } = useQuery({
     queryKey,
-    queryFn:   () => fetchDemandasEnriched(currentTeamId!),
+    // Onda 2: 1 RPC server-side em vez de 2 roundtrips + enriquecimento JS
+    queryFn:   () => svc.fetchDemandasEnriched(currentTeamId!),
     enabled:   !!currentTeamId,
     staleTime: STALE.REALTIME,
   });
 
   const error = queryError ? (queryError as Error).message : null;
 
-  // ── Realtime: invalida cache com Debounce para poupar CPU ────────────────
+  // ── Realtime: invalida cache com debounce ─────────────────────────────────
   useEffect(() => {
     if (!currentTeamId) return;
-
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const channel = supabase
@@ -94,13 +53,11 @@ export function useDemandas() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
         () => {
-          // Não invalida se a aba está escondida (poupa CPU do banco sob 150 usuários)
           if (typeof document !== 'undefined' && document.hidden) return;
           clearTimeout(timeoutId);
           timeoutId = setTimeout(() => {
-            console.log('[Sustentação] Realtime: Invalidando cache de demandas...');
             qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId) });
-          }, 2000); // 2s de debounce
+          }, 2000);
         },
       )
       .subscribe();
@@ -111,7 +68,7 @@ export function useDemandas() {
     };
   }, [currentTeamId, qc]);
 
-  // ── Mutations ─────────────────────────────────────────────────────────────
+  // ── Mutations ──────────────────────────────────────────────────────────────────
   const invalidate = () => qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId!) });
 
   const create = async (d: Partial<Demanda>) => {
@@ -122,15 +79,12 @@ export function useDemandas() {
         await svc.addTransition({
           demanda_id:    created.id,
           from_status:   null,
-          // 'nova' não existe em ALL_SITUACOES — usa 'fila_atendimento' (status inicial correto)
           to_status:     'fila_atendimento',
           user_id:       user.id,
           justificativa: null,
         });
       }
       toast.success('Demanda criada com sucesso');
-      // Realtime dispara invalidação, mas invalidamos aqui também
-      // para resposta imediata caso Realtime tenha latência
       await invalidate();
     } catch {
       toast.error('Erro ao criar demanda');
@@ -186,7 +140,7 @@ export function useDemandas() {
     demandas,
     loading,
     error,
-    reload: invalidate,   // API pública mantida: reload() agora = invalidate
+    reload: invalidate,
     create,
     update,
     moveTo,
@@ -194,7 +148,7 @@ export function useDemandas() {
   };
 }
 
-// ─── useTransitions (migrado) ─────────────────────────────────────────────────
+// ── useTransitions ──────────────────────────────────────────────────────────────
 export function useTransitions(demandaId: string | null) {
   const { data: transitions = [], isLoading: loading, refetch } = useQuery({
     queryKey:  KEYS.demandas.transitions(demandaId ?? ''),
@@ -205,7 +159,7 @@ export function useTransitions(demandaId: string | null) {
   return { transitions, loading, reload: refetch };
 }
 
-// ─── useHours (migrado) ───────────────────────────────────────────────────────
+// ── useHours ───────────────────────────────────────────────────────────────────
 export function useHours(demandaId: string | null) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -214,8 +168,6 @@ export function useHours(demandaId: string | null) {
     queryKey:  KEYS.demandas.hours(demandaId ?? ''),
     queryFn:   () => svc.fetchHours(demandaId!),
     enabled:   !!demandaId,
-    // staleTime: 0 garante que ao mudar de demanda o React Query nunca serve
-    // o cache vazio (registrado quando demandaId era null) — sempre refaz o fetch
     staleTime: 0,
   });
 

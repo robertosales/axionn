@@ -297,22 +297,19 @@ export async function enqueueApfJob(
 }
 
 /**
- * Dispara o worker imediatamente após enfileirar.
- * Fire-and-forget: se falhar, o job continua pendente para o cron/webhook.
+ * Dispara o worker process-apf-job via supabase.functions.invoke.
+ * Usa o client do Supabase (anon key + sessão) — a Edge Function
+ * aceita tanto anon quanto service_role pois usa createClient com
+ * SERVICE_ROLE_KEY internamente para operar no banco.
+ * Fire-and-forget: se falhar, o polling do useApfJob vai buscar o resultado.
  */
 export async function triggerApfWorker(): Promise<void> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-apf-job`;
-    await fetch(url, {
-      method:  "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${session?.access_token ?? ""}`,
-        "apikey":        import.meta.env.VITE_SUPABASE_ANON_KEY ?? "",
-      },
+    await supabase.functions.invoke("process-apf-job", {
+      method: "POST",
+      body: {},
     });
   } catch {
-    // Fire-and-forget: falha silência — job será processado pelo cron/webhook
+    // Fire-and-forget: falha silenciosa — polling do useApfJob garante consistência
   }
 }

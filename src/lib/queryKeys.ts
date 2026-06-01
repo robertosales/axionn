@@ -17,6 +17,8 @@ export const KEYS = {
     hours:  (id: string)     => ['demandas', 'hours', id]        as const,
     allTransitions: (teamId: string) => ['demandas', teamId, 'all-transitions'] as const,
     allHours: (teamId: string) => ['demandas', teamId, 'all-hours'] as const,
+    // Fase 4: chave separada para não colidir com o cache de list (eager)
+    infinite: (teamId: string) => ['demandas', teamId, 'infinite'] as const,
   },
 
   // ── Kanban / User Stories ────────────────────────────────────

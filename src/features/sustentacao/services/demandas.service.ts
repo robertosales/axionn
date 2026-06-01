@@ -38,6 +38,48 @@ export async function fetchDemandasEnriched(teamId: string): Promise<Demanda[]> 
 // Mantido para compatibilidade com imports existentes que usem fetchDemandas diretamente
 export const fetchDemandas = fetchDemandasEnriched;
 
+// ── Paginação cursor-based ────────────────────────────────────────────────────
+/**
+ * fetchDemandasPage — busca uma página de demandas enriquecidas.
+ *
+ * Usa cursor baseado em updated_at (coluna indexada) em ordem decrescente:
+ * a primeira página recebe cursor=null e retorna os N mais recentes;
+ * páginas seguintes recebem o updated_at da última demanda da página anterior.
+ *
+ * Retorna:
+ *   items      — demandas da página (já enriquecidas com responsáveis)
+ *   nextCursor — updated_at da última demanda, ou null se não há próxima página
+ */
+export const PAGE_SIZE = 50;
+
+export interface DemandasPage {
+  items:      Demanda[];
+  nextCursor: string | null;
+}
+
+export async function fetchDemandasPage(
+  teamId: string,
+  cursor: string | null,
+  limit = PAGE_SIZE,
+): Promise<DemandasPage> {
+  const { data, error } = await supabase
+    .rpc("get_demandas_with_responsaveis_paged", {
+      p_team_id: teamId,
+      p_cursor:  cursor,
+      p_limit:   limit,
+    } as any);
+
+  if (error) throw error;
+
+  const items = (data as unknown as Demanda[]) ?? [];
+  const nextCursor =
+    items.length < limit
+      ? null
+      : (items[items.length - 1].updated_at ?? null);
+
+  return { items, nextCursor };
+}
+
 export async function createDemanda(demanda: Partial<Demanda> & { team_id: string; rhm: string }) {
   const { data, error } = await supabase
     .from("demandas" as any)

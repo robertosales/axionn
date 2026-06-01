@@ -1,178 +1,111 @@
-## Diagnóstico do problema
 
-**Sei qual é o problema? Sim.** O módulo não está falhando por um único motivo; há uma combinação de configuração incorreta, fallback incompleto e pouca observabilidade na tela.
+# Plano de execução — Onda 1 (escalabilidade para 150 usuários)
 
-### 1. A última chamada não usou GPT
-Na requisição capturada do navegador, o módulo enviou este provedor:
+## Respostas às suas perguntas
 
-```text
-providerId: Gemini 1.5 Flash
-```
-
-Ou seja: mesmo você tendo GPT cadastrado com chave paga, a chamada analisada foi para o **Gemini recomendado**, não para o GPT. Isso explica por que o erro visto nos logs é do Gemini e não da OpenAI.
-
-### 2. O Gemini recomendado está configurado com modelo que falha
-O backend registrou:
-
-```text
-Gemini [404]: models/gemini-1.5-flash is not found for API version v1beta
-```
-
-Isso significa que o provedor ativo/recomendado está apontando para um modelo que a API atual do Gemini não aceita mais nessa rota. Enquanto esse provedor continuar recomendado, o sistema tende a escolher ele primeiro e falhar.
-
-### 3. O fallback para GPT não está confiável
-Pelo código, deveria haver fallback automático para outro provedor ativo. Porém, a resposta do backend voltou genérica:
-
-```text
-Não foi possível gerar o documento agora. Tente novamente em alguns instantes.
-```
-
-E não trouxe a lista detalhada de tentativas. Isso indica que a falha está sendo engolida pelo tratamento genérico de erro ou que a versão implantada da função ainda não está refletindo totalmente o fallback esperado.
-
-### 4. O prompt enviado começa com `undefined`
-A requisição capturada mostra:
-
-```text
-"prompt":"undefined\n\n---\nDADOS DE ENTRADA..."
-```
-
-Isso é grave: o módulo está tentando ler `prompt_template`, mas os templates do banco usam `prompt_content`. Resultado: a IA recebe os arquivos, mas pode ficar sem as instruções principais do template. Mesmo quando a IA responde, a qualidade do relatório fica comprometida.
-
-### 5. A tela pode ficar “Gerando...” sem saída clara
-O frontend não tem timeout/controlador de travamento para a chamada de geração. Se a API externa demora, trava, limita requisição ou o backend demora a responder, a tela fica esperando e o usuário não recebe uma mensagem operacional clara.
-
-### 6. O Admin mostra chave configurada, mas não testa se ela funciona
-Hoje o cadastro em **Admin → IAs** informa se existe uma chave salva, mas não valida:
-
-- se a chave é realmente aceita pela OpenAI/Gemini;
-- se o modelo existe;
-- se há crédito/quota;
-- se o provedor responde com sucesso.
-
-Por isso o painel pode passar a sensação de “está tudo configurado”, mas o módulo só descobre o problema na hora de gerar.
+1. **Mudanças incrementais e medidas** ✅ Confirmado. Cada onda é dividida em PRs pequenos, com medição antes e depois.
+2. **Ambiente de homologação** ⚠️ O Lovable não tem "staging" nativo dentro do mesmo projeto, mas existem 2 caminhos reais:
+   - **Opção A (recomendada — barata e rápida):** criar um **segundo projeto Lovable** via "Remix" do projeto atual. Ele vem com cópia do código + Lovable Cloud próprio (banco separado). Custo: mais 1 projeto na sua conta. Bom para testar mudanças de schema e edge functions antes de promover.
+   - **Opção B (mais robusta):** usar um **branch Git** (GitHub conectado ao Lovable) e um **segundo Supabase project** manual, com seed de dados anonimizados. Mais trabalho, mais fiel.
+   - Para começar já com segurança, sugiro **Opção A**. Posso te orientar passo a passo quando entrar em build mode.
+3. **Tabela `apf_jobs`** ✅ Será criada na Onda 3.
+4. **Começar pelo mais relevante** ✅ Defini abaixo.
 
 ---
 
-## Plano de correção recomendado
+## O que é mais relevante começar agora
 
-### Etapa 1 — Corrigir configuração dos provedores
-- Atualizar o modelo Gemini recomendado para um modelo atual e suportado.
-- Garantir que o GPT cadastrado com chave paga possa ser selecionado e realmente enviado na geração.
-- Ajustar a ordem de recomendação para evitar que um Gemini quebrado seja escolhido automaticamente.
+Olhando os dados reais do banco (34% memória, 5% disco, 19/90 conexões, **97 mil rollbacks acumulados**) + o código do Kanban e Sustentação, o gargalo real para 150 usuários **não é infra**, é **padrão de query no frontend + falta de índices**. Por isso:
 
-### Etapa 2 — Corrigir o prompt do módulo Gerar HU / Relatório Enterprise
-- Trocar o uso direto de `prompt_template` por uma resolução segura:
+### Ordem de ataque (maior ganho / menor risco primeiro)
 
 ```text
-prompt_template ?? prompt_content ?? ""
-```
-
-- Impedir geração se o template estiver sem conteúdo real.
-- Exibir erro claro: “Template sem prompt configurado”.
-
-### Etapa 3 — Fortalecer o backend `apf-generate`
-- Normalizar modelos por provedor:
-  - Gemini: aceitar nomes atuais e remover prefixos incompatíveis quando necessário.
-  - OpenAI: usar modelo padrão seguro quando o campo estiver vazio.
-- Melhorar o fallback:
-  - se Gemini falhar com 404/429/402/5xx, tentar GPT ativo com chave válida;
-  - registrar cada tentativa;
-  - retornar ao frontend algo como:
-
-```text
-Tentativas: Gemini 1.5 Flash (404 modelo inválido) → GPT (sucesso)
-```
-
-ou, se tudo falhar:
-
-```text
-Tentativas: Gemini (404 modelo inválido) → GPT (401 chave inválida)
-```
-
-### Etapa 4 — Evitar travamento infinito na tela
-- Adicionar timeout por provedor no backend.
-- Adicionar timeout visual no frontend.
-- Trocar “Gerando...” infinito por estados claros:
-  - preparando dados;
-  - chamando IA;
-  - tentando fallback;
-  - finalizando;
-  - falhou com motivo.
-
-### Etapa 5 — Melhorar a tela Admin → IAs
-- Adicionar botão **Testar IA** por provedor.
-- O teste fará uma chamada curta e retornará:
-  - chave válida;
-  - modelo válido;
-  - sem crédito;
-  - limite atingido;
-  - modelo inexistente;
-  - erro de autenticação.
-- Mostrar um badge operacional separado de “Key configurada”, porque “chave salva” não significa “IA funcionando”.
-
-### Etapa 6 — Melhorar mensagens para o usuário final
-- Substituir mensagens genéricas por mensagens acionáveis:
-
-```text
-O modelo Gemini configurado não existe mais. Selecione GPT ou ajuste o modelo em Admin → IAs.
-```
-
-```text
-A chave OpenAI foi recusada. Atualize a chave do provedor GPT em Admin → IAs.
-```
-
-```text
-Gemini atingiu limite gratuito. Tentando GPT pago automaticamente.
+PASSO 1  →  Índices críticos no banco         (risco: zero, ganho: alto)
+PASSO 2  →  Investigar os 97k rollbacks        (risco: zero, leitura de logs)
+PASSO 3  →  Otimizar useKanbanBoard            (risco: baixo, ganho: muito alto)
+PASSO 4  →  Realtime com debounce + filtro     (risco: médio, ganho: alto)
+PASSO 5  →  Medir e decidir próxima onda       (gate de decisão)
 ```
 
 ---
 
-## Alternativa Enterprise mais robusta
+## PASSO 1 — Índices críticos (migration única, ~1 min)
 
-Se você quiser algo mais confiável para relatórios grandes, eu recomendo evoluir esse módulo para uma **fila assíncrona de geração de relatórios**.
+Vou criar **uma migration** com índices nas colunas mais usadas em filtros/joins. São operações `CREATE INDEX IF NOT EXISTS` — não bloqueiam o banco e podem ser revertidas a qualquer momento.
 
-Funcionaria assim:
+Índices planejados:
 
-```text
-Upload dos arquivos
-   ↓
-Cria uma tarefa de relatório
-   ↓
-Processa em partes menores
-   ↓
-Usa IA principal + fallback
-   ↓
-Salva histórico, erros e resultado
-   ↓
-Usuário baixa Markdown/DOCX quando concluir
-```
+| Tabela | Colunas | Por quê |
+|---|---|---|
+| `user_stories` | `(team_id, sprint_id, status)` | Kanban filtra por isso o tempo todo |
+| `user_stories` | `(sprint_id)` quando NULL | Backlog query |
+| `demandas` | `(team_id, situacao, created_at)` | Lista de Sustentação |
+| `demanda_transitions` | `(demanda_id, created_at)` | Cálculo de TMR/MTTR |
+| `demanda_hours` | `(demanda_id)` e `(user_id)` | Trigger de total_horas + KPIs |
+| `activities` | `(hu_id)` | Soma de horas por HU |
+| `impediments` | `(team_id, resolved_at)` | Impedimentos abertos |
+| `demanda_eventos` | `(demanda_id, created_at)` | Cálculo IMR |
+| `notifications` | `(user_id, read)` | Sino de notificações |
 
-Vantagens:
+**Validação:** depois rodo `EXPLAIN ANALYZE` em 3 queries pesadas (Kanban, Sustentação, KPIs admin) e mostro o antes/depois.
 
-- a tela nunca fica travada;
-- o usuário pode sair e voltar depois;
-- relatórios grandes podem ser quebrados em partes;
-- cada etapa fica auditável;
-- se Gemini falhar, GPT continua;
-- se GPT falhar, o erro fica registrado com motivo real;
-- dá para reprocessar só a etapa que falhou.
+## PASSO 2 — Investigar os 97k rollbacks (read-only)
+
+Os rollbacks são um **sintoma escondido**. Cada rollback = uma transação que estourou (provavelmente RLS negando ou trigger falhando). Com 150 usuários isso vira congestionamento.
+
+Vou rodar:
+- `pg_stat_database` para taxa de rollback atual.
+- Logs do Postgres das últimas 24h filtrando `ERROR`/`ROLLBACK`.
+- Identificar top 5 queries que mais falham e propor correção (sem aplicar ainda).
+
+Entrega: **relatório curto** com causa raiz + plano de correção pontual.
+
+## PASSO 3 — Otimizar `useKanbanBoard` (1 PR pequeno)
+
+Mudanças cirúrgicas no hook (sem mudar UI):
+
+1. Trocar `select('*')` por colunas específicas em `user_stories`, `developers`, `epics`, `workflow_columns`.
+2. Adicionar filtro `sprint_id` direto na query (em vez de trazer 500 e filtrar no JS).
+3. Subir `staleTime` de devs/epics para 5min.
+4. Cancelar fetch quando aba não está visível (já tem `useAppResilience`, só precisa integrar).
+
+**Critério de sucesso:** payload do Kanban cai de ~500 KB para <100 KB; tempo de carga cai de Xs para <500ms.
+
+## PASSO 4 — Realtime sob controle
+
+1. Adicionar **debounce de 2s** em `invalidateQueries` disparados por Realtime.
+2. Aplicar **filtro server-side** (`filter: team_id=eq.X`) nos canais de Kanban e Sustentação.
+3. Invalidar **queryKey específica** (`['kanban', sprintId]`) em vez de invalidação global.
+
+Resultado: write de 1 card em vez de gerar `150 usuários × refetch global`, gera `≤30 usuários do time × refetch específico`. Redução estimada de ~80% no tráfego de Realtime + queries em pico.
+
+## PASSO 5 — Gate de decisão
+
+Depois dos passos 1-4, rodamos um **mini teste de carga** (k6/Artillery, posso te ajudar a configurar) simulando 50 → 100 → 150 usuários. Com os números reais, decidimos:
+
+- Se estiver folgado → Ondas 3 e 4 viram opcionais.
+- Se estiver no limite → seguimos com fila assíncrona (`apf_jobs`) + upgrade `ci_small` → `ci_medium`.
+- Se quebrar → vamos atrás do gargalo específico que o teste apontar (não chutamos).
 
 ---
 
-## O que eu implementaria primeiro
+## Cronograma sugerido
 
-1. Corrigir `prompt_template`/`prompt_content`.
-2. Atualizar o modelo Gemini inválido.
-3. Corrigir fallback para GPT e retorno de tentativas.
-4. Adicionar timeout e mensagens claras na tela.
-5. Adicionar teste de provedor em Admin → IAs.
+| Passo | Tempo estimado | Aplica em prod? |
+|---|---|---|
+| Criar projeto de homologação (Opção A) | 15 min (você faz pelo painel) | Não |
+| Passo 1 — Índices | 30 min eu monto + você aprova | **Sim** (seguro) |
+| Passo 2 — Investigação rollbacks | 1h leitura + relatório | Não |
+| Passo 3 — Kanban | 2-3h | Sim, fora de pico |
+| Passo 4 — Realtime | 2-3h | Sim, fora de pico |
+| Passo 5 — Teste de carga | 1-2h | Em homologação |
 
-Depois disso, se você quiser o nível Enterprise de verdade, implementamos a fila assíncrona de relatórios.
+Total da Onda 1: **~1 dia de trabalho efetivo**, distribuído.
 
-<presentation-actions>
-  <presentation-open-history>View History</presentation-open-history>
-</presentation-actions>
+---
 
-<presentation-actions>
-<presentation-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</presentation-link>
-</presentation-actions>
+## O que eu preciso de você para apertar "Implementar plano"
+
+1. **Confirma que posso começar pelo Passo 1 (índices)** assim que entrar em build mode?
+2. **Quer que eu já te oriente a criar o projeto de homologação por Remix** antes de aplicar os passos seguintes em produção?
+3. **Tem janela combinada** (ex: noite/fim de semana) para os Passos 3 e 4, ou prefere que eu aplique a qualquer hora (são mudanças de baixo risco)?

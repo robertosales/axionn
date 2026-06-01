@@ -94,6 +94,8 @@ export function useDemandas() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
         () => {
+          // Não invalida se a aba está escondida (poupa CPU do banco sob 150 usuários)
+          if (typeof document !== 'undefined' && document.hidden) return;
           clearTimeout(timeoutId);
           timeoutId = setTimeout(() => {
             console.log('[Sustentação] Realtime: Invalidando cache de demandas...');

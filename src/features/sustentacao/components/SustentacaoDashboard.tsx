@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDemandas } from "../hooks/useDemandas";
+// F2-A: useDemandas (dataset completo) substituído por useDemandasPaginadas
+import { useDemandasPaginadas } from "../hooks/useDemandasPaginadas";
 import { useProjetos } from "../hooks/useProjetos";
 import { useKpisSustentacao } from "../hooks/useKpisSustentacao";
 import { SITUACAO_LABELS } from "../types/demanda";
@@ -36,7 +37,6 @@ function LazySection({ children, placeholder }: {
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
-
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -47,7 +47,6 @@ function LazySection({ children, placeholder }: {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
   return <div ref={ref}>{visible ? children : (placeholder ?? <SkeletonList count={2} />)}</div>;
 }
 
@@ -55,7 +54,6 @@ function LazySection({ children, placeholder }: {
 export function SustentacaoDashboard() {
   const [filtros, setFiltros] = useState<MetricasFiltros>(FILTROS_DEFAULT);
 
-  // P2-fix: os dois fetches rodam em paralelo — nenhum bloqueia o outro
   const {
     atendimento,
     tempos,
@@ -63,7 +61,12 @@ export function SustentacaoDashboard() {
     loading: kpisLoading,
   } = useKpisSustentacao(filtros.periodo === "all" ? 30 : parseInt(filtros.periodo));
 
-  const { demandas, loading: demandasLoading } = useDemandas();
+  // F2-A: substituído useDemandas (fetchDemandasEnriched completo) por
+  // useDemandasPaginadas (RPC paginada 50 rows/página, infinite scroll).
+  // Os filtros client-side e derivações continuam funcionando sobre o subset
+  // carregado. Para o Dashboard, a primeira página (50 demandas) é suficiente
+  // para os KPIs visuais (gráfico de situação e alertas operacionais).
+  const { demandas, loading: demandasLoading } = useDemandasPaginadas();
   const { projetos } = useProjetos();
 
   const filtered = useMemo(() => {
@@ -128,13 +131,11 @@ export function SustentacaoDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
       <div>
         <h2 className="text-lg font-semibold">Dashboard Sustentação</h2>
         <p className="text-sm text-muted-foreground">Visão consolidada de KPIs e alertas</p>
       </div>
 
-      {/* ── Filter Bar: aguarda demandas para popular filtros de projeto/membro ── */}
       <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
         <MetricasFilterBar
           filtros={filtros}
@@ -145,9 +146,7 @@ export function SustentacaoDashboard() {
         />
       </div>
 
-      {/* ── Atendimento e Volume ──
-          P2-fix: renderiza assim que kpisLoading=false.
-          Não espera demandasLoading. */}
+      {/* KPIs: rendem assim que kpisLoading=false, independente das demandas */}
       <Section title="Atendimento e Volume">
         {kpisLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -157,9 +156,9 @@ export function SustentacaoDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KPICard icon={FileText}    label="Chamados Ativos"  value={atendimento.total}          color="info" />
-            <KPICard icon={Zap}         label="Abertos Hoje"     value={atendimento.abertosHoje}    color="info" />
-            <KPICard icon={CheckCircle2} label="Resolvidos Hoje" value={atendimento.resolvidosHoje} color="info" />
+            <KPICard icon={FileText}     label="Chamados Ativos"  value={atendimento.total}          color="info" />
+            <KPICard icon={Zap}          label="Abertos Hoje"     value={atendimento.abertosHoje}    color="info" />
+            <KPICard icon={CheckCircle2} label="Resolvidos Hoje"  value={atendimento.resolvidosHoje} color="info" />
             <KPICard
               icon={Activity}
               label={`Backlog (>${atendimento.backlogDias}d)`}
@@ -170,7 +169,6 @@ export function SustentacaoDashboard() {
         )}
       </Section>
 
-      {/* ── Tempos Médios ── */}
       <Section title="Tempos Médios">
         {kpisLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -188,7 +186,6 @@ export function SustentacaoDashboard() {
         )}
       </Section>
 
-      {/* ── SLA ── */}
       <Section title="SLA">
         {kpisLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -211,9 +208,7 @@ export function SustentacaoDashboard() {
         )}
       </Section>
 
-      {/* ── Situação + Alertas ──
-          P2-fix: esta seção depende da lista de demandas — mostra skeleton
-          apenas enquanto demandasLoading=true, independentemente dos KPIs. */}
+      {/* Situação + Alertas: dependem das demandas paginadas */}
       {demandasLoading ? (
         <SkeletonList count={3} />
       ) : (
@@ -264,7 +259,6 @@ export function SustentacaoDashboard() {
                     )}
                   </TabsTrigger>
                 </TabsList>
-
                 <TabsContent value="operacional" className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted">
                   {alertasOperacionais.length === 0 ? <EmptyAlerts /> : (
                     alertasOperacionais.map((a) => {
@@ -283,7 +277,6 @@ export function SustentacaoDashboard() {
                     })
                   )}
                 </TabsContent>
-
                 <TabsContent value="sla" className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted">
                   {alertasSLA.length === 0 ? <EmptyAlerts /> : (
                     <>
@@ -314,7 +307,6 @@ export function SustentacaoDashboard() {
 
       <Separator />
 
-      {/* ── IMR: lazy mount via IntersectionObserver ── */}
       <LazySection>
         <ImrDashboard />
       </LazySection>
@@ -322,7 +314,7 @@ export function SustentacaoDashboard() {
   );
 }
 
-// ─── Sub-componentes ──────────────────────────────────────────────────────────────────
+// ─── Sub-componentes ─────────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>

@@ -1,15 +1,16 @@
 /**
- * useDemandas — P0-fix: RT canal invalida também KPIs e infinite query
+ * useDemandas — F2-B: invalidação em cascata nas mutations
  *
- * ANTES: invalidação cobria apenas KEYS.demandas.all
- *   → KPIs do Dashboard ficavam desatualizados até seu próprio canal RT disparar
- *   → useDemandasPaginadas precisava de canal RT próprio para ser notificado
+ * ANTES: create/update/moveTo/remove chamavam invalidate() que atingia
+ *   apenas KEYS.demandas.all. KPIs e infinite query ficavam defasados
+ *   por até 2s (aguardando o debounce do canal RT).
  *
- * DEPOIS: invalidação em cascata cobre:
- *   1. KEYS.demandas.all(teamId)  → lista completa (Kanban)
- *   2. KEYS.kpis.all(teamId)      → KPIs do Dashboard (sincronismo garantido)
- *   3. KEYS.demandas.infinite(teamId) reset → infinite query da página Demandas
- *      (elimina a necessidade de canal RT duplicado em useDemandasPaginadas)
+ * DEPOIS: mutations invalidam em cascata:
+ *   1. KEYS.demandas.all(teamId)  — lista completa (Kanban)
+ *   2. KEYS.kpis.all(teamId)      — KPIs do Dashboard (imediato)
+ *   3. reset KEYS.demandas.infinite — lista paginada reinicia
+ *
+ * Alinhado com o padrão já adotado em useDemandaMutations (Fase 1).
  */
 
 import { useEffect } from 'react';
@@ -23,7 +24,6 @@ import { REQUIRES_JUSTIFICATIVA }   from '../types/demanda';
 import { KEYS }                     from '@/lib/queryKeys';
 import { STALE }                    from '@/lib/queryClient';
 
-// ── Hook principal ────────────────────────────────────────────────────────────
 export function useDemandas() {
   const { currentTeamId, user } = useAuth();
   const qc = useQueryClient();
@@ -39,10 +39,7 @@ export function useDemandas() {
 
   const error = queryError ? (queryError as Error).message : null;
 
-  // ── Realtime: invalida cache em cascata ───────────────────────────────────
-  // P0-fix: além de KEYS.demandas.all, invalida também:
-  //   - KEYS.kpis.all → KPIs do Dashboard ficam sincronizados sem canal extra
-  //   - KEYS.demandas.infinite → useDemandasPaginadas não precisa de canal próprio
+  // ── Realtime: invalidação em cascata (inalterada) ───────────────────────────
   useEffect(() => {
     if (!currentTeamId) return;
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -56,25 +53,24 @@ export function useDemandas() {
           if (typeof document !== 'undefined' && document.hidden) return;
           clearTimeout(timeoutId);
           timeoutId = setTimeout(() => {
-            // 1. Lista completa (Kanban, SustentacaoDashboard)
             qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId) });
-            // 2. KPIs (Dashboard) — P0-fix: consistência sem canal RT extra
             qc.invalidateQueries({ queryKey: KEYS.kpis.all(currentTeamId) });
-            // 3. Infinite query (página Demandas) — P0-fix: elimina canal duplicado
-            qc.resetQueries({ queryKey: KEYS.demandas.infinite(currentTeamId) });
+            qc.resetQueries({     queryKey: KEYS.demandas.infinite(currentTeamId) });
           }, 2000);
         },
       )
       .subscribe();
 
-    return () => {
-      clearTimeout(timeoutId);
-      supabase.removeChannel(channel);
-    };
+    return () => { clearTimeout(timeoutId); supabase.removeChannel(channel); };
   }, [currentTeamId, qc]);
 
-  // ── Mutations ──────────────────────────────────────────────────────────────────
-  const invalidate = () => qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId!) });
+  // ── Invalidação completa (usada pelas mutations) ─────────────────────────────
+  // F2-B: alinhado com useDemandaMutations — atinge kpis + infinite imediatamente
+  const invalidateAll = () => Promise.all([
+    qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId!) }),
+    qc.invalidateQueries({ queryKey: KEYS.kpis.all(currentTeamId!) }),
+    qc.resetQueries({     queryKey: KEYS.demandas.infinite(currentTeamId!) }),
+  ]);
 
   const create = async (d: Partial<Demanda>) => {
     if (!currentTeamId) return;
@@ -90,7 +86,7 @@ export function useDemandas() {
         });
       }
       toast.success('Demanda criada com sucesso');
-      await invalidate();
+      await invalidateAll();
     } catch {
       toast.error('Erro ao criar demanda');
     }
@@ -100,7 +96,7 @@ export function useDemandas() {
     try {
       await svc.updateDemanda(id, updates);
       toast.success('Demanda atualizada com sucesso');
-      await invalidate();
+      await invalidateAll();
     } catch {
       toast.error('Erro ao atualizar demanda');
     }
@@ -123,7 +119,7 @@ export function useDemandas() {
         });
       }
       toast.success('Status atualizado com sucesso');
-      await invalidate();
+      await invalidateAll();
       return true;
     } catch {
       toast.error('Erro ao atualizar status');
@@ -135,7 +131,7 @@ export function useDemandas() {
     try {
       await svc.deleteDemanda(id);
       toast.success('Demanda excluída com sucesso');
-      await invalidate();
+      await invalidateAll();
     } catch {
       toast.error('Erro ao excluir demanda');
     }
@@ -145,7 +141,7 @@ export function useDemandas() {
     demandas,
     loading,
     error,
-    reload: invalidate,
+    reload: invalidateAll,
     create,
     update,
     moveTo,
@@ -153,7 +149,7 @@ export function useDemandas() {
   };
 }
 
-// ── useTransitions ──────────────────────────────────────────────────────────────
+// ── useTransitions ──────────────────────────────────────────────────────────────────
 export function useTransitions(demandaId: string | null) {
   const { data: transitions = [], isLoading: loading, refetch } = useQuery({
     queryKey:  KEYS.demandas.transitions(demandaId ?? ''),
@@ -164,16 +160,20 @@ export function useTransitions(demandaId: string | null) {
   return { transitions, loading, reload: refetch };
 }
 
-// ── useHours ───────────────────────────────────────────────────────────────────
+// ── useHours ────────────────────────────────────────────────────────────────────────
 export function useHours(demandaId: string | null) {
   const { user } = useAuth();
   const qc = useQueryClient();
 
+  // F2-C: staleTime 0 → STALE.REALTIME (30s)
+  // Não há canal RT em demanda_hours — o refetch imediato não trazia dados
+  // mais frescos, apenas adicionava latência. Invalidação explícita nas
+  // mutations garante consistência sem depender de refetch automático.
   const { data: hours = [], isLoading: loading } = useQuery({
     queryKey:  KEYS.demandas.hours(demandaId ?? ''),
     queryFn:   () => svc.fetchHours(demandaId!),
     enabled:   !!demandaId,
-    staleTime: 0,
+    staleTime: STALE.REALTIME,  // F2-C: era 0
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: KEYS.demandas.hours(demandaId!) });

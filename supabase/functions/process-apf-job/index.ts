@@ -1,162 +1,188 @@
-// deno-lint-ignore-file no-explicit-any
 /**
- * process-apf-job — Worker da fila apf_jobs
+ * process-apf-job
+ * Worker da fila apf_jobs. Chamado pelo trigger trg_apf_job_notify
+ * via pg_net sempre que um job entra no estado 'pending'.
  *
- * Responsabilidades:
- *   1. Busca 1 job pendente com SELECT FOR UPDATE SKIP LOCKED
- *      → garante que 2 invocações simultâneas nunca processam o mesmo job
- *   2. Chama apf-generate passando o payload do job
- *   3. Atualiza status: done | failed | dead
- *   4. Calcula next_attempt_at com backoff exponencial
- *
- * Invocação:
- *   - Via pg_cron a cada 10s: SELECT net.http_post(...) (opcional)
- *   - Via Supabase Webhook no INSERT de apf_jobs (recomendado)
- *   - Via chamada direta do frontend após enfileirar (fallback imediato)
- *
- * Segurança:
- *   - Só aceita chamadas com SUPABASE_SERVICE_ROLE_KEY no header
- *     OU chamadas internas (sem header = cron/webhook)
- *   - Nunca expõe dados do job para o caller — só status
+ * Fluxo:
+ *   1. Chama claim_next_apf_job() — SELECT FOR UPDATE SKIP LOCKED
+ *   2. Atualiza job para 'processing'
+ *   3. Executa a geração APF (reutiliza lógica do apf-generate)
+ *   4. Salva resultado e marca 'done' ou 'failed'
+ *   5. Se failed e attempts < max_attempts: reagenda com backoff exponencial
+ *   6. Se esgotou tentativas: marca 'dead'
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const SITE_URL      = Deno.env.get("SITE_URL") ?? "*";
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ??
+                    Deno.env.get('APP_SUPABASE_URL') ?? ''
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ??
+                         Deno.env.get('APP_SUPABASE_KEY') ?? ''
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin":  SITE_URL,
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-// Backoff exponencial: attempt 1→30s, 2→120s, 3→dead
-function nextAttemptDelay(attempt: number): number {
-  return Math.min(30 * Math.pow(4, attempt - 1), 600) * 1000;
+// ----------------------------------------------------------------
+// Tipos
+// ----------------------------------------------------------------
+interface ApfJob {
+  id: string
+  team_id: string
+  generation_id: string | null
+  type: string
+  payload: Record<string, unknown>
+  status: string
+  attempts: number
+  max_attempts: number
+  error_message: string | null
 }
 
+interface ApfPayload {
+  generation_id?: string
+  team_id?: string
+  [key: string]: unknown
+}
+
+// ----------------------------------------------------------------
+// Handler principal
+// ----------------------------------------------------------------
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-
-  // ── 1. Busca 1 job pendente com FOR UPDATE SKIP LOCKED ──────────────────
-  const { data: jobs, error: fetchErr } = await admin
-    .rpc("claim_next_apf_job");
-
-  if (fetchErr) {
-    console.error("[process-apf-job] claim_next_apf_job error:", fetchErr.message);
-    return new Response(JSON.stringify({ error: fetchErr.message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  // Aceita POST do trigger pg_net ou chamadas manuais
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 })
   }
 
-  const job = jobs?.[0];
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  })
+
+  // ------------------------------------------------------------------
+  // 1. Claim: busca e bloqueia 1 job pending atomicamente
+  // ------------------------------------------------------------------
+  const { data: jobs, error: claimErr } = await admin
+    .rpc('claim_next_apf_job')
+
+  if (claimErr) {
+    console.error('[process-apf-job] claim error:', claimErr.message)
+    return new Response(JSON.stringify({ error: claimErr.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  const job: ApfJob | undefined = Array.isArray(jobs) ? jobs[0] : jobs
+
   if (!job) {
-    // Fila vazia — nada a fazer
-    return new Response(JSON.stringify({ status: "idle", message: "No pending jobs" }), {
-      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Fila vazia — resposta normal
+    return new Response(JSON.stringify({ status: 'empty' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
-  const jobId      = job.id as string;
-  const payload    = job.payload as any;
-  const attempts   = (job.attempts as number) + 1;
-  const maxAttempts = job.max_attempts as number;
+  console.log(`[process-apf-job] processing job ${job.id} (attempt ${job.attempts + 1}/${job.max_attempts})`)
 
-  console.log(`[process-apf-job] Processing job ${jobId} (attempt ${attempts}/${maxAttempts})`);
+  // ------------------------------------------------------------------
+  // 2. Marca como 'processing'
+  // ------------------------------------------------------------------
+  await admin
+    .from('apf_jobs')
+    .update({
+      status: 'processing',
+      started_at: new Date().toISOString(),
+      attempts: job.attempts + 1,
+    })
+    .eq('id', job.id)
 
-  // ── 2. Marca como processing ─────────────────────────────────────────────
-  await admin.from("apf_jobs").update({
-    status:     "processing",
-    started_at: new Date().toISOString(),
-    attempts,
-  }).eq("id", jobId);
-
-  // ── 3. Chama apf-generate com o payload do job ───────────────────────────
-  let success = false;
-  let resultData: any = null;
-  let errorMessage: string | null = null;
+  // ------------------------------------------------------------------
+  // 3. Executa geração APF
+  // ------------------------------------------------------------------
+  let result: Record<string, unknown> | null = null
+  let errorMessage: string | null = null
 
   try {
-    const apfUrl = `${SUPABASE_URL}/functions/v1/apf-generate`;
+    const payload = job.payload as ApfPayload
 
-    const response = await fetch(apfUrl, {
-      method:  "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${SERVICE_KEY}`,
-        // Passa o JWT original do usuário para que apf-generate valide auth
-        ...(payload.userJwt ? { "x-user-jwt": payload.userJwt } : {}),
-      },
-      body: JSON.stringify({
-        prompt:       payload.prompt,
-        providerId:   payload.providerId,
-        provider:     payload.provider,
-        model:        payload.model,
-        files:        payload.files,
-        generationId: payload.generationId,
-        apiKey:       payload.apiKey,
-        skipDocx:     payload.skipDocx ?? false,
-      }),
-    });
+    // Chama a Edge Function apf-generate existente
+    const genResp = await fetch(
+      `${SUPABASE_URL}/functions/v1/apf-generate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          ...payload,
+          generation_id: payload.generation_id ?? job.generation_id,
+          team_id: payload.team_id ?? job.team_id,
+          _job_id: job.id,          // contexto para a função destino
+        }),
+      }
+    )
 
-    const data = await response.json();
-
-    if (data.success) {
-      success    = true;
-      resultData = {
-        pfTotal:      data.pfTotal,
-        pfBreakdown:  data.pfBreakdown,
-        charCount:    data.charCount,
-        providerUsed: data.providerUsed,
-        outputFilename: data.outputFilename,
-        fallback:     data.fallback ?? null,
-      };
-      console.log(`[process-apf-job] Job ${jobId} completed. pfTotal=${data.pfTotal}`);
-    } else {
-      errorMessage = data.userMessage ?? data.error ?? "apf-generate returned success=false";
-      console.warn(`[process-apf-job] Job ${jobId} apf-generate failed: ${errorMessage}`);
+    if (!genResp.ok) {
+      const errBody = await genResp.text()
+      throw new Error(`apf-generate retornou ${genResp.status}: ${errBody}`)
     }
-  } catch (e: any) {
-    errorMessage = e?.message ?? "Unknown error calling apf-generate";
-    console.error(`[process-apf-job] Job ${jobId} exception:`, errorMessage);
+
+    result = await genResp.json()
+  } catch (err) {
+    errorMessage = err instanceof Error ? err.message : String(err)
+    console.error(`[process-apf-job] error on job ${job.id}:`, errorMessage)
   }
 
-  // ── 4. Atualiza status final ─────────────────────────────────────────────
+  // ------------------------------------------------------------------
+  // 4. Atualiza status final
+  // ------------------------------------------------------------------
+  const currentAttempts = job.attempts + 1
+  const success = result !== null && errorMessage === null
+
   if (success) {
-    await admin.from("apf_jobs").update({
-      status:      "done",
-      result:      resultData,
-      finished_at: new Date().toISOString(),
-    }).eq("id", jobId);
+    await admin
+      .from('apf_jobs')
+      .update({
+        status: 'done',
+        result,
+        finished_at: new Date().toISOString(),
+        error_message: null,
+      })
+      .eq('id', job.id)
+
+    console.log(`[process-apf-job] job ${job.id} concluído com sucesso`)
   } else {
-    const isDead = attempts >= maxAttempts;
-    const nextStatus = isDead ? "dead" : "failed";
-    const nextAttempt = isDead
-      ? null
-      : new Date(Date.now() + nextAttemptDelay(attempts)).toISOString();
+    const hasRetry = currentAttempts < job.max_attempts
 
-    await admin.from("apf_jobs").update({
-      status:         nextStatus,
-      error_message:  errorMessage,
-      finished_at:    isDead ? new Date().toISOString() : null,
-      next_attempt_at: nextAttempt ?? new Date().toISOString(),
-    }).eq("id", jobId);
+    // Backoff exponencial: 2^attempts * 60 segundos
+    const backoffSeconds = Math.pow(2, currentAttempts) * 60
+    const nextAttempt = new Date(Date.now() + backoffSeconds * 1000).toISOString()
 
-    if (!isDead) {
-      // Recoloca como pending para nova tentativa
-      await admin.from("apf_jobs").update({ status: "pending" }).eq("id", jobId);
-      console.log(`[process-apf-job] Job ${jobId} will retry at ${nextAttempt}`);
+    await admin
+      .from('apf_jobs')
+      .update({
+        status: hasRetry ? 'failed' : 'dead',
+        error_message: errorMessage,
+        finished_at: hasRetry ? null : new Date().toISOString(),
+        next_attempt_at: hasRetry ? nextAttempt : null,
+      })
+      .eq('id', job.id)
+
+    if (hasRetry) {
+      console.warn(
+        `[process-apf-job] job ${job.id} falhou (tentativa ${currentAttempts}/${job.max_attempts}). ` +
+        `Retry em ${backoffSeconds}s`
+      )
     } else {
-      console.error(`[process-apf-job] Job ${jobId} is dead after ${attempts} attempts.`);
+      console.error(`[process-apf-job] job ${job.id} marcado como DEAD após ${currentAttempts} tentativas`)
     }
   }
 
   return new Response(
-    JSON.stringify({ jobId, status: success ? "done" : (attempts >= maxAttempts ? "dead" : "failed") }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-  );
-});
+    JSON.stringify({
+      job_id: job.id,
+      status: success ? 'done' : (currentAttempts < job.max_attempts ? 'failed' : 'dead'),
+      attempts: currentAttempts,
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  )
+})

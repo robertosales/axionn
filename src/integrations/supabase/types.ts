@@ -284,6 +284,75 @@ export type Database = {
           },
         ]
       }
+      apf_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          finished_at: string | null
+          generation_id: string | null
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          payload: Json
+          result: Json | null
+          started_at: string | null
+          status: string
+          team_id: string
+          type: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          generation_id?: string | null
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          payload?: Json
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          team_id: string
+          type?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          generation_id?: string | null
+          id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          payload?: Json
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          team_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_jobs_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "apf_generations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_jobs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_modules: {
         Row: {
           created_at: string | null
@@ -624,6 +693,13 @@ export type Database = {
             referencedRelation: "demandas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "demanda_eventos_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "nome_da_view"
+            referencedColumns: ["id"]
+          },
         ]
       }
       demanda_evidencias: {
@@ -678,6 +754,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "demandas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_evidencias_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "nome_da_view"
             referencedColumns: ["id"]
           },
         ]
@@ -749,6 +832,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "demandas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_hours_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "nome_da_view"
             referencedColumns: ["id"]
           },
         ]
@@ -853,6 +943,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "demanda_responsaveis_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "nome_da_view"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_demanda_responsaveis_user"
             columns: ["user_id"]
             isOneToOne: false
@@ -895,6 +992,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "demandas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_transitions_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "nome_da_view"
             referencedColumns: ["id"]
           },
         ]
@@ -2982,6 +3086,24 @@ export type Database = {
         }
         Relationships: []
       }
+      nome_da_view: {
+        Row: {
+          id: string | null
+          situacao: string | null
+          team_id: string | null
+          total_transitions: number | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demandas_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _assert_team_access: {
@@ -3005,6 +3127,32 @@ export type Database = {
           p_team_id: string
         }
         Returns: Json
+      }
+      claim_next_apf_job: {
+        Args: never
+        Returns: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          finished_at: string | null
+          generation_id: string | null
+          id: string
+          max_attempts: number
+          next_attempt_at: string
+          payload: Json
+          result: Json | null
+          started_at: string | null
+          status: string
+          team_id: string
+          type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "apf_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       delete_ai_provider_key: { Args: { p_id: string }; Returns: undefined }
       fn_audit_log_insert: {
@@ -3062,7 +3210,17 @@ export type Database = {
         }
         Returns: Json
       }
+      get_demandas_with_responsaveis: {
+        Args: { p_team_id: string }
+        Returns: Json
+      }
+      get_demandas_with_responsaveis_paged: {
+        Args: { p_cursor?: string; p_limit?: number; p_team_id: string }
+        Returns: Json[]
+      }
       get_my_module_access: { Args: never; Returns: string }
+      get_project_api_url: { Args: never; Returns: string }
+      get_service_role_key: { Args: never; Returns: string }
       get_sprint_history: {
         Args: { p_cutoff?: string; p_team_id?: string; p_team_ids: string[] }
         Returns: Json
@@ -3083,6 +3241,7 @@ export type Database = {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
       set_ai_provider_key: {
         Args: { p_key: string; p_provider: string }
         Returns: undefined

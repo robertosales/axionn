@@ -14,6 +14,11 @@
  *   - RPC get_ai_provider_key_by_id: erro não era capturado (silent failure)
  *   - Fallback LOVABLE_API_KEY: aceitava qualquer valor sem validar formato sk_...
  *   - Guard obrigatório antes do switch de chamada à IA
+ *
+ * FIX-002 — Service role bypass para worker interno (2026-06-01)
+ *   - Chamadas com Bearer SERVICE_ROLE_KEY bypassam auth.getUser()
+ *   - Permite que process-apf-job processe fila sem JWT de usuário
+ *   - Chamadas externas (frontend) mantêm validação JWT intacta
  */
 
 import {
@@ -59,23 +64,13 @@ interface FileInput {
 
 interface RequestBody {
   prompt: string;
-  providerId?: string; // novo — uuid da linha em ai_providers
-  provider?: Provider; // legado — tipo fixo (compat)
+  providerId?: string;
+  provider?: Provider;
   model?: string;
   files?: FileInput[];
   generationId?: string;
-  /**
-   * Modelo híbrido: chave inline informada pelo usuário (não persistida).
-   * Só é considerada quando o Vault não tem chave para este provider
-   * e o provider não é o Lovable AI.
-   */
   apiKey?: string;
-  /** Quando true, pula geração de .docx no servidor (frontend faz a conversão). */
   skipDocx?: boolean;
-  /**
-   * Modo de teste do provedor: usa um prompt fixo mínimo, ignora persistência,
-   * sem fallback automático — retorna { success, providerUsed, latencyMs, sample }.
-   */
   testMode?: boolean;
 }
 
@@ -107,7 +102,6 @@ async function resolveProvider(
     };
   }
 
-  // Modelo híbrido: provider temporário selecionado na tela com chave inline.
   if (!providerId && providerLegacy && providerLegacy !== "lovable" && bodyApiKey && bodyApiKey.trim().length >= 10) {
     return {
       providerType: providerLegacy as Provider,
@@ -127,7 +121,6 @@ async function resolveProvider(
     if (!data.is_active) throw new Error("Este provedor de IA está desativado.");
     row = data as any;
   } else if (providerLegacy) {
-    // compat: primeira linha ativa do tipo
     const { data } = await admin
       .from("ai_providers")
       .select("id,name,provider_type,model")
@@ -141,7 +134,6 @@ async function resolveProvider(
 
   if (!row) throw new Error("Nenhum provedor de IA selecionado/cadastrado.");
 
-  // ── FIX-001: Busca a key no Vault capturando o erro corretamente ──
   let apiKey: string | null = null;
   const { data: keyData, error: vaultErr } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id as any });
   if (vaultErr) {
@@ -152,10 +144,7 @@ async function resolveProvider(
     console.warn(`[VAULT] RPC retornou valor inesperado para provider "${row.name}":`, typeof keyData);
   }
 
-  // ── FIX-001: Fallback env — valida formato antes de aceitar ──
   if (!apiKey) {
-    // Fallback híbrido: aceita a chave informada inline pelo usuário na tela,
-    // mesmo quando o provider está cadastrado (providerId) mas sem chave no Vault.
     if (bodyApiKey && bodyApiKey.trim().length >= 10) {
       apiKey = bodyApiKey.trim();
       console.log(`[VAULT] Usando chave inline informada pelo usuário para provider "${row.name}".`);
@@ -166,7 +155,6 @@ async function resolveProvider(
     }
   }
 
-  // Cleanup model name for Google/Gemini
   let finalModel = row.model;
   if (row.provider_type === "gemini" && finalModel && finalModel.startsWith("google/")) {
     finalModel = finalModel.replace("google/", "");
@@ -392,7 +380,6 @@ async function persistResult(opts: {
   const { generationId, markdown, pfBreakdown, docxBase64, outputFilename } = opts;
   const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
-  // 1. Salvar docx no Storage
   let storagePath: string | null = null;
   try {
     const docxBytes = Uint8Array.from(atob(docxBase64), (c) => c.charCodeAt(0));
@@ -413,7 +400,6 @@ async function persistResult(opts: {
       .filter(([k]) => k !== "__total")
       .reduce((s, [, v]) => s + v, 0);
 
-  // 2. Atualizar registro em apf_generations
   await adminClient
     .from("apf_generations")
     .update({
@@ -435,9 +421,6 @@ function buildFullPrompt(prompt: string, processedFiles: { name: string; content
   return `Você é um especialista em Análise de Pontos de Função (APF) seguindo a metodologia IFPUG e o Guia de Métricas DPF.\n\nSiga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro.\n\nREGRA — BASELINE:\n- Se um arquivo de BASELINE APF foi fornecido, use a lista de itens para classificar cada funcionalidade:\n  - Impacto \"I\" (Inclusão) = funcionalidade NÃO existe no baseline\n  - Impacto \"A\" (Alteração) = funcionalidade JÁ EXISTE no baseline\n  - Impacto \"E\" (Exclusão) = funcionalidade foi removida\n- Calcule PF FS = PF Bruto × Contribuição FS do fator de impacto aplicado\n\nREGRA — FORMATO DO DOCUMENTO:\n- Use o modelo de documento fornecido como referência de estrutura e seções\n- Mantenha as mesmas seções numeradas: 1. Dados do Atendimento, 2. Contexto, 3. Tabela de Funcionalidades, 4. Funcionalidades Impactadas na Baseline, 5. Itens Não Identificados, 6. Banco de Dados, 7. Contagem de PF (7.1 Detalhamento, 7.2 Consolidado por HU, 7.3 Resumo Executivo), 8. Solicitação de Mudança, 9. Legenda\n- SEMPRE gere a seção 7.2 com a tabela: | HU / Escopo | Qtd. Funções | PF Bruto | PF FS |\n\nREGRA — TABELAS:\n- Use formato Markdown padrão com pipes e linha separadora\n- NÃO inclua tabela dentro de bloco de código\n\nREGRA CRÍTICA — PERGUNTAS NO PROMPT:\n- NÃO inclua perguntas literais no documento gerado\n- Se houver \"=== RESPOSTAS DO USUÁRIO ===\", incorpore as respostas naturalmente ao texto\n${ctx}\n=== INSTRUÇÕES DO USUÁRIO ===\n${prompt}`;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Erro tipado com status HTTP (para fallback e UX)
-// ─────────────────────────────────────────────────────────────
 class ProviderError extends Error {
   status: number;
   providerName: string;
@@ -448,7 +431,6 @@ class ProviderError extends Error {
   }
 }
 
-// Chamadas aos providers (apiKey vem do Vault, não do body)
 async function callLovable(p: string, k: string, m = "google/gemini-2.5-flash") {
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -475,7 +457,6 @@ async function callOpenAI(p: string, k: string, m = "gpt-4o-mini") {
 }
 async function callGemini(p: string, k: string, m = "gemini-2.0-flash") {
   if (m.startsWith("google/")) m = m.replace("google/", "");
-  // Saneamento: modelos antigos descontinuados → fallback para o atual estável
   if (/^gemini-1\.5-(flash|pro)(-latest)?$/i.test(m)) {
     m = "gemini-2.0-flash";
   }
@@ -521,7 +502,6 @@ async function callPerplexity(p: string, k: string, m = "sonar") {
   return text;
 }
 
-// Despacha a chamada pela tipologia do provider
 async function callProvider(type: Provider, prompt: string, apiKey: string, model?: string): Promise<string> {
   switch (type) {
     case "lovable":
@@ -537,7 +517,6 @@ async function callProvider(type: Provider, prompt: string, apiKey: string, mode
   }
 }
 
-// Lista de provedores ativos para fallback (ordenados: recomendados primeiro)
 async function listActiveProvidersForFallback(excludeId?: string) {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const { data } = await admin
@@ -558,7 +537,6 @@ async function getProviderKey(id: string, type: Provider): Promise<string | null
   return key;
 }
 
-// Erros recuperáveis → tentamos fallback
 function isFallbackableStatus(status: number): boolean {
   return status === 402 || status === 404 || status === 429 || (status >= 500 && status < 600);
 }
@@ -597,7 +575,6 @@ function mapErrorToReason(err: unknown): { reason: string; userMessage: string; 
         userMessage: `O serviço de IA "${err.providerName}" está temporariamente indisponível. Tente novamente em instantes.`,
       };
   }
-  const raw = err instanceof Error ? err.message : "Erro desconhecido";
   return {
     reason: "AI_PROVIDER_ERROR",
     status: 500,
@@ -759,7 +736,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // ── 1. Autenticação obrigatória ──
+    // ── 1. Autenticação: JWT de usuário ou service_role (worker interno) ──
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
@@ -767,23 +744,30 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-    const {
-      data: { user },
-      error: authErr,
-    } = await userClient.auth.getUser();
-    if (authErr || !user) {
-      return new Response(JSON.stringify({ error: "Token inválido" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+    const token = authHeader.slice(7);
+    const isServiceRole = SERVICE_KEY && token === SERVICE_KEY;
+
+    if (!isServiceRole) {
+      // Caminho normal: JWT de usuário — valida com auth.getUser()
+      const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+      const {
+        data: { user },
+        error: authErr,
+      } = await userClient.auth.getUser();
+      if (authErr || !user) {
+        return new Response(JSON.stringify({ error: "Token inválido" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
+    // isServiceRole === true: worker interno autenticado — bypassa auth.getUser()
 
     // ── 2. Parse e validação do body ──
     const body = (await req.json().catch(() => ({}))) as RequestBody;
     const { prompt, provider, providerId, model, files, generationId, testMode } = body;
 
-    // Em testMode, o prompt é opcional e substituído por um ping mínimo.
     if (!testMode && !prompt?.trim()) {
       return new Response(JSON.stringify({ error: "Prompt é obrigatório" }), {
         status: 400,
@@ -809,10 +793,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 3. Resolve o provider + busca a API key (Vault → env → body) ──
+    // ── 3. Resolve provider + API key ──
     const resolved = await resolveProvider(providerId, provider, body.apiKey);
 
-    // ── 3b. MODO TESTE: ping rápido, sem fallback nem persistência ──
+    // ── 3b. Modo teste ──
     if (testMode) {
       const t0 = Date.now();
       try {
@@ -860,7 +844,6 @@ Deno.serve(async (req: Request) => {
       processedFiles.push({ name: extracted.name, content: extracted.content });
     }
 
-    // ── 5. Chama a IA (guard anti-regressão: garante key válida antes de chamar) ──
     // ── 5. Chama a IA com fallback automático ──
     const fullPrompt = buildFullPrompt(prompt, processedFiles);
 
@@ -888,11 +871,9 @@ Deno.serve(async (req: Request) => {
       );
 
       if (!isFallbackableStatus(primaryStatus)) {
-        // erro não-recuperável → propaga
         throw primaryErr;
       }
 
-      // Tenta o próximo provider ativo (excluindo o que já falhou)
       const candidates = await listActiveProvidersForFallback(providerId);
       let succeeded = false;
       for (const cand of candidates) {
@@ -924,25 +905,16 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!succeeded) {
-        // Nenhum provider conseguiu → retorna estrutura amigável (sem quebrar a tela)
         const { reason, userMessage } = mapErrorToReason(primaryErr);
         if (generationId) {
           const admin = createClient(SUPABASE_URL, SERVICE_KEY);
           await admin
             .from("apf_generations")
-            .update({
-              status: "error",
-              error_message: userMessage,
-            })
+            .update({ status: "error", error_message: userMessage })
             .eq("id", generationId);
         }
         return new Response(
-          JSON.stringify({
-            success: false,
-            reason,
-            userMessage,
-            attempts,
-          }),
+          JSON.stringify({ success: false, reason, userMessage, attempts }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -983,18 +955,15 @@ Deno.serve(async (req: Request) => {
     else if (/invalid.*api.key|incorrect api key/i.test(raw))
       friendly = "Chave de API inválida para o provider. Contate o administrador.";
     else if (/401/i.test(raw))
-      friendly =
-        "Chave de API recusada pelo provider (401). Verifique a chave configurada no Vault ou na variável de ambiente.";
+      friendly = "Chave de API recusada pelo provider (401). Verifique a chave configurada no Vault ou na variável de ambiente.";
     else if (/rate limit|429/i.test(raw))
       friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
     else if (/não configurada/i.test(raw)) friendly = raw;
     const { reason, userMessage, status } = mapErrorToReason(e);
-    // Para erros recuperáveis (402/429/5xx) devolvemos 200 com payload tipado, evitando
-    // Runtime Error no cliente. Outros erros mantém status apropriado.
     const httpStatus = isFallbackableStatus(status) ? 200 : status >= 400 && status < 600 ? status : 500;
-    return new Response(JSON.stringify({ success: false, reason, userMessage: friendly !== raw ? friendly : userMessage, rawError: raw }), {
-      status: httpStatus,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ success: false, reason, userMessage: friendly !== raw ? friendly : userMessage, rawError: raw }),
+      { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 });

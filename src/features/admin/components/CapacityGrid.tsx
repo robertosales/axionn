@@ -20,9 +20,9 @@ export function CapacityGrid({ teamCapacities }: Props) {
       {teamCapacities.map(team => {
         const dias = daysLeft(team.sprintEndDate);
         return (
-          <div key={team.teamId} className="rounded-xl border border-border bg-card overflow-hidden">
+          <div key={team.teamId} className="rounded-lg border border-border bg-card overflow-hidden">
             {/* Header do time */}
-            <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between gap-3 flex-wrap">
+            <div className="px-4 py-3 border-b border-border bg-muted/60 flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 {team.module === "sala_agil"
                   ? <Zap    className="h-4 w-4 text-primary" />
@@ -38,7 +38,10 @@ export function CapacityGrid({ teamCapacities }: Props) {
                     <CalendarClock className="h-3.5 w-3.5" />
                     {team.sprintAtivo}
                     {dias !== null && (
-                      <Badge variant={dias <= 1 ? "destructive" : dias <= 3 ? "secondary" : "outline"} className="text-[9px] ml-1">
+                      <Badge
+                        variant={dias <= 1 ? "destructive" : dias <= 3 ? "secondary" : "outline"}
+                        className="text-[9px] ml-1"
+                      >
                         {dias <= 0 ? "expirado" : `${dias}d restantes`}
                       </Badge>
                     )}
@@ -61,16 +64,23 @@ export function CapacityGrid({ teamCapacities }: Props) {
             ) : (
               <div className="divide-y divide-border">
                 {team.devs.map(dev => (
-                  <div key={dev.devId} className={`px-4 py-3 grid grid-cols-12 gap-3 items-center ${
-                    dev.status === "overloaded" ? "bg-destructive/5" : ""
-                  }`}>
+                  <div
+                    key={dev.devId}
+                    className={`px-4 py-2 grid grid-cols-12 gap-3 items-center ${
+                      dev.status === "overloaded" ? "bg-destructive/5" : ""
+                    }`}
+                  >
                     {/* Nome */}
                     <div className="col-span-3 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        {dev.status === "overloaded" && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
-                        <span className="text-sm font-medium truncate">{dev.devName}</span>
+                        {dev.status === "overloaded" && (
+                          <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                        )}
+                        <span className="text-xs font-semibold truncate">{dev.devName}</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">{dev.wipCount} HU{dev.wipCount !== 1 ? "s" : ""} em andamento</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {dev.wipCount} HU{dev.wipCount !== 1 ? "s" : ""} em andamento
+                      </span>
                     </div>
 
                     {/* Barra de utilização */}

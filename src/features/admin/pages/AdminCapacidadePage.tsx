@@ -21,7 +21,7 @@ export function AdminCapacidadePage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-base font-semibold">Painel de Capacidade</h2>
+          <h2 className="text-sm font-semibold">Painel de Capacidade</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {loading ? "Carregando..." : (
               <>{totalDevs} desenvolvedor{totalDevs !== 1 ? "es" : ""} · {totalAllocHrs}h / {totalCapHrs}h alocadas ({globalPct}%){" "}
@@ -63,7 +63,7 @@ export function AdminCapacidadePage() {
 
       {/* Grade */}
       {loading
-        ? <div className="space-y-4">{[1,2].map(i => <Skeleton key={i} className="h-48 w-full rounded-xl" />)}</div>
+        ? <div className="space-y-4">{[1,2].map(i => <Skeleton key={i} className="h-48 w-full rounded-lg" />)}</div>
         : <CapacityGrid teamCapacities={teamCapacities} />}
     </div>
   );

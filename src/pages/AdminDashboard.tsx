@@ -14,6 +14,7 @@ import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
 import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
 import { AdminIAsPage }        from "@/features/admin/pages/AdminIAsPage";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
+import { ThemeToggle }         from "@/components/ThemeToggle";
 import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,13 +27,11 @@ import {
 
 // ---------------------------------------------------------------------------
 // STYLE GUIDE — Dashboard Admin (feature/redesign-ui-admin)
-// Sidebar:  bg-teal-700  w-60  fixed  h-screen  text-white
-// Logo:     topo da sidebar, branco, tamanho 36px
-// Nav item: px-4 py-2.5 rounded-lg hover:bg-teal-600 transition-colors
-// Nav item ativo: bg-teal-600 font-semibold
-// Conteudo: flex-1 overflow-auto  pl-60 (desktop)  pl-0 (mobile)
-// Topbar mobile: bg-teal-700 h-14 flex items-center justify-between
-// Paleta:   Teal principal #0f766e  |  hover #0d9488  |  ativo #0d9488
+// Sidebar light:  bg-teal-700  text-white
+// Sidebar dark:   bg-[hsl(var(--sidebar))]  text-sidebar-foreground
+// Nav item ativo: bg-teal-600 (light) | bg-accent (dark)
+// Topbar:         bg-background/95 backdrop-blur (tematico)
+// Paleta teal:    #0f766e (primary light) | hsl(var(--primary)) (dark)
 // ---------------------------------------------------------------------------
 
 const NAV_ITEMS = [
@@ -55,7 +54,6 @@ export default function AdminDashboard() {
   const [activePage, setActivePage]     = useState<PageKey>("visao-geral");
   const [sidebarOpen, setSidebarOpen]   = useState(false);
 
-  // Relogio atualizado a cada 30 segundos (fix #5)
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -64,7 +62,6 @@ export default function AdminDashboard() {
   const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const data = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
-  // Sprint label (fix #3)
   const sprintLabel = selectedTeam === "all"
     ? (() => {
         const comSprint = byTeam.filter(t => t.sprintAtivo);
@@ -76,25 +73,28 @@ export default function AdminDashboard() {
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
 
-  // ── Sidebar component (inline, sem criar arquivo extra) ──────────────────
+  // ── Sidebar ────────────────────────────────────────────────────────────────
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
       className={[
-        "bg-teal-700 text-white flex flex-col h-screen",
+        // Light: teal-700 | Dark: variavel --sidebar (marrom escuro quente)
+        "bg-teal-700 dark:bg-[hsl(var(--sidebar))]",
+        "text-white dark:text-[hsl(var(--sidebar-foreground))]",
+        "flex flex-col h-screen transition-colors duration-250",
         mobile
           ? "w-64"
           : "fixed top-0 left-0 w-60 z-30 hidden lg:flex",
       ].join(" ")}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-teal-600">
-        <AxionLogo size={36} className="brightness-0 invert" />
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-teal-600 dark:border-[hsl(var(--border))]">
+        <AxionLogo size={36} className="brightness-0 invert dark:brightness-100 dark:invert-0" />
         <span className="text-lg font-bold tracking-tight">
-          Axi<span className="text-yellow-300">o</span>n
+          Axi<span className="text-yellow-300 dark:text-[hsl(var(--primary))]">o</span>n
         </span>
         {mobile && (
           <button
-            className="ml-auto text-white/70 hover:text-white"
+            className="ml-auto text-white/70 hover:text-white dark:text-[hsl(var(--sidebar-foreground)/0.7)] dark:hover:text-[hsl(var(--sidebar-foreground))]"
             onClick={() => setSidebarOpen(false)}
             aria-label="Fechar menu"
           >
@@ -103,7 +103,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Navegacao */}
+      {/* Navegação */}
       <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Navegação admin">
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
           <button
@@ -112,8 +112,8 @@ export default function AdminDashboard() {
             className={[
               "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
               activePage === key
-                ? "bg-teal-600 text-white"
-                : "text-teal-100 hover:bg-teal-600 hover:text-white",
+                ? "bg-teal-600 text-white dark:bg-[hsl(var(--accent))] dark:text-[hsl(var(--accent-foreground))]"
+                : "text-teal-100 hover:bg-teal-600 hover:text-white dark:text-[hsl(var(--sidebar-foreground)/0.75)] dark:hover:bg-[hsl(var(--accent))] dark:hover:text-[hsl(var(--accent-foreground))]",
             ].join(" ")}
             aria-current={activePage === key ? "page" : undefined}
           >
@@ -123,19 +123,22 @@ export default function AdminDashboard() {
         ))}
       </nav>
 
-      {/* Rodape: usuario + sair */}
-      <div className="px-4 py-4 border-t border-teal-600 space-y-2">
-        <div className="flex items-center gap-2 text-xs text-teal-200">
+      {/* Rodapé: usuário + sair */}
+      <div className="px-4 py-4 border-t border-teal-600 dark:border-[hsl(var(--border))] space-y-2">
+        <div className="flex items-center gap-2 text-xs text-teal-200 dark:text-[hsl(var(--muted-foreground))]">
           <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="truncate">{profile?.display_name || "Admin"}</span>
-          <Badge variant="secondary" className="ml-auto text-[9px] shrink-0">
+          <Badge
+            variant="secondary"
+            className="ml-auto text-[9px] shrink-0 bg-teal-600/60 text-teal-100 border-transparent dark:bg-[hsl(var(--secondary))] dark:text-[hsl(var(--secondary-foreground))]"
+          >
             {teams.length} time{teams.length !== 1 ? "s" : ""}
           </Badge>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start text-teal-100 hover:bg-teal-600 hover:text-white h-8 text-xs gap-2"
+          className="w-full justify-start text-teal-100 hover:bg-teal-600 hover:text-white dark:text-[hsl(var(--sidebar-foreground)/0.75)] dark:hover:bg-[hsl(var(--accent))] dark:hover:text-[hsl(var(--accent-foreground))] h-8 text-xs gap-2"
           onClick={handleSignOut}
         >
           <LogOut className="h-3.5 w-3.5" aria-hidden="true" /> Sair
@@ -144,7 +147,7 @@ export default function AdminDashboard() {
     </aside>
   );
 
-  // ── Conteúdo da aba ativa ────────────────────────────────────────────────
+  // ── Conteúdo da aba ativa ───────────────────────────────────────────────
   const renderContent = () => {
     switch (activePage) {
       case "historico":  return <AdminHistoricoPage />;
@@ -157,8 +160,6 @@ export default function AdminDashboard() {
           {loading ? <Skeleton className="h-40 w-full rounded-xl" /> : <ModuleQuickAccess kpis={g} />}
           {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SalaAgilKpis kpis={g} sprintAtivo={sprintLabel} />}
           {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SustentacaoKpis kpis={g} />}
-
-          {/* Grid de duas colunas: tabela + grafico */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div>
               {loading
@@ -197,13 +198,12 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Area principal */}
+      {/* Área principal */}
       <div className="flex-1 flex flex-col min-w-0 lg:pl-60">
         {/* Topbar */}
         <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border">
           <div className="h-14 px-4 md:px-6 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              {/* Botao hamburger — visivel so em mobile */}
               <button
                 className="lg:hidden text-muted-foreground hover:text-foreground"
                 onClick={() => setSidebarOpen(true)}
@@ -218,7 +218,9 @@ export default function AdminDashboard() {
                 <p className="text-[11px] text-muted-foreground hidden sm:block">{data} · {hora}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            {/* Ações da topbar */}
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
               {!loading && (
                 <NotificationBell
                   notifications={notifications}
@@ -230,7 +232,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        {/* Conteudo */}
+        {/* Conteúdo */}
         <main className="flex-1 px-4 md:px-6 py-6">
           {dataWarnings.length > 0 && (
             <Alert variant="destructive" className="mb-6">

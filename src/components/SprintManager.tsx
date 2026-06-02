@@ -4,7 +4,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,20 +39,20 @@ export function SprintManager() {
   const [goal, setGoal]           = useState("");
   const [errors, setErrors]       = useState<Record<string, string>>({});
 
-  const [confirmCloseId, setConfirmCloseId]             = useState<string | null>(null);
-  const [impedimentSprintId, setImpedimentSprintId]     = useState<string | null>(null);
-  const [impedimentReason, setImpedimentReason]         = useState("");
-  const [impedimentStartedAt, setImpedimentStartedAt]   = useState(todayISO);
-  const [detailSprint, setDetailSprint]                 = useState<any | null>(null);
+  const [confirmCloseId, setConfirmCloseId]           = useState<string | null>(null);
+  const [impedimentSprintId, setImpedimentSprintId]   = useState<string | null>(null);
+  const [impedimentReason, setImpedimentReason]       = useState("");
+  const [impedimentStartedAt, setImpedimentStartedAt] = useState(todayISO);
+  const [detailSprint, setDetailSprint]               = useState<any | null>(null);
 
   const resetForm = () => { setName(""); setStartDate(""); setEndDate(""); setGoal(""); setErrors({}); setEditId(null); };
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!name.trim()) e.name = "Nome da sprint é obrigatório";
-    if (!startDate)   e.startDate = "Data de início é obrigatória";
-    if (!endDate)     e.endDate   = "Data de término é obrigatória";
-    if (startDate && endDate && startDate >= endDate) e.endDate = "Data fim deve ser posterior à data início";
+    if (!name.trim()) e.name = "Nome da sprint \u00e9 obrigat\u00f3rio";
+    if (!startDate)   e.startDate = "Data de in\u00edcio \u00e9 obrigat\u00f3ria";
+    if (!endDate)     e.endDate   = "Data de t\u00e9rmino \u00e9 obrigat\u00f3ria";
+    if (startDate && endDate && startDate >= endDate) e.endDate = "Data fim deve ser posterior \u00e0 data in\u00edcio";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -81,7 +80,7 @@ export function SprintManager() {
   const handleRemoveSprint = (sprintId: string) => {
     const sprintHUs = userStories.filter((hu: any) => hu.sprintId === sprintId);
     if (sprintHUs.length > 0) {
-      toast.error(`Não é possível excluir: esta Sprint possui ${sprintHUs.length} HU(s) vinculada(s). Remova-as primeiro.`);
+      toast.error(`N\u00e3o \u00e9 poss\u00edvel excluir: esta Sprint possui ${sprintHUs.length} HU(s) vinculada(s). Remova-as primeiro.`);
       return;
     }
     removeSprint(sprintId);
@@ -97,7 +96,7 @@ export function SprintManager() {
   const getSprintProgress = (sprintId: string) => {
     const sprintHUs = userStories.filter((hu: any) => hu.sprintId === sprintId);
     if (sprintHUs.length === 0) return { totalPoints: 0, completedPoints: 0, percent: 0 };
-    const lastCol = workflowColumns[workflowColumns.length - 1]?.key;
+    const lastCol         = workflowColumns[workflowColumns.length - 1]?.key;
     const totalPoints     = sprintHUs.reduce((s: number, hu: any) => s + (hu.storyPoints ?? 0), 0);
     const completedPoints = sprintHUs.filter((hu: any) => hu.status === lastCol).reduce((s: number, hu: any) => s + (hu.storyPoints ?? 0), 0);
     return { totalPoints, completedPoints, percent: totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100) : 0 };
@@ -108,10 +107,7 @@ export function SprintManager() {
     if (!reason) { toast.error("Informe o motivo do impedimento."); return; }
     try {
       if (typeof addImpediment === "function") {
-        await addImpediment({ sprintId: impedimentSprintId }, {
-          reason,
-          startedAt: impedimentStartedAt || undefined,
-        });
+        await addImpediment({ sprintId: impedimentSprintId }, { reason, startedAt: impedimentStartedAt || undefined });
       }
       toast.success("Impedimento registrado na sprint.");
       setImpedimentSprintId(null); setImpedimentReason(""); setImpedimentStartedAt(todayISO());
@@ -122,6 +118,8 @@ export function SprintManager() {
 
   return (
     <div className="space-y-4">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap className="h-5 w-5 text-primary" />
@@ -131,7 +129,9 @@ export function SprintManager() {
         {canCreate && (
           <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
             <DialogTrigger asChild>
-              <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Nova Sprint</Button>
+              <Button size="sm" className="gap-1.5">
+                <Plus className="h-4 w-4" /> Nova Sprint
+              </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -143,27 +143,34 @@ export function SprintManager() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label>Nome <span className="text-destructive">*</span></Label>
-                  <Input value={name} onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: "" })); }} placeholder="Sprint 1" className="mt-1" />
+                  <Input value={name}
+                    onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: "" })); }}
+                    placeholder="Sprint 1" className="mt-1" />
                   {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Início <span className="text-destructive">*</span></Label>
-                    <Input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setErrors((p) => ({ ...p, startDate: "" })); }} className="mt-1" />
+                    <Label>In\u00edcio <span className="text-destructive">*</span></Label>
+                    <Input type="date" value={startDate}
+                      onChange={(e) => { setStartDate(e.target.value); setErrors((p) => ({ ...p, startDate: "" })); }}
+                      className="mt-1" />
                     {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
                   </div>
                   <div>
                     <Label>Fim <span className="text-destructive">*</span></Label>
-                    <Input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setErrors((p) => ({ ...p, endDate: "" })); }} className="mt-1" />
+                    <Input type="date" value={endDate}
+                      onChange={(e) => { setEndDate(e.target.value); setErrors((p) => ({ ...p, endDate: "" })); }}
+                      className="mt-1" />
                     {errors.endDate && <p className="text-xs text-destructive mt-1">{errors.endDate}</p>}
                   </div>
                 </div>
                 <div>
                   <Label>Objetivo da Sprint</Label>
-                  <Textarea value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="O que esperamos entregar nessa sprint?" className="mt-1" />
+                  <Textarea value={goal} onChange={(e) => setGoal(e.target.value)}
+                    placeholder="O que esperamos entregar nessa sprint?" className="mt-1" />
                 </div>
                 <Button type="submit" className="w-full gap-2">
-                  <Zap className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar Sprint"}
+                  <Zap className="h-4 w-4" /> {editId ? "Salvar Altera\u00e7\u00f5es" : "Criar Sprint"}
                 </Button>
               </form>
             </DialogContent>
@@ -171,29 +178,40 @@ export function SprintManager() {
         )}
       </div>
 
-      <div className="flex gap-3 flex-wrap">
+      {/* Grid de sprints — 1 coluna em mobile, 2 em md, 3 em xl */}
+      {/* Cada card ocupa 100% da c\u00e9lula, sem min-width fixo */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {sprints.map((sprint: any) => {
           const progress  = getSprintProgress(sprint.id);
           const sprintHUs = userStories.filter((hu: any) => hu.sprintId === sprint.id);
           return (
             <ContextMenu key={sprint.id}>
               <ContextMenuTrigger asChild>
-                <Card
-                  className={`cursor-pointer transition-all hover:shadow-md min-w-[280px] group ${
-                    sprint.isActive ? "ring-2 ring-primary shadow-md" : "opacity-70 hover:opacity-100"
-                  }`}
+                <div
+                  className={[
+                    "group relative rounded-xl border bg-card cursor-pointer",
+                    "transition-all duration-150 hover:shadow-md",
+                    sprint.isActive
+                      ? "border-primary shadow-sm ring-1 ring-primary/40"
+                      : "border-border opacity-80 hover:opacity-100",
+                  ].join(" ")}
                   onClick={() => !sprint.closedAt && setActiveSprint(sprint.id)}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-sm">{sprint.name}</span>
-                      <div className="flex items-center gap-1">
-                        {/* Badge de status semântico — usa getSprintStatus() internamente */}
+                  {/* Faixa superior colorida para sprint ativa */}
+                  {sprint.isActive && (
+                    <div className="absolute top-0 left-0 right-0 h-[3px] rounded-t-xl bg-primary" />
+                  )}
+
+                  <div className="p-4">
+                    {/* Linha 1: nome + status + a\u00e7\u00f5es */}
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-semibold text-sm leading-snug flex-1">{sprint.name}</span>
+                      <div className="flex items-center gap-1 shrink-0">
                         <SprintStatusBadge sprint={sprint} />
                         {canEdit && !sprint.closedAt && (
                           <Button
                             variant="ghost" size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={(e) => { e.stopPropagation(); openEdit(sprint.id); }}
                           >
                             <Pencil className="h-3 w-3" />
@@ -202,7 +220,7 @@ export function SprintManager() {
                         {canDelete && !sprint.isActive && (
                           <Button
                             variant="ghost" size="icon"
-                            className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100"
+                            className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={(e) => { e.stopPropagation(); handleRemoveSprint(sprint.id); }}
                           >
                             <Trash2 className="h-3 w-3" />
@@ -210,28 +228,36 @@ export function SprintManager() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(sprint.startDate).toLocaleDateString("pt-BR")} — {new Date(sprint.endDate).toLocaleDateString("pt-BR")}
+
+                    {/* Linha 2: datas */}
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      {new Date(sprint.startDate).toLocaleDateString("pt-BR")} \u2014 {new Date(sprint.endDate).toLocaleDateString("pt-BR")}
                     </div>
+
+                    {/* Linha 3: objetivo */}
                     {sprint.goal && (
                       <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1.5">
                         <Target className="h-3 w-3 mt-0.5 shrink-0" />
                         <span className="line-clamp-2">{sprint.goal}</span>
                       </div>
                     )}
+
+                    {/* Linha 4: progress */}
                     {sprintHUs.length > 0 && (
-                      <div className="mt-3 space-y-1">
+                      <div className="mt-3 space-y-1.5 pt-3 border-t border-border/50">
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                           <span>{progress.completedPoints}/{progress.totalPoints} pts</span>
                           <span className="font-semibold">{progress.percent}%</span>
                         </div>
                         <Progress value={progress.percent} className="h-1.5" />
-                        <div className="text-[10px] text-muted-foreground">{sprintHUs.length} HU{sprintHUs.length !== 1 ? "s" : ""}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {sprintHUs.length} HU{sprintHUs.length !== 1 ? "s" : ""}
+                        </div>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </ContextMenuTrigger>
 
               <ContextMenuContent className="w-52">
@@ -252,7 +278,10 @@ export function SprintManager() {
                 {sprint.isActive && (
                   <>
                     <ContextMenuSeparator />
-                    <ContextMenuItem onClick={(e) => { e.stopPropagation(); setImpedimentReason(""); setImpedimentStartedAt(todayISO()); setImpedimentSprintId(sprint.id); }}>
+                    <ContextMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      setImpedimentReason(""); setImpedimentStartedAt(todayISO()); setImpedimentSprintId(sprint.id);
+                    }}>
                       <AlertTriangle className="h-3.5 w-3.5 mr-2 text-amber-500" />Inserir Impedimento
                     </ContextMenuItem>
                   </>
@@ -263,13 +292,13 @@ export function SprintManager() {
         })}
 
         {sprints.length === 0 && (
-          <Card className="border-dashed w-full">
-            <CardContent className="py-10 text-center text-muted-foreground">
+          <div className="col-span-full rounded-xl border border-dashed border-border">
+            <div className="py-10 text-center text-muted-foreground">
               <Zap className="h-10 w-10 mx-auto mb-2 opacity-30" />
               <p className="font-medium">Nenhuma Sprint criada</p>
-              <p className="text-sm mt-1">Crie sua primeira Sprint para começar a gerenciar o backlog</p>
-            </CardContent>
-          </Card>
+              <p className="text-sm mt-1">Crie sua primeira Sprint para come\u00e7ar a gerenciar o backlog</p>
+            </div>
+          </div>
         )}
       </div>
 
@@ -281,9 +310,9 @@ export function SprintManager() {
             <AlertDialogDescription>
               Tem certeza que deseja encerrar a sprint{" "}
               <strong>{sprints.find((s: any) => s.id === confirmCloseId)?.name}</strong>?
-              Esta ação registrará a data de encerramento e calculará os dias de atraso.
+              Esta a\u00e7\u00e3o registrar\u00e1 a data de encerramento e calcular\u00e1 os dias de atraso.
               <br /><br />
-              <span className="text-destructive font-medium">Esta ação não pode ser desfeita.</span>
+              <span className="text-destructive font-medium">Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -301,7 +330,8 @@ export function SprintManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Inserir Impedimento</AlertDialogTitle>
             <AlertDialogDescription>
-              Registrar um impedimento direto na sprint <strong>{sprints.find((s: any) => s.id === impedimentSprintId)?.name}</strong>.
+              Registrar um impedimento direto na sprint{" "}
+              <strong>{sprints.find((s: any) => s.id === impedimentSprintId)?.name}</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2 space-y-3">
@@ -314,19 +344,16 @@ export function SprintManager() {
                 placeholder="Descreva o impedimento..."
                 value={impedimentReason}
                 onChange={(e) => setImpedimentReason(e.target.value)}
-                rows={3}
-                className="resize-none text-sm"
-                autoFocus
+                rows={3} className="resize-none text-sm" autoFocus
               />
             </div>
             <div>
               <Label htmlFor="sprint-impediment-started" className="text-sm mb-1.5 block">
-                Data de início do impedimento
+                Data de in\u00edcio do impedimento
               </Label>
               <Input
                 id="sprint-impediment-started"
-                type="date"
-                value={impedimentStartedAt}
+                type="date" value={impedimentStartedAt}
                 onChange={(e) => setImpedimentStartedAt(e.target.value)}
                 className="text-sm"
               />
@@ -364,10 +391,10 @@ export function SprintManager() {
               <div className="space-y-4 pt-2">
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  {new Date(detailSprint.startDate).toLocaleDateString("pt-BR")} — {new Date(detailSprint.endDate).toLocaleDateString("pt-BR")}
+                  {new Date(detailSprint.startDate).toLocaleDateString("pt-BR")} \u2014 {new Date(detailSprint.endDate).toLocaleDateString("pt-BR")}
                   {detailSprint.closedAt && (
                     <span className="ml-2 text-xs text-muted-foreground">
-                      · Encerrada em {new Date(detailSprint.closedAt).toLocaleDateString("pt-BR")}
+                      \u00b7 Encerrada em {new Date(detailSprint.closedAt).toLocaleDateString("pt-BR")}
                       {detailSprint.delayDays > 0 && (
                         <span className="text-red-500 font-semibold ml-1">(+{detailSprint.delayDays}d atraso)</span>
                       )}
@@ -383,7 +410,7 @@ export function SprintManager() {
                 <div className="grid grid-cols-3 gap-3 text-center">
                   {[
                     { label: "HUs",        value: sprintHUs.length },
-                    { label: "Concluídas", value: done },
+                    { label: "Conclu\u00eddas", value: done },
                     { label: "Progresso",  value: `${progress.percent}%` },
                   ].map(({ label, value }) => (
                     <div key={label} className="rounded-md border bg-muted/30 p-3">

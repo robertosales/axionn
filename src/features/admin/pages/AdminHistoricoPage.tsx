@@ -29,14 +29,14 @@ export function AdminHistoricoPage() {
     teams,
   });
 
-  const [selected,      setSelected]      = useState<SprintMetrics | null>(null);
-  const [reportOpen,    setReportOpen]    = useState(false);
+  const [selected,   setSelected]   = useState<SprintMetrics | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const handleExport = (config: ReportConfig, format: "pdf" | "excel") => {
     try {
       const payload = buildPayload(config);
-      if (format === "pdf")   exportToPDF(payload);
-      else                    exportToExcel(payload);
+      if (format === "pdf") exportToPDF(payload);
+      else                  exportToExcel(payload);
       toast.success(`Relatório ${format.toUpperCase()} gerado com sucesso!`);
       setReportOpen(false);
     } catch (e) {
@@ -50,11 +50,15 @@ export function AdminHistoricoPage() {
       {/* Header + Filtros + Botão exportar */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-base font-semibold">Histórico de Sprints</h2>
+          <h2 className="text-sm font-semibold">Histórico de Sprints</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {loading ? "Carregando..." : (
-              <>{metrics.length} sprint{metrics.length !== 1 ? "s" : ""} encerrado{metrics.length !== 1 ? "s" : ""}{" "}
-              <Badge variant="outline" className="text-[10px] ml-1">{filters.periodo === "all" ? "todo o histórico" : `últimos ${filters.periodo}`}</Badge></>
+              <>
+                {metrics.length} sprint{metrics.length !== 1 ? "s" : ""} encerrado{metrics.length !== 1 ? "s" : ""}{" "}
+                <Badge variant="outline" className="text-[10px] ml-1">
+                  {filters.periodo === "all" ? "todo o histórico" : `últimos ${filters.periodo}`}
+                </Badge>
+              </>
             )}
           </p>
         </div>
@@ -68,9 +72,9 @@ export function AdminHistoricoPage() {
 
       {loading ? (
         <div className="space-y-4">
-          <Skeleton className="h-56 w-full rounded-xl" />
-          <Skeleton className="h-48 w-full rounded-xl" />
-          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-56 w-full rounded-lg" />
+          <Skeleton className="h-48 w-full rounded-lg" />
+          <Skeleton className="h-64 w-full rounded-lg" />
         </div>
       ) : (
         <>
@@ -82,8 +86,8 @@ export function AdminHistoricoPage() {
         </>
       )}
 
-      <SprintDetailDrawer  sprint={selected}    onClose={() => setSelected(null)} />
-      <ReportConfigDialog  open={reportOpen}    teams={teams} onClose={() => setReportOpen(false)} onExport={handleExport} />
+      <SprintDetailDrawer sprint={selected}   onClose={() => setSelected(null)} />
+      <ReportConfigDialog open={reportOpen}   teams={teams} onClose={() => setReportOpen(false)} onExport={handleExport} />
     </div>
   );
 }

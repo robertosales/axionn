@@ -2,30 +2,43 @@ import { Badge } from "@/components/ui/badge";
 import type { ReactNode } from "react";
 
 interface Props {
-  title:       string;
-  value:       string | number;
-  subtitle?:   string;
-  icon:        ReactNode;
-  trend?:      { value: number; label: string }; // positivo = bom
-  variant?:    "default" | "success" | "warning" | "danger";
+  title:     string;
+  value:     string | number;
+  subtitle?: string;
+  icon:      ReactNode;
+  trend?:    { value: number; label: string };
+  variant?:  "default" | "success" | "warning" | "danger";
 }
 
-const VARIANT_STYLES = {
-  default: "border-border",
-  success: "border-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/20",
-  warning: "border-orange-300 bg-orange-50/40 dark:bg-orange-950/20",
-  danger:  "border-red-300 bg-red-50/40 dark:bg-red-950/20",
+// Tokens exatos Opção A — borda superior fina por status
+const ACCENT_COLOR: Record<NonNullable<Props["variant"]>, string> = {
+  default: "#0bbcaf",  // --teal
+  success: "#16a34a",  // --green
+  warning: "#d97706",  // --amber
+  danger:  "#dc2626",  // --red
 };
 
 export function KPICard({ title, value, subtitle, icon, trend, variant = "default" }: Props) {
+  const accentColor = ACCENT_COLOR[variant];
+
   return (
-    <div className={`rounded-xl border-2 ${VARIANT_STYLES[variant]} bg-card p-4 space-y-2`}>
+    <div
+      className="rounded-xl bg-card p-4 space-y-2"
+      style={{
+        borderTop:    `3px solid ${accentColor}`,
+        border:       `1px solid hsl(var(--border))`,
+        borderTopColor: accentColor,          // garante prioridade
+        boxShadow:    "0 1px 4px rgba(0,0,0,0.06)",
+      }}
+    >
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground font-medium">{title}</p>
-        <span className="text-muted-foreground opacity-60">{icon}</span>
+        <span style={{ color: accentColor, opacity: 0.75 }}>{icon}</span>
       </div>
       <div className="flex items-end justify-between gap-2">
-        <p className="text-2xl font-bold leading-none">{value}</p>
+        <p className="text-2xl font-bold leading-none" style={{ color: "hsl(var(--foreground))" }}>
+          {value}
+        </p>
         {trend && (
           <Badge
             variant="outline"
@@ -39,7 +52,9 @@ export function KPICard({ title, value, subtitle, icon, trend, variant = "defaul
           </Badge>
         )}
       </div>
-      {subtitle && <p className="text-[11px] text-muted-foreground">{subtitle}</p>}
+      {subtitle && (
+        <p className="text-[11px] text-muted-foreground">{subtitle}</p>
+      )}
     </div>
   );
 }

@@ -30,13 +30,18 @@ export function DashboardPage() {
   const { currentSprint: cs, devMetrics, statusDistribution, burndown, openImpediments, totalBacklog, avgVelocity } = data;
 
   return (
-    <div className="space-y-6 p-4 max-w-6xl mx-auto">
-      {/* Header */}
+    <div
+      className="space-y-5 p-5 max-w-6xl mx-auto"
+      style={{ color: "hsl(var(--foreground))" }}
+    >
+      {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
-          <LayoutDashboard className="h-5 w-5 text-primary" />
+          <LayoutDashboard className="h-5 w-5" style={{ color: "#0bbcaf" }} />
           <h1 className="text-lg font-bold">Dashboard</h1>
-          {cs && <Badge variant="outline" className="text-[10px]">{cs.sprintName}</Badge>}
+          {cs && (
+            <Badge variant="outline" className="text-[10px]">{cs.sprintName}</Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Select value={period} onValueChange={v => setPeriod(v as any)}>
@@ -54,7 +59,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* ── KPIs — 4 cards com border-top colorida ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KPICard
           title="Velocity média"
@@ -85,13 +90,20 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Burndown + Status */}
+      {/* ── Burndown + Distribuição de Status ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Burndown */}
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div
+          className="rounded-xl p-4 space-y-3"
+          style={{
+            background:  "hsl(var(--card))",
+            border:      "1px solid hsl(var(--border))",
+            boxShadow:   "0 1px 4px rgba(0,0,0,0.06)",
+          }}
+        >
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold flex items-center gap-1.5">
-              <TrendingUp className="h-4 w-4 text-primary" /> Burndown
+              <TrendingUp className="h-4 w-4" style={{ color: "#0bbcaf" }} /> Burndown
             </h2>
             {cs && <Badge variant="outline" className="text-[10px]">{cs.donePoints}/{cs.totalPoints} pts</Badge>}
           </div>
@@ -99,9 +111,16 @@ export function DashboardPage() {
         </div>
 
         {/* Distribuição de status */}
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div
+          className="rounded-xl p-4 space-y-3"
+          style={{
+            background:  "hsl(var(--card))",
+            border:      "1px solid hsl(var(--border))",
+            boxShadow:   "0 1px 4px rgba(0,0,0,0.06)",
+          }}
+        >
           <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <ListTodo className="h-4 w-4 text-primary" /> Status das HUs
+            <ListTodo className="h-4 w-4" style={{ color: "#0bbcaf" }} /> Status das HUs
           </h2>
           {statusDistribution.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-8">Sem HUs no sprint ativo.</p>
@@ -122,7 +141,7 @@ export function DashboardPage() {
                         <span className="text-muted-foreground text-[10px]">({pct}%)</span>
                       </div>
                     </div>
-                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "hsl(var(--muted))" }}>
                       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: s.color }} />
                     </div>
                   </div>
@@ -133,30 +152,48 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Velocity histórico */}
-      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+      {/* ── Velocity histórico ── */}
+      <div
+        className="rounded-xl p-4 space-y-3"
+        style={{
+          background: "hsl(var(--card))",
+          border:     "1px solid hsl(var(--border))",
+          boxShadow:  "0 1px 4px rgba(0,0,0,0.06)",
+        }}
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <Zap className="h-4 w-4 text-primary" /> Velocity por Sprint
+            <Zap className="h-4 w-4" style={{ color: "#0bbcaf" }} /> Velocity por Sprint
           </h2>
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded bg-indigo-400/40" /> Total</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded bg-emerald-400/80" /> Concluído</span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded" style={{ background: "rgba(99,102,241,0.4)" }} /> Total
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded" style={{ background: "rgba(34,197,94,0.8)" }} /> Concluído
+            </span>
           </div>
         </div>
         <VelocityChart sprints={filteredHistory} />
       </div>
 
-      {/* Performance por dev */}
+      {/* ── Performance por dev ── */}
       {devMetrics.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div
+          className="rounded-xl p-4 space-y-3"
+          style={{
+            background: "hsl(var(--card))",
+            border:     "1px solid hsl(var(--border))",
+            boxShadow:  "0 1px 4px rgba(0,0,0,0.06)",
+          }}
+        >
           <h2 className="text-sm font-semibold flex items-center gap-1.5">
-            <Users className="h-4 w-4 text-primary" /> Performance por Dev
+            <Users className="h-4 w-4" style={{ color: "#0bbcaf" }} /> Performance por Dev
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border">
+                <tr style={{ borderBottom: "1px solid hsl(var(--border))" }}>
                   <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Dev</th>
                   <th className="text-right py-2 px-3 font-medium text-muted-foreground">HUs</th>
                   <th className="text-right py-2 px-3 font-medium text-muted-foreground">Concluídas</th>
@@ -169,13 +206,20 @@ export function DashboardPage() {
               </thead>
               <tbody>
                 {devMetrics.map(d => (
-                  <tr key={d.devId} className="border-b border-border/40 hover:bg-muted/30 transition-colors">
+                  <tr
+                    key={d.devId}
+                    className="transition-colors"
+                    style={{ borderBottom: "1px solid hsl(var(--border) / 0.4)" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "hsl(var(--muted) / 0.4)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
                     <td className="py-2 pr-4">
                       <div className="flex items-center gap-2">
                         {d.devAvatar ? (
                           <img src={d.devAvatar} alt={d.devName} className="h-6 w-6 rounded-full object-cover" />
                         ) : (
-                          <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                          <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                            style={{ background: "rgba(11,188,175,0.15)", color: "#0bbcaf" }}>
                             {d.devName.charAt(0)}
                           </div>
                         )}
@@ -190,10 +234,13 @@ export function DashboardPage() {
                     </td>
                     <td className="text-right py-2">
                       <div className="flex items-center justify-end gap-1">
-                        <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: "hsl(var(--muted))" }}>
                           <div
-                            className="h-full bg-emerald-400 rounded-full"
-                            style={{ width: `${d.totalHUs > 0 ? Math.round((d.doneHUs / d.totalHUs) * 100) : 0}%` }}
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${d.totalHUs > 0 ? Math.round((d.doneHUs / d.totalHUs) * 100) : 0}%`,
+                              background: "#16a34a",
+                            }}
                           />
                         </div>
                         <span className="text-[10px] text-muted-foreground tabular-nums">

@@ -19,7 +19,27 @@ const SITUACAO_HEX: Record<string, string> = {
   homologada: "#10b981", fila_producao: "#14b8a6", producao: "#22c55e", aceite_final: "#84cc16",
 };
 
+/**
+ * Lookup reverso: se o label corresponde a um status padrão em SITUACAO_LABELS,
+ * retorna a key canônica original (ex: "fila_atendimento") em vez do slug
+ * derivado do nome (que seria "fila_de_atendimento" e nunca casaria com
+ * demanda.situacao). Para etapas customizadas sem correspondência, gera
+ * um slug simples a partir do nome.
+ */
+const LABEL_TO_KEY: Record<string, string> = {};
+ALL_SITUACOES.forEach((key) => {
+  const label = SITUACAO_LABELS[key];
+  if (label) {
+    // Lookup case-insensitive: normaliza ambos para comparar
+    LABEL_TO_KEY[label.toLowerCase().trim()] = key;
+  }
+});
+
 export function nomeToKey(nome: string): string {
+  // fix: lookup reverso no SITUACAO_LABELS para recuperar key canônica
+  const normalized = nome.toLowerCase().trim();
+  if (LABEL_TO_KEY[normalized]) return LABEL_TO_KEY[normalized];
+  // Para etapas customizadas: gera slug simples
   return nome
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -55,6 +75,7 @@ export function useWorkflowSteps() {
         return data
           .map((d: any) => ({
             id: d.id,
+            // fix: usa lookup reverso para garantir key canônica
             key: nomeToKey(d.nome),
             label: d.nome,
             hex: d.cor,

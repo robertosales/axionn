@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { SustentacaoBoard } from "./components/SustentacaoBoard";
 import type { Demanda } from "./types/demanda";
 import { useDemandas } from "./hooks/useDemandas";
+import { useWorkflowSteps } from "./hooks/useWorkflowSteps";
 import { DemandaDetail } from "./components/DemandaDetail";
 import { DemandaForm } from "./components/DemandaForm";
 import { SustentacaoDashboard } from "./components/SustentacaoDashboard";
@@ -41,7 +42,6 @@ export default function SustentacaoPage() {
     }
   }, [authLoading, teams]);
 
-  // VIEW "times" não precisa de time selecionado — não bloqueia com needsTeam
   const needsTeam = !currentTeamId && active !== "times";
 
   return (
@@ -76,7 +76,6 @@ export default function SustentacaoPage() {
           </div>
         )}
 
-        {/* SustentacaoSection só renderiza quando não está carregando e não é a view de times */}
         {!authLoading && !needsTeam && (
           <SustentacaoSection active={active} />
         )}
@@ -87,6 +86,9 @@ export default function SustentacaoPage() {
 
 function SustentacaoSection({ active }: { active: string }) {
   const { demandas, loading, update, moveTo, create } = useDemandas();
+  // fix(board): carrega as etapas do fluxo e passa ao Board como workflowColumns
+  const { steps: workflowSteps } = useWorkflowSteps();
+
   const [selected, setSelected] = useState<Demanda | null>(null);
   const [createSituacao, setCreateSituacao] = useState<string | undefined>();
   const [showCreate, setShowCreate] = useState(false);
@@ -126,6 +128,14 @@ function SustentacaoSection({ active }: { active: string }) {
     );
   }
 
+  // fix(board): mapeia WorkflowStep[] → WorkflowColumn[] esperado pelo SustentacaoBoard
+  const workflowColumns = workflowSteps.map((s) => ({
+    key: s.key,
+    label: s.label,
+    color: s.hex,
+    sort_order: s.ordem,
+  }));
+
   switch (active) {
     case "dashboard":
       return <SustentacaoDashboard />;
@@ -137,6 +147,7 @@ function SustentacaoSection({ active }: { active: string }) {
           )}
           <SustentacaoBoard
             demandas={demandas}
+            workflowColumns={workflowColumns}
             onCreateDemanda={handleCreateDemanda}
             onSelectDemanda={handleSelectDemanda}
             onMoveDemanda={handleMoveDemanda}
@@ -177,8 +188,6 @@ function SustentacaoSection({ active }: { active: string }) {
       return <CustomFieldManager />;
     case "automacoes":
       return <AutomationManager />;
-    // FIX: case 'times' adicionado explicitamente para evitar queda no default
-    // que retornava SustentacaoDashboard, causando o Dashboard acima do TeamManager
     case "times":
       return <TeamManager moduleFilter="sustentacao" />;
     default:

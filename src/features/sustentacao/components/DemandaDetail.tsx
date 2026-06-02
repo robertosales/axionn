@@ -248,6 +248,11 @@ function minutesToDisplay(horas: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+// ─── cor teal do design system ───────────────────────────────────────────────
+const TEAL = "#0bbcaf";
+const TEAL_BG = "rgba(11,188,175,0.1)";
+const TEAL_BORDER = "rgba(11,188,175,0.35)";
+
 export function DemandaDetail({
   demanda: rawDemanda,
   onBack,
@@ -300,7 +305,6 @@ export function DemandaDetail({
   const todayISO = () => new Date().toISOString().slice(0, 10);
 
   // ─── Estado do formulário inline de lançamento de horas ───
-  // horas em HH:MM — convertido para decimal ao salvar
   const [hourForm, setHourForm] = useState({
     horas: "",
     fase: "execucao",
@@ -311,7 +315,6 @@ export function DemandaDetail({
   const [showFasesManager, setShowFasesManager] = useState(false);
   const [newFaseLabel, setNewFaseLabel] = useState("");
   const [deleteHourId, setDeleteHourId] = useState<string | null>(null);
-  // Edição de atividade — delegada ao NovaAtividadeDialog (inclui campo "Lançado por" para admin)
   const [editHour, setEditHour] = useState<DemandaHour | null>(null);
   const [showEditHourDialog, setShowEditHourDialog] = useState(false);
 
@@ -695,16 +698,16 @@ export function DemandaDetail({
             Demandas
           </Button>
           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-mono font-semibold text-info">{demanda.rhm}</span>
+          <span className="font-mono font-semibold" style={{ color: TEAL }}>{demanda.rhm}</span>
         </div>
 
         <div className="bg-card rounded-xl border shadow-sm">
-          {/* Header */}
-          <div className="px-6 py-5 border-b">
+          {/* ── Header com accent bar teal ── */}
+          <div className="px-6 py-5 border-b" style={{ borderLeft: `4px solid ${TEAL}`, borderRadius: "12px 12px 0 0" }}>
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-xl font-bold tracking-tight font-mono text-foreground">{demanda.rhm}</h1>
+                  <h1 className="text-xl font-bold tracking-tight font-mono" style={{ color: TEAL }}>{demanda.rhm}</h1>
                   <Badge className={`text-xs ${resolveColor(demanda.situacao)}`}>{resolveLabel(demanda.situacao)}</Badge>
                   <Badge className={`text-xs ${SLA_COR_CLASS[slaStatus.cor]}`}>
                     {slaStatus.cor === "green" ? "🟢" : slaStatus.cor === "yellow" ? "🟡" : slaStatus.cor === "orange" ? "🟠" : "🔴"}{" "}
@@ -726,7 +729,14 @@ export function DemandaDetail({
                     <Button variant="outline" size="sm" className="gap-1.5" onClick={cancelEdit}>
                       <X className="h-4 w-4" />Cancelar
                     </Button>
-                    <Button size="sm" className="gap-1.5 bg-info hover:bg-info/90 text-info-foreground" onClick={saveEdit}>
+                    <Button
+                      size="sm"
+                      className="gap-1.5 text-white"
+                      style={{ background: TEAL }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                      onClick={saveEdit}
+                    >
                       <Save className="h-4 w-4" />Salvar
                     </Button>
                   </>
@@ -739,7 +749,7 @@ export function DemandaDetail({
             </div>
           </div>
 
-          {/* Stepper do fluxo */}
+          {/* ── Stepper com nó ativo em teal ── */}
           <div className="px-6 py-4 border-b bg-muted/30 overflow-x-auto">
             <div className="flex items-center min-w-max">
               {STEPPER_STEPS.map((step, idx) => {
@@ -749,21 +759,48 @@ export function DemandaDetail({
                 return (
                   <div key={step} className="flex items-center flex-1 last:flex-none">
                     <div className="flex flex-col items-center gap-1.5">
-                      <div className={`flex items-center justify-center h-7 w-7 rounded-full border-2 transition-all ${
-                        isPast ? "bg-emerald-500 border-emerald-500 text-white" :
-                        isActive ? "bg-info border-info text-info-foreground shadow-md shadow-info/25" :
-                        "bg-muted border-border text-muted-foreground"
-                      }`}>
-                        {isPast ? <Check className="h-3.5 w-3.5" /> : isActive ? <Circle className="h-2.5 w-2.5 fill-current" /> : <span className="text-[10px] font-medium">{idx + 1}</span>}
+                      <div
+                        className="flex items-center justify-center h-7 w-7 rounded-full border-2 transition-all"
+                        style={
+                          isPast
+                            ? { background: "#10b981", borderColor: "#10b981", color: "#fff" }
+                            : isActive
+                            ? { background: TEAL, borderColor: TEAL, color: "#fff", boxShadow: `0 0 0 3px ${TEAL_BG}` }
+                            : {}
+                        }
+                      >
+                        {isPast ? (
+                          <Check className="h-3.5 w-3.5" />
+                        ) : isActive ? (
+                          <Circle className="h-2.5 w-2.5 fill-current" />
+                        ) : (
+                          <span className="text-[10px] font-medium text-muted-foreground">{idx + 1}</span>
+                        )}
                       </div>
-                      <span className={`text-[10px] font-medium text-center leading-tight max-w-[72px] ${
-                        isActive ? "text-info font-semibold" : isPast ? "text-emerald-600" : "text-muted-foreground"
-                      }`}>{STEPPER_LABELS[step]}</span>
+                      <span
+                        className="text-[10px] font-medium text-center leading-tight max-w-[72px]"
+                        style={
+                          isActive
+                            ? { color: TEAL, fontWeight: 600 }
+                            : isPast
+                            ? { color: "#10b981" }
+                            : { color: "hsl(var(--muted-foreground))" }
+                        }
+                      >
+                        {STEPPER_LABELS[step]}
+                      </span>
                     </div>
                     {!isLast && (
-                      <div className={`flex-1 h-0.5 mx-1.5 mt-[-18px] rounded-full transition-colors ${
-                        isPast ? "bg-emerald-500" : isActive ? "bg-gradient-to-r from-info to-border" : "bg-border"
-                      }`} />
+                      <div
+                        className="flex-1 h-0.5 mx-1.5 mt-[-18px] rounded-full transition-colors"
+                        style={
+                          isPast
+                            ? { background: "#10b981" }
+                            : isActive
+                            ? { background: `linear-gradient(to right, ${TEAL}, hsl(var(--border)))` }
+                            : { background: "hsl(var(--border))" }
+                        }
+                      />
                     )}
                   </div>
                 );
@@ -777,14 +814,20 @@ export function DemandaDetail({
             )}
           </div>
 
-          {/* Painel de movimentação */}
+          {/* ── Painel de movimentação com fundo teal suave ── */}
           {!editing && !isTerminal && (
-            <div className="px-6 py-3 border-b bg-info/5">
+            <div className="px-6 py-3 border-b" style={{ background: TEAL_BG }}>
               {isBloqueada ? (
                 <div className="flex items-center gap-3 flex-wrap">
                   <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
                   <span className="text-sm font-medium text-destructive shrink-0">Demanda bloqueada</span>
-                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-sm" onClick={handleUnblock}>
+                  <Button
+                    className="text-white h-8 text-sm"
+                    style={{ background: "#10b981" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#059669")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#10b981")}
+                    onClick={handleUnblock}
+                  >
                     Desbloquear (retornar à etapa anterior)
                   </Button>
                 </div>
@@ -792,16 +835,22 @@ export function DemandaDetail({
                 <div className="flex items-center gap-3 flex-wrap">
                   <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
                   <span className="text-sm font-medium text-rose-700 shrink-0">Demanda rejeitada — reencaminhar para execução</span>
-                  <Button className="bg-amber-600 hover:bg-amber-700 text-white h-8 text-sm" onClick={async () => {
-                    const ok = await onMoveTo(demanda, "em_execucao", "Reencaminhado após rejeição");
-                    if (ok) await refreshAllData();
-                  }}>
+                  <Button
+                    className="text-white h-8 text-sm"
+                    style={{ background: TEAL }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                    onClick={async () => {
+                      const ok = await onMoveTo(demanda, "em_execucao", "Reencaminhado após rejeição");
+                      if (ok) await refreshAllData();
+                    }}
+                  >
                     Retornar para Em Execução
                   </Button>
                 </div>
               ) : (
                 <div className="flex items-center gap-3 flex-wrap">
-                  <MoveRight className="h-4 w-4 text-info shrink-0" />
+                  <MoveRight className="h-4 w-4 shrink-0" style={{ color: TEAL }} />
                   <span className="text-sm font-medium text-foreground shrink-0">Mover para:</span>
                   <Select value={newStatus} onValueChange={setNewStatus}>
                     <SelectTrigger className="h-9 text-sm flex-1 max-w-xs bg-card">
@@ -813,7 +862,14 @@ export function DemandaDetail({
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button className="bg-info hover:bg-info/90 text-info-foreground h-9 text-sm" onClick={handleMove} disabled={!newStatus}>
+                  <Button
+                    className="h-9 text-sm text-white"
+                    style={{ background: TEAL }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                    onClick={handleMove}
+                    disabled={!newStatus}
+                  >
                     Avançar
                   </Button>
                   {canBlock && (
@@ -848,28 +904,38 @@ export function DemandaDetail({
             </div>
           )}
 
-          {/* Tabs de conteúdo */}
+          {/* ── Tabs ── */}
           <div className="px-6 py-5">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
-                <TabsTrigger value="detalhes" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                  <FileText className="h-4 w-4" />Detalhes
-                </TabsTrigger>
-                <TabsTrigger value="historico" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                  <History className="h-4 w-4" />Histórico
-                </TabsTrigger>
-                <TabsTrigger value="horas" disabled={isCancelada} className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                  <Clock className="h-4 w-4" />Atividades{" "}
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-5">{minutesToDisplay(total)}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="responsaveis" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                  <Users className="h-4 w-4" />Responsáveis{" "}
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-5">{responsaveis.length}</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="evidencias" className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
-                  <ShieldCheck className="h-4 w-4" />Evidências{" "}
-                  <Badge variant="secondary" className="ml-1 text-[10px] h-5">{evidencias.length}</Badge>
-                </TabsTrigger>
+                {[
+                  { value: "detalhes", icon: <FileText className="h-4 w-4" />, label: "Detalhes" },
+                  { value: "historico", icon: <History className="h-4 w-4" />, label: "Histórico" },
+                  { value: "horas", icon: <Clock className="h-4 w-4" />, label: "Atividades", badge: minutesToDisplay(total), disabled: isCancelada },
+                  { value: "responsaveis", icon: <Users className="h-4 w-4" />, label: "Responsáveis", badge: String(responsaveis.length) },
+                  { value: "evidencias", icon: <ShieldCheck className="h-4 w-4" />, label: "Evidências", badge: String(evidencias.length) },
+                ].map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    disabled={tab.disabled}
+                    className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {tab.icon}{tab.label}
+                    {tab.badge !== undefined && (
+                      <span
+                        className="ml-1 text-[10px] h-5 px-1.5 rounded-full flex items-center font-medium"
+                        style={
+                          activeTab === tab.value
+                            ? { background: TEAL_BG, color: TEAL }
+                            : { background: "hsl(var(--secondary))", color: "hsl(var(--secondary-foreground))" }
+                        }
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                ))}
               </TabsList>
 
               {/* ─── ABA DETALHES ─── */}
@@ -935,24 +1001,34 @@ export function DemandaDetail({
                         <p className="text-sm font-semibold text-foreground mb-1">Título</p>
                         <p className="text-sm text-muted-foreground leading-relaxed">{demanda.descricao || "Sem descrição informada."}</p>
                       </div>
-                      <Card className="border-dashed">
-                        <CardHeader className="pb-2 pt-4 px-4"><CardTitle className="text-sm font-semibold text-foreground">Informações</CardTitle></CardHeader>
-                        <CardContent className="px-4 pb-4">
-                          <dl className="space-y-2 text-sm">
-                            <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Projeto</dt><dd className="font-medium text-right">{demanda.projeto}</dd></div>
-                            <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Tipo</dt><dd className="font-medium text-right">{getTipoLabel(demanda.tipo)}</dd></div>
-                            <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Regime</dt><dd className="font-medium text-right">{String(demanda.sla) === "continuo" || String(demanda.sla) === "24x7" ? "Contínuo" : "Padrão"}</dd></div>
-                            <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Criado em</dt><dd className="font-medium text-right">{new Date(demanda.created_at).toLocaleString("pt-BR")}</dd></div>
-                            {demandanteProfile && <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Autor</dt><dd className="font-medium text-right">{demandanteProfile}</dd></div>}
-                            <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Prazo Máx. Início</dt><dd className="font-medium text-right">{demanda.originada_diagnostico ? "IMEDIATO" : demanda.prazo_inicio_atendimento ? new Date(demanda.prazo_inicio_atendimento).toLocaleString("pt-BR") : "—"}</dd></div>
-                            <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Prazo Máx. Solução</dt><dd className="font-medium text-right">{demanda.prazo_solucao ? new Date(demanda.prazo_solucao).toLocaleString("pt-BR") : "Definido na OS"}</dd></div>
-                            <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Previsão Encerramento</dt><dd className="font-medium text-right">{demanda.data_previsao_encerramento ? new Date(demanda.data_previsao_encerramento).toLocaleDateString("pt-BR") : "—"}</dd></div>
-                            <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Atualizada em</dt><dd className="font-medium text-right">{new Date(demanda.updated_at).toLocaleDateString("pt-BR")}</dd></div>
-                            {(demanda.contador_rejeicoes ?? 0) > 0 && <div className="flex justify-between gap-2"><dt className="text-muted-foreground shrink-0">Rejeições</dt><dd className="font-medium text-right text-rose-600">{demanda.contador_rejeicoes}x</dd></div>}
-                          </dl>
-                        </CardContent>
-                      </Card>
+
+                      {/* ── Card informações com divide-y ── */}
+                      <div className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                        <div className="px-4 py-2.5 border-b bg-muted/40">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Informações</p>
+                        </div>
+                        <dl className="divide-y text-sm">
+                          {[
+                            { label: "Projeto", value: demanda.projeto },
+                            { label: "Tipo", value: getTipoLabel(demanda.tipo) },
+                            { label: "Regime", value: String(demanda.sla) === "continuo" || String(demanda.sla) === "24x7" ? "Contínuo" : "Padrão" },
+                            { label: "Criado em", value: new Date(demanda.created_at).toLocaleString("pt-BR") },
+                            ...(demandanteProfile ? [{ label: "Autor", value: demandanteProfile }] : []),
+                            { label: "Prazo Máx. Início", value: demanda.originada_diagnostico ? "IMEDIATO" : demanda.prazo_inicio_atendimento ? new Date(demanda.prazo_inicio_atendimento).toLocaleString("pt-BR") : "—" },
+                            { label: "Prazo Máx. Solução", value: demanda.prazo_solucao ? new Date(demanda.prazo_solucao).toLocaleString("pt-BR") : "Definido na OS" },
+                            { label: "Previsão Encerramento", value: demanda.data_previsao_encerramento ? new Date(demanda.data_previsao_encerramento).toLocaleDateString("pt-BR") : "—" },
+                            { label: "Atualizada em", value: new Date(demanda.updated_at).toLocaleDateString("pt-BR") },
+                            ...((demanda.contador_rejeicoes ?? 0) > 0 ? [{ label: "Rejeições", value: `${demanda.contador_rejeicoes}x`, danger: true }] : []),
+                          ].map((row: any) => (
+                            <div key={row.label} className="flex justify-between gap-2 px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                              <dt className="text-muted-foreground shrink-0 text-xs">{row.label}</dt>
+                              <dd className={`font-medium text-right text-xs ${row.danger ? "text-rose-600" : ""}`}>{row.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
                     </div>
+
                     <div className="space-y-4">
                       {slaStatus.status !== "concluida" && slaStatus.status !== "sem_prazo" && (
                         <Card className={`border ${SLA_COR_CLASS[slaStatus.cor]}`}>
@@ -968,20 +1044,27 @@ export function DemandaDetail({
                         </Card>
                       )}
                       {responsaveis.length > 0 && (
-                        <Card>
-                          <CardHeader className="pb-2 pt-4 px-4"><CardTitle className="text-sm font-semibold">Equipe Vinculada</CardTitle></CardHeader>
-                          <CardContent className="px-4 pb-4 space-y-2">
+                        <div className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                          <div className="px-4 py-2.5 border-b bg-muted/40">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Equipe Vinculada</p>
+                          </div>
+                          <div className="divide-y">
                             {responsaveis.map((r) => (
-                              <div key={r.id} className="flex items-center gap-2">
-                                <div className="h-7 w-7 rounded-full bg-info/20 flex items-center justify-center text-xs font-semibold text-info">{getInitials(r.profile?.display_name)}</div>
+                              <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                                <div
+                                  className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
+                                  style={{ background: TEAL_BG, color: TEAL }}
+                                >
+                                  {getInitials(r.profile?.display_name)}
+                                </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium truncate">{formatPersonName(r.profile?.display_name)}</p>
                                   <p className="text-xs text-muted-foreground capitalize">{r.papel}</p>
                                 </div>
                               </div>
                             ))}
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -999,7 +1082,10 @@ export function DemandaDetail({
                       return (
                         <div key={t.id} className="flex gap-3 text-sm">
                           <div className="flex flex-col items-center">
-                            <div className={`h-2 w-2 rounded-full mt-1.5 ${isFirst ? "bg-info" : "bg-muted-foreground/40"}`} />
+                            <div
+                              className="h-2 w-2 rounded-full mt-1.5"
+                              style={isFirst ? { background: TEAL } : { background: "hsl(var(--muted-foreground) / 0.4)" }}
+                            />
                             {idx < transitions.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
                           </div>
                           <div className="pb-3 flex-1">
@@ -1026,46 +1112,30 @@ export function DemandaDetail({
               <TabsContent value="horas" className="mt-5 space-y-5">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-foreground">
-                    Total Acumulado: <span className="text-info">{minutesToDisplay(total)}</span>
+                    Total Acumulado: <span style={{ color: TEAL }}>{minutesToDisplay(total)}</span>
                   </p>
                 </div>
-                <Card>
-                  <CardHeader className="pb-2 pt-4 px-4">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm">Lançar Horas</CardTitle>
-                      {isAdmin && (
-                        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setShowFasesManager(true)} title="Gerenciar fases">
-                          <Settings2 className="h-3.5 w-3.5" />Gerenciar Fases
-                        </Button>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
+
+                {/* Card lançar horas */}
+                <div className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                  <div className="px-4 py-2.5 border-b bg-muted/40 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lançar Horas</p>
+                    {isAdmin && (
+                      <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setShowFasesManager(true)}>
+                        <Settings2 className="h-3.5 w-3.5" />Gerenciar Fases
+                      </Button>
+                    )}
+                  </div>
+                  <div className="px-4 py-4">
                     <div className="flex flex-wrap gap-3 items-end">
-                      {/* Data */}
                       <div>
                         <Label className="text-xs">Data</Label>
-                        <Input
-                          type="date"
-                          value={hourForm.data}
-                          max={todayISO()}
-                          onChange={(e) => setHourForm((p) => ({ ...p, data: e.target.value }))}
-                          className="w-40 mt-1"
-                        />
+                        <Input type="date" value={hourForm.data} max={todayISO()} onChange={(e) => setHourForm((p) => ({ ...p, data: e.target.value }))} className="w-40 mt-1" />
                       </div>
-
-                      {/* Tempo HH:MM */}
                       <div>
                         <Label className="text-xs">Tempo (HH:MM)</Label>
-                        <HorasInput
-                          value={hourForm.horas}
-                          onChange={(v) => setHourForm((p) => ({ ...p, horas: v }))}
-                          placeholder="00:00"
-                          className="w-28 mt-1"
-                        />
+                        <HorasInput value={hourForm.horas} onChange={(v) => setHourForm((p) => ({ ...p, horas: v }))} placeholder="00:00" className="w-28 mt-1" />
                       </div>
-
-                      {/* Fase */}
                       <div>
                         <Label className="text-xs">Fase</Label>
                         <Select value={hourForm.fase} onValueChange={(v) => setHourForm((p) => ({ ...p, fase: v }))}>
@@ -1073,70 +1143,54 @@ export function DemandaDetail({
                           <SelectContent>{fases.map((f) => <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
-
-                      {/* Descrição */}
                       <div className="flex-1 min-w-[200px]">
                         <Label className="text-xs">Descrição</Label>
-                        <Input
-                          value={hourForm.descricao}
-                          onChange={(e) => setHourForm((p) => ({ ...p, descricao: e.target.value }))}
-                          className="mt-1"
-                          placeholder="Descreva a atividade..."
-                        />
+                        <Input value={hourForm.descricao} onChange={(e) => setHourForm((p) => ({ ...p, descricao: e.target.value }))} className="mt-1" placeholder="Descreva a atividade..." />
                       </div>
-
-                      <Button size="sm" onClick={handleAddHour} className="gap-1.5">
+                      <Button
+                        size="sm"
+                        className="gap-1.5 text-white"
+                        style={{ background: TEAL }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                        onClick={handleAddHour}
+                      >
                         <Plus className="h-4 w-4" />Lançar
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
                       Lançado por: {profile?.display_name || user?.email || "Usuário"}
                     </p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
                 {hours.length > 0 && (
-                  <div className="rounded-lg border overflow-x-auto">
+                  <div className="rounded-xl border overflow-x-auto" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
                         <tr>
-                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Data</th>
-                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Fase</th>
-                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Descrição</th>
-                          <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Lançado por</th>
-                          <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">Tempo</th>
-                          {isAdmin && <th className="px-3 py-2" />}
+                          {["Data", "Fase", "Descrição", "Lançado por"].map((h) => (
+                            <th key={h} className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+                          ))}
+                          <th className="text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tempo</th>
+                          {isAdmin && <th className="px-3 py-2.5" />}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
                         {hours.map((h) => (
                           <tr key={h.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-3 py-2 text-xs">{new Date(h.created_at).toLocaleDateString("pt-BR")}</td>
-                            <td className="px-3 py-2 text-xs">{fasesMap[h.fase] || h.fase}</td>
-                            <td className="px-3 py-2 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
-                            <td className="px-3 py-2 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
-                            <td className="px-3 py-2 text-xs text-right font-mono font-medium">
-                              {minutesToDisplay(Number(h.horas))}
-                            </td>
+                            <td className="px-3 py-2.5 text-xs">{new Date(h.created_at).toLocaleDateString("pt-BR")}</td>
+                            <td className="px-3 py-2.5 text-xs">{fasesMap[h.fase] || h.fase}</td>
+                            <td className="px-3 py-2.5 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
+                            <td className="px-3 py-2.5 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
+                            <td className="px-3 py-2.5 text-xs text-right font-mono font-medium">{minutesToDisplay(Number(h.horas))}</td>
                             {isAdmin && (
-                              <td className="px-3 py-2">
+                              <td className="px-3 py-2.5">
                                 <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-info"
-                                    title="Editar atividade"
-                                    onClick={() => { setEditHour(h); setShowEditHourDialog(true); }}
-                                  >
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setEditHour(h); setShowEditHourDialog(true); }}>
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                                    title="Excluir atividade"
-                                    onClick={() => setDeleteHourId(h.id)}
-                                  >
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteHourId(h.id)}>
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
                                 </div>
@@ -1166,9 +1220,16 @@ export function DemandaDetail({
                   </div>
                 </div>
                 {searchResults.length > 0 && (
-                  <div className="border rounded-lg divide-y overflow-hidden">
+                  <div className="border rounded-xl divide-y overflow-hidden">
                     {searchResults.map((r) => (
-                      <button key={r.user_id} className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors flex items-center gap-3" onClick={() => handleAddResp(r.user_id)}>
+                      <button
+                        key={r.user_id}
+                        className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors flex items-center gap-3"
+                        style={{ borderLeft: `3px solid transparent` }}
+                        onMouseEnter={(e) => (e.currentTarget.style.borderLeftColor = TEAL)}
+                        onMouseLeave={(e) => (e.currentTarget.style.borderLeftColor = "transparent")}
+                        onClick={() => handleAddResp(r.user_id)}
+                      >
                         <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="font-medium text-sm">{r.display_name}</span>
                         <span className="text-xs text-muted-foreground">{r.email}</span>
@@ -1179,10 +1240,19 @@ export function DemandaDetail({
                 {respLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
                 {!respLoading && responsaveis.length === 0 && <p className="text-sm text-muted-foreground">Nenhum responsável vinculado.</p>}
                 {responsaveis.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="rounded-xl border overflow-hidden divide-y" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
                     {responsaveis.map((r) => (
-                      <div key={r.id} className="flex items-center gap-3 rounded-lg border px-4 py-3 bg-card">
-                        <div className="h-8 w-8 rounded-full bg-info/20 flex items-center justify-center text-sm font-semibold text-info shrink-0">{getInitials(r.profile?.display_name)}</div>
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-muted/30 transition-colors"
+                        style={{ borderLeft: `3px solid ${TEAL_BORDER}` }}
+                      >
+                        <div
+                          className="h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0"
+                          style={{ background: TEAL_BG, color: TEAL }}
+                        >
+                          {getInitials(r.profile?.display_name)}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">{formatPersonName(r.profile?.display_name) || r.user_id}</p>
                           <p className="text-xs text-muted-foreground capitalize">{r.papel}</p>
@@ -1199,7 +1269,7 @@ export function DemandaDetail({
               {/* ─── ABA EVIDÊNCIAS ─── */}
               <TabsContent value="evidencias" className="mt-5 space-y-5">
                 {pendingTarget && (
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
                     <p className="font-medium text-amber-800 flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" />
                       Para avançar para "{resolveLabel(pendingTarget)}", cadastre ao menos uma evidência desta etapa e tente mover novamente.
@@ -1210,18 +1280,31 @@ export function DemandaDetail({
                       return hasEvidence ? (
                         <div className="mt-2 flex items-center gap-3">
                           <p className="text-emerald-700 text-xs">✅ Evidência registrada. Você já pode avançar.</p>
-                          <Button size="sm" className="bg-info hover:bg-info/90 text-info-foreground h-7 text-xs" onClick={async () => {
-                            const ok = await onMoveTo(demanda, pendingTarget);
-                            if (ok) { setPendingTarget(undefined); await refreshAllData(); }
-                          }}>Avançar agora</Button>
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs text-white"
+                            style={{ background: TEAL }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                            onClick={async () => {
+                              const ok = await onMoveTo(demanda, pendingTarget);
+                              if (ok) { setPendingTarget(undefined); await refreshAllData(); }
+                            }}
+                          >
+                            Avançar agora
+                          </Button>
                         </div>
                       ) : null;
                     })()}
                   </div>
                 )}
-                <Card>
-                  <CardHeader className="pb-2 pt-4 px-4"><CardTitle className="text-sm">Adicionar Evidência</CardTitle></CardHeader>
-                  <CardContent className="px-4 pb-4 space-y-3">
+
+                {/* Card adicionar evidência */}
+                <div className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                  <div className="px-4 py-2.5 border-b bg-muted/40">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Adicionar Evidência</p>
+                  </div>
+                  <div className="px-4 py-4 space-y-3">
                     <div className="grid sm:grid-cols-2 gap-3">
                       <div>
                         <Label className="text-xs">Fase</Label>
@@ -1254,31 +1337,47 @@ export function DemandaDetail({
                       <Label className="text-xs">Descrição (opcional)</Label>
                       <Textarea value={evidForm.descricao} onChange={(e) => setEvidForm((p) => ({ ...p, descricao: e.target.value }))} rows={2} className="mt-1" />
                     </div>
-                    <Button size="sm" className="gap-1.5" onClick={handleAddEvidencia}>
+                    <Button
+                      size="sm"
+                      className="gap-1.5 text-white"
+                      style={{ background: TEAL }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                      onClick={handleAddEvidencia}
+                    >
                       <Plus className="h-4 w-4" />Adicionar
                     </Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
+
                 {EVIDENCIA_FASES.map((fase) => {
                   const items = evidenciasByFase[fase] || [];
                   if (items.length === 0) return null;
                   return (
                     <div key={fase}>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{EVIDENCIA_FASE_LABELS[fase]}</p>
-                      <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{EVIDENCIA_FASE_LABELS[fase]}</p>
+                      <div className="rounded-xl border overflow-hidden divide-y" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
                         {items.map((e) => (
-                          <div key={e.id} className="flex items-center gap-3 rounded-lg border px-4 py-3 bg-card">
-                            {e.tipo === "link" ? <Link2 className="h-4 w-4 text-info shrink-0" /> : <FileText className="h-4 w-4 text-muted-foreground shrink-0" />}
+                          <div
+                            key={e.id}
+                            className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-muted/30 transition-colors"
+                            style={{ borderLeft: `3px solid ${TEAL_BORDER}` }}
+                          >
+                            {e.tipo === "link" ? (
+                              <Link2 className="h-4 w-4 shrink-0" style={{ color: TEAL }} />
+                            ) : (
+                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{e.titulo}</p>
                               <p className="text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString("pt-BR")}{e.descricao ? ` — ${e.descricao}` : ""}</p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                               {e.tipo === "link" && e.url_externa && (
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-info hover:text-info/80" onClick={() => window.open(e.url_externa!, "_blank")}><Eye className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:text-foreground" style={{ color: TEAL }} onClick={() => window.open(e.url_externa!, "_blank")}><Eye className="h-3.5 w-3.5" /></Button>
                               )}
                               {e.tipo === "arquivo" && e.file_path && (
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-info hover:text-info/80" onClick={async () => {
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:text-foreground" style={{ color: TEAL }} onClick={async () => {
                                   try { const url = await evidSvc.getEvidenciaSignedUrl(e.file_path!); window.open(url, "_blank"); } catch { toast.error("Erro ao abrir arquivo"); }
                                 }}><Upload className="h-3.5 w-3.5" /></Button>
                               )}
@@ -1312,8 +1411,6 @@ export function DemandaDetail({
         onConfirm={confirmEncerramento}
         isCorretiva={isCorretiva}
       />
-
-      {/* Edição de atividade via NovaAtividadeDialog — inclui campo "Lançado por" para admin */}
       <NovaAtividadeDialog
         demanda={demanda as Demanda}
         open={showEditHourDialog}
@@ -1321,7 +1418,6 @@ export function DemandaDetail({
         editHour={editHour}
         onSuccess={reloadHours}
       />
-
       <ConfirmDialog
         open={!!deleteHourId}
         title="Remover lançamento?"
@@ -1361,19 +1457,26 @@ export function DemandaDetail({
                 <Label className="text-xs">Nova fase</Label>
                 <Input value={newFaseLabel} onChange={(e) => setNewFaseLabel(e.target.value)} placeholder="Ex.: Reunião de Negócio" className="mt-1" />
               </div>
-              <Button size="sm" onClick={async () => {
-                if (!newFaseLabel.trim()) return;
-                try { await createFase(newFaseLabel.trim()); setNewFaseLabel(""); toast.success("Fase criada"); }
-                catch (e: any) { toast.error(e?.message?.includes("duplicate") ? "Fase já existe" : "Erro ao criar fase"); }
-              }}>
+              <Button
+                size="sm"
+                className="text-white"
+                style={{ background: TEAL }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                onClick={async () => {
+                  if (!newFaseLabel.trim()) return;
+                  try { await createFase(newFaseLabel.trim()); setNewFaseLabel(""); toast.success("Fase criada"); }
+                  catch (e: any) { toast.error(e?.message?.includes("duplicate") ? "Fase já existe" : "Erro ao criar fase"); }
+                }}
+              >
                 <Plus className="h-4 w-4" />Adicionar
               </Button>
             </div>
-            <div className="rounded-lg border max-h-[300px] overflow-y-auto">
+            <div className="rounded-xl border overflow-hidden max-h-[300px] overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Fase</th>
+                    <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Fase</th>
                     <th className="px-3 py-2" />
                   </tr>
                 </thead>

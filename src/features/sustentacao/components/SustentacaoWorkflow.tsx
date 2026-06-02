@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { ALL_SITUACOES, SITUACAO_LABELS } from "../types/demanda";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   fetchActiveWorkflowSteps,
   replaceWorkflowSteps,
@@ -51,6 +52,10 @@ function buildDefaultSteps(): SustentacaoStep[] {
 
 export function SustentacaoWorkflow() {
   const { currentTeamId } = useAuth();
+  // fix(P2): QueryClient para invalidar ['workflow-steps'] após save/restore,
+  // garantindo que SustentacaoBoard reflita o novo fluxo imediatamente.
+  const qc = useQueryClient();
+
   const [draft, setDraft] = useState<SustentacaoStep[]>(buildDefaultSteps);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
@@ -139,6 +144,11 @@ export function SustentacaoWorkflow() {
       setHasChanges(false);
       toast.success("Fluxo de sustentação salvo com sucesso!");
       await loadFromDb();
+      // fix(P2): força revalidação imediata da query consumida por
+      // useWorkflowSteps / SustentacaoBoard, sem depender da latência do
+      // canal Realtime Postgres. O canal RT continua ativo para sincronizar
+      // os demais usuários sem nenhuma alteração.
+      qc.invalidateQueries({ queryKey: ['workflow-steps'] });
     } catch {
       toast.error("Erro ao salvar fluxo de trabalho");
     }
@@ -157,6 +167,9 @@ export function SustentacaoWorkflow() {
       setDraft(defaults);
       setHasChanges(false);
       toast.success("Padrão restaurado e salvo.");
+      // fix(P2): mesma invalidation de save() — garante que o Board
+      // reflita o padrão restaurado imediatamente.
+      qc.invalidateQueries({ queryKey: ['workflow-steps'] });
     } catch {
       toast.error("Erro ao restaurar padrão");
     }

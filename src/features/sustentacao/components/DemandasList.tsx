@@ -233,7 +233,21 @@ export function DemandasList() {
         </>
       )}
 
-      <DemandaForm open={showForm} onClose={() => setShowForm(false)} onSubmit={(d) => create(d as any)} />
+      {/*
+       * fix(P1): onSubmit agora é async e aguarda create() completar antes de
+       * fechar o modal. Isso garante que invalidateAll() (dentro de
+       * useDemandaMutations.create) execute por completo — incluindo
+       * resetQueries(KEYS.demandas.infinite) — antes do componente re-renderizar,
+       * fazendo a nova demanda aparecer imediatamente na lista sem reload.
+       */}
+      <DemandaForm
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        onSubmit={async (d) => {
+          await create(d as any);
+          setShowForm(false);
+        }}
+      />
 
       <DemandaForm
         open={!!editTarget}

@@ -1,10 +1,10 @@
 /**
- * KanbanFilterBar — Filtro visual do Kanban Ágil.
- * Inclui seletor de sprint com badge de sprint ativa, visões salvas,
- * filter chips com contagem e contador de demandas.
+ * KanbanFilterBar — Toolbar compacta em 2 linhas.
+ * Linha 1: info da sprint selecionada.
+ * Linha 2: busca + avatares + visões rápidas + botão Filtros + contador.
  */
 import React, { useState, useMemo, useCallback } from "react";
-import { X, BookmarkPlus, ChevronDown, SlidersHorizontal, Search, CalendarDays } from "lucide-react";
+import { X, BookmarkPlus, ChevronDown, Search, Filter } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -27,15 +27,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// ─── Tipos ─────────────────────────────────────────────────────────────────────────────
+// ─── Tipos ──────────────────────────────────────────────────────────────────
 
 export interface KanbanFiltros {
-  membros: string[];   // user IDs; vazio = todos
-  tipo: string;        // "all" | story type
-  prioridade: string;  // "all" | priority
-  status: string;      // "all" | column key
-  search: string;      // texto livre
-  sprintId: string;    // "all" | sprint UUID
+  membros: string[];
+  tipo: string;
+  prioridade: string;
+  status: string;
+  search: string;
+  sprintId: string;
 }
 
 export const KANBAN_FILTROS_DEFAULT: KanbanFiltros = {
@@ -58,7 +58,7 @@ const VIEWS_BUILTIN: KanbanViewSalva[] = [
   { id: "meus",      label: "Meus cards",  icon: "👤", filtros: { ...KANBAN_FILTROS_DEFAULT } },
   { id: "bugs",      label: "Bugs",        icon: "🐛", filtros: { ...KANBAN_FILTROS_DEFAULT, tipo: "bug" } },
   { id: "alta_prio", label: "Alta Prior.", icon: "🔥", filtros: { ...KANBAN_FILTROS_DEFAULT, prioridade: "alta" } },
-  { id: "em_exec",   label: "Em Execução", icon: "⚡", filtros: { ...KANBAN_FILTROS_DEFAULT, status: "in_progress" } },
+  { id: "em_exec",   label: "Em Execução", icon: "⚡",  filtros: { ...KANBAN_FILTROS_DEFAULT, status: "in_progress" } },
 ];
 
 const LS_KEY = "kanban_agil_views_salvas";
@@ -68,7 +68,7 @@ function loadViews(): KanbanViewSalva[] {
 }
 function saveViews(v: KanbanViewSalva[]) { localStorage.setItem(LS_KEY, JSON.stringify(v)); }
 
-// ─── Helpers visuais ────────────────────────────────────────────────────────────────────
+// ─── Helpers visuais ──────────────────────────────────────────────────────────
 
 const CHIP_COLORS: Record<string, string> = {
   tipo:       "text-violet-400 border-violet-400/40 bg-violet-400/10",
@@ -82,7 +82,7 @@ const CHIP_LABELS: Record<string, string> = {
   status:     "Status",
 };
 
-// ─── Componente principal ─────────────────────────────────────────────────────────────────────
+// ─── Componente principal ─────────────────────────────────────────────────────
 
 export const KanbanFilterBar = React.memo(function KanbanFilterBar({
   filtros,
@@ -109,13 +109,11 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
   const [saveLabel, setSaveLabel] = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
 
-  // ── Sprint ativa do time ──
   const activeSprint = useMemo(
     () => (sprints ?? []).find((s: any) => s.isActive || s.is_active) ?? null,
     [sprints],
   );
 
-  // ── Contagem de HUs por sprint ──
   const huCountBySprint = useMemo(() => {
     const counts: Record<string, number> = {};
     stories.forEach((h: any) => {
@@ -125,7 +123,6 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
     return counts;
   }, [stories]);
 
-  // ── Sprints ordenadas: ativa primeiro, depois mais recentes ──
   const sprintsSorted = useMemo(() => {
     return [...(sprints ?? [])].sort((a: any, b: any) => {
       const aActive = a.isActive || a.is_active;
@@ -137,26 +134,29 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
     });
   }, [sprints]);
 
-  // ── Sprint selecionada ──
   const selectedSprint = useMemo(
     () => (sprints ?? []).find((s: any) => s.id === filtros.sprintId) ?? null,
     [sprints, filtros.sprintId],
   );
 
-  // ── Label completo da opção selecionada ──
-  const selectedLabel = useMemo(() => {
-    if (filtros.sprintId === "all") return "📋 Todas as sprints";
-    const s = selectedSprint;
-    if (!s) return "";
-    const isActive = s.isActive || s.is_active;
-    const count    = huCountBySprint[s.id] ?? 0;
-    const emoji    = isActive ? "🟢" : "⚫";
-    const ativa    = isActive ? " • Ativa" : "";
-    const hus      = count > 0 ? ` • ${count} HU${count !== 1 ? "s" : ""}` : "";
-    return `${emoji} ${s.name}${ativa}${hus}`;
-  }, [filtros.sprintId, selectedSprint, huCountBySprint]);
+  // Sprint info derivada para linha 1
+  const sprintInfo = useMemo(() => {
+    if (!selectedSprint) return null;
+    const isActive  = selectedSprint.isActive || selectedSprint.is_active;
+    const count     = huCountBySprint[selectedSprint.id] ?? 0;
+    const startDate = selectedSprint.startDate || selectedSprint.start_date;
+    const endDate   = selectedSprint.endDate   || selectedSprint.end_date;
+    const fmt = (d: string) =>
+      new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    const dateRange = startDate && endDate ? `${fmt(startDate)} – ${fmt(endDate)}` : null;
+    let delayDays = 0;
+    if (isActive && endDate) {
+      const diff = Math.floor((Date.now() - new Date(endDate).getTime()) / 86_400_000);
+      if (diff > 0) delayDays = diff;
+    }
+    return { name: selectedSprint.name, isActive, count, dateRange, delayDays };
+  }, [selectedSprint, huCountBySprint]);
 
-  // ── Monta lista de responsáveis ──
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const idsComStory = new Set<string>();
     stories.forEach((h: any) => {
@@ -172,7 +172,6 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
       } satisfies ResponsavelFilterItem));
   }, [stories, developers]);
 
-  // ── Contagens dinâmicas ──
   const counts = useMemo(() => {
     const tipoCounts: Record<string, number>   = {};
     const prioCounts: Record<string, number>   = {};
@@ -185,7 +184,6 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
     return { tipoCounts, prioCounts, statusCounts };
   }, [stories]);
 
-  // ── Chips ativos ──
   const activeChips = useMemo(() => {
     const chips: { key: string; display: string }[] = [];
     if (filtros.tipo !== "all")       chips.push({ key: "tipo",       display: filtros.tipo });
@@ -196,6 +194,8 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
     }
     return chips;
   }, [filtros, workflowColumns]);
+
+  const advancedFilterCount = activeChips.length;
 
   const hasAnyFilter =
     filtros.membros.length > 0 ||
@@ -268,13 +268,20 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
   ], [workflowColumns, counts, stories]);
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2">
 
-      {/* ── Linha 0: Seletor de Sprint ── */}
+      {/* ── LINHA 1: Sprint info ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0">Sprint</span>
 
+        {/* Dot de status */}
+        {sprintInfo && (
+          <span
+            className="h-2 w-2 rounded-full shrink-0"
+            style={{ background: sprintInfo.isActive ? "#22c55e" : "#94a3b8" }}
+          />
+        )}
+
+        {/* Select de sprint */}
         <Select
           value={filtros.sprintId}
           onValueChange={(val) => {
@@ -282,18 +289,17 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
             onChange({ ...filtros, sprintId: val });
           }}
         >
-          <SelectTrigger className="h-8 text-xs w-auto min-w-[12rem] border-border/60 pr-8">
-            <span className="whitespace-nowrap text-xs">{selectedLabel}</span>
+          <SelectTrigger className="h-8 text-xs w-auto min-w-[10rem] max-w-[16rem] border-border/60 font-semibold pr-8">
+            <span className="whitespace-nowrap text-xs truncate">
+              {filtros.sprintId === "all" ? "Todas as sprints" : (sprintInfo?.name ?? "")}
+            </span>
           </SelectTrigger>
-
           <SelectContent className="min-w-[var(--radix-select-trigger-width)]">
             <SelectItem value="all">
               <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
-                <span>📋</span>
-                <span>Todas as sprints</span>
+                <span>📋</span><span>Todas as sprints</span>
               </span>
             </SelectItem>
-
             {sprintsSorted.map((s: any) => {
               const isActive = s.isActive || s.is_active;
               const count    = huCountBySprint[s.id] ?? 0;
@@ -319,64 +325,42 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
           </SelectContent>
         </Select>
 
-        {selectedSprint && (selectedSprint.isActive || selectedSprint.is_active) && (
-          <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-600 text-[10px] font-semibold">
-            🏃 Sprint em andamento
+        {sprintInfo && <span className="h-4 w-px bg-border shrink-0" />}
+
+        {/* Datas */}
+        {sprintInfo?.dateRange && (
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+            {sprintInfo.dateRange}
           </span>
         )}
 
-        {selectedSprint && !selectedSprint.isActive && !selectedSprint.is_active && (
-          <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-slate-400/15 border border-slate-400/40 text-slate-500 text-[10px] font-medium">
+        {/* Badge HU count */}
+        {sprintInfo && sprintInfo.count > 0 && (
+          <span className="inline-flex items-center h-5 px-2 rounded-full bg-muted border border-border text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
+            {sprintInfo.count} HU{sprintInfo.count !== 1 ? "s" : ""}
+          </span>
+        )}
+
+        {/* Badge atraso */}
+        {sprintInfo && sprintInfo.delayDays > 0 && (
+          <span className="inline-flex items-center h-5 px-2 rounded-full bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 text-[10px] font-semibold text-amber-600 whitespace-nowrap">
+            {sprintInfo.delayDays}d atraso
+          </span>
+        )}
+
+        {/* Badge encerrada */}
+        {sprintInfo && !sprintInfo.isActive && (
+          <span className="inline-flex items-center h-5 px-2 rounded-full bg-muted border border-border text-[10px] text-muted-foreground whitespace-nowrap">
             🏁 Encerrada
           </span>
         )}
       </div>
 
-      {/* ── Linha 1: Visões salvas ── */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1 shrink-0">Visões</span>
-        {allViews.map((v) => (
-          <ViewChip
-            key={v.id}
-            view={v}
-            active={activeViewId === v.id}
-            onApply={() => applyView(v)}
-            onDelete={viewsCustom.find((c) => c.id === v.id) ? () => deleteView(v.id) : undefined}
-          />
-        ))}
-        {!showSaveInput ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setShowSaveInput(true)}
-                  className="h-7 px-2 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary text-[11px] flex items-center gap-1 transition-colors"
-                >
-                  <BookmarkPlus className="h-3 w-3" /> Salvar filtro
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">Salva os filtros ativos como visão rápida</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : (
-          <div className="flex items-center gap-1">
-            <input
-              autoFocus
-              value={saveLabel}
-              onChange={(e) => setSaveLabel(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") saveCurrentView(); if (e.key === "Escape") setShowSaveInput(false); }}
-              placeholder="Nome da visão..."
-              className="h-7 px-2 rounded-lg border border-primary/50 bg-background text-xs text-foreground focus:outline-none w-36"
-            />
-            <button onClick={saveCurrentView} className="h-7 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium">OK</button>
-            <button onClick={() => setShowSaveInput(false)} className="h-7 px-2 rounded-lg text-muted-foreground hover:text-foreground text-xs"><X className="h-3 w-3" /></button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Linha 2: Busca + avatares de membros ── */}
+      {/* ── LINHA 2: Busca + Avatares + Visões + Filtros + Contador ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative">
+
+        {/* Busca */}
+        <div className="relative shrink-0">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Buscar card..."
@@ -394,6 +378,7 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
           )}
         </div>
 
+        {/* Avatares */}
         {responsaveisFilter.length > 0 && (
           <KanbanResponsavelFilter
             responsaveis={responsaveisFilter}
@@ -401,10 +386,66 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
             onChange={(membros) => { setActiveViewId(null); onChange({ ...filtros, membros }); }}
           />
         )}
-      </div>
 
-      {/* ── Linha 3: Chips ativos + Filtrar + contador ── */}
-      <div className="flex items-center gap-2 flex-wrap">
+        <span className="h-4 w-px bg-border shrink-0" />
+
+        {/* Visões rápidas */}
+        {allViews.map((v) => (
+          <ViewChip
+            key={v.id}
+            view={v}
+            active={activeViewId === v.id}
+            onApply={() => applyView(v)}
+            onDelete={viewsCustom.find((c) => c.id === v.id) ? () => deleteView(v.id) : undefined}
+          />
+        ))}
+
+        {/* Salvar filtro — só ícone com tooltip */}
+        {!showSaveInput ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setShowSaveInput(true)}
+                  className="h-7 w-7 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary flex items-center justify-center transition-colors shrink-0"
+                >
+                  <BookmarkPlus className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">Salvar filtro atual como visão</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              value={saveLabel}
+              onChange={(e) => setSaveLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveCurrentView();
+                if (e.key === "Escape") setShowSaveInput(false);
+              }}
+              placeholder="Nome da visão..."
+              className="h-7 px-2 rounded-lg border border-primary/50 bg-background text-xs text-foreground focus:outline-none w-36"
+            />
+            <button
+              onClick={saveCurrentView}
+              className="h-7 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium"
+            >
+              OK
+            </button>
+            <button
+              onClick={() => setShowSaveInput(false)}
+              className="h-7 px-2 rounded-lg text-muted-foreground hover:text-foreground text-xs"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+
+        <span className="h-4 w-px bg-border shrink-0" />
+
+        {/* Chips de filtros ativos (Tipo/Prior/Status) */}
         {activeChips.map((chip) => (
           <span
             key={chip.key}
@@ -412,44 +453,81 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
           >
             <span className="text-muted-foreground/60 text-[10px]">{CHIP_LABELS[chip.key]}:</span>
             {chip.display}
-            <button onClick={() => clearChip(chip.key)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => clearChip(chip.key)}
+              className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+            >
               <X className="h-2.5 w-2.5" />
             </button>
           </span>
         ))}
 
+        {/* Botão Filtros com badge de contagem */}
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
-            <button className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary text-[11px] transition-colors">
-              <SlidersHorizontal className="h-3 w-3" /> Tipo / Prior / Status
-              <ChevronDown className="h-2.5 w-2.5" />
+            <button className="relative inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-primary text-[12px] transition-colors shrink-0">
+              <Filter className="h-3.5 w-3.5" />
+              Filtros
+              <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
+              {advancedFilterCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold grid place-items-center">
+                  {advancedFilterCount}
+                </span>
+              )}
             </button>
           </PopoverTrigger>
           <PopoverContent side="bottom" align="start" className="w-72 p-3 space-y-4">
-            <FilterGroup label="Tipo"       colorClass="text-violet-400" items={tipoItems}   selected={filtros.tipo}       onSelect={(v) => { onChange({ ...filtros, tipo: v });       setActiveViewId(null); }} />
-            <FilterGroup label="Prioridade" colorClass="text-amber-400"  items={prioItems}   selected={filtros.prioridade} onSelect={(v) => { onChange({ ...filtros, prioridade: v }); setActiveViewId(null); }} />
-            <FilterGroup label="Status"     colorClass="text-cyan-400"   items={statusItems} selected={filtros.status}     onSelect={(v) => { onChange({ ...filtros, status: v });     setActiveViewId(null); }} />
+            <FilterGroup
+              label="Tipo"
+              colorClass="text-violet-400"
+              items={tipoItems}
+              selected={filtros.tipo}
+              onSelect={(v) => { onChange({ ...filtros, tipo: v }); setActiveViewId(null); }}
+            />
+            <FilterGroup
+              label="Prioridade"
+              colorClass="text-amber-400"
+              items={prioItems}
+              selected={filtros.prioridade}
+              onSelect={(v) => { onChange({ ...filtros, prioridade: v }); setActiveViewId(null); }}
+            />
+            <FilterGroup
+              label="Status"
+              colorClass="text-cyan-400"
+              items={statusItems}
+              selected={filtros.status}
+              onSelect={(v) => { onChange({ ...filtros, status: v }); setActiveViewId(null); }}
+            />
           </PopoverContent>
         </Popover>
 
+        {/* Limpar tudo */}
         {hasAnyFilter && (
-          <button onClick={clearAll} className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            onClick={clearAll}
+            className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          >
             <X className="h-3 w-3" /> Limpar tudo
           </button>
         )}
 
-        <span className="ml-auto text-[11px] font-mono text-muted-foreground">
-          <span className="text-foreground font-semibold">{totalFiltrado}</span> demanda{totalFiltrado !== 1 ? "s" : ""}
+        {/* Contador — sempre à direita */}
+        <span className="ml-auto text-[11px] font-mono text-muted-foreground whitespace-nowrap">
+          <span className="text-foreground font-semibold">{totalFiltrado}</span>{" "}
+          demanda{totalFiltrado !== 1 ? "s" : ""}
         </span>
       </div>
     </div>
   );
 });
 
-// ─── ViewChip ─────────────────────────────────────────────────────────────────────────────
+// ─── ViewChip ────────────────────────────────────────────────────────────────
 
 const ViewChip = React.memo(function ViewChip({ view, active, onApply, onDelete }: {
-  view: KanbanViewSalva; active: boolean; onApply: () => void; onDelete?: () => void;
+  view: KanbanViewSalva;
+  active: boolean;
+  onApply: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <span
@@ -463,7 +541,10 @@ const ViewChip = React.memo(function ViewChip({ view, active, onApply, onDelete 
       <span>{view.icon}</span>
       {view.label}
       {onDelete && (
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity"
+        >
           <X className="h-2.5 w-2.5" />
         </button>
       )}
@@ -471,16 +552,20 @@ const ViewChip = React.memo(function ViewChip({ view, active, onApply, onDelete 
   );
 });
 
-// ─── FilterGroup ────────────────────────────────────────────────────────────────────────────
+// ─── FilterGroup ─────────────────────────────────────────────────────────────
 
 const FilterGroup = React.memo(function FilterGroup({ label, colorClass, items, selected, onSelect }: {
-  label: string; colorClass: string;
+  label: string;
+  colorClass: string;
   items: { value: string; label: string; count: number }[];
-  selected: string; onSelect: (v: string) => void;
+  selected: string;
+  onSelect: (v: string) => void;
 }) {
   return (
     <div>
-      <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${colorClass}`}>{label}</p>
+      <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${colorClass}`}>
+        {label}
+      </p>
       <div className="flex flex-wrap gap-1.5">
         {items.map((item) => (
           <button
@@ -493,7 +578,9 @@ const FilterGroup = React.memo(function FilterGroup({ label, colorClass, items, 
             }`}
           >
             {item.label}
-            <span className={`text-[9px] ${selected === item.value ? "opacity-80" : "opacity-50"}`}>{item.count}</span>
+            <span className={`text-[9px] ${selected === item.value ? "opacity-80" : "opacity-50"}`}>
+              {item.count}
+            </span>
           </button>
         ))}
       </div>

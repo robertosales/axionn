@@ -11,6 +11,11 @@
  *      currentTeamIdRef ANTES do primeiro render dos consumidores.
  *   2. refreshTeams() resolve o teamId válido de forma síncrona dentro
  *      da função e chama setCurrentTeamId() uma única vez com o valor final.
+ *
+ * fix(teams-dedup): a tabela team_modules tem uma linha por módulo por time.
+ *   O flatMap gerava teamList com entradas duplicadas para o mesmo team.id.
+ *   Corrigido com dedup por id após montar teamList, na origem, para que
+ *   todos os Selects da aplicação recebam a lista sem duplicatas.
  */
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -89,9 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // F4-fix: boot-sync — pré-popula currentTeamIdRef a partir do localStorage
-  // ANTES do primeiro render dos hooks consumidores, eliminando o ciclo idle.
-  // Não valida contra a lista de times (ainda não carregada) — refreshTeams()
-  // fará a validação definitiva e corrigirá se necessário.
   useEffect(() => {
     const saved = localStorage.getItem("selectedTeamId");
     if (saved && !currentTeamIdRef.current) {
@@ -167,25 +169,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) { console.error("[Auth] refreshTeams:", error); return; }
 
-    const teamList: AuthTeam[] = (data ?? []).flatMap((row: any) => {
+    const rawList: AuthTeam[] = (data ?? []).flatMap((row: any) => {
       if (!row.team) return [];
       return [{ id: row.team.id, name: row.team.name, module: row.module }];
+    });
+
+    // fix(teams-dedup): team_modules tem uma linha por módulo por time.
+    // O mesmo team.id pode aparecer várias vezes (ex: sala_agil + sustentacao).
+    // Mantemos apenas a primeira ocorrência para que todos os Selects da
+    // aplicação recebam a lista sem duplicatas.
+    const seen = new Set<string>();
+    const teamList = rawList.filter(t => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
     });
 
     if (!mountedRef.current) return;
     setTeams(teamList);
 
-    // F4-fix: lê o saved ANTES de qualquer setState para resolver o teamId
-    // de forma síncrona dentro desta função, evitando o ciclo idle.
     const saved          = localStorage.getItem("selectedTeamId");
     const savedIsValid   = saved && teamList.some(t => t.id === saved);
     const alreadyHasTeam = !!currentTeamIdRef.current &&
                            teamList.some(t => t.id === currentTeamIdRef.current);
 
-    if (alreadyHasTeam) {
-      // Boot-sync já preencheu um valor válido — apenas confirma sem setState redundante
-      return;
-    }
+    if (alreadyHasTeam) return;
 
     if (savedIsValid) {
       setCurrentTeamId(saved!);
@@ -194,11 +202,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("selectedTeamId");
         console.warn("[Auth] selectedTeamId inválido removido do localStorage:", saved);
       }
-      // Sem team salvo válido: não auto-seleciona (usuário deve escolher)
     }
   };
 
-  const hasPermission  = (permission: Permission) => isAdmin || permissions.has(permission);
+  const hasPermission   = (permission: Permission) => isAdmin || permissions.has(permission);
   const hasModuleAccess = (module: string): boolean => {
     if (isAdmin) return true;
     return moduleRoles.some(mr => mr.module === module);

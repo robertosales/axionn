@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-// F2-A: useDemandas (dataset completo) substituído por useDemandasPaginadas
 import { useDemandasPaginadas } from "../hooks/useDemandasPaginadas";
 import { useProjetos } from "../hooks/useProjetos";
 import { useKpisSustentacao } from "../hooks/useKpisSustentacao";
@@ -13,6 +12,7 @@ import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { ImrDashboard } from "./ImrDashboard";
 import { MetricasFilterBar, FILTROS_DEFAULT } from "./MetricasFilterBar";
 import type { MetricasFiltros } from "./MetricasFilterBar";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertTriangle,
   Clock,
@@ -29,6 +29,26 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 const SEVERITY_ORDER = ["bloqueada", "aguardando_retorno"] as const;
+
+// ─── Helpers de saudação ──────────────────────────────────────────────────────
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function getFormattedDate(): string {
+  return new Date().toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  });
+}
+
+function capitalizeFirst(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
 
 // ─── LazySection ─────────────────────────────────────────────────────────────
 function LazySection({ children, placeholder }: {
@@ -53,6 +73,16 @@ function LazySection({ children, placeholder }: {
 // ─── SustentacaoDashboard ──────────────────────────────────────────────────────
 export function SustentacaoDashboard() {
   const [filtros, setFiltros] = useState<MetricasFiltros>(FILTROS_DEFAULT);
+  const { user } = useAuth() as any;
+
+  const firstName = useMemo(() => {
+    const full: string =
+      user?.user_metadata?.full_name ||
+      user?.user_metadata?.name ||
+      user?.email?.split("@")[0] ||
+      "";
+    return capitalizeFirst(full.split(" ")[0] ?? "");
+  }, [user]);
 
   const {
     atendimento,
@@ -61,11 +91,6 @@ export function SustentacaoDashboard() {
     loading: kpisLoading,
   } = useKpisSustentacao(filtros.periodo === "all" ? 30 : parseInt(filtros.periodo));
 
-  // F2-A: substituído useDemandas (fetchDemandasEnriched completo) por
-  // useDemandasPaginadas (RPC paginada 50 rows/página, infinite scroll).
-  // Os filtros client-side e derivações continuam funcionando sobre o subset
-  // carregado. Para o Dashboard, a primeira página (50 demandas) é suficiente
-  // para os KPIs visuais (gráfico de situação e alertas operacionais).
   const { demandas, loading: demandasLoading } = useDemandasPaginadas();
   const { projetos } = useProjetos();
 
@@ -131,9 +156,15 @@ export function SustentacaoDashboard() {
 
   return (
     <div className="space-y-6">
+
+      {/* ── Greeting header ── */}
       <div>
-        <h2 className="text-lg font-semibold">Dashboard Sustentação</h2>
-        <p className="text-sm text-muted-foreground">Visão consolidada de KPIs e alertas</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {getGreeting()}{firstName ? `, ${firstName}` : ""} 👋
+        </h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {capitalizeFirst(getFormattedDate())}
+        </p>
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
@@ -146,7 +177,7 @@ export function SustentacaoDashboard() {
         />
       </div>
 
-      {/* KPIs: rendem assim que kpisLoading=false, independente das demandas */}
+      {/* KPIs */}
       <Section title="Atendimento e Volume">
         {kpisLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -208,7 +239,6 @@ export function SustentacaoDashboard() {
         )}
       </Section>
 
-      {/* Situação + Alertas: dependem das demandas paginadas */}
       {demandasLoading ? (
         <SkeletonList count={3} />
       ) : (

@@ -6,10 +6,12 @@
  * - Sheet lateral (UserProfileSheet) para edicao
  * - DropdownMenu unico por linha (substituiu 5 botoes soltos)
  * - Todos os Dialogs de confirmacao preservados
+ * - Fundo suave aprovado no mockup (bg-muted/40 container, hover:bg-muted/50 linhas)
  *
  * STYLE GUIDE:
+ *   Container: bg-muted/40 rounded-xl p-4 (fundo suave)
  *   Header tabela: bg-muted/60 text-[10px] uppercase tracking-wider py-2
- *   Linha: text-xs py-2 hover:bg-muted/30
+ *   Linha: text-xs py-2 hover:bg-muted/50
  *   Avatar: h-7 w-7 rounded-full bg-primary/10 text-primary text-[10px] font-bold
  *   Badge modulo: text-[9px] px-1.5 py-0
  */
@@ -377,7 +379,6 @@ export function UserRolesManager() {
       if (actor) await writeAudit(actor.id, user.user_id, "toggle_active", { status: newActive ? "ativado" : "desativado" });
       toast.success(newActive ? `${user.display_name} ativado.` : `${user.display_name} desativado.`);
       setToggleState(TOG0);
-      // Fecha sheet se estava aberto para o mesmo usuario
       if (sheetUser?.user_id === user.user_id) closeSheet();
       await fetchUsers();
     } catch (err: any) {
@@ -497,15 +498,15 @@ export function UserRolesManager() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* Busca + contador */}
-      <div className="flex items-center gap-3">
+      {/* Busca + contador — fundo suave */}
+      <div className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-3 border border-border/60">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome ou e-mail..."
             value={searchFilter}
             onChange={e => setSearchFilter(e.target.value)}
-            className="pl-9 h-9 text-xs"
+            className="pl-9 h-9 text-xs bg-background"
           />
         </div>
         <span className="text-xs text-muted-foreground">
@@ -520,36 +521,37 @@ export function UserRolesManager() {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="rounded-lg border border-border overflow-hidden shadow-sm">
+        <div className="rounded-xl border border-border/70 overflow-hidden shadow-sm bg-card">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/60 hover:bg-muted/60">
-                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2">Usuário</TableHead>
-                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2">Módulo &amp; Perfil</TableHead>
-                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2">Times</TableHead>
-                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2 text-center">Status</TableHead>
-                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2 text-right">Ações</TableHead>
+              <TableRow className="bg-muted/50 hover:bg-muted/50 border-b border-border/70">
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Usuário</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Módulo &amp; Perfil</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Times</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-center text-muted-foreground">Status</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-right text-muted-foreground">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-10">
+                  <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-10 bg-muted/20">
                     Nenhum usuário encontrado.
                   </TableCell>
                 </TableRow>
-              ) : paginatedItems.map(user => (
+              ) : paginatedItems.map((user, idx) => (
                 <TableRow
                   key={user.user_id}
                   className={cn(
-                    "transition-colors",
+                    "transition-colors border-b border-border/50 hover:bg-muted/40",
                     !user.is_active && "opacity-60",
+                    idx % 2 === 0 ? "bg-background" : "bg-muted/20",
                   )}
                 >
                   {/* Usuário */}
-                  <TableCell className="py-2">
+                  <TableCell className="py-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-[10px]">
+                      <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-[10px] ring-1 ring-primary/20">
                         {getInitials(user.display_name)}
                       </div>
                       <div className="min-w-0">
@@ -568,33 +570,33 @@ export function UserRolesManager() {
                   </TableCell>
 
                   {/* Módulo */}
-                  <TableCell className="py-2">
+                  <TableCell className="py-2.5">
                     <ModuleTags moduleRoles={user.moduleRoles} module_access={user.module_access} />
                   </TableCell>
 
                   {/* Times */}
-                  <TableCell className="py-2">
+                  <TableCell className="py-2.5">
                     <div className="flex flex-wrap gap-1">
                       {user.teams.length > 0
                         ? user.teams.map(t => (
-                            <Badge key={t.id} variant="outline" className="text-[9px] font-normal px-1.5 py-0">{t.name}</Badge>
+                            <Badge key={t.id} variant="outline" className="text-[9px] font-normal px-1.5 py-0 bg-muted/50">{t.name}</Badge>
                           ))
                         : <span className="text-[10.5px] text-muted-foreground">—</span>}
                     </div>
                   </TableCell>
 
                   {/* Status */}
-                  <TableCell className="py-2 text-center">
+                  <TableCell className="py-2.5 text-center">
                     {user.is_active
                       ? <Badge className="text-[9px] bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0 dark:bg-emerald-900/30 dark:text-emerald-400">● ativo</Badge>
                       : <Badge className="text-[9px] bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0 dark:bg-rose-900/30 dark:text-rose-400">● inativo</Badge>}
                   </TableCell>
 
                   {/* Ações */}
-                  <TableCell className="py-2 text-right">
+                  <TableCell className="py-2.5 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-muted">
                           <MoreHorizontal className="h-3.5 w-3.5" />
                         </Button>
                       </DropdownMenuTrigger>

@@ -8,8 +8,8 @@
    ============================================================ */
 :root,
 [data-theme="light"] {
-  /* Superfícies — beige quente, hierarquia clara */
-  --background:        0 0% 97%;
+  /* Superfícies — beige quente suave, hierarquia clara */
+  --background:        30 14% 96%;
   --foreground:        30 8% 12%;
 
   --card:              0 0% 100%;
@@ -26,7 +26,7 @@
   --secondary:         30 6% 91%;
   --secondary-foreground: 30 6% 20%;
 
-  --muted:             30 6% 91%;
+  --muted:             30 8% 92%;
   --muted-foreground:  30 4% 44%;
 
   /* Accent */
@@ -38,15 +38,15 @@
   --destructive-foreground: 0 0% 100%;
 
   /* Bordas e inputs */
-  --border:            30 8% 85%;
-  --input:             30 8% 85%;
+  --border:            30 8% 86%;
+  --input:             30 8% 86%;
   --ring:              174 97% 22%;
   --radius:            0.5rem;
 
-  /* Sidebar */
-  --sidebar:           30 10% 97%;
+  /* Sidebar — ligeiramente mais clara que o background */
+  --sidebar:           30 12% 98%;
   --sidebar-foreground: 30 8% 14%;
-  --sidebar-accent:    30 6% 91%;
+  --sidebar-accent:    30 8% 92%;
 
   /* Info — teal médio (alias de primary para contextos informativos) */
   --info:              174 60% 35%;

@@ -1,4 +1,17 @@
 // src/contexts/AuthContext.tsx
+/**
+ * F4-fix: resolução eager de currentTeamId no boot
+ *
+ * ANTES: refreshTeams() gravava currentTeamId via setState async, deixando
+ *   o valor null no primeiro render dos hooks consumidores (enabled: !!teamId
+ *   = false → queries em idle → tela em branco até F5).
+ *
+ * DEPOIS:
+ *   1. Novo efeito de boot-sync lê localStorage no mount e pré-popula
+ *      currentTeamIdRef ANTES do primeiro render dos consumidores.
+ *   2. refreshTeams() resolve o teamId válido de forma síncrona dentro
+ *      da função e chama setCurrentTeamId() uma única vez com o valor final.
+ */
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
@@ -47,17 +60,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ─── Audit logger ─────────────────────────────────────────────────────────────
 function auditLog(
   event: "SIGNOUT_INITIATED" | "SIGNOUT_REMOTE_SUCCESS" | "SIGNOUT_REMOTE_FAILED" | "SIGNOUT_LOCAL_CLEARED",
   meta: Record<string, unknown> = {},
 ) {
-  console.info("[Auth:Audit]", event, {
-    timestamp: new Date().toISOString(),
-    ...meta,
-  });
-  // TODO: plug Sentry / DataDog here when needed
-  // captureEvent({ message: event, extra: meta });
+  console.info("[Auth:Audit]", event, { timestamp: new Date().toISOString(), ...meta });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -79,6 +86,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
+  }, []);
+
+  // F4-fix: boot-sync — pré-popula currentTeamIdRef a partir do localStorage
+  // ANTES do primeiro render dos hooks consumidores, eliminando o ciclo idle.
+  // Não valida contra a lista de times (ainda não carregada) — refreshTeams()
+  // fará a validação definitiva e corrigirá se necessário.
+  useEffect(() => {
+    const saved = localStorage.getItem("selectedTeamId");
+    if (saved && !currentTeamIdRef.current) {
+      currentTeamIdRef.current = saved;
+      setCurrentTeamIdState(saved);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setCurrentTeamId = (id: string | null) => {
@@ -155,28 +175,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!mountedRef.current) return;
     setTeams(teamList);
 
-    if (teamList.length > 0 && !currentTeamIdRef.current) {
-      const saved = localStorage.getItem("selectedTeamId");
-      const savedIsValid = saved && teamList.some(t => t.id === saved);
+    // F4-fix: lê o saved ANTES de qualquer setState para resolver o teamId
+    // de forma síncrona dentro desta função, evitando o ciclo idle.
+    const saved          = localStorage.getItem("selectedTeamId");
+    const savedIsValid   = saved && teamList.some(t => t.id === saved);
+    const alreadyHasTeam = !!currentTeamIdRef.current &&
+                           teamList.some(t => t.id === currentTeamIdRef.current);
 
-      if (savedIsValid) {
-        setCurrentTeamId(saved!);
-      } else {
-        if (saved) {
-          localStorage.removeItem("selectedTeamId");
-          console.warn("[Auth] selectedTeamId inválido removido do localStorage:", saved);
-        }
+    if (alreadyHasTeam) {
+      // Boot-sync já preencheu um valor válido — apenas confirma sem setState redundante
+      return;
+    }
+
+    if (savedIsValid) {
+      setCurrentTeamId(saved!);
+    } else {
+      if (saved) {
+        localStorage.removeItem("selectedTeamId");
+        console.warn("[Auth] selectedTeamId inválido removido do localStorage:", saved);
       }
+      // Sem team salvo válido: não auto-seleciona (usuário deve escolher)
     }
   };
 
-  const hasPermission = (permission: Permission) => isAdmin || permissions.has(permission);
-
+  const hasPermission  = (permission: Permission) => isAdmin || permissions.has(permission);
   const hasModuleAccess = (module: string): boolean => {
     if (isAdmin) return true;
     return moduleRoles.some(mr => mr.module === module);
   };
-
   const getModuleRole = (module: string): string | null =>
     moduleRoles.find(mr => mr.module === module)?.role_name ?? null;
 
@@ -185,7 +211,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: profileData } = await supabase
         .from("profiles").select("*").eq("user_id", userId).single();
 
-      // BLOQUEIO DE INATIVOS: Se o perfil estiver inativo, encerra a sessão imediatamente.
       if (profileData && profileData.is_active === false) {
         console.warn("[Auth] Bloqueio: Usuário inativo detectado.");
         await forceLocalClear();
@@ -204,10 +229,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ─── forceLocalClear: limpa estado local SEMPRE, independente da API ─────────
   const forceLocalClear = () => {
     localStorage.removeItem("selectedTeamId");
-    // Limpa qualquer outro dado de sessão que possa existir
     try {
       const keysToRemove = Object.keys(localStorage).filter(
         (k) => k.startsWith("sb-") || k.startsWith("supabase."),
@@ -271,55 +294,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── signOut resiliente ───────────────────────────────────────────────────────
-  // 1. Guard: impede cliques concorrentes (debounce de estado)
-  // 2. Audit log no início
-  // 3. Promise.race com timeout de 5s — evita travamento eterno
-  // 4. try/catch robusto — captura falhas da API
-  // 5. forceLocalClear() no finally — SEMPRE limpa o estado local
   const signOut = async () => {
-    if (isSigningOut) return; // debounce: ignora clique duplo
+    if (isSigningOut) return;
     setIsSigningOut(true);
 
-    const currentToken = session?.access_token;
+    const currentToken   = session?.access_token;
     const tokenExpiresAt = session?.expires_at;
 
-    auditLog("SIGNOUT_INITIATED", {
-      userId: user?.id,
-      email: user?.email,
-      hasToken: !!currentToken,
-      tokenExpiresAt,
-    });
+    auditLog("SIGNOUT_INITIATED", { userId: user?.id, email: user?.email, hasToken: !!currentToken, tokenExpiresAt });
 
     let remoteSuccess = false;
-
     try {
       const TIMEOUT_MS = 5_000;
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`timeout_${TIMEOUT_MS}ms`)), TIMEOUT_MS),
-      );
-
       await Promise.race([
         supabase.auth.signOut(),
-        timeoutPromise,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout_${TIMEOUT_MS}ms`)), TIMEOUT_MS)),
       ]);
-
       remoteSuccess = true;
       auditLog("SIGNOUT_REMOTE_SUCCESS", { userId: user?.id });
     } catch (err: any) {
       const reason = err?.message ?? String(err);
-      auditLog("SIGNOUT_REMOTE_FAILED", {
-        userId: user?.id,
-        reason,
-        tokenState: currentToken ? "present" : "absent",
-      });
+      auditLog("SIGNOUT_REMOTE_FAILED", { userId: user?.id, reason, tokenState: currentToken ? "present" : "absent" });
       console.error("[Auth] signOut falhou — aplicando fallback local:", reason);
     } finally {
       forceLocalClear();
-      auditLog("SIGNOUT_LOCAL_CLEARED", {
-        userId: user?.id,
-        remoteSuccess,
-      });
+      auditLog("SIGNOUT_LOCAL_CLEARED", { userId: user?.id, remoteSuccess });
       if (mountedRef.current) setIsSigningOut(false);
     }
   };

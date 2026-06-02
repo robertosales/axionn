@@ -1,3 +1,17 @@
+/**
+ * SustentacaoBoard — F5-fix: arquivamento automático de demandas concluídas
+ *
+ * ANTES: todas as demandas em status final eram renderizadas no DOM
+ *   independente de antigüidade, causando boards com centenas de cards em
+ *   colunas finais e travando a thread principal.
+ *
+ * DEPOIS:
+ *   • ARCHIVE_DAYS=7: demandas em status final com updated_at > 7 dias
+ *     atrás são filtradas antes de chegar ao DOM.
+ *   • Toggle 'Exibir arquivadas' (Eye/EyeOff) no header da barra de filtros.
+ *   • Badge contador 'N arquivadas' quando showArchived=false e há filtradas.
+ *   • STATUS_FINAIS configurável via constante.
+ */
 import { useState, useMemo } from "react";
 import {
   ChevronDown,
@@ -14,8 +28,11 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Check,
+  Eye,
+  EyeOff,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge }   from "@/components/ui/badge";
+import { Button }  from "@/components/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -35,6 +52,18 @@ import { SITUACAO_LABELS } from "../types/demanda";
 export type { Demanda };
 
 export const WORKFLOWLABELS: Record<string, string> = SITUACAO_LABELS;
+
+// F5-fix: status considerados "finais" para arquivamento automático
+const STATUS_FINAIS = new Set(["concluida", "encerrada", "cancelada", "rejeitada"]);
+const ARCHIVE_DAYS  = 7;
+
+function isArquivada(demanda: Demanda): boolean {
+  if (!STATUS_FINAIS.has(demanda.situacao as string)) return false;
+  const ref = (demanda as any).updated_at ?? (demanda as any).situacao_changed_at;
+  if (!ref) return false;
+  const diffDays = (Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays > ARCHIVE_DAYS;
+}
 
 // ── Helpers de tempo em coluna / horas ────────────────────────────────
 function formatTimeInColumn(iso?: string | null): string {
@@ -57,7 +86,6 @@ function formatHorasTotais(horas?: number | null): string {
   return mm > 0 ? `${hh}h${String(mm).padStart(2, "0")}` : `${hh}h`;
 }
 
-// Colunas padrão usadas como fallback quando workflowColumns não for passado
 export const FLOWPRINCIPAL = [
   "fila_atendimento",
   "planejamento_elaboracao",
@@ -100,7 +128,6 @@ const PAPEL_LABELS: Record<string, string> = {
   gestor:        "Gestor",
 };
 
-// ── Labels explícitas dos tipos conhecidos (com acentuação correta) ─────────────
 const TIPO_LABELS: Record<string, string> = {
   corretiva:              "Corretiva",
   evolutiva:              "Evolutiva",
@@ -116,7 +143,6 @@ const TIPO_LABELS: Record<string, string> = {
   demanda:                "Demanda",
 };
 
-// Paleta de cores por tipo (ciclicamente reutilizada para tipos não mapeados)
 const TIPO_COLORS: Record<string, { bg: string; text: string }> = {
   corretiva:              { bg: "rgba(239,68,68,0.12)",   text: "#ef4444" },
   evolutiva:              { bg: "rgba(16,185,129,0.12)",  text: "#10b981" },
@@ -132,22 +158,16 @@ const TIPO_COLORS: Record<string, { bg: string; text: string }> = {
   demanda:                { bg: "rgba(100,116,139,0.12)", text: "#64748b" },
 };
 
-// Fallback universal: converte qualquer snake_case em "Title Case" legível
 function tipoSnakeToLabel(tipo: string): string {
   if (!tipo) return "";
   if (TIPO_LABELS[tipo]) return TIPO_LABELS[tipo];
-  return tipo
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return tipo.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 function tipoGetStyle(tipo: string): { bg: string; text: string } {
-  if (TIPO_COLORS[tipo]) return TIPO_COLORS[tipo];
-  return { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
+  return TIPO_COLORS[tipo] ?? { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
 }
 
-// Interface para coluna de workflow dinâmica
 export interface WorkflowColumn {
   key: string;
   label: string;
@@ -163,9 +183,7 @@ function hexAlpha(hex: string, a: number) {
 function slaDaysRemaining(demanda: Demanda): number | null {
   const prazo = (demanda as any).prazosolucao;
   if (!prazo) return null;
-  const now = new Date();
-  const dead = new Date(prazo);
-  return Math.round((dead.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.round((new Date(prazo).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 import { getInitials, formatDisplayName } from "@/lib/nameUtils";
@@ -174,46 +192,31 @@ type RespItem = { papel: string; nome: string; created_at: string };
 
 function getResponsaveisList(demanda: Demanda): RespItem[] {
   const lista = (demanda as any).responsaveis_list as RespItem[] | undefined;
-
   if (lista && lista.length > 0) {
     const seen = new Set<string>();
     return lista.filter((r) => {
       if (!r.nome || seen.has(r.nome)) return false;
-      seen.add(r.nome);
-      return true;
+      seen.add(r.nome); return true;
     });
   }
-
   const campos: [string, string | null | undefined][] = [
     ["desenvolvedor",  demanda.responsavel_dev],
     ["analista",       demanda.responsavel_requisitos],
     ["arquiteto",      demanda.responsavel_arquiteto],
     ["testador",       demanda.responsavel_teste],
   ];
-  return campos
-    .filter(([, nome]) => !!nome)
-    .map(([papel, nome]) => ({ papel, nome: nome!, created_at: "" }));
+  return campos.filter(([, nome]) => !!nome).map(([papel, nome]) => ({ papel, nome: nome!, created_at: "" }));
 }
 
-// ── Avatar individual ────────────────────────────────────────────────
-function ResponsavelAvatar({
-  nome, papel, size = "sm", highlight = false,
-}: { nome: string; papel: string; size?: "sm" | "md"; highlight?: boolean }) {
+function ResponsavelAvatar({ nome, papel, size = "sm", highlight = false }: { nome: string; papel: string; size?: "sm" | "md"; highlight?: boolean }) {
   const color = PAPEL_COLORS[papel] ?? "#64748b";
-  const dim = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
+  const dim   = size === "md" ? "h-6 w-6 text-[9px]" : "h-5 w-5 text-[8px]";
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div
-            className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border-2 transition-transform hover:scale-110`}
-            style={{
-              backgroundColor: hexAlpha(color, 0.2),
-              color,
-              borderColor: highlight ? color : hexAlpha(color, 0.4),
-              boxShadow: highlight ? `0 0 0 2px ${hexAlpha(color, 0.25)}` : undefined,
-            }}
-          >
+          <div className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border-2 transition-transform hover:scale-110`}
+            style={{ backgroundColor: hexAlpha(color, 0.2), color, borderColor: highlight ? color : hexAlpha(color, 0.4), boxShadow: highlight ? `0 0 0 2px ${hexAlpha(color, 0.25)}` : undefined }}>
             {getInitials(nome)}
           </div>
         </TooltipTrigger>
@@ -226,20 +229,13 @@ function ResponsavelAvatar({
   );
 }
 
-// ── Grupo responsáveis expand/collapse ─────────────────────────────
 function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
   const [expanded, setExpanded] = useState(false);
-
   if (responsaveis.length === 0) {
-    return (
-      <div className="flex items-center gap-1 text-muted-foreground/40">
-        <User className="h-3 w-3" />
-      </div>
-    );
+    return <div className="flex items-center gap-1 text-muted-foreground/40"><User className="h-3 w-3" /></div>;
   }
-
-  const ultimo = responsaveis[responsaveis.length - 1];
-  const demais = responsaveis.slice(0, -1);
+  const ultimo  = responsaveis[responsaveis.length - 1];
+  const demais  = responsaveis.slice(0, -1);
   const ultimoColor = PAPEL_COLORS[ultimo.papel] ?? "#64748b";
 
   if (!expanded) {
@@ -250,15 +246,9 @@ function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+                <button onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
                   className="h-5 min-w-[22px] px-1.5 rounded-full text-[8px] font-bold border transition-all hover:scale-105 active:scale-95"
-                  style={{
-                    backgroundColor: hexAlpha(ultimoColor, 0.1),
-                    color: ultimoColor,
-                    borderColor: hexAlpha(ultimoColor, 0.35),
-                  }}
-                >
+                  style={{ backgroundColor: hexAlpha(ultimoColor, 0.1), color: ultimoColor, borderColor: hexAlpha(ultimoColor, 0.35) }}>
                   +{demais.length} <ChevronDown className="inline h-2.5 w-2.5" />
                 </button>
               </TooltipTrigger>
@@ -266,8 +256,7 @@ function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
                 <div className="font-semibold mb-1 text-muted-foreground">Outros responsáveis:</div>
                 {demais.map((r, i) => (
                   <div key={`${r.nome}-${i}`} className="flex items-center gap-1.5">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
-                      style={{ background: PAPEL_COLORS[r.papel] ?? "#64748b" }} />
+                    <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0" style={{ background: PAPEL_COLORS[r.papel] ?? "#64748b" }} />
                     <span>{formatDisplayName(r.nome)}</span>
                     <span className="text-muted-foreground">· {PAPEL_LABELS[r.papel] ?? r.papel}</span>
                   </div>
@@ -282,38 +271,27 @@ function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
   }
 
   return (
-    <div
-      className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/40 p-1.5 w-full"
-      onClick={(e) => e.stopPropagation()}
-    >
+    <div className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/40 p-1.5 w-full" onClick={(e) => e.stopPropagation()}>
       <div className="flex items-center justify-between mb-0.5">
         <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wide">Responsáveis</span>
-        <button
-          onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
-          className="h-4 w-4 rounded flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-        >
+        <button onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+          className="h-4 w-4 rounded flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
           <ChevronUp className="h-3 w-3" />
         </button>
       </div>
       {responsaveis.map((r, i) => {
-        const color = PAPEL_COLORS[r.papel] ?? "#64748b";
+        const color    = PAPEL_COLORS[r.papel] ?? "#64748b";
         const isUltimo = i === responsaveis.length - 1;
         return (
           <div key={`${r.nome}-${i}`} className="flex items-center gap-1.5 py-0.5">
             <ResponsavelAvatar nome={r.nome} papel={r.papel} size="sm" highlight={isUltimo} />
             <div className="flex flex-col min-w-0 flex-1">
-              <span className="text-[10px] font-medium text-foreground truncate">
-                {formatDisplayName(r.nome)}
-              </span>
-              <span className="text-[9px]" style={{ color: hexAlpha(color, 0.85) }}>
-                {PAPEL_LABELS[r.papel] ?? r.papel}
-              </span>
+              <span className="text-[10px] font-medium text-foreground truncate">{formatDisplayName(r.nome)}</span>
+              <span className="text-[9px]" style={{ color: hexAlpha(color, 0.85) }}>{PAPEL_LABELS[r.papel] ?? r.papel}</span>
             </div>
             {isUltimo && (
               <span className="text-[8px] px-1 py-0.5 rounded border shrink-0"
-                style={{ color, borderColor: hexAlpha(color, 0.3), background: hexAlpha(color, 0.08) }}>
-                último
-              </span>
+                style={{ color, borderColor: hexAlpha(color, 0.3), background: hexAlpha(color, 0.08) }}>último</span>
             )}
           </div>
         );
@@ -322,48 +300,23 @@ function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
   );
 }
 
-// ── Multi-select de projetos ────────────────────────────────────────
-function ProjetoMultiSelect({
-  projetos,
-  selected,
-  onChange,
-}: {
-  projetos: string[];
-  selected: string[];
-  onChange: (v: string[]) => void;
-}) {
+function ProjetoMultiSelect({ projetos, selected, onChange }: { projetos: string[]; selected: string[]; onChange: (v: string[]) => void }) {
   const [open, setOpen] = useState(false);
-
-  const toggle = (p: string) => {
-    onChange(selected.includes(p) ? selected.filter((s) => s !== p) : [...selected, p]);
-  };
-
-  const label =
-    selected.length === 0
-      ? "Todos os projetos"
-      : selected.length === 1
-        ? selected[0]
-        : `${selected.length} projetos`;
-
+  const toggle = (p: string) => onChange(selected.includes(p) ? selected.filter((s) => s !== p) : [...selected, p]);
+  const label  = selected.length === 0 ? "Todos os projetos" : selected.length === 1 ? selected[0] : `${selected.length} projetos`;
   return (
     <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="h-9 px-3 rounded-lg border border-border bg-background text-sm flex items-center gap-2 hover:bg-muted transition-colors min-w-[160px] max-w-[240px]"
-      >
+      <button onClick={() => setOpen((v) => !v)}
+        className="h-9 px-3 rounded-lg border border-border bg-background text-sm flex items-center gap-2 hover:bg-muted transition-colors min-w-[160px] max-w-[240px]">
         <span className="truncate flex-1 text-left text-foreground">{label}</span>
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       </button>
       {open && (
         <div className="absolute top-10 left-0 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[200px] max-h-[280px] overflow-y-auto">
           <div className="px-2 pb-1 pt-0.5">
-            <button
-              onClick={() => onChange([])}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-muted-foreground"
-            >
-              <span className={`h-4 w-4 rounded border flex items-center justify-center ${
-                selected.length === 0 ? "bg-primary border-primary" : "border-border"
-              }`}>
+            <button onClick={() => onChange([])}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-muted-foreground">
+              <span className={`h-4 w-4 rounded border flex items-center justify-center ${selected.length === 0 ? "bg-primary border-primary" : "border-border"}`}>
                 {selected.length === 0 && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
               </span>
               Todos
@@ -371,14 +324,9 @@ function ProjetoMultiSelect({
           </div>
           <div className="border-t border-border/50 my-0.5" />
           {projetos.map((p) => (
-            <button
-              key={p}
-              onClick={() => toggle(p)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-muted transition-colors text-foreground"
-            >
-              <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${
-                selected.includes(p) ? "bg-primary border-primary" : "border-border"
-              }`}>
+            <button key={p} onClick={() => toggle(p)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-muted transition-colors text-foreground">
+              <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected.includes(p) ? "bg-primary border-primary" : "border-border"}`}>
                 {selected.includes(p) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
               </span>
               <span className="truncate">{p}</span>
@@ -386,43 +334,29 @@ function ProjetoMultiSelect({
           ))}
         </div>
       )}
-      {open && (
-        <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-      )}
+      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
     </div>
   );
 }
 
-// ── Card da demanda ──────────────────────────────────────────────────
-function DemandaCard({
-  demanda, accentHex, visibleCols, currentIndex, onClick, onMove, onNovaAtividade,
-}: {
-  demanda: Demanda;
-  accentHex: string;
-  visibleCols: string[];
-  currentIndex: number;
-  onClick?: () => void;
-  onMove?: (targetKey: string) => void;
-  onNovaAtividade?: () => void;
+function DemandaCard({ demanda, accentHex, visibleCols, currentIndex, onClick, onMove, onNovaAtividade }: {
+  demanda: Demanda; accentHex: string; visibleCols: string[]; currentIndex: number;
+  onClick?: () => void; onMove?: (targetKey: string) => void; onNovaAtividade?: () => void;
 }) {
-  const slaD = slaDaysRemaining(demanda);
-  const urgent = slaD !== null && slaD <= 3 && slaD >= 0;
-  const late   = slaD !== null && slaD < 0;
+  const slaD        = slaDaysRemaining(demanda);
+  const urgent      = slaD !== null && slaD <= 3 && slaD >= 0;
+  const late        = slaD !== null && slaD < 0;
   const responsaveis = getResponsaveisList(demanda);
-
-  const colsAntes  = visibleCols.slice(0, currentIndex);
-  const colsDepois = visibleCols.slice(currentIndex + 1);
-
-  const tipoLabel = tipoSnakeToLabel(demanda.tipo);
-  const tipoStyle = tipoGetStyle(demanda.tipo);
+  const colsAntes   = visibleCols.slice(0, currentIndex);
+  const colsDepois  = visibleCols.slice(currentIndex + 1);
+  const tipoLabel   = tipoSnakeToLabel(demanda.tipo);
+  const tipoStyle   = tipoGetStyle(demanda.tipo);
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div
-          onClick={onClick}
-          className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150 overflow-hidden cursor-pointer select-none group"
-        >
+        <div onClick={onClick}
+          className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150 overflow-hidden cursor-pointer select-none group">
           <div className="h-0.5" style={{ backgroundColor: accentHex }} />
           <div className="p-3 flex flex-col gap-2">
             <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2">
@@ -432,9 +366,7 @@ function DemandaCard({
               <div className="flex flex-wrap gap-1">
                 {demanda.rhm && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}>
-                    RHM {demanda.rhm}
-                  </span>
+                    style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}>RHM {demanda.rhm}</span>
                 )}
                 {demanda.projeto && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium truncate max-w-[140px]">
@@ -442,12 +374,8 @@ function DemandaCard({
                   </span>
                 )}
                 {demanda.tipo && (
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                    style={{ backgroundColor: tipoStyle.bg, color: tipoStyle.text }}
-                  >
-                    {tipoLabel}
-                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: tipoStyle.bg, color: tipoStyle.text }}>{tipoLabel}</span>
                 )}
               </div>
             )}
@@ -468,40 +396,32 @@ function DemandaCard({
                     <Clock className="h-2.5 w-2.5" /> {slaD}d
                   </span>
                 )}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-muted/60 text-muted-foreground border border-border/50">
-                        <Clock className="h-2.5 w-2.5" /> {formatTimeInColumn(demanda.situacao_changed_at ?? demanda.updated_at)}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">Tempo nesta coluna</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 font-medium">
-                        {formatHorasTotais(demanda.total_horas)}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">Horas lançadas na demanda</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <TooltipProvider><Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-muted/60 text-muted-foreground border border-border/50">
+                      <Clock className="h-2.5 w-2.5" /> {formatTimeInColumn(demanda.situacao_changed_at ?? demanda.updated_at)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">Tempo nesta coluna</TooltipContent>
+                </Tooltip></TooltipProvider>
+                <TooltipProvider><Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 font-medium">
+                      {formatHorasTotais(demanda.total_horas)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">Horas lançadas na demanda</TooltipContent>
+                </Tooltip></TooltipProvider>
                 {onNovaAtividade && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onNovaAtividade(); }}
-                          className="h-5 w-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary hover:bg-primary/10"
-                        >
-                          <ActivitySquare className="h-3.5 w-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">Nova atividade</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <TooltipProvider><Tooltip>
+                    <TooltipTrigger asChild>
+                      <button onClick={(e) => { e.stopPropagation(); onNovaAtividade(); }}
+                        className="h-5 w-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary hover:bg-primary/10">
+                        <ActivitySquare className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">Nova atividade</TooltipContent>
+                  </Tooltip></TooltipProvider>
                 )}
               </div>
               <div className="flex-1 min-w-0 flex justify-end">
@@ -515,8 +435,7 @@ function DemandaCard({
         <ContextMenuItem onClick={onClick}>Abrir detalhes</ContextMenuItem>
         {onNovaAtividade && (
           <ContextMenuItem onClick={(e) => { e.stopPropagation(); onNovaAtividade(); }}>
-            <ActivitySquare className="h-3.5 w-3.5 mr-2 text-primary" />
-            Nova atividade
+            <ActivitySquare className="h-3.5 w-3.5 mr-2 text-primary" />Nova atividade
           </ContextMenuItem>
         )}
         {onMove && (
@@ -524,14 +443,11 @@ function DemandaCard({
             <ContextMenuSeparator />
             {colsDepois.length > 0 && (
               <ContextMenuSub>
-                <ContextMenuSubTrigger>
-                  <ChevronsRight className="h-3.5 w-3.5 mr-2 text-emerald-500" />Avançar para
-                </ContextMenuSubTrigger>
+                <ContextMenuSubTrigger><ChevronsRight className="h-3.5 w-3.5 mr-2 text-emerald-500" />Avançar para</ContextMenuSubTrigger>
                 <ContextMenuSubContent className="max-h-[50vh] overflow-y-auto w-52">
                   {colsDepois.map((key) => (
                     <ContextMenuItem key={key} onClick={() => onMove(key)}>
-                      <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
-                        style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
+                      <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
                       {WORKFLOWLABELS[key] ?? key}
                     </ContextMenuItem>
                   ))}
@@ -540,14 +456,11 @@ function DemandaCard({
             )}
             {colsAntes.length > 0 && (
               <ContextMenuSub>
-                <ContextMenuSubTrigger>
-                  <ChevronsLeft className="h-3.5 w-3.5 mr-2 text-amber-500" />Regredir para
-                </ContextMenuSubTrigger>
+                <ContextMenuSubTrigger><ChevronsLeft className="h-3.5 w-3.5 mr-2 text-amber-500" />Regredir para</ContextMenuSubTrigger>
                 <ContextMenuSubContent className="max-h-[50vh] overflow-y-auto w-52">
                   {[...colsAntes].reverse().map((key) => (
                     <ContextMenuItem key={key} onClick={() => onMove(key)}>
-                      <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
-                        style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
+                      <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
                       {WORKFLOWLABELS[key] ?? key}
                     </ContextMenuItem>
                   ))}
@@ -555,14 +468,11 @@ function DemandaCard({
               </ContextMenuSub>
             )}
             <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />Mover para
-              </ContextMenuSubTrigger>
+              <ContextMenuSubTrigger><ArrowRightLeft className="h-3.5 w-3.5 mr-2" />Mover para</ContextMenuSubTrigger>
               <ContextMenuSubContent className="max-h-[60vh] overflow-y-auto w-52">
                 {visibleCols.map((key) => (
                   <ContextMenuItem key={key} disabled={key === demanda.situacao} onClick={() => onMove(key)}>
-                    <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0"
-                      style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
+                    <span className="inline-block h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: COLUMN_COLORS[key]?.hex ?? "#6b7280" }} />
                     {WORKFLOWLABELS[key] ?? key}
                     {key === demanda.situacao && <span className="ml-auto text-[10px] text-muted-foreground">(atual)</span>}
                   </ContextMenuItem>
@@ -587,27 +497,17 @@ function CollapsedCol({ label, count, accentHex, onClick }: { label: string; cou
         {label}
       </span>
       <span className="text-[10px] font-bold rounded-full min-w-[18px] text-center py-0.5 px-1"
-        style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}>
-        {count}
-      </span>
+        style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}>{count}</span>
     </div>
   );
 }
 
 function ExpandedCol({ label, colKey, demandas, accentHex, visibleCols, onCollapse, onCardClick, onAdd, onMove, onNovaAtividade }: {
-  label: string;
-  colKey: string;
-  demandas: Demanda[];
-  accentHex: string;
-  visibleCols: string[];
-  onCollapse: () => void;
-  onCardClick?: (d: Demanda) => void;
-  onAdd?: () => void;
-  onMove?: (demanda: Demanda, targetKey: string) => void;
-  onNovaAtividade?: (demanda: Demanda) => void;
+  label: string; colKey: string; demandas: Demanda[]; accentHex: string; visibleCols: string[];
+  onCollapse: () => void; onCardClick?: (d: Demanda) => void; onAdd?: () => void;
+  onMove?: (demanda: Demanda, targetKey: string) => void; onNovaAtividade?: (demanda: Demanda) => void;
 }) {
   const currentIndex = visibleCols.indexOf(colKey);
-
   return (
     <div className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-all"
       style={{ borderTop: `3px solid ${accentHex}` }}>
@@ -628,18 +528,11 @@ function ExpandedCol({ label, colKey, demandas, accentHex, visibleCols, onCollap
       </div>
       <div className="p-2 overflow-y-auto flex-1 space-y-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
         {demandas.length === 0 ? (
-          <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground">
-            Sem demandas
-          </div>
+          <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground">Sem demandas</div>
         ) : (
           demandas.map((d) => (
-            <DemandaCard
-              key={d.id as string}
-              demanda={d}
-              accentHex={accentHex}
-              visibleCols={visibleCols}
-              currentIndex={currentIndex}
-              onClick={() => onCardClick?.(d)}
+            <DemandaCard key={d.id as string} demanda={d} accentHex={accentHex} visibleCols={visibleCols}
+              currentIndex={currentIndex} onClick={() => onCardClick?.(d)}
               onMove={onMove ? (targetKey) => onMove(d, targetKey) : undefined}
               onNovaAtividade={onNovaAtividade ? () => onNovaAtividade(d) : undefined}
             />
@@ -666,10 +559,13 @@ export function SustentacaoBoard({
   onMoveDemanda,
 }: SustentacaoBoardProps) {
   const demandas = demandasProp ?? [];
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
-  const [selectedResp, setSelectedResp] = useState<string[]>([]);
+
+  const [collapsed,     setCollapsed]     = useState<Set<string>>(new Set());
+  const [search,        setSearch]        = useState("");
+  const [selectedResp,  setSelectedResp]  = useState<string[]>([]);
   const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
+  // F5-fix: toggle de arquivadas (default: oculto)
+  const [showArchived,  setShowArchived]  = useState(false);
 
   const visibleCols = useMemo<string[]>(() => {
     if (workflowColumns && workflowColumns.length > 0) {
@@ -682,18 +578,14 @@ export function SustentacaoBoard({
 
   const colLabels = useMemo<Record<string, string>>(() => {
     const base: Record<string, string> = { ...WORKFLOWLABELS };
-    if (workflowColumns) {
-      workflowColumns.forEach((c) => { base[c.key] = c.label; });
-    }
+    if (workflowColumns) workflowColumns.forEach((c) => { base[c.key] = c.label; });
     return base;
   }, [workflowColumns]);
 
   const colColors = useMemo<Record<string, string>>(() => {
     const base: Record<string, string> = {};
     Object.entries(COLUMN_COLORS).forEach(([k, v]) => { base[k] = v.hex; });
-    if (workflowColumns) {
-      workflowColumns.forEach((c) => { if (c.color) base[c.key] = c.color; });
-    }
+    if (workflowColumns) workflowColumns.forEach((c) => { if (c.color) base[c.key] = c.color; });
     return base;
   }, [workflowColumns]);
 
@@ -709,18 +601,23 @@ export function SustentacaoBoard({
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const map = new Map<string, ResponsavelFilterItem>();
     demandas.forEach((d) => {
-      const lista = getResponsaveisList(d);
-      lista.forEach(({ papel, nome }) => {
-        if (nome && !map.has(nome)) {
+      getResponsaveisList(d).forEach(({ papel, nome }) => {
+        if (nome && !map.has(nome))
           map.set(nome, { userId: nome, name: nome, color: PAPEL_COLORS[papel] } as any);
-        }
       });
     });
     return Array.from(map.values());
   }, [demandas]);
 
+  // F5-fix: conta arquivadas antes de aplicar os outros filtros
+  const arquivadas = useMemo(
+    () => demandas.filter(isArquivada),
+    [demandas],
+  );
+
   const filtered = useMemo(() => {
-    let items = demandas;
+    // F5-fix: remove arquivadas quando showArchived=false
+    let items = showArchived ? demandas : demandas.filter((d) => !isArquivada(d));
     if (search) {
       const q = search.toLowerCase();
       items = items.filter((d) =>
@@ -728,17 +625,12 @@ export function SustentacaoBoard({
         String(d.projeto ?? "").toLowerCase().includes(q) ||
         String(d.rhm ?? "").toLowerCase().includes(q));
     }
-    if (selectedProjetos.length > 0) {
+    if (selectedProjetos.length > 0)
       items = items.filter((d) => d.projeto && selectedProjetos.includes(d.projeto));
-    }
-    if (selectedResp.length > 0) {
-      items = items.filter((d) => {
-        const nomes = getResponsaveisList(d).map((r) => r.nome);
-        return nomes.some((n) => selectedResp.includes(n));
-      });
-    }
+    if (selectedResp.length > 0)
+      items = items.filter((d) => getResponsaveisList(d).map((r) => r.nome).some((n) => selectedResp.includes(n)));
     return items;
-  }, [demandas, search, selectedProjetos, selectedResp]);
+  }, [demandas, showArchived, search, selectedProjetos, selectedResp]);
 
   const byStatus = useMemo(() => {
     const map: Record<string, Demanda[]> = {};
@@ -770,31 +662,43 @@ export function SustentacaoBoard({
           )}
         </div>
         {projetosDisponiveis.length > 0 && (
-          <ProjetoMultiSelect
-            projetos={projetosDisponiveis}
-            selected={selectedProjetos}
-            onChange={setSelectedProjetos}
-          />
+          <ProjetoMultiSelect projetos={projetosDisponiveis} selected={selectedProjetos} onChange={setSelectedProjetos} />
         )}
         {responsaveisFilter.length > 0 && (
-          <KanbanResponsavelFilter
-            responsaveis={responsaveisFilter}
-            selected={selectedResp}
-            onChange={setSelectedResp}
-          />
+          <KanbanResponsavelFilter responsaveis={responsaveisFilter} selected={selectedResp} onChange={setSelectedResp} />
         )}
         {hasActiveFilters && (
-          <button
-            onClick={() => { setSelectedProjetos([]); setSelectedResp([]); }}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <button onClick={() => { setSelectedProjetos([]); setSelectedResp([]); }}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <X className="h-3 w-3" /> Limpar filtros
           </button>
         )}
+
+        {/* F5-fix: toggle arquivadas */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowArchived((v) => !v)}
+          className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {showArchived
+            ? <EyeOff className="h-3.5 w-3.5" />
+            : <Eye     className="h-3.5 w-3.5" />}
+          {showArchived ? "Ocultar arquivadas" : "Exibir arquivadas"}
+        </Button>
+
+        {/* Badge contador de arquivadas quando ocultas */}
+        {!showArchived && arquivadas.length > 0 && (
+          <Badge variant="outline" className="text-[10px] text-muted-foreground h-9 px-3">
+            {arquivadas.length} arquivada{arquivadas.length !== 1 ? "s" : ""}
+          </Badge>
+        )}
+
         <Badge variant="outline" className="text-xs font-mono h-9 px-3">
           {filtered.length} demanda{filtered.length !== 1 ? "s" : ""}
         </Badge>
       </div>
+
       <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
         {visibleCols.map((key) => {
           const label = colLabels[key] ?? key;
@@ -804,14 +708,8 @@ export function SustentacaoBoard({
             return <CollapsedCol key={key} label={label} count={items.length} accentHex={hex} onClick={() => toggle(key)} />;
           }
           return (
-            <ExpandedCol
-              key={key}
-              colKey={key}
-              label={label}
-              demandas={items}
-              accentHex={hex}
-              visibleCols={visibleCols}
-              onCollapse={() => toggle(key)}
+            <ExpandedCol key={key} colKey={key} label={label} demandas={items} accentHex={hex}
+              visibleCols={visibleCols} onCollapse={() => toggle(key)}
               onCardClick={(d) => onSelectDemanda?.(d)}
               onAdd={onCreateDemanda ? () => onCreateDemanda(key) : undefined}
               onMove={onMoveDemanda}

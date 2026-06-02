@@ -6,12 +6,20 @@ import { SizeBadge } from "@/components/SizeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Plus, Trash2, Clock, Pencil, ShieldAlert, Search, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  BookOpen, Plus, Trash2, Clock, Pencil, ShieldAlert,
+  Search, X, SlidersHorizontal, ListFilter,
+} from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogTrigger, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { getTotalHoursForHU, hasActiveImpediment } from "@/types/sprint";
 import { toast } from "sonner";
 import { PaginationControls } from "@/shared/components/common/Pagination";
@@ -24,71 +32,60 @@ import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 import { HUEditDrawer } from "@/components/HUEditDrawer";
 
-const PRIORITY_MAP: Record<string, { label: string; color: string }> = {
-  baixa: { label: "Baixa", color: "bg-muted text-muted-foreground" },
-  media: { label: "Média", color: "bg-info/15 text-info border border-info/30" },
-  alta: { label: "Alta", color: "bg-warning/15 text-warning border border-warning/30" },
-  critica: { label: "Crítica", color: "bg-destructive/15 text-destructive border border-destructive/30" },
+const PRIORITY_MAP: Record<string, { label: string; color: string; dot: string }> = {
+  baixa:   { label: "Baixa",    color: "bg-muted text-muted-foreground",                          dot: "bg-muted-foreground" },
+  media:   { label: "M\u00e9dia",   color: "bg-info/10 text-info border border-info/30",             dot: "bg-info" },
+  alta:    { label: "Alta",     color: "bg-warning/10 text-warning border border-warning/30",     dot: "bg-warning" },
+  critica: { label: "Cr\u00edtica", color: "bg-destructive/10 text-destructive border border-destructive/30", dot: "bg-destructive" },
 };
 
-// Separador canônico compartilhado entre montagem e leitura da descrição.
-// Mantém paridade com HUEditDrawer.tsx.
-const AC_SEPARATOR = "\n\n---\n**Critérios de Aceite:**\n";
+const AC_SEPARATOR = "\n\n---\n**Crit\u00e9rios de Aceite:**\n";
 
 export function UserStoryManager() {
   const {
-    userStories,
-    addUserStory,
-    removeUserStory,
-    updateUserStory,
-    activities,
-    activeSprint,
-    sprints,
-    epics,
-    workflowColumns,
-    customFields,
-    developers,
-    loading,
+    userStories, addUserStory, removeUserStory, updateUserStory,
+    activities, activeSprint, sprints, epics, workflowColumns,
+    customFields, developers, loading,
   } = useSprint();
   const { hasPermission, currentTeamId } = useAuth();
   const canCreate = hasPermission("create_backlog");
-  const canEdit = hasPermission("edit_backlog");
+  const canEdit   = hasPermission("edit_backlog");
 
-  // ── Dialog de criação de nova HU ───────────────────────────────────────────
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  // ─ Dialog cria\u00e7\u00e3o ─
+  const [open, setOpen]                   = useState(false);
+  const [title, setTitle]                 = useState("");
+  const [description, setDescription]     = useState("");
   const [acceptanceCriteria, setAcceptanceCriteria] = useState("");
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [priority, setPriority] = useState<"baixa" | "media" | "alta" | "critica">("media");
-  const [epicId, setEpicId] = useState<string>("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [selectedSize, setSelectedSize]   = useState<string | null>(null);
+  const [priority, setPriority]           = useState<"baixa"|"media"|"alta"|"critica">("media");
+  const [epicId, setEpicId]               = useState<string>("");
+  const [startDate, setStartDate]         = useState("");
+  const [endDate, setEndDate]             = useState("");
   const [functionPoints, setFunctionPoints] = useState<string>("");
-  const [assigneeId, setAssigneeId] = useState<string>("");
+  const [assigneeId, setAssigneeId]       = useState<string>("");
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string | number>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [sprintId, setSprintId] = useState<string>("");
-  const [statusField, setStatusField] = useState<string>("");
+  const [errors, setErrors]               = useState<Record<string, string>>({});
+  const [submitting, setSubmitting]       = useState(false);
+  const [sprintId, setSprintId]           = useState<string>("");
+  const [statusField, setStatusField]     = useState<string>("");
 
-  // ── HUEditDrawer (edição via lápis) ────────────────────────────────────────
+  // ─ Drawer edi\u00e7\u00e3o ─
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
-  const [editHuId, setEditHuId] = useState<string | null>(null);
+  const [editHuId, setEditHuId]             = useState<string | null>(null);
 
-  // ── Exclusão ───────────────────────────────────────────────────────────────
+  // ─ Exclus\u00e3o ─
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  // ── Criação rápida de tarefa ───────────────────────────────────────────────
+  // ─ Quick task ─
   const [quickTaskHU, setQuickTaskHU] = useState<string | null>(null);
 
-  // Filters
-  const [searchFilter, setSearchFilter] = useState("");
-  const debouncedSearch = useDebounce(searchFilter);
+  // ─ Filtros ─
+  const [searchFilter, setSearchFilter]     = useState("");
+  const debouncedSearch                     = useDebounce(searchFilter);
   const [priorityFilter, setPriorityFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [epicFilter, setEpicFilter] = useState("all");
-  const [sprintFilter, setSprintFilter] = useState("all");
+  const [statusFilter, setStatusFilter]     = useState("all");
+  const [epicFilter, setEpicFilter]         = useState("all");
+  const [sprintFilter, setSprintFilter]     = useState("all");
 
   const hasFilters =
     searchFilter !== "" ||
@@ -107,7 +104,6 @@ export function UserStoryManager() {
 
   const filteredStories = useMemo(() => {
     let stories = [...userStories];
-
     if (sprintFilter === "backlog") {
       stories = stories.filter((hu) => !hu.sprintId);
     } else if (sprintFilter !== "all") {
@@ -115,57 +111,35 @@ export function UserStoryManager() {
     } else if (activeSprint) {
       stories = stories.filter((hu) => hu.sprintId === activeSprint.id || !hu.sprintId);
     }
-
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
     }
-
     if (priorityFilter !== "all") stories = stories.filter((hu) => hu.priority === priorityFilter);
-    if (statusFilter !== "all") stories = stories.filter((hu) => hu.status === statusFilter);
-    if (epicFilter !== "all") stories = stories.filter((hu) => hu.epicId === epicFilter);
-
+    if (statusFilter !== "all")   stories = stories.filter((hu) => hu.status === statusFilter);
+    if (epicFilter !== "all")     stories = stories.filter((hu) => hu.epicId === epicFilter);
     return stories;
   }, [activeSprint, userStories, debouncedSearch, priorityFilter, statusFilter, epicFilter, sprintFilter]);
 
-  const {
-    paginatedItems: sprintStories,
-    currentPage,
-    setCurrentPage,
-    totalItems,
-    pageSize,
-  } = usePagination(filteredStories, { pageSize: 10 });
+  const { paginatedItems: sprintStories, currentPage, setCurrentPage, totalItems, pageSize } =
+    usePagination(filteredStories, { pageSize: 10 });
 
   const resetForm = () => {
-    setTitle("");
-    setDescription("");
-    setAcceptanceCriteria("");
-    setSelectedSize(null);
-    setPriority("media");
-    setEpicId("");
-    setSprintId(activeSprint?.id || "");
-    setStatusField(workflowColumns[0]?.key || "");
-    setStartDate("");
-    setEndDate("");
-    setFunctionPoints("");
-    setAssigneeId("");
-    setCustomFieldValues({});
-    setErrors({});
+    setTitle(""); setDescription(""); setAcceptanceCriteria(""); setSelectedSize(null);
+    setPriority("media"); setEpicId(""); setSprintId(activeSprint?.id || "");
+    setStatusField(workflowColumns[0]?.key || ""); setStartDate(""); setEndDate("");
+    setFunctionPoints(""); setAssigneeId(""); setCustomFieldValues({}); setErrors({});
   };
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!title.trim()) e.title = "Título é obrigatório";
-
+    if (!title.trim()) e.title = "T\u00edtulo \u00e9 obrigat\u00f3rio";
     customFields.forEach((f) => {
       if (f.required) {
         const val = customFieldValues[f.id];
-        if (val === undefined || val === "" || val === null) {
-          e[`cf_${f.id}`] = `${f.name} é obrigatório`;
-        }
+        if (val === undefined || val === "" || val === null) e[`cf_${f.id}`] = `${f.name} \u00e9 obrigat\u00f3rio`;
       }
     });
-
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -173,72 +147,44 @@ export function UserStoryManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-
     setSubmitting(true);
     try {
       const s = selectedSize ? getSizeByKey(selectedSize) : null;
       const sizeData = s
         ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
         : { sizeReference: null, estimatedHours: null, storyPoints: 0 };
-
       const fp = functionPoints ? parseFloat(functionPoints) : null;
-
       const fullDesc = acceptanceCriteria
         ? `${description.trim()}${AC_SEPARATOR}${acceptanceCriteria.trim()}`
         : description.trim();
-
-      const selectedSprintId = sprintId === "" ? null : sprintId;
-      const selectedStatus = statusField || workflowColumns[0]?.key || "aguardando_desenvolvimento";
-
       await addUserStory({
-        title: title.trim(),
-        description: fullDesc,
-        ...sizeData,
-        priority,
-        sprintId: selectedSprintId,
-        epicId: epicId || null,
-        customFields: customFieldValues,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        functionPoints: fp,
-        assigneeId: assigneeId || null,
+        title: title.trim(), description: fullDesc, ...sizeData, priority,
+        sprintId: sprintId === "" ? null : sprintId,
+        epicId: epicId || null, customFields: customFieldValues,
+        startDate: startDate || undefined, endDate: endDate || undefined,
+        functionPoints: fp, assigneeId: assigneeId || null,
       } as any);
       toast.success("Registro criado com sucesso");
-
-      resetForm();
-      setOpen(false);
-    } catch {
-      toast.error("Erro ao salvar. Tente novamente.");
-    } finally {
-      setSubmitting(false);
-    }
+      resetForm(); setOpen(false);
+    } catch { toast.error("Erro ao salvar. Tente novamente."); }
+    finally { setSubmitting(false); }
   };
 
   const handleConfirmRemove = async () => {
     if (!deleteTarget) return;
-
     const huActivities = activities.filter((a) => a.huId === deleteTarget);
     if (huActivities.length > 0) {
-      toast.error(
-        `Não é possível excluir: esta HU possui ${huActivities.length} atividade(s) vinculada(s). Remova-as primeiro.`,
-      );
-      setDeleteTarget(null);
-      return;
+      toast.error(`N\u00e3o \u00e9 poss\u00edvel excluir: esta HU possui ${huActivities.length} atividade(s) vinculada(s). Remova-as primeiro.`);
+      setDeleteTarget(null); return;
     }
-
-    try {
-      await removeUserStory(deleteTarget);
-      toast.success("Registro excluído com sucesso");
-    } catch {
-      toast.error("Falha ao excluir item");
-    }
-
+    try { await removeUserStory(deleteTarget); toast.success("Registro exclu\u00eddo com sucesso"); }
+    catch { toast.error("Falha ao excluir item"); }
     setDeleteTarget(null);
   };
 
   if (loading) return <SkeletonList count={5} variant="row" />;
 
-  // ─── Formulário do Dialog (apenas criação) ────────────────────────────────
+  // ── Dialog formul\u00e1rio (inalterado) ──
   const dialogForm = (
     <DialogContent className="max-w-[960px] w-[80vw] max-h-[90vh] overflow-y-auto p-0">
       <DialogHeader className="px-6 pt-6 pb-0">
@@ -247,279 +193,145 @@ export function UserStoryManager() {
           Nova User Story
         </DialogTitle>
       </DialogHeader>
-
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
         <div className="flex-1 px-6 py-4">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             <div className="md:col-span-3 space-y-4">
               <div>
-                <Label>
-                  Título <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={title}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    setErrors((p) => ({ ...p, title: "" }));
-                  }}
-                  placeholder="Como usuário, eu quero..."
-                  className="mt-1"
-                />
+                <Label>T\u00edtulo <span className="text-destructive">*</span></Label>
+                <Input value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }}
+                  placeholder="Como usu\u00e1rio, eu quero..." className="mt-1" />
                 {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
               </div>
-
               <div>
-                <Label>Descrição</Label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descrição detalhada da funcionalidade..."
-                  className="mt-1"
-                  rows={3}
-                />
+                <Label>Descri\u00e7\u00e3o</Label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Descri\u00e7\u00e3o detalhada da funcionalidade..." className="mt-1" rows={3} />
               </div>
-
               <div>
-                <Label>Critérios de Aceite</Label>
-                <Textarea
-                  value={acceptanceCriteria}
-                  onChange={(e) => setAcceptanceCriteria(e.target.value)}
-                  placeholder="1. Dado que... quando... então..."
-                  className="mt-1"
-                  rows={3}
-                />
+                <Label>Crit\u00e9rios de Aceite</Label>
+                <Textarea value={acceptanceCriteria} onChange={(e) => setAcceptanceCriteria(e.target.value)}
+                  placeholder="1. Dado que... quando... ent\u00e3o..." className="mt-1" rows={3} />
               </div>
-
               {customFields.length > 0 && (
                 <div className="space-y-3 border-t pt-3">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Campos Personalizados
-                  </Label>
-
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Campos Personalizados</Label>
                   {customFields.map((field) => (
                     <div key={field.id}>
-                      <Label className="text-sm">
-                        {field.name}
-                        {field.required && <span className="text-destructive"> *</span>}
-                      </Label>
-
+                      <Label className="text-sm">{field.name}{field.required && <span className="text-destructive"> *</span>}</Label>
                       {field.type === "text" && (
-                        <Input
-                          value={String(customFieldValues[field.id] || "")}
+                        <Input value={String(customFieldValues[field.id] || "")}
                           onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-                          placeholder={field.name}
-                          className="mt-1"
-                        />
+                          placeholder={field.name} className="mt-1" />
                       )}
-
                       {field.type === "number" && (
-                        <Input
-                          type="number"
-                          value={String(customFieldValues[field.id] || "")}
-                          onChange={(e) =>
-                            setCustomFieldValues((prev) => ({ ...prev, [field.id]: Number(e.target.value) }))
-                          }
-                          placeholder={field.name}
-                          className="mt-1"
-                        />
+                        <Input type="number" value={String(customFieldValues[field.id] || "")}
+                          onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: Number(e.target.value) }))}
+                          placeholder={field.name} className="mt-1" />
                       )}
-
                       {field.type === "select" && field.options && (
-                        <Select
-                          value={String(customFieldValues[field.id] || "")}
-                          onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}
-                        >
-                          <SelectTrigger className="mt-1">
-                            <SelectValue placeholder={`Selecione ${field.name}`} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {field.options.map((opt) => (
-                              <SelectItem key={opt} value={opt}>
-                                {opt}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
+                        <Select value={String(customFieldValues[field.id] || "")}
+                          onValueChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [field.id]: v }))}>
+                          <SelectTrigger className="mt-1"><SelectValue placeholder={`Selecione ${field.name}`} /></SelectTrigger>
+                          <SelectContent>{field.options.map((opt) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                         </Select>
                       )}
-
-                      {errors[`cf_${field.id}`] && (
-                        <p className="text-xs text-destructive mt-1">{errors[`cf_${field.id}`]}</p>
-                      )}
+                      {errors[`cf_${field.id}`] && <p className="text-xs text-destructive mt-1">{errors[`cf_${field.id}`]}</p>}
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
             <div className="md:col-span-2 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Sprint</Label>
                   <Select value={sprintId || "backlog"} onValueChange={(v) => setSprintId(v === "backlog" ? "" : v)}>
-                    <SelectTrigger className="mt-1 h-9 text-xs">
-                      <SelectValue placeholder="Backlog" />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Backlog" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="backlog">Backlog Geral</SelectItem>
-                      {sprints.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name} {s.isActive ? "✦" : ""}
-                        </SelectItem>
-                      ))}
+                      {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "\u2736" : ""}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
-                  <Label className="text-xs">Épico</Label>
+                  <Label className="text-xs">\u00c9pico</Label>
                   <Select value={epicId || "none"} onValueChange={(v) => setEpicId(v === "none" ? "" : v)}>
-                    <SelectTrigger className="mt-1 h-9 text-xs">
-                      <SelectValue placeholder="Sem épico" />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem \u00e9pico" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Sem épico</SelectItem>
+                      <SelectItem value="none">Sem \u00e9pico</SelectItem>
                       {epics.map((ep) => (
                         <SelectItem key={ep.id} value={ep.id}>
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />
-                            {ep.name}
-                          </div>
+                          <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />{ep.name}</div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
                   <Label className="text-xs">Status</Label>
                   <Select value={statusField || workflowColumns[0]?.key || ""} onValueChange={(v) => setStatusField(v)}>
-                    <SelectTrigger className="mt-1 h-9 text-xs">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
                     <SelectContent>
                       {workflowColumns.map((col) => (
                         <SelectItem key={col.key} value={col.key}>
-                          <div className="flex items-center gap-2">
-                            <div className={`h-2 w-2 rounded-full ${col.dotColor}`} />
-                            {col.label}
-                          </div>
+                          <div className="flex items-center gap-2"><div className={`h-2 w-2 rounded-full ${col.dotColor}`} />{col.label}</div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
-                  <Label className="text-xs">
-                    Prioridade <span className="text-destructive">*</span>
-                  </Label>
+                  <Label className="text-xs">Prioridade <span className="text-destructive">*</span></Label>
                   <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
-                    <SelectTrigger className="mt-1 h-9 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(PRIORITY_MAP).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>
-                          {v.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(PRIORITY_MAP).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-
                 <div>
                   <Label className="text-xs">Estimativa em horas</Label>
-                  <Select
-                    value={selectedSize ?? "none"}
-                    onValueChange={(v) => setSelectedSize(v === "none" ? null : v)}
-                  >
-                    <SelectTrigger className="mt-1 h-9 text-xs">
-                      <SelectValue placeholder="Não estimado" />
-                    </SelectTrigger>
+                  <Select value={selectedSize ?? "none"} onValueChange={(v) => setSelectedSize(v === "none" ? null : v)}>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="N\u00e3o estimado" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Não estimado</SelectItem>
-                      {SIZE_REFERENCES.map((s) => (
-                        <SelectItem key={s.key} value={s.key}>
-                          {s.label} — {s.hours}h ({s.pointsLabel})
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="none">N\u00e3o estimado</SelectItem>
+                      {SIZE_REFERENCES.map((s) => <SelectItem key={s.key} value={s.key}>{s.label} \u2014 {s.hours}h ({s.pointsLabel})</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
-                  <Label className="text-xs">Responsável</Label>
+                  <Label className="text-xs">Respons\u00e1vel</Label>
                   <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
-                    <SelectTrigger className="mt-1 h-9 text-xs">
-                      <SelectValue placeholder="Sem responsável" />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem respons\u00e1vel" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Sem responsável</SelectItem>
-                      {developers.map((dev) => (
-                        <SelectItem key={dev.id} value={dev.id}>
-                          {dev.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="none">Sem respons\u00e1vel</SelectItem>
+                      {developers.map((dev) => <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div>
-                  <Label className="text-xs">Data de Início</Label>
-                  <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="mt-1 h-9 text-xs"
-                  />
+                  <Label className="text-xs">Data de In\u00edcio</Label>
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 h-9 text-xs" />
                 </div>
-
                 <div>
                   <Label className="text-xs">Data de Entrega</Label>
-                  <Input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="mt-1 h-9 text-xs"
-                  />
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 h-9 text-xs" />
                 </div>
-
                 <div>
-                  <Label className="text-xs">Ponto de Função</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={functionPoints}
-                    onChange={(e) => setFunctionPoints(e.target.value)}
-                    placeholder="Ex: 12,50"
-                    className="mt-1 h-9 text-xs"
-                  />
+                  <Label className="text-xs">Ponto de Fun\u00e7\u00e3o</Label>
+                  <Input type="number" step="0.01" min="0" value={functionPoints}
+                    onChange={(e) => setFunctionPoints(e.target.value)} placeholder="Ex: 12,50" className="mt-1 h-9 text-xs" />
                 </div>
-
                 <div />
               </div>
             </div>
           </div>
         </div>
-
         <DialogFooter className="px-6 py-4 border-t bg-muted/30">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              resetForm();
-              setOpen(false);
-            }}
-          >
-            Cancelar
-          </Button>
+          <Button type="button" variant="outline" onClick={() => { resetForm(); setOpen(false); }}>Cancelar</Button>
           <Button type="submit" className="gap-2" disabled={submitting}>
-            {submitting ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
+            {submitting
+              ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
+              : <Plus className="h-4 w-4" />}
             Salvar HU
           </Button>
         </DialogFooter>
@@ -527,27 +339,29 @@ export function UserStoryManager() {
     </DialogContent>
   );
 
+  // ──────────────────────────────────────────────────────────────────────
+  // RENDER PRINCIPAL
+  // ──────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+
+      {/* ─ Header ─ */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold tracking-tight">User Stories (Backlog)</h2>
-          <Badge variant="secondary">{totalItems}</Badge>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-primary/10">
+            <BookOpen className="h-4.5 w-4.5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold tracking-tight leading-none">User Stories</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Backlog · {totalItems} itens</p>
+          </div>
         </div>
 
-        {/* Dialog apenas para criação de nova HU */}
-        <Dialog
-          open={open}
-          onOpenChange={(v) => {
-            setOpen(v);
-            if (!v) resetForm();
-          }}
-        >
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           {canCreate && (
             <DialogTrigger asChild>
-              <Button size="sm" className="gap-1.5">
-                <Plus className="h-4 w-4" /> Nova HU
+              <Button size="sm" className="gap-1.5 h-8 text-xs">
+                <Plus className="h-3.5 w-3.5" /> Nova HU
               </Button>
             </DialogTrigger>
           )}
@@ -555,117 +369,69 @@ export function UserStoryManager() {
         </Dialog>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[180px] max-w-[280px]">
+      {/* ─ Barra de filtros ─ */}
+      <div className="rounded-xl border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[180px] max-w-[260px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={searchFilter}
-            onChange={(e) => {
-              setSearchFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder="Buscar HU..."
-            className="pl-8 h-8 text-xs"
+            onChange={(e) => { setSearchFilter(e.target.value); setCurrentPage(1); }}
+            placeholder="Buscar por t\u00edtulo ou c\u00f3digo..."
+            className="pl-8 h-8 text-xs bg-background"
           />
         </div>
 
-        <Select
-          value={sprintFilter}
-          onValueChange={(v) => {
-            setSprintFilter(v);
-            setCurrentPage(1);
-          }}
-        >
-          <SelectTrigger className="h-8 w-[160px] text-xs">
-            <SelectValue placeholder="Sprint" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="backlog">📋 Backlog</SelectItem>
-            {sprints.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name} {s.isActive ? "✦" : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <ListFilter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
 
-        <Select
-          value={priorityFilter}
-          onValueChange={(v) => {
-            setPriorityFilter(v);
-            setCurrentPage(1);
-          }}
-        >
-          <SelectTrigger className="h-8 w-[130px] text-xs">
-            <SelectValue placeholder="Prioridade" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas</SelectItem>
-            <SelectItem value="critica">Crítica</SelectItem>
-            <SelectItem value="alta">Alta</SelectItem>
-            <SelectItem value="media">Média</SelectItem>
-            <SelectItem value="baixa">Baixa</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v);
-            setCurrentPage(1);
-          }}
-        >
-          <SelectTrigger className="h-8 w-[160px] text-xs">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos status</SelectItem>
-            {workflowColumns.map((col) => (
-              <SelectItem key={col.key} value={col.key}>
-                {col.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {epics.length > 0 && (
-          <Select
-            value={epicFilter}
-            onValueChange={(v) => {
-              setEpicFilter(v);
-              setCurrentPage(1);
-            }}
-          >
-            <SelectTrigger className="h-8 w-[140px] text-xs">
-              <SelectValue placeholder="Épico" />
-            </SelectTrigger>
+          <Select value={sprintFilter} onValueChange={(v) => { setSprintFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="h-8 w-[145px] text-xs bg-background"><SelectValue placeholder="Sprint" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos épicos</SelectItem>
-              {epics.map((ep) => (
-                <SelectItem key={ep.id} value={ep.id}>
-                  {ep.name}
-                </SelectItem>
-              ))}
+              <SelectItem value="all">Todas as sprints</SelectItem>
+              <SelectItem value="backlog">\ud83d\udccb Backlog</SelectItem>
+              {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "\u2736" : ""}</SelectItem>)}
             </SelectContent>
           </Select>
-        )}
 
-        {hasFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs gap-1 text-muted-foreground"
-            onClick={() => {
-              clearFilters();
-              setCurrentPage(1);
-            }}
-          >
-            <X className="h-3 w-3" /> Limpar
-          </Button>
-        )}
+          <Select value={priorityFilter} onValueChange={(v) => { setPriorityFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="h-8 w-[120px] text-xs bg-background"><SelectValue placeholder="Prioridade" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Prioridade</SelectItem>
+              <SelectItem value="critica">Cr\u00edtica</SelectItem>
+              <SelectItem value="alta">Alta</SelectItem>
+              <SelectItem value="media">M\u00e9dia</SelectItem>
+              <SelectItem value="baixa">Baixa</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="h-8 w-[145px] text-xs bg-background"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos status</SelectItem>
+              {workflowColumns.map((col) => <SelectItem key={col.key} value={col.key}>{col.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          {epics.length > 0 && (
+            <Select value={epicFilter} onValueChange={(v) => { setEpicFilter(v); setCurrentPage(1); }}>
+              <SelectTrigger className="h-8 w-[130px] text-xs bg-background"><SelectValue placeholder="\u00c9pico" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos \u00e9picos</SelectItem>
+                {epics.map((ep) => <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+
+          {hasFilters && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground px-2"
+              onClick={() => { clearFilters(); setCurrentPage(1); }}>
+              <X className="h-3 w-3" /> Limpar
+            </Button>
+          )}
+        </div>
       </div>
 
+      {/* ─ Empty state ─ */}
       {totalItems === 0 && (
         <EmptyState
           icon={BookOpen}
@@ -674,162 +440,162 @@ export function UserStoryManager() {
         />
       )}
 
-      <div className="space-y-3">
+      {/* ─ Lista de HUs ─ */}
+      <div className="space-y-2">
         {sprintStories.map((hu) => {
-          const totalHours = getTotalHoursForHU(activities, hu.id);
-          const huActivities = activities.filter((a) => a.huId === hu.id);
-          const closedActivities = huActivities.filter((a) => a.isClosed);
-          const pInfo = PRIORITY_MAP[hu.priority];
-          const statusCol = workflowColumns.find((c) => c.key === hu.status);
-          const blocked = hasActiveImpediment(hu);
-          const activeImps = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
-          const epic = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
-          const completionPct =
-            huActivities.length > 0 ? Math.round((closedActivities.length / huActivities.length) * 100) : 0;
-          const assignee = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
+          const totalHours     = getTotalHoursForHU(activities, hu.id);
+          const huActivities   = activities.filter((a) => a.huId === hu.id);
+          const closedAct      = huActivities.filter((a) => a.isClosed);
+          const pInfo          = PRIORITY_MAP[hu.priority];
+          const statusCol      = workflowColumns.find((c) => c.key === hu.status);
+          const blocked        = hasActiveImpediment(hu);
+          const activeImps     = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
+          const epic           = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
+          const completionPct  = huActivities.length > 0
+            ? Math.round((closedAct.length / huActivities.length) * 100) : 0;
+          const assignee       = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
 
           return (
-            <Card
+            <div
               key={hu.id}
-              className={`group hover:shadow-md transition-shadow ${blocked ? "ring-2 ring-warning" : ""}`}
+              className={[
+                "group relative rounded-xl border bg-card transition-all duration-150",
+                "hover:shadow-md hover:border-primary/30",
+                blocked ? "border-warning/60 ring-1 ring-warning/30" : "border-border",
+              ].join(" ")}
             >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <Badge variant="outline" className="font-mono text-xs font-bold">
-                        {hu.code}
-                      </Badge>
+              {/* Faixa de prioridade esquerda */}
+              <div
+                className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full ${pInfo.dot}`}
+                style={{ marginLeft: "1px" }}
+              />
 
-                      {epic && (
-                        <Badge
-                          className="text-[10px] gap-1 px-1.5"
-                          style={{
-                            backgroundColor: epic.color + "22",
-                            color: epic.color,
-                            borderColor: epic.color + "44",
-                          }}
-                        >
-                          <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: epic.color }} />
-                          {epic.name}
-                        </Badge>
-                      )}
+              <div className="p-4 pl-5">
+                {/* Linha 1: c\u00f3digo + badges + a\u00e7\u00f5es */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                    <span className="font-mono text-[11px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                      {hu.code}
+                    </span>
 
-                      <Badge className={`${pInfo.color} text-xs`}>{pInfo.label}</Badge>
-                      <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
-
-                      {statusCol && (
-                        <Badge variant="secondary" className="text-[10px] gap-1">
-                          <div className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />
-                          {statusCol.label}
-                        </Badge>
-                      )}
-
-                      {blocked && (
-                        <Badge className="text-[10px] gap-0.5 bg-warning text-warning-foreground">
-                          <ShieldAlert className="h-2.5 w-2.5" /> {activeImps} impedimento{activeImps > 1 ? "s" : ""}
-                        </Badge>
-                      )}
-
-                      {huActivities.length > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                          {closedActivities.length}/{huActivities.length} tarefa{huActivities.length !== 1 ? "s" : ""}
-                        </Badge>
-                      )}
-
-                      {assignee && (
-                        <Badge variant="outline" className="text-[10px] gap-1">
-                          👤 {assignee.name}
-                        </Badge>
-                      )}
-                    </div>
-
-                    <h3 className="font-semibold text-sm">{hu.title}</h3>
-
-                    {hu.description && (
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{hu.description}</p>
-                    )}
-
-                    {hu.customFields && customFields.length > 0 && Object.keys(hu.customFields).length > 0 && (
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {customFields.map((cf) => {
-                          const val = hu.customFields?.[cf.id];
-                          if (val === undefined || val === "" || val === null) return null;
-                          return (
-                            <Badge key={cf.id} variant="outline" className="text-[10px]">
-                              {cf.name}: {String(val)}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {totalHours}h total
+                    {epic && (
+                      <span
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
+                        style={{ backgroundColor: epic.color + "22", color: epic.color }}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ backgroundColor: epic.color }} />
+                        {epic.name}
                       </span>
+                    )}
 
-                      {huActivities.length > 0 && (
-                        <div className="flex items-center gap-2 flex-1">
-                          <div className="flex-1 max-w-[120px] h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-success rounded-full transition-all"
-                              style={{ width: `${completionPct}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] font-medium">{completionPct}%</span>
-                        </div>
-                      )}
-                    </div>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${pInfo.color} shrink-0`}>
+                      {pInfo.label}
+                    </span>
 
-                    <FileUploader
-                      entityType="user_story"
-                      entityId={hu.id}
-                      teamId={activeSprint ? currentTeamId || "" : ""}
-                    />
+                    {statusCol && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground flex items-center gap-1 shrink-0">
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />
+                        {statusCol.label}
+                      </span>
+                    )}
+
+                    <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
+
+                    {blocked && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/15 text-warning border border-warning/30 flex items-center gap-1 shrink-0">
+                        <ShieldAlert className="h-3 w-3" /> {activeImps} impedimento{activeImps > 1 ? "s" : ""}
+                      </span>
+                    )}
+
+                    {huActivities.length > 0 && (
+                      <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded border border-border bg-background shrink-0">
+                        {closedAct.length}/{huActivities.length} tarefas
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* A\u00e7\u00f5es — vis\u00edveis no hover */}
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-primary"
-                        title="Adicionar tarefa"
-                        onClick={() => setQuickTaskHU(hu.id)}
-                      >
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" title="Adicionar tarefa"
+                        onClick={() => setQuickTaskHU(hu.id)}>
                         <Plus className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        title="Editar HU"
-                        onClick={() => {
-                          setEditHuId(hu.id);
-                          setEditDrawerOpen(true);
-                        }}
-                      >
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Editar HU"
+                        onClick={() => { setEditHuId(hu.id); setEditDrawerOpen(true); }}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => setDeleteTarget(hu.id)}
-                      >
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                        onClick={() => setDeleteTarget(hu.id)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+
+                {/* Linha 2: t\u00edtulo */}
+                <h3 className="font-semibold text-sm mt-2 leading-snug">{hu.title}</h3>
+
+                {/* Linha 3: descri\u00e7\u00e3o */}
+                {hu.description && (
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                    {hu.description}
+                  </p>
+                )}
+
+                {/* Campos custom */}
+                {hu.customFields && customFields.length > 0 && Object.keys(hu.customFields).length > 0 && (
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {customFields.map((cf) => {
+                      const val = hu.customFields?.[cf.id];
+                      if (val === undefined || val === "" || val === null) return null;
+                      return (
+                        <span key={cf.id} className="text-[10px] border border-border rounded px-1.5 py-0.5 bg-muted/50">
+                          {cf.name}: {String(val)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Linha 4: footer com horas, progress, assignee */}
+                <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    {totalHours}h
+                  </span>
+
+                  {huActivities.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-success rounded-full transition-all" style={{ width: `${completionPct}%` }} />
+                      </div>
+                      <span className="text-[10px] font-medium text-muted-foreground">{completionPct}%</span>
+                    </div>
+                  )}
+
+                  {assignee && (
+                    <span className="text-[11px] text-muted-foreground flex items-center gap-1 ml-auto">
+                      <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary/15 text-primary text-[9px] font-bold">
+                        {assignee.name.charAt(0).toUpperCase()}
+                      </span>
+                      {assignee.name}
+                    </span>
+                  )}
+                </div>
+
+                {/* File uploader */}
+                <FileUploader
+                  entityType="user_story"
+                  entityId={hu.id}
+                  teamId={activeSprint ? currentTeamId || "" : ""}
+                />
+              </div>
+            </div>
           );
         })}
       </div>
@@ -855,14 +621,10 @@ export function UserStoryManager() {
         />
       )}
 
-      {/* HUEditDrawer — abre ao clicar no lápis de qualquer HU */}
       <HUEditDrawer
         huId={editHuId}
         open={editDrawerOpen}
-        onClose={() => {
-          setEditDrawerOpen(false);
-          setEditHuId(null);
-        }}
+        onClose={() => { setEditDrawerOpen(false); setEditHuId(null); }}
       />
     </div>
   );

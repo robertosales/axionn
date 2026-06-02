@@ -4,11 +4,11 @@
 @tailwind utilities;
 
 /* ============================================================
-   TEMA CLARO — superfícies quentes, acento teal
+   TEMA CLARO — fundo bege suave + sidebar escura teal
    ============================================================ */
 :root,
 [data-theme="light"] {
-  /* Superfícies — beige quente suave, hierarquia clara */
+  /* Superfícies — beige quente suave */
   --background:        30 14% 96%;
   --foreground:        30 8% 12%;
 
@@ -33,7 +33,7 @@
   --accent:            174 35% 90%;
   --accent-foreground: 174 97% 18%;
 
-  /* Destrutivo — vermelho equilibrado */
+  /* Destrutivo */
   --destructive:       2 68% 48%;
   --destructive-foreground: 0 0% 100%;
 
@@ -43,12 +43,12 @@
   --ring:              174 97% 22%;
   --radius:            0.5rem;
 
-  /* Sidebar — ligeiramente mais clara que o background */
-  --sidebar:           30 12% 98%;
-  --sidebar-foreground: 30 8% 14%;
-  --sidebar-accent:    30 8% 92%;
+  /* Sidebar ESCURA — #0d1f1e teal profundo */
+  --sidebar:           174 44% 9%;
+  --sidebar-foreground: 174 15% 80%;
+  --sidebar-accent:    174 30% 14%;
 
-  /* Info — teal médio (alias de primary para contextos informativos) */
+  /* Info */
   --info:              174 60% 35%;
   --info-foreground:   0 0% 100%;
 
@@ -60,11 +60,10 @@
 }
 
 /* ============================================================
-   TEMA ESCURO — superfícies quentes escuras, sem azul frio
+   TEMA ESCURO — superficies quentes escuras + sidebar ainda mais escura
    ============================================================ */
 [data-theme="dark"],
 .dark {
-  /* Superfícies — marrom escuro quente, hierarquia de 5 níveis */
   --background:        24 8% 7%;
   --foreground:        30 8% 84%;
 
@@ -74,41 +73,34 @@
   --popover:           24 8% 12%;
   --popover-foreground: 30 8% 84%;
 
-  /* Primária — teal mais luminoso no escuro para contraste */
   --primary:           174 42% 52%;
   --primary-foreground: 24 8% 7%;
 
-  /* Secundária / muted — quente, não azul */
   --secondary:         24 6% 16%;
   --secondary-foreground: 30 6% 72%;
 
   --muted:             24 6% 16%;
   --muted-foreground:  30 4% 50%;
 
-  /* Accent — teal escuro para seleção/hover */
   --accent:            174 22% 16%;
   --accent-foreground: 174 42% 65%;
 
-  /* Destrutivo — vermelho suave */
   --destructive:       2 55% 52%;
   --destructive-foreground: 0 0% 97%;
 
-  /* Bordas — quentes e sutis */
   --border:            24 6% 18%;
   --input:             24 6% 18%;
   --ring:              174 42% 52%;
   --radius:            0.5rem;
 
-  /* Sidebar — um tom mais escuro que o card */
-  --sidebar:           24 8% 8.5%;
-  --sidebar-foreground: 30 8% 82%;
-  --sidebar-accent:    24 6% 13%;
+  /* Sidebar escura — ligeiramente mais escura que o card */
+  --sidebar:           174 44% 7%;
+  --sidebar-foreground: 174 15% 78%;
+  --sidebar-accent:    174 30% 12%;
 
-  /* Info — teal luminoso no escuro */
   --info:              174 42% 52%;
   --info-foreground:   24 8% 7%;
 
-  /* Cores de estado ajustadas para dark */
   --success:           138 42% 42%;
   --success-foreground: 0 0% 97%;
   --warning:           35 80% 52%;
@@ -141,7 +133,7 @@ body {
 }
 
 /* ============================================================
-   SCROLLBAR — quente e sutil
+   SCROLLBAR
    ============================================================ */
 ::-webkit-scrollbar {
   width: 5px;
@@ -162,7 +154,6 @@ body {
    UTILITÁRIOS GLOBAIS DE TEMA
    ============================================================ */
 
-/* Badge Pendente — mais visível em ambos os temas */
 .badge-pending {
   background: hsl(var(--muted));
   color: hsl(var(--muted-foreground));
@@ -173,7 +164,6 @@ body {
   border-radius: 9999px;
 }
 
-/* Botão cancelar / destrutivo — ghost refinado */
 .btn-destructive-ghost {
   color: hsl(var(--destructive));
   border: 1px solid hsl(var(--destructive) / 0.3);
@@ -184,7 +174,6 @@ body {
   border-color: hsl(var(--destructive) / 0.5);
 }
 
-/* Transição suave em todos os elementos interativos */
 a, button, [role="button"] {
   transition:
     color 180ms ease,
@@ -194,7 +183,6 @@ a, button, [role="button"] {
     opacity 180ms ease;
 }
 
-/* Focus ring consistente */
 :focus-visible {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;

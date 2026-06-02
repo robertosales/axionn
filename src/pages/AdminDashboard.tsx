@@ -25,21 +25,12 @@ import {
   BarChart3, History, Gauge, AlertTriangle, Sparkles, Menu, X,
 } from "lucide-react";
 
-// ---------------------------------------------------------------------------
-// STYLE GUIDE — Dashboard Admin (feature/redesign-ui-admin)
-// Sidebar light:  bg-teal-700  text-white
-// Sidebar dark:   bg-[hsl(var(--sidebar))]  text-sidebar-foreground
-// Nav item ativo: bg-teal-600 (light) | bg-accent (dark)
-// Topbar:         bg-background/95 backdrop-blur (tematico)
-// Paleta teal:    #0f766e (primary light) | hsl(var(--primary)) (dark)
-// ---------------------------------------------------------------------------
-
 const NAV_ITEMS = [
-  { key: "visao-geral", label: "Visão Geral",  icon: BarChart3  },
-  { key: "historico",   label: "Histórico",    icon: History    },
+  { key: "visao-geral", label: "Vis\u00e3o Geral",  icon: BarChart3  },
+  { key: "historico",   label: "Hist\u00f3rico",    icon: History    },
   { key: "capacidade",  label: "Capacidade",   icon: Gauge      },
   { key: "times",       label: "Times",        icon: UsersRound },
-  { key: "usuarios",    label: "Usuários",     icon: Users      },
+  { key: "usuarios",    label: "Usu\u00e1rios",     icon: Users      },
   { key: "ias",         label: "IA",           icon: Sparkles   },
 ] as const;
 
@@ -73,28 +64,34 @@ export default function AdminDashboard() {
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
 
-  // ── Sidebar ────────────────────────────────────────────────────────────────
+  // ── Sidebar ────────────────────────────────────────────────────────────────────────
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
       className={[
-        // Light: teal-700 | Dark: variavel --sidebar (marrom escuro quente)
-        "bg-teal-700 dark:bg-[hsl(var(--sidebar))]",
-        "text-white dark:text-[hsl(var(--sidebar-foreground))]",
         "flex flex-col h-screen transition-colors duration-250",
+        "scrollbar-none",
         mobile
           ? "w-64"
           : "fixed top-0 left-0 w-60 z-30 hidden lg:flex",
       ].join(" ")}
+      style={{
+        background: "hsl(var(--sidebar))",
+        color:      "hsl(var(--sidebar-foreground))",
+      }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-teal-600 dark:border-[hsl(var(--border))]">
-        <AxionLogo size={36} className="brightness-0 invert dark:brightness-100 dark:invert-0" />
+      <div
+        className="flex items-center gap-3 px-5 py-5"
+        style={{ borderBottom: "1px solid hsl(var(--sidebar-muted))" }}
+      >
+        <AxionLogo size={36} className="brightness-0 invert" />
         <span className="text-lg font-bold tracking-tight">
-          Axi<span className="text-yellow-300 dark:text-[hsl(var(--primary))]">o</span>n
+          Axi<span style={{ color: "hsl(var(--primary))" }}>o</span>n
         </span>
         {mobile && (
           <button
-            className="ml-auto text-white/70 hover:text-white dark:text-[hsl(var(--sidebar-foreground)/0.7)] dark:hover:text-[hsl(var(--sidebar-foreground))]"
+            className="ml-auto"
+            style={{ color: "hsl(var(--sidebar-foreground) / 0.6)" }}
             onClick={() => setSidebarOpen(false)}
             aria-label="Fechar menu"
           >
@@ -104,33 +101,63 @@ export default function AdminDashboard() {
       </div>
 
       {/* Navegação */}
-      <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Navegação admin">
-        {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => { setActivePage(key); if (mobile) setSidebarOpen(false); }}
-            className={[
-              "w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
-              activePage === key
-                ? "bg-teal-600 text-white dark:bg-[hsl(var(--accent))] dark:text-[hsl(var(--accent-foreground))]"
-                : "text-teal-100 hover:bg-teal-600 hover:text-white dark:text-[hsl(var(--sidebar-foreground)/0.75)] dark:hover:bg-[hsl(var(--accent))] dark:hover:text-[hsl(var(--accent-foreground))]",
-            ].join(" ")}
-            aria-current={activePage === key ? "page" : undefined}
-          >
-            <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {label}
-          </button>
-        ))}
+      <nav
+        className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-none"
+        aria-label="Navegação admin"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+          const isActive = activePage === key;
+          return (
+            <button
+              key={key}
+              onClick={() => { setActivePage(key); if (mobile) setSidebarOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors text-left"
+              style={{
+                background: isActive ? "hsl(var(--sidebar-active))" : "transparent",
+                color:      isActive
+                  ? "hsl(var(--sidebar-foreground))"
+                  : "hsl(var(--sidebar-foreground) / 0.7)",
+              }}
+              onMouseEnter={e => {
+                if (!isActive) {
+                  (e.currentTarget as HTMLElement).style.background = "hsl(var(--sidebar-accent))";
+                  (e.currentTarget as HTMLElement).style.color = "hsl(var(--sidebar-foreground))";
+                }
+              }}
+              onMouseLeave={e => {
+                if (!isActive) {
+                  (e.currentTarget as HTMLElement).style.background = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = "hsl(var(--sidebar-foreground) / 0.7)";
+                }
+              }}
+              aria-current={isActive ? "page" : undefined}
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {label}
+            </button>
+          );
+        })}
       </nav>
 
-      {/* Rodapé: usuário + sair */}
-      <div className="px-4 py-4 border-t border-teal-600 dark:border-[hsl(var(--border))] space-y-2">
-        <div className="flex items-center gap-2 text-xs text-teal-200 dark:text-[hsl(var(--muted-foreground))]">
+      {/* Rodapé */}
+      <div
+        className="px-4 py-4 space-y-2"
+        style={{ borderTop: "1px solid hsl(var(--sidebar-muted))" }}
+      >
+        <div
+          className="flex items-center gap-2 text-xs"
+          style={{ color: "hsl(var(--sidebar-foreground) / 0.6)" }}
+        >
           <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="truncate">{profile?.display_name || "Admin"}</span>
           <Badge
             variant="secondary"
-            className="ml-auto text-[9px] shrink-0 bg-teal-600/60 text-teal-100 border-transparent dark:bg-[hsl(var(--secondary))] dark:text-[hsl(var(--secondary-foreground))]"
+            className="ml-auto text-[9px] shrink-0 border-transparent"
+            style={{
+              background: "hsl(var(--sidebar-accent))",
+              color:      "hsl(var(--sidebar-foreground) / 0.8)",
+            }}
           >
             {teams.length} time{teams.length !== 1 ? "s" : ""}
           </Badge>
@@ -138,7 +165,16 @@ export default function AdminDashboard() {
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start text-teal-100 hover:bg-teal-600 hover:text-white dark:text-[hsl(var(--sidebar-foreground)/0.75)] dark:hover:bg-[hsl(var(--accent))] dark:hover:text-[hsl(var(--accent-foreground))] h-8 text-xs gap-2"
+          className="w-full justify-start h-8 text-xs gap-2 transition-colors"
+          style={{ color: "hsl(var(--sidebar-foreground) / 0.7)" }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.background = "hsl(var(--sidebar-accent))";
+            (e.currentTarget as HTMLElement).style.color = "hsl(var(--sidebar-foreground))";
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.background = "transparent";
+            (e.currentTarget as HTMLElement).style.color = "hsl(var(--sidebar-foreground) / 0.7)";
+          }}
           onClick={handleSignOut}
         >
           <LogOut className="h-3.5 w-3.5" aria-hidden="true" /> Sair
@@ -147,7 +183,7 @@ export default function AdminDashboard() {
     </aside>
   );
 
-  // ── Conteúdo da aba ativa ───────────────────────────────────────────────
+  // ── Conteúdo da aba ativa ────────────────────────────────────────────────────────
   const renderContent = () => {
     switch (activePage) {
       case "historico":  return <AdminHistoricoPage />;
@@ -178,14 +214,15 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen flex" style={{ background: "hsl(var(--background))" }}>
       {/* Sidebar desktop */}
       <Sidebar />
 
       {/* Overlay mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-40 lg:hidden"
+          style={{ background: "rgba(0,0,0,0.45)" }}
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -201,11 +238,18 @@ export default function AdminDashboard() {
       {/* Área principal */}
       <div className="flex-1 flex flex-col min-w-0 lg:pl-60">
         {/* Topbar */}
-        <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border">
+        <header
+          className="sticky top-0 z-20 backdrop-blur"
+          style={{
+            background:   "hsl(var(--background) / 0.95)",
+            borderBottom: "1px solid hsl(var(--border))",
+          }}
+        >
           <div className="h-14 px-4 md:px-6 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <button
-                className="lg:hidden text-muted-foreground hover:text-foreground"
+                className="lg:hidden"
+                style={{ color: "hsl(var(--muted-foreground))" }}
                 onClick={() => setSidebarOpen(true)}
                 aria-label="Abrir menu"
               >
@@ -215,10 +259,11 @@ export default function AdminDashboard() {
                 <h1 className="text-sm font-semibold leading-tight">
                   {NAV_ITEMS.find(n => n.key === activePage)?.label ?? "Dashboard Admin"}
                 </h1>
-                <p className="text-[11px] text-muted-foreground hidden sm:block">{data} · {hora}</p>
+                <p className="text-[11px] hidden sm:block" style={{ color: "hsl(var(--muted-foreground))" }}>
+                  {data} · {hora}
+                </p>
               </div>
             </div>
-            {/* Ações da topbar */}
             <div className="flex items-center gap-1">
               <ThemeToggle />
               {!loading && (

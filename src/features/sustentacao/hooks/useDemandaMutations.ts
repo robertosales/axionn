@@ -13,6 +13,12 @@
  *   A invalidação após cada mutation atinge KEYS.demandas.all E
  *   KEYS.demandas.infinite, mantendo Kanban e lista paginada sincronizados.
  *
+ * fix(P1-root): resetQueries → invalidateQueries({ refetchType:'active' })
+ *   resetQueries respeitava staleTime e não forçava refetch dentro da
+ *   janela de frescor (STALE.REALTIME = 30s). invalidateQueries marca a
+ *   query como stale e dispara refetch imediato se o componente estiver
+ *   montado, garantindo que a nova demanda apareça sem reload.
+ *
  * Uso:
  *   const { create, update, moveTo, remove } = useDemandaMutations();
  */
@@ -29,10 +35,12 @@ export function useDemandaMutations() {
   const { currentTeamId, user } = useAuth();
   const qc = useQueryClient();
 
-  // Invalida lista completa (Kanban) + infinite query (DemandasList)
+  // fix(P1-root): invalidateQueries com refetchType:'active' para a InfiniteQuery.
+  // Isso marca a query como stale E dispara refetch imediato se o componente
+  // estiver montado — ao contrário de resetQueries que respeita o staleTime.
   const invalidateAll = () => Promise.all([
     qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId!) }),
-    qc.resetQueries({     queryKey: KEYS.demandas.infinite(currentTeamId!) }),
+    qc.invalidateQueries({ queryKey: KEYS.demandas.infinite(currentTeamId!), refetchType: 'active' }),
   ]);
 
   const create = async (d: Partial<Demanda>) => {
@@ -78,7 +86,7 @@ export function useDemandaMutations() {
           from_status:   demanda.situacao,
           to_status:     newStatus,
           user_id:       user.id,
-          justificativa: justificativa || null,
+          justificativa: null,
         });
       }
       toast.success('Status atualizado com sucesso');

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   BookOpen, Plus, Trash2, Clock, Pencil, ShieldAlert,
-  Search, X, SlidersHorizontal, ListFilter,
+  Search, X, ListFilter,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -33,13 +33,13 @@ import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 import { HUEditDrawer } from "@/components/HUEditDrawer";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string; dot: string }> = {
-  baixa:   { label: "Baixa",    color: "bg-muted text-muted-foreground",                          dot: "bg-muted-foreground" },
-  media:   { label: "M\u00e9dia",   color: "bg-info/10 text-info border border-info/30",             dot: "bg-info" },
-  alta:    { label: "Alta",     color: "bg-warning/10 text-warning border border-warning/30",     dot: "bg-warning" },
-  critica: { label: "Cr\u00edtica", color: "bg-destructive/10 text-destructive border border-destructive/30", dot: "bg-destructive" },
+  baixa:   { label: "Baixa",   color: "bg-muted text-muted-foreground",                                      dot: "bg-muted-foreground" },
+  media:   { label: "Média",   color: "bg-info/10 text-info border border-info/30",                          dot: "bg-info" },
+  alta:    { label: "Alta",    color: "bg-warning/10 text-warning border border-warning/30",                 dot: "bg-warning" },
+  critica: { label: "Crítica", color: "bg-destructive/10 text-destructive border border-destructive/30",     dot: "bg-destructive" },
 };
 
-const AC_SEPARATOR = "\n\n---\n**Crit\u00e9rios de Aceite:**\n";
+const AC_SEPARATOR = "\n\n---\n**Critérios de Aceite:**\n";
 
 export function UserStoryManager() {
   const {
@@ -51,7 +51,6 @@ export function UserStoryManager() {
   const canCreate = hasPermission("create_backlog");
   const canEdit   = hasPermission("edit_backlog");
 
-  // ─ Dialog cria\u00e7\u00e3o ─
   const [open, setOpen]                   = useState(false);
   const [title, setTitle]                 = useState("");
   const [description, setDescription]     = useState("");
@@ -69,17 +68,11 @@ export function UserStoryManager() {
   const [sprintId, setSprintId]           = useState<string>("");
   const [statusField, setStatusField]     = useState<string>("");
 
-  // ─ Drawer edi\u00e7\u00e3o ─
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [editHuId, setEditHuId]             = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget]     = useState<string | null>(null);
+  const [quickTaskHU, setQuickTaskHU]       = useState<string | null>(null);
 
-  // ─ Exclus\u00e3o ─
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-
-  // ─ Quick task ─
-  const [quickTaskHU, setQuickTaskHU] = useState<string | null>(null);
-
-  // ─ Filtros ─
   const [searchFilter, setSearchFilter]     = useState("");
   const debouncedSearch                     = useDebounce(searchFilter);
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -95,11 +88,8 @@ export function UserStoryManager() {
     sprintFilter !== "all";
 
   const clearFilters = () => {
-    setSearchFilter("");
-    setPriorityFilter("all");
-    setStatusFilter("all");
-    setEpicFilter("all");
-    setSprintFilter("all");
+    setSearchFilter(""); setPriorityFilter("all");
+    setStatusFilter("all"); setEpicFilter("all"); setSprintFilter("all");
   };
 
   const filteredStories = useMemo(() => {
@@ -133,11 +123,11 @@ export function UserStoryManager() {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!title.trim()) e.title = "T\u00edtulo \u00e9 obrigat\u00f3rio";
+    if (!title.trim()) e.title = "Título é obrigatório";
     customFields.forEach((f) => {
       if (f.required) {
         const val = customFieldValues[f.id];
-        if (val === undefined || val === "" || val === null) e[`cf_${f.id}`] = `${f.name} \u00e9 obrigat\u00f3rio`;
+        if (val === undefined || val === "" || val === null) e[`cf_${f.id}`] = `${f.name} é obrigatório`;
       }
     });
     setErrors(e);
@@ -174,17 +164,16 @@ export function UserStoryManager() {
     if (!deleteTarget) return;
     const huActivities = activities.filter((a) => a.huId === deleteTarget);
     if (huActivities.length > 0) {
-      toast.error(`N\u00e3o \u00e9 poss\u00edvel excluir: esta HU possui ${huActivities.length} atividade(s) vinculada(s). Remova-as primeiro.`);
+      toast.error(`Não é possível excluir: esta HU possui ${huActivities.length} atividade(s) vinculada(s). Remova-as primeiro.`);
       setDeleteTarget(null); return;
     }
-    try { await removeUserStory(deleteTarget); toast.success("Registro exclu\u00eddo com sucesso"); }
+    try { await removeUserStory(deleteTarget); toast.success("Registro excluído com sucesso"); }
     catch { toast.error("Falha ao excluir item"); }
     setDeleteTarget(null);
   };
 
   if (loading) return <SkeletonList count={5} variant="row" />;
 
-  // ── Dialog formul\u00e1rio (inalterado) ──
   const dialogForm = (
     <DialogContent className="max-w-[960px] w-[80vw] max-h-[90vh] overflow-y-auto p-0">
       <DialogHeader className="px-6 pt-6 pb-0">
@@ -198,20 +187,20 @@ export function UserStoryManager() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             <div className="md:col-span-3 space-y-4">
               <div>
-                <Label>T\u00edtulo <span className="text-destructive">*</span></Label>
+                <Label>Título <span className="text-destructive">*</span></Label>
                 <Input value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }}
-                  placeholder="Como usu\u00e1rio, eu quero..." className="mt-1" />
+                  placeholder="Como usuário, eu quero..." className="mt-1" />
                 {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
               </div>
               <div>
-                <Label>Descri\u00e7\u00e3o</Label>
+                <Label>Descrição</Label>
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descri\u00e7\u00e3o detalhada da funcionalidade..." className="mt-1" rows={3} />
+                  placeholder="Descrição detalhada da funcionalidade..." className="mt-1" rows={3} />
               </div>
               <div>
-                <Label>Crit\u00e9rios de Aceite</Label>
+                <Label>Critérios de Aceite</Label>
                 <Textarea value={acceptanceCriteria} onChange={(e) => setAcceptanceCriteria(e.target.value)}
-                  placeholder="1. Dado que... quando... ent\u00e3o..." className="mt-1" rows={3} />
+                  placeholder="1. Dado que... quando... então..." className="mt-1" rows={3} />
               </div>
               {customFields.length > 0 && (
                 <div className="space-y-3 border-t pt-3">
@@ -250,16 +239,16 @@ export function UserStoryManager() {
                     <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Backlog" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="backlog">Backlog Geral</SelectItem>
-                      {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "\u2736" : ""}</SelectItem>)}
+                      {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "✦" : ""}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">\u00c9pico</Label>
+                  <Label className="text-xs">Épico</Label>
                   <Select value={epicId || "none"} onValueChange={(v) => setEpicId(v === "none" ? "" : v)}>
-                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem \u00e9pico" /></SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem épico" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Sem \u00e9pico</SelectItem>
+                      <SelectItem value="none">Sem épico</SelectItem>
                       {epics.map((ep) => (
                         <SelectItem key={ep.id} value={ep.id}>
                           <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />{ep.name}</div>
@@ -291,25 +280,25 @@ export function UserStoryManager() {
                 <div>
                   <Label className="text-xs">Estimativa em horas</Label>
                   <Select value={selectedSize ?? "none"} onValueChange={(v) => setSelectedSize(v === "none" ? null : v)}>
-                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="N\u00e3o estimado" /></SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Não estimado" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">N\u00e3o estimado</SelectItem>
-                      {SIZE_REFERENCES.map((s) => <SelectItem key={s.key} value={s.key}>{s.label} \u2014 {s.hours}h ({s.pointsLabel})</SelectItem>)}
+                      <SelectItem value="none">Não estimado</SelectItem>
+                      {SIZE_REFERENCES.map((s) => <SelectItem key={s.key} value={s.key}>{s.label} — {s.hours}h ({s.pointsLabel})</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Respons\u00e1vel</Label>
+                  <Label className="text-xs">Responsável</Label>
                   <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
-                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem respons\u00e1vel" /></SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem responsável" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Sem respons\u00e1vel</SelectItem>
+                      <SelectItem value="none">Sem responsável</SelectItem>
                       {developers.map((dev) => <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Data de In\u00edcio</Label>
+                  <Label className="text-xs">Data de Início</Label>
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 h-9 text-xs" />
                 </div>
                 <div>
@@ -317,7 +306,7 @@ export function UserStoryManager() {
                   <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 h-9 text-xs" />
                 </div>
                 <div>
-                  <Label className="text-xs">Ponto de Fun\u00e7\u00e3o</Label>
+                  <Label className="text-xs">Ponto de Função</Label>
                   <Input type="number" step="0.01" min="0" value={functionPoints}
                     onChange={(e) => setFunctionPoints(e.target.value)} placeholder="Ex: 12,50" className="mt-1 h-9 text-xs" />
                 </div>
@@ -339,24 +328,20 @@ export function UserStoryManager() {
     </DialogContent>
   );
 
-  // ──────────────────────────────────────────────────────────────────────
-  // RENDER PRINCIPAL
-  // ──────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
 
-      {/* ─ Header ─ */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-primary/10">
-            <BookOpen className="h-4.5 w-4.5 text-primary" />
+            <BookOpen className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h2 className="text-base font-bold tracking-tight leading-none">User Stories</h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">Backlog · {totalItems} itens</p>
           </div>
         </div>
-
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           {canCreate && (
             <DialogTrigger asChild>
@@ -369,41 +354,37 @@ export function UserStoryManager() {
         </Dialog>
       </div>
 
-      {/* ─ Barra de filtros ─ */}
+      {/* Barra de filtros */}
       <div className="rounded-xl border border-border bg-card p-3 flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-[260px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={searchFilter}
             onChange={(e) => { setSearchFilter(e.target.value); setCurrentPage(1); }}
-            placeholder="Buscar por t\u00edtulo ou c\u00f3digo..."
+            placeholder="Buscar por título ou código..."
             className="pl-8 h-8 text-xs bg-background"
           />
         </div>
-
         <div className="flex items-center gap-1.5 flex-wrap">
           <ListFilter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-
           <Select value={sprintFilter} onValueChange={(v) => { setSprintFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="h-8 w-[145px] text-xs bg-background"><SelectValue placeholder="Sprint" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas as sprints</SelectItem>
-              <SelectItem value="backlog">\ud83d\udccb Backlog</SelectItem>
-              {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "\u2736" : ""}</SelectItem>)}
+              <SelectItem value="backlog">📋 Backlog</SelectItem>
+              {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "✦" : ""}</SelectItem>)}
             </SelectContent>
           </Select>
-
           <Select value={priorityFilter} onValueChange={(v) => { setPriorityFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="h-8 w-[120px] text-xs bg-background"><SelectValue placeholder="Prioridade" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Prioridade</SelectItem>
-              <SelectItem value="critica">Cr\u00edtica</SelectItem>
+              <SelectItem value="critica">Crítica</SelectItem>
               <SelectItem value="alta">Alta</SelectItem>
-              <SelectItem value="media">M\u00e9dia</SelectItem>
+              <SelectItem value="media">Média</SelectItem>
               <SelectItem value="baixa">Baixa</SelectItem>
             </SelectContent>
           </Select>
-
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="h-8 w-[145px] text-xs bg-background"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
@@ -411,17 +392,15 @@ export function UserStoryManager() {
               {workflowColumns.map((col) => <SelectItem key={col.key} value={col.key}>{col.label}</SelectItem>)}
             </SelectContent>
           </Select>
-
           {epics.length > 0 && (
             <Select value={epicFilter} onValueChange={(v) => { setEpicFilter(v); setCurrentPage(1); }}>
-              <SelectTrigger className="h-8 w-[130px] text-xs bg-background"><SelectValue placeholder="\u00c9pico" /></SelectTrigger>
+              <SelectTrigger className="h-8 w-[130px] text-xs bg-background"><SelectValue placeholder="Épico" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos \u00e9picos</SelectItem>
+                <SelectItem value="all">Todos épicos</SelectItem>
                 {epics.map((ep) => <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
-
           {hasFilters && (
             <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground px-2"
               onClick={() => { clearFilters(); setCurrentPage(1); }}>
@@ -431,7 +410,6 @@ export function UserStoryManager() {
         </div>
       </div>
 
-      {/* ─ Empty state ─ */}
       {totalItems === 0 && (
         <EmptyState
           icon={BookOpen}
@@ -440,20 +418,20 @@ export function UserStoryManager() {
         />
       )}
 
-      {/* ─ Lista de HUs ─ */}
+      {/* Lista de HUs */}
       <div className="space-y-2">
         {sprintStories.map((hu) => {
-          const totalHours     = getTotalHoursForHU(activities, hu.id);
-          const huActivities   = activities.filter((a) => a.huId === hu.id);
-          const closedAct      = huActivities.filter((a) => a.isClosed);
-          const pInfo          = PRIORITY_MAP[hu.priority];
-          const statusCol      = workflowColumns.find((c) => c.key === hu.status);
-          const blocked        = hasActiveImpediment(hu);
-          const activeImps     = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
-          const epic           = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
-          const completionPct  = huActivities.length > 0
+          const totalHours    = getTotalHoursForHU(activities, hu.id);
+          const huActivities  = activities.filter((a) => a.huId === hu.id);
+          const closedAct     = huActivities.filter((a) => a.isClosed);
+          const pInfo         = PRIORITY_MAP[hu.priority];
+          const statusCol     = workflowColumns.find((c) => c.key === hu.status);
+          const blocked       = hasActiveImpediment(hu);
+          const activeImps    = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
+          const epic          = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
+          const completionPct = huActivities.length > 0
             ? Math.round((closedAct.length / huActivities.length) * 100) : 0;
-          const assignee       = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
+          const assignee      = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
 
           return (
             <div
@@ -464,57 +442,42 @@ export function UserStoryManager() {
                 blocked ? "border-warning/60 ring-1 ring-warning/30" : "border-border",
               ].join(" ")}
             >
-              {/* Faixa de prioridade esquerda */}
-              <div
-                className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full ${pInfo.dot}`}
-                style={{ marginLeft: "1px" }}
-              />
+              <div className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-full ${pInfo.dot}`} style={{ marginLeft: "1px" }} />
 
               <div className="p-4 pl-5">
-                {/* Linha 1: c\u00f3digo + badges + a\u00e7\u00f5es */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
                     <span className="font-mono text-[11px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
                       {hu.code}
                     </span>
-
                     {epic && (
-                      <span
-                        className="text-[10px] font-medium px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
-                        style={{ backgroundColor: epic.color + "22", color: epic.color }}
-                      >
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
+                        style={{ backgroundColor: epic.color + "22", color: epic.color }}>
                         <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ backgroundColor: epic.color }} />
                         {epic.name}
                       </span>
                     )}
-
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${pInfo.color} shrink-0`}>
                       {pInfo.label}
                     </span>
-
                     {statusCol && (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground flex items-center gap-1 shrink-0">
                         <span className={`h-1.5 w-1.5 rounded-full ${statusCol.dotColor}`} />
                         {statusCol.label}
                       </span>
                     )}
-
                     <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
-
                     {blocked && (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/15 text-warning border border-warning/30 flex items-center gap-1 shrink-0">
                         <ShieldAlert className="h-3 w-3" /> {activeImps} impedimento{activeImps > 1 ? "s" : ""}
                       </span>
                     )}
-
                     {huActivities.length > 0 && (
                       <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded border border-border bg-background shrink-0">
                         {closedAct.length}/{huActivities.length} tarefas
                       </span>
                     )}
                   </div>
-
-                  {/* A\u00e7\u00f5es — vis\u00edveis no hover */}
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     {canEdit && (
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" title="Adicionar tarefa"
@@ -537,17 +500,14 @@ export function UserStoryManager() {
                   </div>
                 </div>
 
-                {/* Linha 2: t\u00edtulo */}
                 <h3 className="font-semibold text-sm mt-2 leading-snug">{hu.title}</h3>
 
-                {/* Linha 3: descri\u00e7\u00e3o */}
                 {hu.description && (
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                     {hu.description}
                   </p>
                 )}
 
-                {/* Campos custom */}
                 {hu.customFields && customFields.length > 0 && Object.keys(hu.customFields).length > 0 && (
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     {customFields.map((cf) => {
@@ -562,13 +522,11 @@ export function UserStoryManager() {
                   </div>
                 )}
 
-                {/* Linha 4: footer com horas, progress, assignee */}
                 <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/50">
                   <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                     <Clock className="h-3 w-3" />
                     {totalHours}h
                   </span>
-
                   {huActivities.length > 0 && (
                     <div className="flex items-center gap-2">
                       <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -577,7 +535,6 @@ export function UserStoryManager() {
                       <span className="text-[10px] font-medium text-muted-foreground">{completionPct}%</span>
                     </div>
                   )}
-
                   {assignee && (
                     <span className="text-[11px] text-muted-foreground flex items-center gap-1 ml-auto">
                       <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary/15 text-primary text-[9px] font-bold">
@@ -588,7 +545,6 @@ export function UserStoryManager() {
                   )}
                 </div>
 
-                {/* File uploader */}
                 <FileUploader
                   entityType="user_story"
                   entityId={hu.id}

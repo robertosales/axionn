@@ -20,6 +20,8 @@ import { DeveloperManager } from "@/components/DeveloperManager";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/contexts/AuthContext";
 import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -28,6 +30,7 @@ export default function SustentacaoPage() {
   const [active, setActive] = useState("dashboard");
   const { loading: authLoading, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
   const [showTeamModal, setShowTeamModal] = useState(false);
+  const qc = useQueryClient();
 
   const moduleTeams = teams.filter((t) => t.module === "sustentacao");
 
@@ -41,6 +44,20 @@ export default function SustentacaoPage() {
       setShowTeamModal(true);
     }
   }, [authLoading, teams]);
+
+  // Canal RT singleton para workflow-steps.
+  // Montado aqui (raiz da página, fora de SustentacaoSection) para garantir
+  // exatamente 1 canal 'workflow-steps-rt' por usuário, independente de
+  // quantos componentes chamem useWorkflowSteps() simultaneamente.
+  // Regra P0 preservada: 150 usuários = 150 canais.
+  useEffect(() => {
+    const sub = supabase.channel("workflow-steps-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sustentacao_workflow_steps" },
+        () => qc.invalidateQueries({ queryKey: ['workflow-steps'] })
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(sub); };
+  }, [qc]);
 
   const needsTeam = !currentTeamId && active !== "times";
 
@@ -86,7 +103,6 @@ export default function SustentacaoPage() {
 
 function SustentacaoSection({ active }: { active: string }) {
   const { demandas, loading, update, moveTo, create } = useDemandas();
-  // fix(board): carrega as etapas do fluxo e passa ao Board como workflowColumns
   const { steps: workflowSteps } = useWorkflowSteps();
 
   const [selected, setSelected] = useState<Demanda | null>(null);
@@ -128,7 +144,6 @@ function SustentacaoSection({ active }: { active: string }) {
     );
   }
 
-  // fix(board): mapeia WorkflowStep[] → WorkflowColumn[] esperado pelo SustentacaoBoard
   const workflowColumns = workflowSteps.map((s) => ({
     key: s.key,
     label: s.label,

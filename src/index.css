@@ -4,107 +4,109 @@
 @tailwind utilities;
 
 /* ============================================================
-   TEMA CLARO — fundo bege suave + sidebar escura teal
+   OPÇÃO A — Sidebar Escura + Fundo Suave
+   Tokens exatos do protótipo opcao_a_fundo_suave.html
    ============================================================ */
 :root,
 [data-theme="light"] {
-  /* Superfícies — beige quente suave */
-  --background:        30 14% 96%;
-  --foreground:        30 8% 12%;
+  /* Fundo geral suave / quente */
+  --background:           30 43% 93%;    /* #f5f0e8 */
+  --background-2:         30 30% 88%;    /* #ede7db */
+  --foreground:           25 60% 9%;     /* #1a1410 */
 
-  --card:              0 0% 100%;
-  --card-foreground:   30 8% 12%;
+  /* Cards — warm minimal */
+  --card:                 40 100% 99%;   /* #fffdf9 */
+  --card-foreground:      25 60% 9%;
 
-  --popover:           0 0% 100%;
-  --popover-foreground: 30 8% 12%;
+  --popover:              40 100% 99%;
+  --popover-foreground:   25 60% 9%;
 
-  /* Primária — teal refinado */
-  --primary:           174 97% 22%;
-  --primary-foreground: 0 0% 100%;
+  /* Primária — teal */
+  --primary:              176 89% 40%;   /* #0bbcaf */
+  --primary-foreground:   0 0% 100%;
 
-  /* Secundária / muted — cinza quente */
-  --secondary:         30 6% 91%;
-  --secondary-foreground: 30 6% 20%;
+  --secondary:            30 20% 88%;
+  --secondary-foreground: 25 60% 9%;
 
-  --muted:             30 8% 92%;
-  --muted-foreground:  30 4% 44%;
+  --muted:                30 20% 88%;
+  --muted-foreground:     30 13% 49%;    /* #8a7e6e */
 
-  /* Accent */
-  --accent:            174 35% 90%;
-  --accent-foreground: 174 97% 18%;
+  --accent:               176 40% 90%;
+  --accent-foreground:    176 89% 25%;
 
-  /* Destrutivo */
-  --destructive:       2 68% 48%;
+  --destructive:          0 72% 51%;     /* #dc2626 */
   --destructive-foreground: 0 0% 100%;
 
-  /* Bordas e inputs */
-  --border:            30 8% 86%;
-  --input:             30 8% 86%;
-  --ring:              174 97% 22%;
-  --radius:            0.5rem;
+  --border:               30 22% 84%;    /* #e0d8cc */
+  --input:                30 22% 84%;
+  --ring:                 176 89% 40%;
+  --radius:               0.5rem;
 
-  /* Sidebar ESCURA — #0d1f1e teal profundo */
-  --sidebar:           174 44% 9%;
-  --sidebar-foreground: 174 15% 80%;
-  --sidebar-accent:    174 30% 14%;
+  /* ── Sidebar escura verde profundo ── */
+  --sidebar:              168 30% 8%;    /* #0f1a18 */
+  --sidebar-foreground:   172 19% 79%;   /* #c0d4d0 */
+  --sidebar-muted:        168 19% 30%;   /* #3d5a56 */
+  --sidebar-accent:       168 28% 14%;   /* #182e2a */
+  --sidebar-active:       172 57% 15%;   /* #0c3d38 */
 
-  /* Info */
-  --info:              174 60% 35%;
-  --info-foreground:   0 0% 100%;
+  /* Status */
+  --teal:                 176 89% 40%;   /* #0bbcaf */
+  --green:                142 72% 37%;   /* #16a34a */
+  --blue:                 221 83% 53%;   /* #2563eb */
+  --red:                  0 72% 51%;     /* #dc2626 */
+  --amber:                32 95% 44%;    /* #d97706 */
+  --purple:               262 83% 58%;   /* #7c3aed */
 
-  /* Cores de estado */
-  --success:           138 60% 30%;
-  --success-foreground: 0 0% 100%;
-  --warning:           35 90% 42%;
-  --warning-foreground: 0 0% 100%;
+  --info:                 176 89% 40%;
+  --info-foreground:      0 0% 100%;
+  --success:              142 72% 37%;
+  --success-foreground:   0 0% 100%;
+  --warning:              32 95% 44%;
+  --warning-foreground:   0 0% 100%;
 }
 
 /* ============================================================
-   TEMA ESCURO — superficies quentes escuras + sidebar ainda mais escura
+   TEMA ESCURO — mantido para compatibilidade
    ============================================================ */
 [data-theme="dark"],
 .dark {
-  --background:        24 8% 7%;
-  --foreground:        30 8% 84%;
-
-  --card:              24 8% 10%;
-  --card-foreground:   30 8% 84%;
-
-  --popover:           24 8% 12%;
-  --popover-foreground: 30 8% 84%;
-
-  --primary:           174 42% 52%;
-  --primary-foreground: 24 8% 7%;
-
-  --secondary:         24 6% 16%;
+  --background:           24 8% 7%;
+  --foreground:           30 8% 84%;
+  --card:                 24 8% 10%;
+  --card-foreground:      30 8% 84%;
+  --popover:              24 8% 12%;
+  --popover-foreground:   30 8% 84%;
+  --primary:              174 42% 52%;
+  --primary-foreground:   24 8% 7%;
+  --secondary:            24 6% 16%;
   --secondary-foreground: 30 6% 72%;
-
-  --muted:             24 6% 16%;
-  --muted-foreground:  30 4% 50%;
-
-  --accent:            174 22% 16%;
-  --accent-foreground: 174 42% 65%;
-
-  --destructive:       2 55% 52%;
+  --muted:                24 6% 16%;
+  --muted-foreground:     30 4% 50%;
+  --accent:               174 22% 16%;
+  --accent-foreground:    174 42% 65%;
+  --destructive:          2 55% 52%;
   --destructive-foreground: 0 0% 97%;
-
-  --border:            24 6% 18%;
-  --input:             24 6% 18%;
-  --ring:              174 42% 52%;
-  --radius:            0.5rem;
-
-  /* Sidebar escura — ligeiramente mais escura que o card */
-  --sidebar:           174 44% 7%;
-  --sidebar-foreground: 174 15% 78%;
-  --sidebar-accent:    174 30% 12%;
-
-  --info:              174 42% 52%;
-  --info-foreground:   24 8% 7%;
-
-  --success:           138 42% 42%;
-  --success-foreground: 0 0% 97%;
-  --warning:           35 80% 52%;
-  --warning-foreground: 24 8% 7%;
+  --border:               24 6% 18%;
+  --input:                24 6% 18%;
+  --ring:                 174 42% 52%;
+  --radius:               0.5rem;
+  --sidebar:              168 30% 6%;
+  --sidebar-foreground:   172 15% 72%;
+  --sidebar-muted:        168 15% 24%;
+  --sidebar-accent:       168 24% 11%;
+  --sidebar-active:       172 50% 12%;
+  --teal:                 174 42% 52%;
+  --green:                138 42% 42%;
+  --blue:                 221 60% 60%;
+  --red:                  2 55% 52%;
+  --amber:                35 80% 52%;
+  --purple:               262 60% 65%;
+  --info:                 174 42% 52%;
+  --info-foreground:      24 8% 7%;
+  --success:              138 42% 42%;
+  --success-foreground:   0 0% 97%;
+  --warning:              35 80% 52%;
+  --warning-foreground:   24 8% 7%;
 }
 
 /* ============================================================
@@ -112,79 +114,54 @@
    ============================================================ */
 *,
 *::before,
-*::after {
-  box-sizing: border-box;
-}
+*::after { box-sizing: border-box; }
 
-html {
-  font-size: 16px;
-}
+html { font-size: 16px; }
 
 body {
   background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: "Inter", sans-serif;
+  color:            hsl(var(--foreground));
+  font-family:      "Inter", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition:
-    background-color 250ms ease,
-    color 250ms ease;
+  transition: background-color 250ms ease, color 250ms ease;
   margin: 0;
 }
 
-/* ============================================================
-   SCROLLBAR
-   ============================================================ */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
-}
+/* ── Scrollbar ── */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
 
-/* ============================================================
-   UTILITÁRIOS GLOBAIS DE TEMA
-   ============================================================ */
-
+/* ── Utilitários ── */
 .badge-pending {
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
-  border: 1px solid hsl(var(--border));
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.15rem 0.5rem;
+  background:    hsl(var(--muted));
+  color:         hsl(var(--muted-foreground));
+  border:        1px solid hsl(var(--border));
+  font-size:     0.7rem;
+  font-weight:   600;
+  padding:       0.15rem 0.5rem;
   border-radius: 9999px;
 }
 
 .btn-destructive-ghost {
-  color: hsl(var(--destructive));
-  border: 1px solid hsl(var(--destructive) / 0.3);
+  color:      hsl(var(--destructive));
+  border:     1px solid hsl(var(--destructive) / 0.3);
   background: hsl(var(--destructive) / 0.06);
 }
 .btn-destructive-ghost:hover {
-  background: hsl(var(--destructive) / 0.12);
-  border-color: hsl(var(--destructive) / 0.5);
+  background:    hsl(var(--destructive) / 0.12);
+  border-color:  hsl(var(--destructive) / 0.5);
 }
 
 a, button, [role="button"] {
-  transition:
-    color 180ms ease,
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    opacity 180ms ease;
+  transition: color 180ms ease, background-color 180ms ease,
+    border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
 }
 
 :focus-visible {
-  outline: 2px solid hsl(var(--ring));
+  outline:        2px solid hsl(var(--ring));
   outline-offset: 2px;
-  border-radius: calc(var(--radius) - 2px);
+  border-radius:  calc(var(--radius) - 2px);
 }

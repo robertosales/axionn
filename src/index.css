@@ -9,53 +9,48 @@
    ============================================================ */
 :root,
 [data-theme="light"] {
-  /* Fundo geral suave / quente */
-  --background:           30 43% 93%;    /* #f5f0e8 */
-  --background-2:         30 30% 88%;    /* #ede7db */
-  --foreground:           25 60% 9%;     /* #1a1410 */
+  --background:           30 43% 93%;
+  --background-2:         30 30% 88%;
+  --foreground:           25 60% 9%;
 
-  /* Cards — warm minimal */
-  --card:                 40 100% 99%;   /* #fffdf9 */
+  --card:                 40 100% 99%;
   --card-foreground:      25 60% 9%;
 
   --popover:              40 100% 99%;
   --popover-foreground:   25 60% 9%;
 
-  /* Primária — teal */
-  --primary:              176 89% 40%;   /* #0bbcaf */
+  --primary:              176 89% 40%;
   --primary-foreground:   0 0% 100%;
 
   --secondary:            30 20% 88%;
   --secondary-foreground: 25 60% 9%;
 
   --muted:                30 20% 88%;
-  --muted-foreground:     30 13% 49%;    /* #8a7e6e */
+  --muted-foreground:     30 13% 49%;
 
   --accent:               176 40% 90%;
   --accent-foreground:    176 89% 25%;
 
-  --destructive:          0 72% 51%;     /* #dc2626 */
+  --destructive:          0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --border:               30 22% 84%;    /* #e0d8cc */
+  --border:               30 22% 84%;
   --input:                30 22% 84%;
   --ring:                 176 89% 40%;
   --radius:               0.5rem;
 
-  /* ── Sidebar escura verde profundo ── */
-  --sidebar:              168 30% 8%;    /* #0f1a18 */
-  --sidebar-foreground:   172 19% 79%;   /* #c0d4d0 */
-  --sidebar-muted:        168 19% 30%;   /* #3d5a56 */
-  --sidebar-accent:       168 28% 14%;   /* #182e2a */
-  --sidebar-active:       172 57% 15%;   /* #0c3d38 */
+  --sidebar:              168 30% 8%;
+  --sidebar-foreground:   172 19% 79%;
+  --sidebar-muted:        168 19% 30%;
+  --sidebar-accent:       168 28% 14%;
+  --sidebar-active:       172 57% 15%;
 
-  /* Status */
-  --teal:                 176 89% 40%;   /* #0bbcaf */
-  --green:                142 72% 37%;   /* #16a34a */
-  --blue:                 221 83% 53%;   /* #2563eb */
-  --red:                  0 72% 51%;     /* #dc2626 */
-  --amber:                32 95% 44%;    /* #d97706 */
-  --purple:               262 83% 58%;   /* #7c3aed */
+  --teal:                 176 89% 40%;
+  --green:                142 72% 37%;
+  --blue:                 221 83% 53%;
+  --red:                  0 72% 51%;
+  --amber:                32 95% 44%;
+  --purple:               262 83% 58%;
 
   --info:                 176 89% 40%;
   --info-foreground:      0 0% 100%;
@@ -66,7 +61,7 @@
 }
 
 /* ============================================================
-   TEMA ESCURO — mantido para compatibilidade
+   TEMA ESCURO
    ============================================================ */
 [data-theme="dark"],
 .dark {
@@ -128,11 +123,27 @@ body {
   margin: 0;
 }
 
-/* ── Scrollbar ── */
+/* ── Scrollbar global (área de conteúdo) ── */
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+
+/* ── Sidebar: scrollbar completamente oculta (Chrome/Safari/Edge + Firefox) ── */
+aside ::-webkit-scrollbar { display: none; }
+aside nav {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE 11 (legado) */
+}
+
+/* ── Utility class reutilizável em qualquer elemento ── */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
 
 /* ── Utilitários ── */
 .badge-pending {

@@ -36,9 +36,9 @@ const STATUS_OPTIONS = [
 ];
 
 const SLA_TYPE_OPTIONS: { value: SlaType; label: string }[] = [
-  { value: "24x7",           label: "24x7"               },
-  { value: "business_hours", label: "Horário Comercial"  },
-  { value: "custom",         label: "Personalizado"      },
+  { value: "24x7",           label: "24x7"              },
+  { value: "business_hours", label: "Horário Comercial" },
+  { value: "custom",         label: "Personalizado"     },
 ];
 
 const CRITICIDADE_LABELS: Record<string, string> = {
@@ -116,13 +116,13 @@ export function ContractWizardDialog({ open, contractId, initialData, onClose, o
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v && !saving) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar Contrato" : "Novo Contrato"}</DialogTitle>
         </DialogHeader>
 
-        {/* Stepper */}
-        <div className="flex gap-1">
+        {/* Stepper — mesmo padrão sutil do sistema */}
+        <div className="flex rounded-md overflow-hidden border">
           {STEPS.map((label, i) => (
             <button
               key={i}
@@ -130,12 +130,12 @@ export function ContractWizardDialog({ open, contractId, initialData, onClose, o
               onClick={() => i < step ? setStep(i) : undefined}
               disabled={i > step}
               className={[
-                "flex-1 py-1.5 px-2 text-xs font-medium rounded transition-colors",
+                "flex-1 py-2 text-xs font-medium transition-colors border-r last:border-r-0",
                 i === step
                   ? "bg-primary text-primary-foreground"
                   : i < step
-                  ? "bg-muted text-muted-foreground hover:bg-muted/80 cursor-pointer"
-                  : "bg-muted/40 text-muted-foreground/50 cursor-default",
+                  ? "bg-muted/60 text-muted-foreground hover:bg-muted cursor-pointer"
+                  : "bg-muted/20 text-muted-foreground/40 cursor-default",
               ].join(" ")}
             >
               {i < step && <Check className="inline h-3 w-3 mr-1" />}
@@ -144,7 +144,7 @@ export function ContractWizardDialog({ open, contractId, initialData, onClose, o
           ))}
         </div>
 
-        {/* STEP 1 */}
+        {/* STEP 1: DADOS */}
         {step === 0 && (
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -192,7 +192,7 @@ export function ContractWizardDialog({ open, contractId, initialData, onClose, o
           </div>
         )}
 
-        {/* STEP 2 */}
+        {/* STEP 2: PROJETOS */}
         {step === 1 && (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -235,7 +235,7 @@ export function ContractWizardDialog({ open, contractId, initialData, onClose, o
           </div>
         )}
 
-        {/* STEP 3 */}
+        {/* STEP 3: SLAs */}
         {step === 2 && (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -245,7 +245,9 @@ export function ContractWizardDialog({ open, contractId, initialData, onClose, o
               {form.slas.map((sla, idx) => (
                 <div key={sla.criticidade} className="rounded-md border bg-card p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <Badge variant="outline" className="text-xs">{CRITICIDADE_LABELS[sla.criticidade]}</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {CRITICIDADE_LABELS[sla.criticidade]}
+                    </Badge>
                     <Select value={sla.sla_type} onValueChange={v => updateSla(idx, "sla_type", v as SlaType)}>
                       <SelectTrigger className="h-7 w-44 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -276,12 +278,22 @@ export function ContractWizardDialog({ open, contractId, initialData, onClose, o
           </div>
         )}
 
-        <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" onClick={() => step === 0 ? onClose() : setStep(s => s - 1)} disabled={saving}>
+        {/* Footer — padrão do sistema: outline + default */}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => step === 0 ? onClose() : setStep(s => s - 1)}
+            disabled={saving}
+          >
             {step === 0 ? "Cancelar" : "Voltar"}
           </Button>
           {step < 2 ? (
-            <Button type="button" onClick={() => setStep(s => s + 1)} disabled={step === 0 && !step1Valid}>
+            <Button
+              type="button"
+              onClick={() => setStep(s => s + 1)}
+              disabled={step === 0 && !step1Valid}
+            >
               Próximo
             </Button>
           ) : (

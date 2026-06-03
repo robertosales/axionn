@@ -8,6 +8,7 @@ export interface Projeto {
   equipe: string;
   sla: string;
   sla_id: string | null;
+  contract_id: string | null; // Fase 2
   created_at: string;
   updated_at: string;
 }
@@ -18,10 +19,6 @@ export async function fetchProjetos(teamId: string): Promise<Projeto[]> {
     .select("*")
     .eq("team_id", teamId)
     .order("nome");
-
-  console.log("DATA:", data);
-  console.log("ERROR:", error);
-
   if (error) throw error;
   return (data || []) as unknown as Projeto[];
 }
@@ -32,6 +29,8 @@ export async function createProjeto(p: {
   descricao?: string;
   equipe?: string;
   sla?: string;
+  sla_id?: string | null;
+  contract_id?: string | null;
 }) {
   const { data, error } = await supabase
     .from("projetos" as any)
@@ -67,11 +66,11 @@ export async function upsertProjetos(
 ) {
   for (const row of rows) {
     const { error } = await supabase.from("projetos" as any).insert({
-      team_id: teamId,
-      nome: row.nome,
+      team_id:   teamId,
+      nome:      row.nome,
       descricao: row.descricao || "",
-      equipe: row.equipe || "",
-      sla: row.sla || "padrao",
+      equipe:    row.equipe || "",
+      sla:       row.sla || "padrao",
     } as any);
     if (error) throw error;
   }

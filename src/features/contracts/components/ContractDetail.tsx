@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Edit2, Trash2, FileText, ShieldCheck } from 'lucide-react';
+import { X, Edit2, Trash2, FileText, ShieldCheck, FolderKanban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import { deleteContract } from '../services/contracts.service';
 import { CONTRACT_STATUS_CONFIG, PRIORITY_CONFIG } from '../types/contract';
 import type { ContractStatus, SLAPriority } from '../types/contract';
 import { ContractForm } from './ContractForm';
+import { ProjectTeamsPanel } from './ProjectTeamsPanel';
 
 interface Props {
   contractId: string;
@@ -61,7 +62,11 @@ export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
             <Button variant="ghost" size="sm" className="h-8" onClick={() => setEditing(true)}>
               <Edit2 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive h-8" onClick={handleDelete}>
+            <Button
+              variant="ghost" size="sm"
+              className="text-destructive hover:text-destructive h-8"
+              onClick={handleDelete}
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm" className="h-8" onClick={onClose}>
@@ -72,7 +77,7 @@ export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
-          {/* Informações gerais */}
+          {/* Dados gerais */}
           <section>
             <div className="flex items-center gap-2 mb-3">
               <FileText className="h-4 w-4 text-muted-foreground" />
@@ -106,22 +111,15 @@ export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
             </div>
           </section>
 
-          {/* Projetos — placeholder Fase 2 */}
+          {/* Projetos e Times — Fase 3 ✅ */}
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <FileText className="h-4 w-4 text-muted-foreground" />
+              <FolderKanban className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Projetos
+                Projetos &amp; Times
               </h3>
             </div>
-            <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center">
-              <p className="text-xs text-muted-foreground">
-                Os projetos deste contrato serão exibidos aqui.
-              </p>
-              <p className="text-[11px] text-muted-foreground/60 mt-1">
-                Disponível na próxima fase do módulo.
-              </p>
-            </div>
+            <ProjectTeamsPanel contractId={contractId} />
           </section>
 
           {/* Matriz de SLA */}

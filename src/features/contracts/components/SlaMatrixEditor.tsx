@@ -1,3 +1,6 @@
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import type { SlaRow, SLAPriority } from '../types/contract';
 import { PRIORITY_CONFIG } from '../types/contract';
 
@@ -15,51 +18,51 @@ export function SlaMatrixEditor({ slas, onChange }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="p-3 bg-amber-950/20 border border-amber-900/50 text-amber-300 text-xs rounded-lg flex items-start gap-2">
-        <span>⚠️</span>
-        <p>
-          Ao salvar, estas regras substituem qualquer SLA fixado no código para
-          chamados desta sala de sustentação.
-        </p>
+
+      {/* Aviso */}
+      <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-600 dark:text-yellow-400">
+        <strong>Atenção:</strong> Ao salvar, estas regras substituem qualquer SLA fixado no código
+        para chamados desta sala de sustentação.
       </div>
 
-      <div className="border border-slate-800 rounded-lg overflow-hidden">
+      {/* Tabela */}
+      <div className="rounded-lg border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-950 text-slate-400 text-[11px] uppercase">
-            <tr>
-              <th className="px-4 py-3 text-left font-semibold">Prioridade</th>
-              <th className="px-4 py-3 text-left font-semibold">1ª Resposta (min)</th>
-              <th className="px-4 py-3 text-left font-semibold">Resolução (horas)</th>
+          <thead>
+            <tr className="border-b bg-muted/40">
+              <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Prioridade</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">1ª Resposta (min)</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Resolução (horas)</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800">
+          <tbody className="divide-y">
             {slas.map((sla) => {
               const cfg = PRIORITY_CONFIG[sla.priority as SLAPriority];
               return (
-                <tr key={sla.priority} className="hover:bg-slate-800/40 transition-colors">
+                <tr key={sla.priority} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${cfg.bgColor} shrink-0`} />
-                      <span className="font-medium text-white text-xs">{cfg.label}</span>
+                      <span className={`w-2 h-2 rounded-full ${cfg.bgColor} shrink-0`} />
+                      <span className="text-xs font-medium">{cfg.label}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <input
+                      <Input
                         type="number"
                         min={1}
                         value={sla.response_time_minutes}
                         onChange={(e) =>
                           updateSla(sla.priority as SLAPriority, 'response_time_minutes', Number(e.target.value))
                         }
-                        className="w-20 bg-slate-950 border border-slate-700 text-center rounded p-1.5 text-white text-xs focus:border-indigo-500 focus:outline-none"
+                        className="w-20 h-8 text-center text-xs"
                       />
-                      <span className="text-slate-500 text-xs">min</span>
+                      <span className="text-xs text-muted-foreground">min</span>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <input
+                      <Input
                         type="number"
                         min={1}
                         value={Math.round(sla.resolution_time_minutes / 60)}
@@ -67,12 +70,12 @@ export function SlaMatrixEditor({ slas, onChange }: Props) {
                           updateSla(
                             sla.priority as SLAPriority,
                             'resolution_time_minutes',
-                            Number(e.target.value) * 60
+                            Number(e.target.value) * 60,
                           )
                         }
-                        className="w-20 bg-slate-950 border border-slate-700 text-center rounded p-1.5 text-white text-xs focus:border-indigo-500 focus:outline-none"
+                        className="w-20 h-8 text-center text-xs"
                       />
-                      <span className="text-slate-500 text-xs">h</span>
+                      <span className="text-xs text-muted-foreground">h</span>
                     </div>
                   </td>
                 </tr>
@@ -83,30 +86,19 @@ export function SlaMatrixEditor({ slas, onChange }: Props) {
       </div>
 
       {/* Toggle horário comercial */}
-      <div className="flex items-center justify-between p-4 bg-slate-950 rounded-lg border border-slate-800">
+      <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
         <div>
-          <p className="text-sm font-medium text-white">Apenas Horário Comercial (8×5)</p>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <Label className="text-sm font-medium">Apenas Horário Comercial (8×5)</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Pausa a contagem de SLA fora do expediente e feriados.
           </p>
         </div>
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            className="sr-only peer"
-            checked={businessHoursOnly}
-            onChange={(e) =>
-              onChange(slas.map((s) => ({ ...s, business_hours_only: e.target.checked })))
-            }
-          />
-          <div
-            className="w-11 h-6 bg-slate-700 rounded-full peer
-              peer-checked:bg-indigo-600
-              after:content-[''] after:absolute after:top-0.5 after:left-[2px]
-              after:bg-white after:rounded-full after:h-5 after:w-5
-              after:transition-all peer-checked:after:translate-x-full"
-          />
-        </label>
+        <Switch
+          checked={businessHoursOnly}
+          onCheckedChange={(checked) =>
+            onChange(slas.map((s) => ({ ...s, business_hours_only: checked })))
+          }
+        />
       </div>
     </div>
   );

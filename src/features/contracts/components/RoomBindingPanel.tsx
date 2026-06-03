@@ -1,4 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { fetchFreeTeams } from '../services/contracts.service';
 import type { TeamConfig } from '../types/contract';
 
@@ -9,100 +15,93 @@ interface Props {
   onChange: (c: TeamConfig) => void;
 }
 
-export function RoomBindingPanel({ title, accentColor, config, onChange }: Props) {
+export function RoomBindingPanel({ title, config, onChange }: Props) {
   const [freeTeams, setFreeTeams] = useState<{ id: string; name: string; module: string }[]>([]);
 
   useEffect(() => {
     fetchFreeTeams().then(setFreeTeams).catch(() => {});
   }, []);
 
-  const accent =
-    accentColor === 'indigo'
-      ? {
-          border: 'border-indigo-600',
-          text: 'text-indigo-400',
-          activeBg: 'bg-indigo-950/20 border-indigo-900/50',
-        }
-      : {
-          border: 'border-purple-600',
-          text: 'text-purple-400',
-          activeBg: 'bg-purple-950/20 border-purple-900/50',
-        };
-
   return (
-    <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-4">
+    <div className="rounded-lg border bg-card p-4 space-y-3">
       <div>
-        <h4 className={`text-sm font-bold ${accent.text}`}>{title}</h4>
-        <p className="text-xs text-slate-500 mt-0.5">
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
           Vincule um time existente ou provisione uma nova estrutura do zero.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {/* Opção: vincular existente */}
+        {/* Vincular existente */}
         <label
-          className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-colors ${
+          className={[
+            'flex flex-col p-3 rounded-lg border cursor-pointer transition-colors',
             config.mode === 'link_existing'
-              ? `${accent.activeBg} ${accent.border}`
-              : 'bg-slate-900 border-slate-800 hover:border-slate-600'
-          }`}
+              ? 'border-primary bg-primary/5'
+              : 'border-border hover:border-muted-foreground/40',
+          ].join(' ')}
         >
-          <div className="flex items-center gap-2 font-medium text-sm">
+          <div className="flex items-center gap-2 text-sm font-medium">
             <input
               type="radio"
               checked={config.mode === 'link_existing'}
               onChange={() => onChange({ ...config, mode: 'link_existing' })}
-              className="accent-indigo-600"
+              className="accent-primary"
             />
-            <span className="text-white">Vincular Time Existente</span>
+            Vincular Existente
           </div>
-          <p className="text-xs text-slate-500 mt-2">
-            Preserva histórico, quadros e dados legados intactos.
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Preserva histórico, quadros e dados legados.
           </p>
           {config.mode === 'link_existing' && (
-            <select
-              className="mt-3 w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-slate-300 focus:outline-none"
-              value={config.existingTeamId ?? ''}
-              onChange={(e) => onChange({ ...config, existingTeamId: e.target.value })}
-            >
-              <option value="">Selecione um time...</option>
-              {freeTeams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            <div className="mt-2">
+              <Select
+                value={config.existingTeamId ?? ''}
+                onValueChange={(v) => onChange({ ...config, existingTeamId: v })}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Selecione um time..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {freeTeams.map((t) => (
+                    <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </label>
 
-        {/* Opção: provisionar novo */}
+        {/* Provisionar novo */}
         <label
-          className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-colors ${
+          className={[
+            'flex flex-col p-3 rounded-lg border cursor-pointer transition-colors',
             config.mode === 'provision_new'
-              ? `${accent.activeBg} ${accent.border}`
-              : 'bg-slate-900 border-slate-800 hover:border-slate-600'
-          }`}
+              ? 'border-primary bg-primary/5'
+              : 'border-border hover:border-muted-foreground/40',
+          ].join(' ')}
         >
-          <div className="flex items-center gap-2 font-medium text-sm">
+          <div className="flex items-center gap-2 text-sm font-medium">
             <input
               type="radio"
               checked={config.mode === 'provision_new'}
               onChange={() => onChange({ ...config, mode: 'provision_new' })}
-              className="accent-indigo-600"
+              className="accent-primary"
             />
-            <span className="text-emerald-400">✨ Provisionar Novo Time</span>
+            Provisionar Novo
           </div>
-          <p className="text-xs text-slate-500 mt-2">
-            Estrutura limpa. Configure membros, fluxos e Kanban do zero.
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Estrutura limpa. Configure membros e fluxos do zero.
           </p>
           {config.mode === 'provision_new' && (
-            <input
-              type="text"
-              placeholder="Nome do novo time..."
-              className="mt-3 w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-              value={config.newTeamName ?? ''}
-              onChange={(e) => onChange({ ...config, newTeamName: e.target.value })}
-            />
+            <div className="mt-2">
+              <Input
+                placeholder="Nome do novo time..."
+                className="h-8 text-xs"
+                value={config.newTeamName ?? ''}
+                onChange={(e) => onChange({ ...config, newTeamName: e.target.value })}
+              />
+            </div>
           )}
         </label>
       </div>

@@ -24,11 +24,13 @@ create policy "project_teams_select" on public.project_teams
     )
   );
 
+-- Gerenciar: apenas owners/admins do time (role armazenado em team_members.role, NAO em user_roles)
 create policy "project_teams_manage" on public.project_teams
   for all using (
     team_id in (
-      select tm.team_id from public.team_members tm
-      join public.user_roles ur on ur.user_id = tm.user_id and ur.team_id = tm.team_id
-      where tm.user_id = auth.uid() and ur.role in ('owner', 'admin')
+      select team_id
+      from public.team_members
+      where user_id = auth.uid()
+        and role in ('owner', 'admin')
     )
   );

@@ -13,6 +13,7 @@ import { ImrDashboard } from "./ImrDashboard";
 import { MetricasFilterBar, FILTROS_DEFAULT } from "./MetricasFilterBar";
 import type { MetricasFiltros } from "./MetricasFilterBar";
 import { useAuth } from "@/contexts/AuthContext";
+import { SLADashboardSection } from "./SLADashboardSection";
 import {
   AlertTriangle,
   Clock,
@@ -30,7 +31,6 @@ import { Separator } from "@/components/ui/separator";
 
 const SEVERITY_ORDER = ["bloqueada", "aguardando_retorno"] as const;
 
-// ─── Helpers de saudação ──────────────────────────────────────────────────────
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return "Bom dia";
@@ -50,7 +50,6 @@ function capitalizeFirst(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-// ─── LazySection ─────────────────────────────────────────────────────────────
 function LazySection({ children, placeholder }: {
   children: React.ReactNode;
   placeholder?: React.ReactNode;
@@ -70,10 +69,12 @@ function LazySection({ children, placeholder }: {
   return <div ref={ref}>{visible ? children : (placeholder ?? <SkeletonList count={2} />)}</div>;
 }
 
-// ─── SustentacaoDashboard ──────────────────────────────────────────────────────
 export function SustentacaoDashboard() {
   const [filtros, setFiltros] = useState<MetricasFiltros>(FILTROS_DEFAULT);
   const { user } = useAuth() as any;
+
+  // contractId ativo — virá do filtro quando disponível, por enquanto null
+  const contractId: string | null = (filtros as any).contract_id ?? null;
 
   const firstName = useMemo(() => {
     const full: string =
@@ -87,7 +88,6 @@ export function SustentacaoDashboard() {
   const {
     atendimento,
     tempos,
-    sla,
     loading: kpisLoading,
   } = useKpisSustentacao(filtros.periodo === "all" ? 30 : parseInt(filtros.periodo));
 
@@ -140,24 +140,11 @@ export function SustentacaoDashboard() {
     [filtered],
   );
 
-  const alertasSLA = useMemo(
-    () =>
-      filtered
-        .filter((d) => (d as any).sla_violado || (d as any).sla_em_risco)
-        .sort((a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime())
-        .map((d) => ({
-          id: d.id, rhm: d.rhm, projeto: d.projeto, situacao: d.situacao, updatedAt: d.updated_at,
-          diasAtraso: Math.floor((Date.now() - new Date(d.updated_at).getTime()) / 86400000),
-        })),
-    [filtered],
-  );
-
   const maxCount = Math.max(...porSituacao.map(([, c]) => c), 1);
 
   return (
     <div className="space-y-6">
 
-      {/* ── Greeting header ── */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
           {getGreeting()}{firstName ? `, ${firstName}` : ""} 👋
@@ -177,7 +164,7 @@ export function SustentacaoDashboard() {
         />
       </div>
 
-      {/* KPIs */}
+      {/* KPIs Atendimento */}
       <Section title="Atendimento e Volume">
         {kpisLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -200,6 +187,7 @@ export function SustentacaoDashboard() {
         )}
       </Section>
 
+      {/* KPIs Tempos */}
       <Section title="Tempos Médios">
         {kpisLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -217,28 +205,12 @@ export function SustentacaoDashboard() {
         )}
       </Section>
 
-      <Section title="SLA">
-        {kpisLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <KPICard
-              icon={Shield}
-              label="SLA Compliance"
-              value={sla.total === 0 ? "N/A" : `${sla.compliance.toFixed(1)}%`}
-              color={sla.total === 0 ? "muted" : sla.compliance >= 95 ? "info" : "destructive"}
-              sub={sla.total === 0 ? "Sem demandas" : "Meta: ≥ 95%"}
-            />
-            <KPICard icon={AlertTriangle} label="Em Risco"    value={sla.emRisco}  color={sla.emRisco > 0 ? "destructive" : "muted"} sub="< 2h restantes" />
-            <KPICard icon={AlertTriangle} label="SLA Violado" value={sla.violados} color={sla.violados > 0 ? "destructive" : "muted"} />
-          </div>
-        )}
+      {/* ── Fase 6: SLA dinâmico via fn_sla_status_summary ── */}
+      <Section title="SLA por Contrato">
+        <SLADashboardSection contractId={contractId} />
       </Section>
 
+      {/* Demandas por situação + Alertas operacionais */}
       {demandasLoading ? (
         <SkeletonList count={3} />
       ) : (
@@ -270,66 +242,28 @@ export function SustentacaoDashboard() {
             <CardHeader className="pb-2 shrink-0">
               <CardTitle className="text-sm flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
-                Alertas
+                Alertas Operacionais
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 flex-1 flex flex-col min-h-0">
-              <Tabs defaultValue="operacional" className="flex flex-col flex-1 min-h-0">
-                <TabsList className="w-full h-8 shrink-0 mb-2">
-                  <TabsTrigger value="operacional" className="flex-1 text-xs gap-1.5">
-                    Operacional
-                    {alertasOperacionais.length > 0 && (
-                      <Badge variant="destructive" className="h-4 px-1.5 text-[10px] leading-none">{alertasOperacionais.length}</Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="sla" className="flex-1 text-xs gap-1.5">
-                    SLA (E8)
-                    {alertasSLA.length > 0 && (
-                      <Badge variant="destructive" className="h-4 px-1.5 text-[10px] leading-none">{alertasSLA.length}</Badge>
-                    )}
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="operacional" className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted">
-                  {alertasOperacionais.length === 0 ? <EmptyAlerts /> : (
-                    alertasOperacionais.map((a) => {
-                      const isBlocked = a.situacao === "bloqueada";
-                      const hoursAgo = Math.round((Date.now() - new Date(a.updatedAt).getTime()) / 3_600_000);
-                      return (
-                        <AlertRow
-                          key={a.id}
-                          icon={isBlocked ? AlertTriangle : Clock}
-                          iconClass={isBlocked ? "text-destructive" : "text-orange-500"}
-                          borderClass={isBlocked ? "border-destructive/30 bg-destructive/5" : "border-orange-400/30 bg-orange-50 dark:bg-orange-950/20"}
-                          title={a.rhm}
-                          sub={`${isBlocked ? "Bloqueada" : "Aguardando retorno"} há ${hoursAgo}h · ${a.projeto}`}
-                        />
-                      );
-                    })
-                  )}
-                </TabsContent>
-                <TabsContent value="sla" className="mt-0 flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-muted">
-                  {alertasSLA.length === 0 ? <EmptyAlerts /> : (
-                    <>
-                      <div className="flex items-center justify-between px-1 pb-1 border-b border-border/40">
-                        <span className="text-[11px] text-muted-foreground">
-                          <span className="text-destructive font-semibold">{alertasSLA.length}</span> demanda{alertasSLA.length > 1 ? "s" : ""} com SLA violado
-                        </span>
-                        <span className="text-[11px] text-destructive font-medium">
-                          Glosa acumulada: {(alertasSLA.length * 0.2).toFixed(1)}%
-                        </span>
-                      </div>
-                      {alertasSLA.map((a) => (
-                        <AlertRow key={a.id} icon={AlertTriangle} iconClass="text-destructive"
-                          borderClass="border-destructive/20 bg-destructive/5"
-                          title={`${a.rhm} — ${a.projeto}`}
-                          sub={`${a.diasAtraso} dias de atraso · Glosa 0,2%`}
-                          badge={`${a.diasAtraso}d`}
-                        />
-                      ))}
-                    </>
-                  )}
-                </TabsContent>
-              </Tabs>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {alertasOperacionais.length === 0 ? <EmptyAlerts /> : (
+                  alertasOperacionais.map((a) => {
+                    const isBlocked = a.situacao === "bloqueada";
+                    const hoursAgo = Math.round((Date.now() - new Date(a.updatedAt).getTime()) / 3_600_000);
+                    return (
+                      <AlertRow
+                        key={a.id}
+                        icon={isBlocked ? AlertTriangle : Clock}
+                        iconClass={isBlocked ? "text-destructive" : "text-orange-500"}
+                        borderClass={isBlocked ? "border-destructive/30 bg-destructive/5" : "border-orange-400/30 bg-orange-50 dark:bg-orange-950/20"}
+                        title={a.rhm}
+                        sub={`${isBlocked ? "Bloqueada" : "Aguardando retorno"} há ${hoursAgo}h · ${a.projeto}`}
+                      />
+                    );
+                  })
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -344,7 +278,6 @@ export function SustentacaoDashboard() {
   );
 }
 
-// ─── Sub-componentes ─────────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>

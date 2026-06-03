@@ -12,11 +12,9 @@ import {
   Dialog, DialogContent, DialogHeader,
   DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { linkTeamToContract } from '../services/contracts.service';
 import { DEFAULT_SLAS } from '../types/contract';
-import type { ContractFormData, SlaRow, TeamConfig } from '../types/contract';
+import type { ContractFormData, SlaRow } from '../types/contract';
 import { useSaveContract } from '../hooks/useContracts';
-import { RoomBindingPanel } from './RoomBindingPanel';
 import { SlaMatrixEditor } from './SlaMatrixEditor';
 
 interface Props {
@@ -33,14 +31,12 @@ const EMPTY_FORM: ContractFormData = {
   ends_at: '',
 };
 
-const STEPS = ['1. Dados', '2. Times', '3. SLAs'];
+const STEPS = ['1. Dados', '2. SLAs'];
 
 export function ContractForm({ onClose, onSuccess, initialData }: Props) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState<ContractFormData>({ ...EMPTY_FORM, ...initialData });
-  const [slas, setSlas]         = useState<SlaRow[]>(DEFAULT_SLAS);
-  const [agileTeam, setAgileTeam] = useState<TeamConfig>({ mode: 'link_existing',  teamType: 'agile'     });
-  const [sustTeam,  setSustTeam]  = useState<TeamConfig>({ mode: 'provision_new',  teamType: 'sustenance' });
+  const [slas, setSlas] = useState<SlaRow[]>(DEFAULT_SLAS);
 
   const { save, saving, error } = useSaveContract();
 
@@ -54,19 +50,12 @@ export function ContractForm({ onClose, onSuccess, initialData }: Props) {
     const contractId = await save(form, slas, initialData?.id);
     if (!contractId) { toast.error(error ?? 'Erro ao salvar'); return; }
 
-    const linkPromises: Promise<void>[] = [];
-    if (agileTeam.mode === 'link_existing' && agileTeam.existingTeamId)
-      linkPromises.push(linkTeamToContract(agileTeam.existingTeamId, contractId, 'agile'));
-    if (sustTeam.mode === 'link_existing' && sustTeam.existingTeamId)
-      linkPromises.push(linkTeamToContract(sustTeam.existingTeamId, contractId, 'sustenance'));
-    await Promise.all(linkPromises);
-
     toast.success(initialData?.id ? 'Contrato atualizado!' : 'Contrato criado com sucesso!');
     onSuccess();
   }
 
-  const isEditing   = !!initialData?.id;
-  const step1Valid  = form.name.trim().length >= 2;
+  const isEditing  = !!initialData?.id;
+  const step1Valid = form.name.trim().length >= 2;
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -75,7 +64,7 @@ export function ContractForm({ onClose, onSuccess, initialData }: Props) {
           <DialogTitle>{isEditing ? 'Editar Contrato' : 'Novo Contrato'}</DialogTitle>
         </DialogHeader>
 
-        {/* Stepper — padrão sutil */}
+        {/* Stepper */}
         <div className="flex rounded-md overflow-hidden border">
           {STEPS.map((s, i) => (
             <button
@@ -98,7 +87,7 @@ export function ContractForm({ onClose, onSuccess, initialData }: Props) {
           ))}
         </div>
 
-        {/* Step 1: Dados */}
+        {/* Step 1 — Dados */}
         {step === 1 && (
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -106,7 +95,7 @@ export function ContractForm({ onClose, onSuccess, initialData }: Props) {
               <Input
                 value={form.name}
                 onChange={(e) => setField('name', e.target.value)}
-                placeholder="Ex: Contrato Enterprise — TechCorp"
+                placeholder="Ex: Contrato Fábrica — TechCorp 2026"
                 autoFocus
               />
             </div>
@@ -121,11 +110,19 @@ export function ContractForm({ onClose, onSuccess, initialData }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Início da Vigência</Label>
-                <Input type="date" value={form.starts_at ?? ''} onChange={(e) => setField('starts_at', e.target.value)} />
+                <Input
+                  type="date"
+                  value={form.starts_at ?? ''}
+                  onChange={(e) => setField('starts_at', e.target.value)}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Fim da Vigência</Label>
-                <Input type="date" value={form.ends_at ?? ''} onChange={(e) => setField('ends_at', e.target.value)} />
+                <Input
+                  type="date"
+                  value={form.ends_at ?? ''}
+                  onChange={(e) => setField('ends_at', e.target.value)}
+                />
               </div>
             </div>
             <div className="space-y-1.5">
@@ -142,36 +139,28 @@ export function ContractForm({ onClose, onSuccess, initialData }: Props) {
           </div>
         )}
 
-        {/* Step 2: Times */}
+        {/* Step 2 — SLAs */}
         {step === 2 && (
-          <div className="space-y-3">
-            <RoomBindingPanel title="Time Ágil"      accentColor="indigo" config={agileTeam} onChange={setAgileTeam} />
-            <RoomBindingPanel title="Time Sustentação" accentColor="purple" config={sustTeam}  onChange={setSustTeam}  />
-          </div>
-        )}
-
-        {/* Step 3: SLAs */}
-        {step === 3 && (
           <div className="max-h-[50vh] overflow-y-auto pr-1">
             <SlaMatrixEditor slas={slas} onChange={setSlas} />
           </div>
         )}
 
-        {/* Footer — igual ao TeamFormDialog */}
+        {/* Footer */}
         <DialogFooter>
           <Button
             type="button"
             variant="outline"
-            onClick={() => step === 1 ? onClose() : setStep((s) => (s - 1) as any)}
+            onClick={() => step === 1 ? onClose() : setStep(1)}
             disabled={saving}
           >
             {step === 1 ? 'Cancelar' : 'Voltar'}
           </Button>
-          {step < 3 ? (
+          {step < 2 ? (
             <Button
               type="button"
-              onClick={() => setStep((s) => (s + 1) as any)}
-              disabled={step === 1 && !step1Valid}
+              onClick={() => setStep(2)}
+              disabled={!step1Valid}
             >
               Próximo
             </Button>

@@ -4,8 +4,8 @@
 
 export type ContractStatus = 'active' | 'paused' | 'terminated';
 export type SLAPriority    = 'urgent' | 'high' | 'medium' | 'low';
-export type TeamType       = 'agile' | 'sustenance';
-export type RoomMode       = 'link_existing' | 'provision_new';
+
+// TeamType e RoomMode removidos da Fase 1 — pertencem ao módulo de Projetos (Fase 2)
 
 export interface Contract {
   id: string;
@@ -37,13 +37,6 @@ export interface ContractFormData {
   status: ContractStatus;
   starts_at?: string;
   ends_at?: string;
-}
-
-export interface TeamConfig {
-  mode: RoomMode;
-  existingTeamId?: string;
-  newTeamName?: string;
-  teamType: TeamType;
 }
 
 export interface SlaStatusResult {

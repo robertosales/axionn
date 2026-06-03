@@ -5,21 +5,22 @@ import {
   createContract,
   updateContract,
   upsertContractSlas,
+  fetchActiveContracts,
 } from '../services/contracts.service';
 import type { Contract, ContractFormData, SlaRow } from '../types/contract';
 
-// ── Lista de contratos ────────────────────────────────────────────────────────
-
+// ── Lista completa de contratos ───────────────────────────────────────────────
 export function useContracts() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setContracts(await fetchContracts());
+      const data = await fetchContracts();
+      setContracts(data as Contract[]);
     } catch (e: any) {
       setError(e?.message ?? 'Erro ao carregar contratos');
     } finally {
@@ -27,68 +28,68 @@ export function useContracts() {
     }
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { load(); }, [load]);
 
-  return { contracts, loading, error, reload };
+  return { contracts, loading, error, reload: load };
 }
 
 // ── Detalhe de um contrato ────────────────────────────────────────────────────
-
-export function useContractDetail(id: string | null) {
+export function useContractDetail(contractId: string) {
   const [contract, setContract] = useState<Contract | null>(null);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [loading, setLoading]   = useState(true);
 
-  const reload = useCallback(async () => {
-    if (!id) return;
+  useEffect(() => {
+    if (!contractId) return;
     setLoading(true);
-    setError(null);
-    try {
-      setContract(await fetchContractById(id));
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro ao carregar contrato');
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+    fetchContractById(contractId)
+      .then((d) => setContract(d as Contract))
+      .catch(() => setContract(null))
+      .finally(() => setLoading(false));
+  }, [contractId]);
 
-  useEffect(() => { reload(); }, [reload]);
-
-  return { contract, loading, error, reload };
+  return { contract, loading };
 }
 
-// ── Salvar contrato + SLAs ────────────────────────────────────────────────────
-
+// ── Salvar (criar ou editar) contrato + SLAs ─────────────────────────────────
 export function useSaveContract() {
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState<string | null>(null);
 
-  async function save(
-    formData: ContractFormData,
+  const save = useCallback(async (
+    form: ContractFormData,
     slas: SlaRow[],
-    contractId?: string
-  ): Promise<string | null> {
+    existingId?: string,
+  ): Promise<string | null> => {
     setSaving(true);
     setError(null);
     try {
-      let id = contractId;
-      if (id) {
-        await updateContract(id, formData);
-      } else {
-        const created = await createContract(formData);
-        id = created.id;
-      }
-      if (slas.length > 0) {
-        await upsertContractSlas(id!, slas);
-      }
-      return id!;
+      const id = existingId
+        ? (await updateContract(existingId, form), existingId)
+        : await createContract(form);
+      await upsertContractSlas(id, slas);
+      return id;
     } catch (e: any) {
-      setError(e?.message ?? 'Erro ao salvar contrato');
+      setError(e?.message ?? 'Erro desconhecido');
       return null;
     } finally {
       setSaving(false);
     }
-  }
+  }, []);
 
   return { save, saving, error };
+}
+
+// ── Contratos ativos para selects ─────────────────────────────────────────────
+export function useActiveContracts() {
+  const [contracts, setContracts] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading]     = useState(true);
+
+  useEffect(() => {
+    fetchActiveContracts()
+      .then(setContracts)
+      .catch(() => setContracts([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return { contracts, loading };
 }

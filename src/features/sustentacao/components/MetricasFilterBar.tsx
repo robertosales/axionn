@@ -1,7 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
-import { X, Bookmark, BookmarkPlus, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { useState, useMemo } from "react";
+import { X, BookmarkPlus, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -15,87 +14,60 @@ import {
 } from "@/components/ui/tooltip";
 import type { Demanda } from "../types/demanda";
 import { SITUACAO_LABELS } from "../types/demanda";
+import { useContracts } from "@/features/contracts/hooks/useContracts";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface MetricasFiltros {
-  projeto: string;      // "all" | nome do projeto
-  periodo: string;      // "7" | "30" | "90" | "all"
-  situacao: string;     // "all" | chave de situacao
-  membro: string;       // "all" | display_name
+  projeto:     string;   // "all" | nome do projeto
+  periodo:     string;   // "7" | "30" | "90" | "all"
+  situacao:    string;   // "all" | chave de situacao
+  membro:      string;   // "all" | display_name
+  contract_id: string;   // "all" | uuid do contrato
 }
 
 export const FILTROS_DEFAULT: MetricasFiltros = {
-  projeto: "all",
-  periodo: "30",
-  situacao: "all",
-  membro: "all",
+  projeto:     "all",
+  periodo:     "30",
+  situacao:    "all",
+  membro:      "all",
+  contract_id: "all",
 };
 
 export interface ViewSalva {
-  id: string;
-  label: string;
-  icon: string;
+  id:     string;
+  label:  string;
+  icon:   string;
   filtros: MetricasFiltros;
 }
 
 const VIEWS_BUILTIN: ViewSalva[] = [
-  {
-    id: "atrasados",
-    label: "Atrasados",
-    icon: "🔴",
-    filtros: { ...FILTROS_DEFAULT, situacao: "bloqueada" },
-  },
-  {
-    id: "ultimos7",
-    label: "Últimos 7 dias",
-    icon: "⚡",
-    filtros: { ...FILTROS_DEFAULT, periodo: "7" },
-  },
-  {
-    id: "ultimos30",
-    label: "Últimos 30 dias",
-    icon: "📅",
-    filtros: { ...FILTROS_DEFAULT, periodo: "30" },
-  },
+  { id: "atrasados", label: "Atrasados",     icon: "🔴", filtros: { ...FILTROS_DEFAULT, situacao: "bloqueada" } },
+  { id: "ultimos7",  label: "Últimos 7 dias", icon: "⚡",   filtros: { ...FILTROS_DEFAULT, periodo: "7" } },
+  { id: "ultimos30", label: "Últimos 30 dias",icon: "📅",   filtros: { ...FILTROS_DEFAULT, periodo: "30" } },
 ];
 
 const LS_KEY = "metricas_views_salvas";
 
 function loadViewsFromLS(): ViewSalva[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? (JSON.parse(raw) as ViewSalva[]) : [];
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? "null") ?? []; }
+  catch { return []; }
 }
 
 function saveViewsToLS(views: ViewSalva[]) {
   localStorage.setItem(LS_KEY, JSON.stringify(views));
 }
 
-// ─── Helpers visuais ─────────────────────────────────────────────────────────
-
 const PERIODO_LABELS: Record<string, string> = {
-  "7":  "7 dias",
-  "30": "30 dias",
-  "90": "90 dias",
-  all:  "Todos",
+  "7": "7 dias", "30": "30 dias", "90": "90 dias", all: "Todos",
 };
 
 const CHIP_COLORS: Record<keyof MetricasFiltros, string> = {
-  projeto:  "text-violet-400 border-violet-400/40 bg-violet-400/10",
-  periodo:  "text-cyan-400 border-cyan-400/40 bg-cyan-400/10",
-  situacao: "text-amber-400 border-amber-400/40 bg-amber-400/10",
-  membro:   "text-emerald-400 border-emerald-400/40 bg-emerald-400/10",
-};
-
-const CHIP_LABELS: Record<keyof MetricasFiltros, string> = {
-  projeto:  "Projeto",
-  periodo:  "Período",
-  situacao: "Status",
-  membro:   "Membro",
+  projeto:     "text-violet-400 border-violet-400/40 bg-violet-400/10",
+  periodo:     "text-cyan-400   border-cyan-400/40   bg-cyan-400/10",
+  situacao:    "text-amber-400  border-amber-400/40  bg-amber-400/10",
+  membro:      "text-emerald-400 border-emerald-400/40 bg-emerald-400/10",
+  contract_id: "text-sky-400   border-sky-400/40    bg-sky-400/10",
 };
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -107,19 +79,20 @@ export function MetricasFilterBar({
   projetos,
   totalFiltrado,
 }: {
-  filtros: MetricasFiltros;
-  onChange: (f: MetricasFiltros) => void;
-  demandas: Demanda[];
-  projetos: { id: string; nome: string }[];
+  filtros:       MetricasFiltros;
+  onChange:      (f: MetricasFiltros) => void;
+  demandas:      Demanda[];
+  projetos:      { id: string; nome: string }[];
   totalFiltrado: number;
 }) {
-  const [viewsCustom, setViewsCustom] = useState<ViewSalva[]>(loadViewsFromLS);
+  const [viewsCustom, setViewsCustom]   = useState<ViewSalva[]>(loadViewsFromLS);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const [saveLabel, setSaveLabel] = useState("");
+  const [popoverOpen, setPopoverOpen]   = useState(false);
+  const [saveLabel, setSaveLabel]       = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
 
-  // contagens por opção para exibir nos chips de seleção
+  const { contracts } = useContracts();
+
   const counts = useMemo(() => {
     const periodoItems = (dias: string) => {
       if (dias === "all") return demandas.length;
@@ -128,37 +101,38 @@ export function MetricasFilterBar({
       return demandas.filter((d) => new Date(d.created_at) >= cutoff).length;
     };
     const situacaoCounts: Record<string, number> = {};
-    const membroCounts: Record<string, number> = {};
-    const projetoCounts: Record<string, number> = {};
+    const membroCounts:   Record<string, number> = {};
+    const projetoCounts:  Record<string, number> = {};
+    const contractCounts: Record<string, number> = {};
     demandas.forEach((d) => {
       situacaoCounts[d.situacao] = (situacaoCounts[d.situacao] || 0) + 1;
       if (d.projeto) projetoCounts[d.projeto] = (projetoCounts[d.projeto] || 0) + 1;
+      if (d.contract_id) contractCounts[d.contract_id] = (contractCounts[d.contract_id] || 0) + 1;
       const resp = (d as any).responsaveis_list as { nome: string }[] | undefined;
       resp?.forEach((r) => {
         if (r.nome) membroCounts[r.nome] = (membroCounts[r.nome] || 0) + 1;
       });
       if (!resp) {
-        const names = [
-          (d as any).responsavel_dev,
-          (d as any).responsavel_requisitos,
-          (d as any).responsavel_arquiteto,
-          (d as any).responsavel_teste,
-        ].filter(Boolean) as string[];
-        names.forEach((n) => { membroCounts[n] = (membroCounts[n] || 0) + 1; });
+        ([(d as any).responsavel_dev, (d as any).responsavel_requisitos,
+          (d as any).responsavel_arquiteto, (d as any).responsavel_teste] as string[])
+          .filter(Boolean).forEach((n) => { membroCounts[n] = (membroCounts[n] || 0) + 1; });
       }
     });
-    return { periodoItems, situacaoCounts, membroCounts, projetoCounts };
+    return { periodoItems, situacaoCounts, membroCounts, projetoCounts, contractCounts };
   }, [demandas]);
 
-  // Chips ativos (filtros != default)
   const activeChips = useMemo(() => {
-    const chips: { key: keyof MetricasFiltros; label: string; value: string; display: string }[] = [];
-    if (filtros.projeto !== "all")  chips.push({ key: "projeto",  label: "Projeto",  value: filtros.projeto,  display: filtros.projeto });
-    if (filtros.periodo !== "all")  chips.push({ key: "periodo",  label: "Período",  value: filtros.periodo,  display: PERIODO_LABELS[filtros.periodo] ?? filtros.periodo });
-    if (filtros.situacao !== "all") chips.push({ key: "situacao", label: "Status",   value: filtros.situacao, display: SITUACAO_LABELS[filtros.situacao] ?? filtros.situacao });
-    if (filtros.membro !== "all")   chips.push({ key: "membro",   label: "Membro",   value: filtros.membro,   display: filtros.membro.split(" ")[0] });
+    const chips: { key: keyof MetricasFiltros; label: string; display: string }[] = [];
+    if (filtros.projeto     !== "all") chips.push({ key: "projeto",     label: "Projeto",  display: filtros.projeto });
+    if (filtros.periodo     !== "all") chips.push({ key: "periodo",     label: "Período",  display: PERIODO_LABELS[filtros.periodo] ?? filtros.periodo });
+    if (filtros.situacao    !== "all") chips.push({ key: "situacao",    label: "Status",   display: SITUACAO_LABELS[filtros.situacao] ?? filtros.situacao });
+    if (filtros.membro      !== "all") chips.push({ key: "membro",      label: "Membro",   display: filtros.membro.split(" ")[0] });
+    if (filtros.contract_id !== "all") {
+      const name = contracts.find(c => c.id === filtros.contract_id)?.name ?? filtros.contract_id.slice(0, 8);
+      chips.push({ key: "contract_id", label: "Contrato", display: name });
+    }
     return chips;
-  }, [filtros]);
+  }, [filtros, contracts]);
 
   function clearChip(key: keyof MetricasFiltros) {
     setActiveViewId(null);
@@ -177,12 +151,7 @@ export function MetricasFilterBar({
 
   function saveCurrentView() {
     if (!saveLabel.trim()) return;
-    const newView: ViewSalva = {
-      id: Date.now().toString(),
-      label: saveLabel.trim(),
-      icon: "📌",
-      filtros: { ...filtros },
-    };
+    const newView: ViewSalva = { id: Date.now().toString(), label: saveLabel.trim(), icon: "📌", filtros: { ...filtros } };
     const updated = [...viewsCustom, newView];
     setViewsCustom(updated);
     saveViewsToLS(updated);
@@ -198,17 +167,15 @@ export function MetricasFilterBar({
     if (activeViewId === id) setActiveViewId(null);
   }
 
-  const allViews = [...VIEWS_BUILTIN, ...viewsCustom];
-  const membros = useMemo(() => Object.keys(counts.membroCounts).sort(), [counts]);
-  const situacoes = useMemo(() => Object.keys(counts.situacaoCounts).sort(), [counts]);
+  const allViews    = [...VIEWS_BUILTIN, ...viewsCustom];
+  const membros     = useMemo(() => Object.keys(counts.membroCounts).sort(), [counts]);
+  const situacoes   = useMemo(() => Object.keys(counts.situacaoCounts).sort(), [counts]);
 
   return (
     <div className="flex flex-col gap-2">
-      {/* ── Linha 1: Visões salvas ── */}
+      {/* Linha 1: visões salvas */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1">
-          Visões
-        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1">Visões</span>
         {allViews.map((v) => (
           <ViewChip
             key={v.id}
@@ -218,8 +185,6 @@ export function MetricasFilterBar({
             onDelete={viewsCustom.find((c) => c.id === v.id) ? () => deleteView(v.id) : undefined}
           />
         ))}
-
-        {/* Salvar view atual */}
         {!showSaveInput ? (
           <TooltipProvider>
             <Tooltip>
@@ -250,13 +215,10 @@ export function MetricasFilterBar({
         )}
       </div>
 
-      {/* ── Linha 2: Chips ativos + botão add filtro ── */}
+      {/* Linha 2: chips ativos + popover */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1">
-          Filtros
-        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pr-1">Filtros</span>
 
-        {/* Chips dos filtros ativos */}
         {activeChips.map((chip) => (
           <span
             key={chip.key}
@@ -270,7 +232,6 @@ export function MetricasFilterBar({
           </span>
         ))}
 
-        {/* Popover para adicionar filtro */}
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
             <button className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary text-[11px] transition-colors">
@@ -279,6 +240,24 @@ export function MetricasFilterBar({
             </button>
           </PopoverTrigger>
           <PopoverContent side="bottom" align="start" className="w-72 p-3 space-y-4">
+
+            {/* Contrato */}
+            {contracts.length > 0 && (
+              <FilterGroup
+                label="Contrato"
+                colorClass="text-sky-400"
+                items={[
+                  { value: "all", label: "Todos", count: demandas.length },
+                  ...contracts.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                    count: counts.contractCounts[c.id] ?? 0,
+                  })),
+                ]}
+                selected={filtros.contract_id}
+                onSelect={(v) => { onChange({ ...filtros, contract_id: v }); setActiveViewId(null); }}
+              />
+            )}
 
             {/* Projeto */}
             <FilterGroup
@@ -294,10 +273,10 @@ export function MetricasFilterBar({
               label="Período"
               colorClass="text-cyan-400"
               items={[
-                { value: "all",  label: "Todos",        count: counts.periodoItems("all") },
-                { value: "7",    label: "Últimos 7d",   count: counts.periodoItems("7") },
-                { value: "30",   label: "Últimos 30d",  count: counts.periodoItems("30") },
-                { value: "90",   label: "Últimos 90d",  count: counts.periodoItems("90") },
+                { value: "all", label: "Todos",        count: counts.periodoItems("all") },
+                { value: "7",   label: "Últimos 7d",   count: counts.periodoItems("7") },
+                { value: "30",  label: "Últimos 30d",  count: counts.periodoItems("30") },
+                { value: "90",  label: "Últimos 90d",  count: counts.periodoItems("90") },
               ]}
               selected={filtros.periodo}
               onSelect={(v) => { onChange({ ...filtros, periodo: v }); setActiveViewId(null); }}
@@ -325,14 +304,12 @@ export function MetricasFilterBar({
           </PopoverContent>
         </Popover>
 
-        {/* Limpar todos */}
         {activeChips.length > 0 && (
           <button onClick={clearAll} className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
             <X className="h-3 w-3" /> Limpar
           </button>
         )}
 
-        {/* Contador de resultados */}
         <span className="ml-auto text-[11px] font-mono text-muted-foreground">
           <span className="text-foreground font-semibold">{totalFiltrado}</span> demanda{totalFiltrado !== 1 ? "s" : ""}
         </span>
@@ -341,15 +318,8 @@ export function MetricasFilterBar({
   );
 }
 
-// ─── ViewChip ─────────────────────────────────────────────────────────────────
-
-function ViewChip({
-  view, active, onApply, onDelete,
-}: {
-  view: ViewSalva;
-  active: boolean;
-  onApply: () => void;
-  onDelete?: () => void;
+function ViewChip({ view, active, onApply, onDelete }: {
+  view: ViewSalva; active: boolean; onApply: () => void; onDelete?: () => void;
 }) {
   return (
     <span
@@ -363,10 +333,7 @@ function ViewChip({
       <span>{view.icon}</span>
       {view.label}
       {onDelete && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity"
-        >
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity">
           <X className="h-2.5 w-2.5" />
         </button>
       )}
@@ -374,16 +341,10 @@ function ViewChip({
   );
 }
 
-// ─── FilterGroup ──────────────────────────────────────────────────────────────
-
-function FilterGroup({
-  label, colorClass, items, selected, onSelect,
-}: {
-  label: string;
-  colorClass: string;
+function FilterGroup({ label, colorClass, items, selected, onSelect }: {
+  label: string; colorClass: string;
   items: { value: string; label: string; count: number }[];
-  selected: string;
-  onSelect: (v: string) => void;
+  selected: string; onSelect: (v: string) => void;
 }) {
   return (
     <div>

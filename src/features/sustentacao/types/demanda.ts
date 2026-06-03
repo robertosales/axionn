@@ -60,10 +60,6 @@ export const SITUACAO_COLORS: Record<string, string> = {
   cancelada: "bg-gray-200 text-gray-700 border-gray-300",
 };
 
-/**
- * Todas as fases disponíveis para lançamento de horas.
- * A ordem aqui define a ordem no select do NovaAtividadeDialog.
- */
 export const FASES = [
   "analise",
   "planejamento",
@@ -99,7 +95,12 @@ export interface Demanda {
   situacao: string;
   descricao: string;
   sla: DemandaSLA;
+  /** ID do contrato vinculado ao projeto desta demanda — populado pela RPC */
+  contract_id?: string | null;
+  /** Prioridade SLA (urgent | high | medium | low) — populado pela RPC */
+  sla_priority?: string | null;
   demandante?: string | null;
+  data_abertura?: string | null;
   data_previsao_encerramento?: string | null;
   responsavel_requisitos?: string | null;
   responsavel_dev?: string | null;
@@ -164,10 +165,6 @@ export function getResponsavelAtivo(demanda: Demanda): string | null {
   );
 }
 
-/**
- * Retorna o label legível de uma fase, com fallback seguro para valores
- * antigos ou desconhecidos salvos no banco.
- */
 export function getFaseLabel(fase: string): string {
   return FASE_LABELS[fase] ?? fase;
 }

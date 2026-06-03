@@ -1,7 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDemandasPaginadas } from "../hooks/useDemandasPaginadas";
 import { useProjetos } from "../hooks/useProjetos";
@@ -21,7 +19,6 @@ import {
   FileText,
   BarChart3,
   TrendingUp,
-  Shield,
   Timer,
   Zap,
   Target,
@@ -39,21 +36,14 @@ function getGreeting(): string {
 }
 
 function getFormattedDate(): string {
-  return new Date().toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-  });
+  return new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 }
 
 function capitalizeFirst(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-function LazySection({ children, placeholder }: {
-  children: React.ReactNode;
-  placeholder?: React.ReactNode;
-}) {
+function LazySection({ children, placeholder }: { children: React.ReactNode; placeholder?: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -73,48 +63,37 @@ export function SustentacaoDashboard() {
   const [filtros, setFiltros] = useState<MetricasFiltros>(FILTROS_DEFAULT);
   const { user } = useAuth() as any;
 
-  // contractId ativo — virá do filtro quando disponível, por enquanto null
-  const contractId: string | null = (filtros as any).contract_id ?? null;
+  // contract_id vindo do filtro — alimenta o SLADashboardSection
+  const contractId = filtros.contract_id !== "all" ? filtros.contract_id : null;
 
   const firstName = useMemo(() => {
     const full: string =
-      user?.user_metadata?.full_name ||
-      user?.user_metadata?.name ||
-      user?.email?.split("@")[0] ||
-      "";
+      user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "";
     return capitalizeFirst(full.split(" ")[0] ?? "");
   }, [user]);
 
-  const {
-    atendimento,
-    tempos,
-    loading: kpisLoading,
-  } = useKpisSustentacao(filtros.periodo === "all" ? 30 : parseInt(filtros.periodo));
+  const { atendimento, tempos, loading: kpisLoading } =
+    useKpisSustentacao(filtros.periodo === "all" ? 30 : parseInt(filtros.periodo));
 
   const { demandas, loading: demandasLoading } = useDemandasPaginadas();
   const { projetos } = useProjetos();
 
   const filtered = useMemo(() => {
     let items = demandas;
-    if (filtros.projeto !== "all")
-      items = items.filter((d) => d.projeto === filtros.projeto);
-    if (filtros.periodo !== "all") {
+    if (filtros.projeto     !== "all") items = items.filter((d) => d.projeto === filtros.projeto);
+    if (filtros.contract_id !== "all") items = items.filter((d) => d.contract_id === filtros.contract_id);
+    if (filtros.periodo     !== "all") {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - parseInt(filtros.periodo));
       items = items.filter((d) => new Date(d.created_at) >= cutoff);
     }
-    if (filtros.situacao !== "all")
-      items = items.filter((d) => d.situacao === filtros.situacao);
-    if (filtros.membro !== "all") {
+    if (filtros.situacao !== "all") items = items.filter((d) => d.situacao === filtros.situacao);
+    if (filtros.membro   !== "all") {
       items = items.filter((d) => {
         const lista = (d as any).responsaveis_list as { nome: string }[] | undefined;
-        if (lista && lista.length > 0) return lista.some((r) => r.nome === filtros.membro);
-        return [
-          (d as any).responsavel_dev,
-          (d as any).responsavel_requisitos,
-          (d as any).responsavel_arquiteto,
-          (d as any).responsavel_teste,
-        ].includes(filtros.membro);
+        if (lista?.length) return lista.some((r) => r.nome === filtros.membro);
+        return [(d as any).responsavel_dev, (d as any).responsavel_requisitos,
+                (d as any).responsavel_arquiteto, (d as any).responsavel_teste].includes(filtros.membro);
       });
     }
     return items;
@@ -126,17 +105,16 @@ export function SustentacaoDashboard() {
     return Object.entries(acc).sort((a, b) => b[1] - a[1]);
   }, [filtered]);
 
-  const alertasOperacionais = useMemo(
-    () =>
-      filtered
-        .filter((d) => d.situacao === "bloqueada" || d.situacao === "aguardando_retorno")
-        .sort((a, b) => {
-          const oa = SEVERITY_ORDER.indexOf(a.situacao as any);
-          const ob = SEVERITY_ORDER.indexOf(b.situacao as any);
-          if (oa !== ob) return oa - ob;
-          return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
-        })
-        .map((d) => ({ id: d.id, rhm: d.rhm, projeto: d.projeto, situacao: d.situacao, updatedAt: d.updated_at })),
+  const alertasOperacionais = useMemo(() =>
+    filtered
+      .filter((d) => d.situacao === "bloqueada" || d.situacao === "aguardando_retorno")
+      .sort((a, b) => {
+        const oa = SEVERITY_ORDER.indexOf(a.situacao as any);
+        const ob = SEVERITY_ORDER.indexOf(b.situacao as any);
+        if (oa !== ob) return oa - ob;
+        return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+      })
+      .map((d) => ({ id: d.id, rhm: d.rhm, projeto: d.projeto, situacao: d.situacao, updatedAt: d.updated_at })),
     [filtered],
   );
 
@@ -149,9 +127,7 @@ export function SustentacaoDashboard() {
         <h1 className="text-2xl font-bold tracking-tight">
           {getGreeting()}{firstName ? `, ${firstName}` : ""} 👋
         </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {capitalizeFirst(getFormattedDate())}
-        </p>
+        <p className="text-sm text-muted-foreground mt-0.5">{capitalizeFirst(getFormattedDate())}</p>
       </div>
 
       <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
@@ -164,7 +140,6 @@ export function SustentacaoDashboard() {
         />
       </div>
 
-      {/* KPIs Atendimento */}
       <Section title="Atendimento e Volume">
         {kpisLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -177,17 +152,11 @@ export function SustentacaoDashboard() {
             <KPICard icon={FileText}     label="Chamados Ativos"  value={atendimento.total}          color="info" />
             <KPICard icon={Zap}          label="Abertos Hoje"     value={atendimento.abertosHoje}    color="info" />
             <KPICard icon={CheckCircle2} label="Resolvidos Hoje"  value={atendimento.resolvidosHoje} color="info" />
-            <KPICard
-              icon={Activity}
-              label={`Backlog (>${atendimento.backlogDias}d)`}
-              value={atendimento.backlog}
-              color={atendimento.backlog > 0 ? "destructive" : "muted"}
-            />
+            <KPICard icon={Activity}     label={`Backlog (>${atendimento.backlogDias}d)`} value={atendimento.backlog} color={atendimento.backlog > 0 ? "destructive" : "muted"} />
           </div>
         )}
       </Section>
 
-      {/* KPIs Tempos */}
       <Section title="Tempos Médios">
         {kpisLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -205,12 +174,11 @@ export function SustentacaoDashboard() {
         )}
       </Section>
 
-      {/* ── Fase 6: SLA dinâmico via fn_sla_status_summary ── */}
+      {/* Fase 6: SLA dinâmico — ativado quando usuário filtra por contrato */}
       <Section title="SLA por Contrato">
         <SLADashboardSection contractId={contractId} />
       </Section>
 
-      {/* Demandas por situação + Alertas operacionais */}
       {demandasLoading ? (
         <SkeletonList count={3} />
       ) : (
@@ -271,9 +239,7 @@ export function SustentacaoDashboard() {
 
       <Separator />
 
-      <LazySection>
-        <ImrDashboard />
-      </LazySection>
+      <LazySection><ImrDashboard /></LazySection>
     </div>
   );
 }
@@ -297,9 +263,7 @@ function AlertRow({ icon: Icon, iconClass, borderClass, title, sub, badge }: {
         <p className="text-xs font-medium truncate">{title}</p>
         <p className="text-[10px] text-muted-foreground">{sub}</p>
       </div>
-      {badge && (
-        <span className="text-[10px] font-bold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 shrink-0">{badge}</span>
-      )}
+      {badge && <span className="text-[10px] font-bold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 shrink-0">{badge}</span>}
     </div>
   );
 }

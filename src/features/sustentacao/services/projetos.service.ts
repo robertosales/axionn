@@ -4,13 +4,15 @@ export interface Projeto {
   id: string;
   team_id: string;
   nome: string;
-  descricao: string;
-  equipe: string;
+  descricao: string | null;
+  equipe: string | null;
   sla: string;
   sla_id: string | null;
-  contract_id: string | null; // Fase 2
+  contract_id: string | null;
   created_at: string;
   updated_at: string;
+  // join opcional carregado por fetchProjetosComContrato
+  contract_name?: string | null;
 }
 
 export async function fetchProjetos(teamId: string): Promise<Projeto[]> {
@@ -21,6 +23,24 @@ export async function fetchProjetos(teamId: string): Promise<Projeto[]> {
     .order("nome");
   if (error) throw error;
   return (data || []) as unknown as Projeto[];
+}
+
+/** Busca projetos ja com o nome do contrato vinculado (para exibir no select do DemandaForm) */
+export async function fetchProjetosComContrato(teamId: string): Promise<Projeto[]> {
+  const { data, error } = await (supabase as any)
+    .from("projetos")
+    .select(`
+      id, team_id, nome, descricao, equipe, sla, sla_id, contract_id, created_at, updated_at,
+      contracts ( name )
+    `)
+    .eq("team_id", teamId)
+    .order("nome");
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((p: any) => ({
+    ...p,
+    contract_name: p.contracts?.name ?? null,
+    contracts: undefined,
+  })) as Projeto[];
 }
 
 export async function createProjeto(p: {

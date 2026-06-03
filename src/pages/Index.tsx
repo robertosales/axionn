@@ -12,6 +12,7 @@ import { SprintManager }     from "@/components/SprintManager";
 import { DeveloperManager }  from "@/components/DeveloperManager";
 import { KanbanBoard }       from "@/components/KanbanBoard";
 import { DashboardHome }     from "@/components/DashboardHome";
+import { DemandasPorTimeSection } from "@/features/contracts/DemandasPorTimeSection";
 
 // ─── Componentes pesados — lazy loaded ────────────────────────────────────────
 const AgileHistory        = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
@@ -112,6 +113,7 @@ const VALID_SECTIONS = [
   "releases", "relatorios", "notificacoes", "gerador-apf", "metricas",
   "historico", "calendario", "equipe", "epicos", "atividades",
   "impedimentos", "times", "membros", "perfis", "fluxo", "campos", "automacoes",
+  "demandas-contratos",
 ] as const;
 
 export type SectionKey = (typeof VALID_SECTIONS)[number];
@@ -295,6 +297,17 @@ const Index = () => {
               <SectionGuard permission="view_dashboard">
                 <LazySection name="Histórico">
                   <AgileHistory />
+                </LazySection>
+              </SectionGuard>
+            )}
+
+            {/* ─── Demandas por Contrato — módulo contracts/SLA ───────────────── */}
+            {active === "demandas-contratos" && (
+              <SectionGuard permission="view_backlog">
+                <LazySection name="Demandas por Contrato">
+                  {currentTeamId && (
+                    <DemandasPorTimeSection teamId={currentTeamId} />
+                  )}
                 </LazySection>
               </SectionGuard>
             )}

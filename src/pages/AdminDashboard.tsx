@@ -13,6 +13,7 @@ import { AdminUsuariosPage }   from "@/features/admin/pages/AdminUsuariosPage";
 import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
 import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
 import { AdminIAsPage }        from "@/features/admin/pages/AdminIAsPage";
+import { ContractsDashboard }  from "@/features/contracts/components/ContractsDashboard";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { ThemeToggle }         from "@/components/ThemeToggle";
 import { Button }   from "@/components/ui/button";
@@ -22,10 +23,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AxionLogo } from "@/components/AxionLogo";
 import {
   LogOut, Users, UsersRound,
-  BarChart3, History, Gauge, AlertTriangle, Sparkles, Menu, X,
+  BarChart3, History, Gauge, AlertTriangle, Sparkles, Menu, X, FileText,
 } from "lucide-react";
 
-// Token teal igual ao AppShell
 const TEAL = "#0bbcaf";
 
 const NAV_ITEMS = [
@@ -35,6 +35,7 @@ const NAV_ITEMS = [
   { key: "times",       label: "Times",       icon: UsersRound },
   { key: "usuarios",    label: "Usu\u00e1rios",    icon: Users      },
   { key: "ias",         label: "IA",          icon: Sparkles   },
+  { key: "contratos",   label: "Contratos",   icon: FileText   },
 ] as const;
 
 type PageKey = typeof NAV_ITEMS[number]["key"];
@@ -76,12 +77,10 @@ export default function AdminDashboard() {
       ].join(" ")}
       style={{ background: "hsl(var(--sidebar))", color: "hsl(var(--sidebar-foreground))" }}
     >
-      {/* ─ Logo — mesmo padrão da Sala Ágil ─ */}
       <div
         className="flex items-center gap-2.5 px-4 h-14 shrink-0"
         style={{ borderBottom: "1px solid rgba(192,212,208,0.08)" }}
       >
-        {/* SVG colorido sem filtro */}
         <AxionLogo size={24} />
         <div className="min-w-0">
           <p className="text-[15px] font-bold leading-none tracking-tight" style={{ color: "#ffffff" }}>
@@ -103,7 +102,6 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* ─ Navegação ─ */}
       <nav
         className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-none"
         aria-label="Navegação admin"
@@ -134,7 +132,6 @@ export default function AdminDashboard() {
               }}
               aria-current={isActive ? "page" : undefined}
             >
-              {/* Barra lateral esquerda no item ativo */}
               {isActive && (
                 <span
                   className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
@@ -147,12 +144,17 @@ export default function AdminDashboard() {
                 aria-hidden="true"
               />
               {label}
+              {/* Badge "Novo" no item Contratos */}
+              {key === "contratos" && (
+                <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300">
+                  Novo
+                </span>
+              )}
             </button>
           );
         })}
       </nav>
 
-      {/* ─ Rodapé ─ */}
       <div
         className="px-3 py-3 space-y-2 shrink-0"
         style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}
@@ -197,6 +199,7 @@ export default function AdminDashboard() {
       case "times":      return <AdminTimesPage />;
       case "usuarios":   return <AdminUsuariosPage />;
       case "ias":        return <AdminIAsPage />;
+      case "contratos":  return <ContractsDashboard />;
       default: return (
         <div className="space-y-8">
           {loading ? <Skeleton className="h-40 w-full rounded-xl" /> : <ModuleQuickAccess kpis={g} />}
@@ -235,7 +238,6 @@ export default function AdminDashboard() {
       )}
 
       <div className="flex-1 flex flex-col min-w-0 lg:pl-60">
-        {/* Topbar */}
         <header
           className="sticky top-0 z-20 backdrop-blur"
           style={{ background: "hsl(var(--background) / 0.95)", borderBottom: "1px solid hsl(var(--border))" }}

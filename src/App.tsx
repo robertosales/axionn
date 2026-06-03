@@ -13,7 +13,6 @@ import { useOnboarding } from "@/hooks/useOnboarding";
 import { useAppResilience } from "@/hooks/useAppResilience";
 
 // ─── Páginas leves (críticas — carregadas imediatamente) ──────────────────────
-// Auth é a primeira tela que o usuário vê: não pode ser lazy
 import Auth            from "./pages/Auth.tsx";
 import AuthCallback    from "./pages/AuthCallback.tsx";
 import NotFound        from "./pages/NotFound.tsx";
@@ -33,6 +32,13 @@ const AdminDashboard       = lazy(() => import("./pages/AdminDashboard"));
 const PlanningPokerPage    = lazy(() => import("./pages/PlanningPokerPage"));
 const RetrospactivaPage    = lazy(() => import("./pages/RetrospactivaPage"));
 
+// ─── Módulo Contratos (lazy) ──────────────────────────────────────────────────
+const ContractsPage = lazy(() =>
+  import("./features/contracts/components/ContractsDashboard").then((m) => ({
+    default: m.ContractsDashboard,
+  }))
+);
+
 // ─── Fallback de carregamento (Suspense) ──────────────────────────────────────
 function PageLoader() {
   return (
@@ -49,7 +55,7 @@ function PageLoader() {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, refreshProfile } = useAuth();
   const { showWizard, completeOnboarding } = useOnboarding();
-  useAppResilience(); // Injeta lógica de performance e logout automático
+  useAppResilience();
 
   if (loading) return <PageLoader />;
   if (!session) return <Navigate to="/auth" replace />;
@@ -122,7 +128,6 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 }
 
 // ─── Rotas ────────────────────────────────────────────────────────────────────
-// Suspense global envolve todas as rotas lazy — um único boundary
 function AppRoutes() {
   return (
     <SprintProvider>
@@ -130,12 +135,12 @@ function AppRoutes() {
       <Sonner />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Rotas públicas — não lazy (necessárias antes de qualquer autenticação) */}
+          {/* Rotas públicas */}
           <Route path="/auth"           element={<AuthRoute><Auth /></AuthRoute>} />
           <Route path="/auth/callback"  element={<AuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Raiz — redireciona para o módulo correto */}
+          {/* Raiz */}
           <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
 
           {/* Seletor de módulos */}
@@ -150,6 +155,16 @@ function AppRoutes() {
             element={
               <ProtectedRoute>
                 <AdminGuard><AdminDashboard /></AdminGuard>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ── Contratos (somente admin) ────────────────────────────────── */}
+          <Route
+            path="/contratos"
+            element={
+              <ProtectedRoute>
+                <AdminGuard><ContractsPage /></AdminGuard>
               </ProtectedRoute>
             }
           />

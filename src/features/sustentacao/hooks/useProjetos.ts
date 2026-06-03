@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchProjetos, type Projeto } from '../services/projetos.service';
+import { fetchProjetosComContrato, type Projeto } from '../services/projetos.service';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Options {
@@ -9,9 +9,9 @@ interface Options {
 
 export function useProjetos({ allTeams = false }: Options = {}) {
   const { currentTeam, teams } = useAuth();
-  const [projetos, setProjetos]   = useState<Projeto[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const teamIds = allTeams
@@ -22,8 +22,8 @@ export function useProjetos({ allTeams = false }: Options = {}) {
     setLoading(true);
     setError(null);
     try {
-      const results = await Promise.all(teamIds.map((id) => fetchProjetos(id)));
-      // Deduplicar por id (pode haver overlaps em allTeams)
+      // fetchProjetosComContrato ja carrega contract_name via join
+      const results = await Promise.all(teamIds.map((id) => fetchProjetosComContrato(id)));
       const map = new Map<string, Projeto>();
       results.flat().forEach((p) => map.set(p.id, p));
       setProjetos([...map.values()].sort((a, b) => a.nome.localeCompare(b.nome)));

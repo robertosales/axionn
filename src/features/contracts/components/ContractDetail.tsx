@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useContractDetail } from '../hooks/useContracts';
 import { deleteContract } from '../services/contracts.service';
-import { CONTRACT_STATUS_CONFIG, PRIORITY_CONFIG } from '../types/contract';
+import { CONTRACT_STATUS_CONFIG, PRIORITY_CONFIG, ROOM_MODE_CONFIG } from '../types/contract';
 import type { ContractStatus, SLAPriority } from '../types/contract';
 import { ContractForm } from './ContractForm';
 import { ProjectTeamsPanel } from './ProjectTeamsPanel';
@@ -42,7 +42,10 @@ export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
 
   if (!contract) return null;
 
-  const statusCfg = CONTRACT_STATUS_CONFIG[contract.status as ContractStatus];
+  const statusCfg  = CONTRACT_STATUS_CONFIG[contract.status as ContractStatus];
+  const roomMode   = (contract as any).room_mode ?? 'sustentacao';
+  const roomCfg    = ROOM_MODE_CONFIG[roomMode as keyof typeof ROOM_MODE_CONFIG];
+  const hasSLA     = roomCfg?.hasSLA ?? true;
 
   return (
     <>
@@ -54,9 +57,16 @@ export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <div>
             <h2 className="text-base font-bold">{contract.name}</h2>
-            <Badge className={`mt-1 text-xs border ${statusCfg.className}`}>
-              {statusCfg.label}
-            </Badge>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge className={`text-xs border ${statusCfg.className}`}>
+                {statusCfg.label}
+              </Badge>
+              {roomCfg && (
+                <Badge variant="outline" className={`text-xs border ${roomCfg.className}`}>
+                  {roomCfg.icon} {roomCfg.label}
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" className="h-8" onClick={() => setEditing(true)}>
@@ -111,7 +121,7 @@ export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
             </div>
           </section>
 
-          {/* Projetos e Times — Fase 3 ✅ */}
+          {/* Projetos e Times */}
           <section>
             <div className="flex items-center gap-2 mb-3">
               <FolderKanban className="h-4 w-4 text-muted-foreground" />
@@ -119,69 +129,72 @@ export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
                 Projetos &amp; Times
               </h3>
             </div>
-            <ProjectTeamsPanel contractId={contractId} />
+            {/* Passa room_mode para o painel respeitar RN02/RN04 */}
+            <ProjectTeamsPanel contractId={contractId} roomMode={roomMode} />
           </section>
 
-          {/* Matriz de SLA */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Matriz de SLA
-              </h3>
-            </div>
-            {!contract.contract_slas || contract.contract_slas.length === 0 ? (
-              <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-4 text-center">
-                <p className="text-xs text-muted-foreground">Nenhum SLA configurado.</p>
+          {/* Matriz de SLA — só se hasSLA (RN03) */}
+          {hasSLA && (
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Matriz de SLA
+                </h3>
               </div>
-            ) : (
-              <div className="rounded-lg border overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/40">
-                    <tr className="text-muted-foreground uppercase">
-                      <th className="px-4 py-2.5 text-left font-semibold">Prioridade</th>
-                      <th className="px-4 py-2.5 text-left font-semibold">1ª Resposta</th>
-                      <th className="px-4 py-2.5 text-left font-semibold">Resolução</th>
-                      <th className="px-4 py-2.5 text-left font-semibold">Regime</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {contract.contract_slas.map((sla) => {
-                      const cfg = PRIORITY_CONFIG[sla.priority as SLAPriority];
-                      return (
-                        <tr key={sla.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`w-2 h-2 rounded-full ${cfg.bgColor}`} />
-                              <span className="font-medium">{cfg.label}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-muted-foreground">
-                            {sla.response_time_minutes} min
-                          </td>
-                          <td className="px-4 py-2.5 text-muted-foreground">
-                            {(sla.resolution_time_minutes / 60).toFixed(0)}h
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <span className={sla.business_hours_only ? 'text-sky-500' : 'text-violet-500'}>
-                              {sla.business_hours_only ? '8×5' : '24×7'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+              {!contract.contract_slas || contract.contract_slas.length === 0 ? (
+                <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-4 text-center">
+                  <p className="text-xs text-muted-foreground">Nenhum SLA configurado.</p>
+                </div>
+              ) : (
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/40">
+                      <tr className="text-muted-foreground uppercase">
+                        <th className="px-4 py-2.5 text-left font-semibold">Prioridade</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">1ª Resposta</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">Resolução</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">Regime</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {contract.contract_slas.map((sla: any) => {
+                        const cfg = PRIORITY_CONFIG[sla.priority as SLAPriority];
+                        return (
+                          <tr key={sla.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${cfg?.bgColor ?? 'bg-muted'}`} />
+                                <span className="font-medium">{cfg?.label ?? sla.priority}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5 text-muted-foreground">
+                              {sla.response_time_minutes} min
+                            </td>
+                            <td className="px-4 py-2.5 text-muted-foreground">
+                              {(sla.resolution_time_minutes / 60).toFixed(0)}h
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span className={sla.business_hours_only ? 'text-sky-500' : 'text-violet-500'}>
+                                {sla.business_hours_only ? '8×5' : '24×7'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
 
         </div>
       </div>
 
       {editing && (
         <ContractForm
-          initialData={{ ...contract }}
+          initialData={{ ...contract, room_mode: roomMode }}
           onClose={() => setEditing(false)}
           onSuccess={() => {
             setEditing(false);

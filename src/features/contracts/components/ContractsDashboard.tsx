@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FileText, Plus, AlertTriangle, CheckCircle2, Clock, Settings } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Button }   from '@/components/ui/button';
+import { Badge }    from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -9,30 +9,32 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useContracts } from '../hooks/useContracts';
+import { useContracts }   from '../hooks/useContracts';
 import { CONTRACT_STATUS_CONFIG } from '../types/contract';
 import type { Contract, ContractStatus } from '../types/contract';
-import { ContractForm } from './ContractForm';
-import { ContractDetail } from './ContractDetail';
+import { ContractForm }        from './ContractForm';
+import { ContractDetail }      from './ContractDetail';
+import { SLACompliancePanel }  from './SLACompliancePanel';
 
 export function ContractsDashboard() {
   const { contracts, loading, reload } = useContracts();
-  const [showForm, setShowForm]     = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showForm, setShowForm]         = useState(false);
+  const [selectedId, setSelectedId]     = useState<string | null>(null);
+  const [slaContractId, setSlaContractId] = useState<string | null>(null);
 
-  const active  = contracts.filter((c) => c.status === 'active').length;
-  const paused  = contracts.filter((c) => c.status === 'paused').length;
+  const active = contracts.filter((c) => c.status === 'active').length;
+  const paused = contracts.filter((c) => c.status === 'paused').length;
 
   const metrics = [
-    { label: 'Contratos Ativos',  value: active,            icon: <CheckCircle2  className="h-4 w-4" /> },
-    { label: 'Pausados',          value: paused,            icon: <Clock         className="h-4 w-4" /> },
-    { label: 'Alertas Críticos',  value: 0,                 icon: <AlertTriangle className="h-4 w-4" /> },
-    { label: 'Total',             value: contracts.length,  icon: <FileText      className="h-4 w-4" /> },
+    { label: 'Contratos Ativos', value: active,           icon: <CheckCircle2  className="h-4 w-4" /> },
+    { label: 'Pausados',         value: paused,           icon: <Clock         className="h-4 w-4" /> },
+    { label: 'Alertas Críticos', value: 0,                icon: <AlertTriangle className="h-4 w-4" /> },
+    { label: 'Total',            value: contracts.length, icon: <FileText      className="h-4 w-4" /> },
   ];
 
   return (
     <TooltipProvider>
-      <div className="space-y-4">
+      <div className="space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
@@ -62,7 +64,15 @@ export function ContractsDashboard() {
           ))}
         </div>
 
-        {/* Tabela */}
+        {/* Painel SLA — aparece ao selecionar um contrato na tabela */}
+        {slaContractId && (
+          <SLACompliancePanel
+            contractId={slaContractId}
+            title="SLA — Compliance do contrato"
+          />
+        )}
+
+        {/* Tabela de contratos */}
         <div className="rounded-lg border bg-card">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <span className="text-sm font-semibold">Contratos</span>
@@ -96,11 +106,17 @@ export function ContractsDashboard() {
               <tbody className="divide-y">
                 {contracts.map((c: Contract) => {
                   const statusCfg = CONTRACT_STATUS_CONFIG[c.status as ContractStatus];
+                  const isSlaPanelOpen = slaContractId === c.id;
                   return (
                     <tr
                       key={c.id}
-                      className="hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => setSelectedId(c.id)}
+                      className={`hover:bg-muted/30 transition-colors cursor-pointer ${
+                        isSlaPanelOpen ? 'bg-muted/40' : ''
+                      }`}
+                      onClick={() => {
+                        // Toggle: clica de novo no mesmo contrato fecha o painel
+                        setSlaContractId((prev) => (prev === c.id ? null : c.id));
+                      }}
                     >
                       <td className="px-4 py-3">
                         <p className="font-medium">{c.name}</p>

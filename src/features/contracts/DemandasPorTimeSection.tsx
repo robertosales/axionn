@@ -1,24 +1,28 @@
-// DemandasPorTimeSection — fila de demandas de um time com badge SLA dinâmico
-// Plugado no ContractDetail > ProjectTeamsPanel > lista de demandas por time
+// DemandasPorTimeSection — usa cache TanStack Query (zero fetch duplicado)
 import { useDemandasWithResponsaveis } from '@/hooks/useDemandasWithResponsaveis';
-import { SLABadge } from '@/features/sustentacao/components/SLABadge';
-import { Badge }    from '@/components/ui/badge';
-import { Loader2 }  from 'lucide-react';
+import { SLABadge }  from '@/features/sustentacao/components/SLABadge';
+import { Badge }     from '@/components/ui/badge';
+import { Loader2 }   from 'lucide-react';
 
 type Props = {
-  teamId: string;
-  contractId?: string;   // passado pelo painel de contratos para calcular SLA contratual
+  teamId:      string;
+  contractId?: string;
 };
 
 const SITUACAO_CONFIG: Record<string, { label: string; className: string }> = {
-  aberta:      { label: 'Aberta',      className: 'bg-blue-950   text-blue-300   border-blue-800'   },
-  em_andamento:{ label: 'Em andamento',className: 'bg-yellow-950 text-yellow-300 border-yellow-800' },
-  bloqueada:   { label: 'Bloqueada',   className: 'bg-red-950    text-red-300    border-red-800'    },
-  concluida:   { label: 'Concluída',   className: 'bg-green-950  text-green-300  border-green-800'  },
-  cancelada:   { label: 'Cancelada',   className: 'bg-muted      text-muted-foreground border-border'},
+  aberta:         { label: 'Aberta',         className: 'bg-blue-950   text-blue-300   border-blue-800'   },
+  em_andamento:   { label: 'Em andamento',   className: 'bg-yellow-950 text-yellow-300 border-yellow-800' },
+  bloqueada:      { label: 'Bloqueada',      className: 'bg-red-950    text-red-300    border-red-800'    },
+  concluida:      { label: 'Concluída',      className: 'bg-green-950  text-green-300  border-green-800'  },
+  cancelada:      { label: 'Cancelada',      className: 'bg-muted      text-muted-foreground border-border'},
+  fila_atendimento: { label: 'Fila',         className: 'bg-slate-950  text-slate-300  border-slate-800'  },
+  em_execucao:    { label: 'Em execução',    className: 'bg-yellow-950 text-yellow-300 border-yellow-800' },
+  ag_aceite_final:{ label: 'Ag. Aceite',    className: 'bg-green-950  text-green-300  border-green-800'  },
 };
 
 export function DemandasPorTimeSection({ teamId, contractId }: Props) {
+  // TanStack Query: se o Kanban do mesmo teamId já carregou, retorna do cache
+  // instantaneamente — zero request adicional.
   const { data: demandas, loading, error } = useDemandasWithResponsaveis(teamId);
 
   if (loading) {
@@ -32,7 +36,7 @@ export function DemandasPorTimeSection({ teamId, contractId }: Props) {
   if (error) {
     return (
       <div className="p-4 text-destructive text-sm">
-        Erro ao carregar demandas.
+        Erro ao carregar demandas: {error.message}
       </div>
     );
   }
@@ -59,17 +63,17 @@ export function DemandasPorTimeSection({ teamId, contractId }: Props) {
         </thead>
         <tbody className="divide-y">
           {demandas.map((d) => {
-            const situacaoCfg = SITUACAO_CONFIG[d.situacao ?? ''] ?? null;
+            const situacaoCfg     = SITUACAO_CONFIG[(d as any).situacao ?? ''] ?? null;
             const resolvedContractId = contractId ?? (d as any).contract_id ?? null;
 
             return (
               <tr key={d.id} className="hover:bg-muted/30 transition-colors">
-                <td className="py-2 px-3 font-mono text-xs text-info">{d.rhm ?? '—'}</td>
+                <td className="py-2 px-3 font-mono text-xs text-info">{(d as any).rhm ?? '—'}</td>
                 <td className="py-2 px-3 max-w-[200px]">
                   <p className="truncate text-xs">{(d as any).descricao ?? '—'}</p>
                 </td>
                 <td className="py-2 px-3 text-xs text-muted-foreground">
-                  {d.project_name ?? 'Sem projeto'}
+                  {(d as any).projeto ?? (d as any).project_name ?? 'Sem projeto'}
                 </td>
                 <td className="py-2 px-3">
                   {situacaoCfg ? (
@@ -77,17 +81,18 @@ export function DemandasPorTimeSection({ teamId, contractId }: Props) {
                       {situacaoCfg.label}
                     </Badge>
                   ) : (
-                    <span className="text-xs text-muted-foreground">{d.situacao ?? '—'}</span>
+                    <span className="text-xs text-muted-foreground">{(d as any).situacao ?? '—'}</span>
                   )}
                 </td>
                 <td className="py-2 px-3">
-                  {/* Badge SLA dinâmico — usa contrato do time ou do painel */}
+                  {/* SLABadge client-side — zero fetch extra */}
                   <SLABadge
                     demandaId={d.id}
                     contractId={resolvedContractId}
                     priority={(d as any).sla_priority ?? null}
                     createdAt={(d as any).created_at ?? (d as any).data_abertura ?? ''}
                     slaLegado={(d as any).sla ?? null}
+                    slaStatus={(d as any).sla_status ?? null}
                   />
                 </td>
               </tr>

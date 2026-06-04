@@ -1,190 +1,212 @@
 import { useState } from 'react';
-import { FileText, Plus, AlertTriangle, CheckCircle2, Clock, Settings } from 'lucide-react';
-import { Button }   from '@/components/ui/button';
-import { Badge }    from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { useContracts }   from '../hooks/useContracts';
-import { CONTRACT_STATUS_CONFIG } from '../types/contract';
-import type { Contract, ContractStatus } from '../types/contract';
-import { ContractForm }        from './ContractForm';
-import { ContractDetail }      from './ContractDetail';
-import { SLACompliancePanel }  from './SLACompliancePanel';
+import { Plus, Settings, RefreshCw, ShieldCheck, Zap, Wrench, Shuffle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useContracts } from '../hooks/useContracts';
+import { ContractForm } from './ContractForm';
+import { ContractDetail } from './ContractDetail';
+import { SLACompliancePanel } from './SLACompliancePanel';
+import { CONTRACT_STATUS_CONFIG, ROOM_MODE_CONFIG } from '../types/contract';
+import type { ContractStatus, RoomMode } from '../types/contract';
 
 export function ContractsDashboard() {
   const { contracts, loading, reload } = useContracts();
-  const [showForm, setShowForm]         = useState(false);
-  const [selectedId, setSelectedId]     = useState<string | null>(null);
-  const [slaContractId, setSlaContractId] = useState<string | null>(null);
+  const [showForm,          setShowForm]          = useState(false);
+  const [selectedContract,  setSelectedContract]  = useState<string | null>(null);
+  const [expandedSLA,       setExpandedSLA]       = useState<string | null>(null);
 
-  const active = contracts.filter((c) => c.status === 'active').length;
-  const paused = contracts.filter((c) => c.status === 'paused').length;
+  // D — KPIs por modalidade
+  const total      = contracts.length;
+  const ativos     = contracts.filter((c: any) => c.status === 'active').length;
+  const pausados   = contracts.filter((c: any) => c.status === 'paused').length;
+  const comSLA     = contracts.filter((c: any) =>
+    c.room_mode === 'sustentacao' || c.room_mode === 'hibrido'
+  ).length;
 
-  const metrics = [
-    { label: 'Contratos Ativos', value: active,           icon: <CheckCircle2  className="h-4 w-4" /> },
-    { label: 'Pausados',         value: paused,           icon: <Clock         className="h-4 w-4" /> },
-    { label: 'Alertas Críticos', value: 0,                icon: <AlertTriangle className="h-4 w-4" /> },
-    { label: 'Total',            value: contracts.length, icon: <FileText      className="h-4 w-4" /> },
-  ];
+  function toggleSLA(contractId: string) {
+    // Só expande SLA para contratos com sustentação
+    setExpandedSLA(prev => prev === contractId ? null : contractId);
+  }
+
+  const ROOM_ICON: Record<string, React.ReactNode> = {
+    agil:        <Zap    className="h-3 w-3" />,
+    sustentacao: <Wrench className="h-3 w-3" />,
+    hibrido:     <Shuffle className="h-3 w-3" />,
+  };
 
   return (
-    <TooltipProvider>
-      <div className="space-y-6">
+    <div className="space-y-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">Gestão de Contratos</h2>
-            <p className="text-xs text-muted-foreground">
-              {loading
-                ? 'Carregando...'
-                : `${contracts.length} contrato${contracts.length !== 1 ? 's' : ''} cadastrado${contracts.length !== 1 ? 's' : ''}`}
-            </p>
-          </div>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-            <Plus className="h-4 w-4" /> Novo Contrato
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold">Gestão de Contratos</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {total} contrato{total !== 1 ? 's' : ''} cadastrado{total !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8 gap-1" onClick={reload}>
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="sm" className="h-8 gap-1" onClick={() => setShowForm(true)}>
+            <Plus className="h-3.5 w-3.5" /> Novo Contrato
           </Button>
         </div>
+      </div>
 
-        {/* KPI cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {metrics.map((m) => (
-            <div key={m.label} className="rounded-lg border bg-card p-3">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
-                {m.icon}
-                <span>{m.label}</span>
-              </div>
-              <p className="text-2xl font-bold">{m.value}</p>
-            </div>
-          ))}
+      {/* D — KPI cards com breakdown por modalidade */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Contratos Ativos</p>
+          <p className="text-2xl font-bold mt-1">{ativos}</p>
         </div>
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Pausados</p>
+          <p className="text-2xl font-bold mt-1 text-yellow-400">{pausados}</p>
+        </div>
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Com SLA</p>
+          <p className="text-2xl font-bold mt-1 text-purple-400">{comSLA}</p>
+        </div>
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Total</p>
+          <p className="text-2xl font-bold mt-1">{total}</p>
+        </div>
+      </div>
 
-        {/* Painel SLA — aparece ao selecionar um contrato na tabela */}
-        {slaContractId && (
-          <SLACompliancePanel
-            contractId={slaContractId}
-            title="SLA — Compliance do contrato"
-          />
-        )}
+      {/* Tabela de contratos */}
+      <div className="rounded-lg border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40 text-muted-foreground text-xs uppercase">
+            <tr>
+              <th className="px-4 py-3 text-left font-semibold">Contrato</th>
+              <th className="px-4 py-3 text-left font-semibold">Status</th>
+              <th className="px-4 py-3 text-left font-semibold hidden sm:table-cell">Modalidade</th>
+              <th className="px-4 py-3 text-left font-semibold hidden md:table-cell">Vigência</th>
+              <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell">SLAs</th>
+              <th className="px-4 py-3 text-right font-semibold">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {loading && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                  Carregando...
+                </td>
+              </tr>
+            )}
+            {!loading && contracts.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                  Nenhum contrato cadastrado.
+                </td>
+              </tr>
+            )}
+            {contracts.map((contract: any) => {
+              const statusCfg = CONTRACT_STATUS_CONFIG[contract.status as ContractStatus];
+              const roomMode  = (contract.room_mode ?? 'sustentacao') as RoomMode;
+              const roomCfg   = ROOM_MODE_CONFIG[roomMode];
+              const hasSLA    = roomCfg?.hasSLA ?? true;
+              const slaCount  = contract.contract_slas?.length ?? 0;
+              const isExpanded = expandedSLA === contract.id;
 
-        {/* Tabela de contratos */}
-        <div className="rounded-lg border bg-card">
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <span className="text-sm font-semibold">Contratos</span>
-            <Badge variant="secondary" className="text-xs">{contracts.length}</Badge>
-          </div>
-
-          {loading ? (
-            <Skeleton className="h-48 w-full rounded-b-lg" />
-          ) : contracts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
-              <FileText className="h-8 w-8 opacity-30" />
-              <p className="text-sm">Nenhum contrato cadastrado.</p>
-              <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Criar primeiro contrato
-              </Button>
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/40">
-                  {['Contrato', 'Status', 'Vigência', 'SLAs', 'Ações'].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {contracts.map((c: Contract) => {
-                  const statusCfg = CONTRACT_STATUS_CONFIG[c.status as ContractStatus];
-                  const isSlaPanelOpen = slaContractId === c.id;
-                  return (
-                    <tr
-                      key={c.id}
-                      className={`hover:bg-muted/30 transition-colors cursor-pointer ${
-                        isSlaPanelOpen ? 'bg-muted/40' : ''
-                      }`}
-                      onClick={() => {
-                        // Toggle: clica de novo no mesmo contrato fecha o painel
-                        setSlaContractId((prev) => (prev === c.id ? null : c.id));
-                      }}
-                    >
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{c.name}</p>
-                        {c.description && (
-                          <p className="text-xs text-muted-foreground truncate max-w-[220px]">
-                            {c.description}
+              return (
+                <>
+                  <tr
+                    key={contract.id}
+                    className={[
+                      'hover:bg-muted/30 transition-colors',
+                      hasSLA ? 'cursor-pointer' : 'cursor-default',
+                      isExpanded ? 'bg-muted/20' : '',
+                    ].join(' ')}
+                    onClick={() => hasSLA && toggleSLA(contract.id)}
+                  >
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="font-medium">{contract.name}</p>
+                        {contract.description && (
+                          <p className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                            {contract.description}
                           </p>
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline" className={`text-xs ${statusCfg.className}`}>
-                          {statusCfg.label}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge className={`text-xs border ${statusCfg.className}`}>
+                        {statusCfg.label}
+                      </Badge>
+                    </td>
+                    {/* D — Badge de modalidade */}
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      {roomCfg && (
+                        <Badge variant="outline" className={`text-[10px] border gap-1 ${roomCfg.className}`}>
+                          {ROOM_ICON[roomMode]}
+                          {roomCfg.label}
                         </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {c.starts_at ? new Date(c.starts_at).toLocaleDateString('pt-BR') : '—'}
-                        {' → '}
-                        {c.ends_at ? new Date(c.ends_at).toLocaleDateString('pt-BR') : 'Indeterminado'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {c.contract_slas && c.contract_slas.length > 0 ? (
-                          <span className="text-xs text-muted-foreground">
-                            {c.contract_slas.length} prioridade{c.contract_slas.length > 1 ? 's' : ''}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Sem SLA</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                              onClick={() => setSelectedId(c.id)}
-                            >
-                              <Settings className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left">
-                            Configurar contrato
-                          </TooltipContent>
-                        </Tooltip>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs hidden md:table-cell">
+                      {contract.starts_at
+                        ? new Date(contract.starts_at).toLocaleDateString('pt-BR')
+                        : '—'}
+                      {' → '}
+                      {contract.ends_at
+                        ? new Date(contract.ends_at).toLocaleDateString('pt-BR')
+                        : 'Indeterminado'}
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      {hasSLA ? (
+                        <div className="flex items-center gap-1 text-xs text-purple-400">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          {slaCount} prioridade{slaCount !== 1 ? 's' : ''}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Não aplicável</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        variant="ghost" size="sm" className="h-7 w-7 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedContract(contract.id);
+                        }}
+                      >
+                        <Settings className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+
+                  {/* D — Painel SLA inline — só para contratos com sustentação */}
+                  {isExpanded && hasSLA && (
+                    <tr key={`sla-${contract.id}`}>
+                      <td colSpan={6} className="px-4 py-4 bg-muted/10 border-t">
+                        <SLACompliancePanel contractId={contract.id} />
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {showForm && (
-          <ContractForm
-            onClose={() => setShowForm(false)}
-            onSuccess={() => { setShowForm(false); reload(); }}
-          />
-        )}
-
-        {selectedId && (
-          <ContractDetail
-            contractId={selectedId}
-            onClose={() => setSelectedId(null)}
-            onUpdate={reload}
-          />
-        )}
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-    </TooltipProvider>
+
+      {showForm && (
+        <ContractForm
+          onClose={() => setShowForm(false)}
+          onSuccess={() => { setShowForm(false); reload(); }}
+        />
+      )}
+
+      {selectedContract && (
+        <ContractDetail
+          contractId={selectedContract}
+          onClose={() => setSelectedContract(null)}
+          onUpdate={reload}
+        />
+      )}
+    </div>
   );
 }

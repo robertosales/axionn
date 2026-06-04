@@ -1,5 +1,4 @@
-// Barrel export do módulo de contratos
-export * from './types/contract';
-export * from './services/contracts.service';
-export * from './hooks/useContracts';
-export * from './hooks/useContractSla';
+export { ContractsDashboard }   from './components/ContractsDashboard';
+export { SlaStatusBadge }       from './components/SlaStatusBadge';
+export { SLACompliancePanel }   from './components/SLACompliancePanel';
+export { useContractRoomTeams } from './hooks/useContractRoomTeams';

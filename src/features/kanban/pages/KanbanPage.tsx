@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useKanbanBoard }          from "../hooks/useKanbanBoard";
 import { useFinalizeSprint }       from "../hooks/useFinalizeSprint";
-import { KanbanFilters as KanbanFiltersBar } from "../components/KanbanFilters";
+import { KanbanFilters as KanbanFiltersBarRaw } from "../components/KanbanFilters";
+const KanbanFiltersBar = KanbanFiltersBarRaw as unknown as React.FC<any>;
 import { KanbanColumnItem }        from "../components/KanbanColumn";
 import { FinalizeSprintModal }     from "../components/FinalizeSprintModal";
 import { UserStoryDetailModal }    from "../components/UserStoryDetailModal";

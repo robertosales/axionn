@@ -61,3 +61,43 @@ export interface ContractRoomTeam {
   team_name?:  string;
   team_module?: string;
 }
+
+// ── Compat aliases / shapes usados por hooks legados ────────────────────────
+
+export interface Contract {
+  id:          string;
+  name:        string;
+  description: string | null;
+  status:      ContractStatus;
+  room_mode?:  RoomMode;
+  starts_at:   string | null;
+  ends_at:     string | null;
+  created_at?: string;
+  updated_at?: string;
+  contract_slas?: ContractSla[];
+}
+
+export interface ContractSla extends SlaRow {
+  id?:           string;
+  contract_id?:  string;
+  sla_type?:     'business_hours' | 'continuous' | '24x7' | 'custom';
+}
+
+export interface SlaStatusResult {
+  status:                   string;
+  sla_color:                'green' | 'yellow' | 'orange' | 'red' | 'none';
+  elapsed_minutes:          number;
+  response_pct:             number;
+  resolution_pct:           number;
+  response_breached:        boolean;
+  resolution_breached:      boolean;
+  business_hours_only:      boolean;
+  response_limit_minutes:   number;
+  resolution_limit_minutes: number;
+}
+
+export interface TeamConfig {
+  mode:            'link_existing' | 'provision_new';
+  existingTeamId?: string;
+  newTeamName?:    string;
+}

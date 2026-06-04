@@ -13,7 +13,7 @@ import { useProjects } from '../hooks/useProjects';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   FolderKanban, Plus, Trash2, Loader2,
-  Archive, Edit2, Users,
+  Archive, Edit2, Users, Info,
 } from 'lucide-react';
 import { ProjectForm } from './ProjectForm';
 import type { Project, ProjectInput } from '../services/projects.service';
@@ -33,16 +33,19 @@ export function ProjectTeamsPanel({ contractId }: Props) {
     useProjects(contractId);
   const { teams } = useAuth();
 
-  const [showForm, setShowForm]     = useState(false);
+  const [showForm, setShowForm]             = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [linkingProject, setLinkingProject] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam]     = useState<string>('');
 
+  // Apenas times de sustentação podem ter SLA contratual
+  const sustentacaoTeams = teams.filter((t: any) => t.module === 'sustentacao');
+
   const handleLink = async (projectId: string) => {
-    if (!selectedTeam) { toast.error('Selecione um time'); return; }
+    if (!selectedTeam) { toast.error('Selecione um time de sustentação'); return; }
     try {
       await linkTeam(projectId, selectedTeam);
-      toast.success('Time vinculado!');
+      toast.success('Time de sustentação vinculado!');
       setLinkingProject(null);
       setSelectedTeam('');
     } catch (e: any) {
@@ -81,6 +84,16 @@ export function ProjectTeamsPanel({ contractId }: Props) {
   return (
     <TooltipProvider>
       <div className="space-y-3">
+
+        {/* Aviso contextual */}
+        <div className="flex items-start gap-2 rounded-lg bg-muted/40 border px-3 py-2">
+          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+          <p className="text-[11px] text-muted-foreground">
+            Apenas <strong>salas de sustentação</strong> podem ser vinculadas a contratos.
+            Salas ágeis não possuem SLA contratual.
+          </p>
+        </div>
+
         {/* Botão novo projeto */}
         <div className="flex justify-end">
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setShowForm(true)}>
@@ -95,10 +108,11 @@ export function ProjectTeamsPanel({ contractId }: Props) {
           </div>
         ) : (
           projects.map(project => {
-            const moduleCfg       = MODULE_CONFIG[project.module_type];
-            const linkedTeamIds   = new Set((project.teams ?? []).map(t => t.id));
-            const availableTeams  = teams.filter(t => !linkedTeamIds.has(t.id));
-            const isLinking       = linkingProject === project.id;
+            const moduleCfg      = MODULE_CONFIG[project.module_type];
+            const linkedTeamIds  = new Set((project.teams ?? []).map((t: any) => t.id));
+            // Só sustentação disponível para vincular, excluindo já vinculados
+            const availableTeams = sustentacaoTeams.filter((t: any) => !linkedTeamIds.has(t.id));
+            const isLinking      = linkingProject === project.id;
 
             return (
               <div key={project.id} className="rounded-lg border bg-card">
@@ -134,14 +148,24 @@ export function ProjectTeamsPanel({ contractId }: Props) {
                       </TooltipTrigger>
                       <TooltipContent>Arquivar projeto</TooltipContent>
                     </Tooltip>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
-                      onClick={() => {
-                        setLinkingProject(isLinking ? null : project.id);
-                        setSelectedTeam('');
-                      }}>
-                      <Plus className="h-3 w-3" />
-                      {isLinking ? 'Cancelar' : 'Time'}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
+                          disabled={availableTeams.length === 0 && !isLinking}
+                          onClick={() => {
+                            setLinkingProject(isLinking ? null : project.id);
+                            setSelectedTeam('');
+                          }}>
+                          <Plus className="h-3 w-3" />
+                          {isLinking ? 'Cancelar' : 'Time'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {availableTeams.length === 0 && !isLinking
+                          ? 'Todos os times de sustentação já estão vinculados'
+                          : 'Vincular sala de sustentação'}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -149,17 +173,17 @@ export function ProjectTeamsPanel({ contractId }: Props) {
                 <div className="px-4 py-2 space-y-1.5">
                   {(project.teams ?? []).length === 0 && !isLinking && (
                     <p className="text-[11px] text-muted-foreground py-1">
-                      Nenhum time vinculado.
+                      Nenhuma sala de sustentação vinculada.
                     </p>
                   )}
-                  {(project.teams ?? []).map(team => (
+                  {(project.teams ?? []).map((team: any) => (
                     <div key={team.id} className="flex items-center justify-between py-1.5">
                       <div className="flex items-center gap-2">
                         <Users className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-sm">{team.name}</span>
-                        {team.team_type && (
-                          <Badge variant="outline" className="text-[10px]">{team.team_type}</Badge>
-                        )}
+                        <Badge variant="outline" className="text-[10px] bg-purple-950 text-purple-300 border-purple-800">
+                          🛠 Sustentação
+                        </Badge>
                       </div>
                       <Button variant="ghost" size="icon"
                         className="h-6 w-6 text-muted-foreground hover:text-destructive"
@@ -169,26 +193,34 @@ export function ProjectTeamsPanel({ contractId }: Props) {
                     </div>
                   ))}
 
-                  {/* Mini-form vincular time */}
+                  {/* Mini-form vincular time de sustentação */}
                   {isLinking && (
                     <div className="flex items-center gap-2 pt-2 pb-1 border-t mt-1">
-                      <Select value={selectedTeam || '_none'}
-                        onValueChange={v => setSelectedTeam(v === '_none' ? '' : v)}>
-                        <SelectTrigger className="h-8 flex-1 text-xs">
-                          <SelectValue placeholder="Selecione o time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none">Selecione...</SelectItem>
-                          {availableTeams.map(t => (
-                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button size="sm" className="h-8 text-xs px-3"
-                        disabled={!selectedTeam}
-                        onClick={() => handleLink(project.id)}>
-                        Vincular
-                      </Button>
+                      {availableTeams.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-1">
+                          Nenhuma sala de sustentação disponível para vincular.
+                        </p>
+                      ) : (
+                        <>
+                          <Select value={selectedTeam || '_none'}
+                            onValueChange={v => setSelectedTeam(v === '_none' ? '' : v)}>
+                            <SelectTrigger className="h-8 flex-1 text-xs">
+                              <SelectValue placeholder="Selecione a sala" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="_none">Selecione...</SelectItem>
+                              {availableTeams.map((t: any) => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button size="sm" className="h-8 text-xs px-3"
+                            disabled={!selectedTeam}
+                            onClick={() => handleLink(project.id)}>
+                            Vincular
+                          </Button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -203,7 +235,7 @@ export function ProjectTeamsPanel({ contractId }: Props) {
             contractId={contractId}
             onClose={() => setShowForm(false)}
             onSuccess={() => setShowForm(false)}
-            onSubmit={async (input) => { await addProject(input); }}
+            onSubmit={async (input: ProjectInput) => { await addProject(input); }}
           />
         )}
 
@@ -214,7 +246,7 @@ export function ProjectTeamsPanel({ contractId }: Props) {
             initialData={editingProject}
             onClose={() => setEditingProject(null)}
             onSuccess={() => setEditingProject(null)}
-            onSubmit={async (input) => { await editProject(editingProject.id, input); }}
+            onSubmit={async (input: ProjectInput) => { await editProject(editingProject.id, input); }}
           />
         )}
       </div>

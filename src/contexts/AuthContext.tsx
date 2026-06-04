@@ -2,20 +2,16 @@
 /**
  * F4-fix: resolução eager de currentTeamId no boot
  *
- * ANTES: refreshTeams() gravava currentTeamId via setState async, deixando
- *   o valor null no primeiro render dos hooks consumidores (enabled: !!teamId
- *   = false → queries em idle → tela em branco até F5).
+ * fix(teams-dedup-v2): o dedup anterior usava team.id como chave única,
+ *   descartando linhas com módulos distintos para o mesmo time.
+ *   Isso fazia SustentacaoPage.teams.filter(t => t.module === 'sustentacao')
+ *   retornar [] quando a primeira ocorrência do time era de outro módulo
+ *   (ex: sala_agil), resultando em currentTeamId=null e board sem cards.
  *
- * DEPOIS:
- *   1. Novo efeito de boot-sync lê localStorage no mount e pré-popula
- *      currentTeamIdRef ANTES do primeiro render dos consumidores.
- *   2. refreshTeams() resolve o teamId válido de forma síncrona dentro
- *      da função e chama setCurrentTeamId() uma única vez com o valor final.
- *
- * fix(teams-dedup): a tabela team_modules tem uma linha por módulo por time.
- *   O flatMap gerava teamList com entradas duplicadas para o mesmo team.id.
- *   Corrigido com dedup por id após montar teamList, na origem, para que
- *   todos os Selects da aplicação recebam a lista sem duplicatas.
+ *   CORRIGIDO: dedup agora usa `${id}::${module}` como chave, preservando
+ *   uma entrada por (time × módulo). O dedup ainda evita linhas 100%
+ *   duplicadas (mesmo id E mesmo module), que podem ocorrer se team_modules
+ *   tiver entradas repetidas.
  */
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -174,14 +170,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return [{ id: row.team.id, name: row.team.name, module: row.module }];
     });
 
-    // fix(teams-dedup): team_modules tem uma linha por módulo por time.
-    // O mesmo team.id pode aparecer várias vezes (ex: sala_agil + sustentacao).
-    // Mantemos apenas a primeira ocorrência para que todos os Selects da
-    // aplicação recebam a lista sem duplicatas.
+    // fix(teams-dedup-v2): dedup por (id × module) — preserva uma entrada
+    // por combinação única de time+módulo. Isso garante que
+    // teams.filter(t => t.module === 'sustentacao') nunca retorne []
+    // quando o time também pertence a outros módulos.
     const seen = new Set<string>();
     const teamList = rawList.filter(t => {
-      if (seen.has(t.id)) return false;
-      seen.add(t.id);
+      const key = `${t.id}::${t.module}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     });
 

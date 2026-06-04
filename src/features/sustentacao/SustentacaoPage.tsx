@@ -32,6 +32,8 @@ export default function SustentacaoPage() {
   const [showTeamModal, setShowTeamModal] = useState(false);
   const qc = useQueryClient();
 
+  // fix(teams-dedup-v2): teams agora preserva uma entrada por (id × módulo),
+  // portanto este filtro retorna corretamente os times do módulo sustentacao.
   const moduleTeams = teams.filter((t) => t.module === "sustentacao");
 
   useEffect(() => {
@@ -43,13 +45,11 @@ export default function SustentacaoPage() {
     } else {
       setShowTeamModal(true);
     }
-  }, [authLoading, teams]);
+  // Dependências explícitas — evita loop infinito com teams como objeto
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, moduleTeams.length, currentTeamId]);
 
   // Canal RT singleton para workflow-steps.
-  // Montado aqui (raiz da página, fora de SustentacaoSection) para garantir
-  // exatamente 1 canal 'workflow-steps-rt' por usuário, independente de
-  // quantos componentes chamem useWorkflowSteps() simultaneamente.
-  // Regra P0 preservada: 150 usuários = 150 canais.
   useEffect(() => {
     const sub = supabase.channel("workflow-steps-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "sustentacao_workflow_steps" },
@@ -105,16 +105,23 @@ function SustentacaoSection({ active }: { active: string }) {
   const { demandas, loading, update, moveTo, create } = useDemandas();
   const { steps: workflowSteps } = useWorkflowSteps();
 
+  // fix: selected é resetado ao sair do board para evitar que DemandaDetail
+  // persista ao navegar para outras abas e voltar.
   const [selected, setSelected] = useState<Demanda | null>(null);
   const [createSituacao, setCreateSituacao] = useState<string | undefined>();
   const [showCreate, setShowCreate] = useState(false);
+
+  // Limpa o card selecionado sempre que a aba mudar para algo diferente de board
+  useEffect(() => {
+    if (active !== "board") setSelected(null);
+  }, [active]);
 
   const handleCreateDemanda = useCallback((situacao?: string) => {
     setCreateSituacao(situacao);
     setShowCreate(true);
   }, []);
 
-  const handleSelectDemanda = useCallback((d: Demanda) => setSelected(d), []);
+  const handleSelectDemanda = useCallback((d: Demanda, initialTab?: string) => setSelected(d), []);
   const handleUpdate = useCallback(async (id: string, updates: Partial<Demanda>) => { await update(id, updates); }, [update]);
   const handleMoveTo = useCallback(
     async (demanda: Demanda, newStatus: string, justificativa?: string) => moveTo(demanda, newStatus, justificativa),

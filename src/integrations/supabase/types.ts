@@ -616,6 +616,163 @@ export type Database = {
           },
         ]
       }
+      contract_audit_log: {
+        Row: {
+          action: string
+          admin_id: string
+          contract_id: string
+          created_at: string
+          id: string
+          payload: Json | null
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          contract_id: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          contract_id?: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_audit_log_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_room_teams: {
+        Row: {
+          contract_id: string
+          created_at: string
+          id: string
+          room_type: string
+          team_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          id?: string
+          room_type: string
+          team_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          id?: string
+          room_type?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_room_teams_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_room_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contract_slas: {
+        Row: {
+          business_hours_only: boolean
+          contract_id: string
+          created_at: string | null
+          id: string
+          priority: string
+          resolution_time_minutes: number
+          response_time_minutes: number
+          sla_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          business_hours_only?: boolean
+          contract_id: string
+          created_at?: string | null
+          id?: string
+          priority: string
+          resolution_time_minutes?: number
+          response_time_minutes?: number
+          sla_type?: string
+          updated_at?: string | null
+        }
+        Update: {
+          business_hours_only?: boolean
+          contract_id?: string
+          created_at?: string | null
+          id?: string
+          priority?: string
+          resolution_time_minutes?: number
+          response_time_minutes?: number
+          sla_type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_slas_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contracts: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          ends_at: string | null
+          id: string
+          name: string
+          room_mode: string
+          starts_at: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          ends_at?: string | null
+          id?: string
+          name: string
+          room_mode?: string
+          starts_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          ends_at?: string | null
+          id?: string
+          name?: string
+          room_mode?: string
+          starts_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       custom_field_definitions: {
         Row: {
           created_at: string
@@ -1010,6 +1167,7 @@ export type Database = {
           artefatos_atualizados: string | null
           cobertura_testes: number | null
           contador_rejeicoes: number
+          contract_id: string | null
           created_at: string
           data_previsao_encerramento: string | null
           demandante: string | null
@@ -1020,6 +1178,7 @@ export type Database = {
           originada_diagnostico: boolean
           prazo_inicio_atendimento: string | null
           prazo_solucao: string | null
+          project_id: string | null
           projeto: string
           reincidencia_defeito: boolean | null
           responsavel_arquiteto: string | null
@@ -1043,6 +1202,7 @@ export type Database = {
           artefatos_atualizados?: string | null
           cobertura_testes?: number | null
           contador_rejeicoes?: number
+          contract_id?: string | null
           created_at?: string
           data_previsao_encerramento?: string | null
           demandante?: string | null
@@ -1053,6 +1213,7 @@ export type Database = {
           originada_diagnostico?: boolean
           prazo_inicio_atendimento?: string | null
           prazo_solucao?: string | null
+          project_id?: string | null
           projeto?: string
           reincidencia_defeito?: boolean | null
           responsavel_arquiteto?: string | null
@@ -1076,6 +1237,7 @@ export type Database = {
           artefatos_atualizados?: string | null
           cobertura_testes?: number | null
           contador_rejeicoes?: number
+          contract_id?: string | null
           created_at?: string
           data_previsao_encerramento?: string | null
           demandante?: string | null
@@ -1086,6 +1248,7 @@ export type Database = {
           originada_diagnostico?: boolean
           prazo_inicio_atendimento?: string | null
           prazo_solucao?: string | null
+          project_id?: string | null
           projeto?: string
           reincidencia_defeito?: boolean | null
           responsavel_arquiteto?: string | null
@@ -1112,10 +1275,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "demandas_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "demandas_demandante_fkey"
             columns: ["demandante"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandas_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
@@ -1731,8 +1908,101 @@ export type Database = {
           },
         ]
       }
+      project_teams: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          role: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          role?: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          role?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_teams_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projetos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          code: string | null
+          contract_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          module_type: string
+          name: string
+          redmine_id: number | null
+          room_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          code?: string | null
+          contract_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          module_type?: string
+          name: string
+          redmine_id?: number | null
+          room_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string | null
+          contract_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          module_type?: string
+          name?: string
+          redmine_id?: number | null
+          room_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projetos: {
         Row: {
+          contract_id: string | null
           created_at: string
           descricao: string | null
           equipe: string | null
@@ -1744,6 +2014,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          contract_id?: string | null
           created_at?: string
           descricao?: string | null
           equipe?: string | null
@@ -1755,6 +2026,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          contract_id?: string | null
           created_at?: string
           descricao?: string | null
           equipe?: string | null
@@ -1766,6 +2038,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "projetos_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "projetos_sla_id_fkey"
             columns: ["sla_id"]
@@ -1825,6 +2104,13 @@ export type Database = {
             referencedRelation: "rdms"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "rdm_audit_log_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "vw_rdms_sem_projeto"
+            referencedColumns: ["id"]
+          },
         ]
       }
       rdm_checklist_items: {
@@ -1876,6 +2162,13 @@ export type Database = {
             columns: ["rdm_id"]
             isOneToOne: false
             referencedRelation: "rdms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rdm_checklist_items_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "vw_rdms_sem_projeto"
             referencedColumns: ["id"]
           },
           {
@@ -1960,6 +2253,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "rdm_deployment_tasks_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "vw_rdms_sem_projeto"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "rdm_deployment_tasks_responsavel_id_fkey"
             columns: ["responsavel_id"]
             isOneToOne: false
@@ -2014,6 +2314,13 @@ export type Database = {
             referencedRelation: "rdms"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "rdm_gonogo_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "vw_rdms_sem_projeto"
+            referencedColumns: ["id"]
+          },
         ]
       }
       rdm_participantes: {
@@ -2053,6 +2360,13 @@ export type Database = {
             referencedRelation: "rdms"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "rdm_participantes_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "vw_rdms_sem_projeto"
+            referencedColumns: ["id"]
+          },
         ]
       }
       rdm_sprint_items: {
@@ -2080,6 +2394,13 @@ export type Database = {
             columns: ["rdm_id"]
             isOneToOne: false
             referencedRelation: "rdms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rdm_sprint_items_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "vw_rdms_sem_projeto"
             referencedColumns: ["id"]
           },
           {
@@ -2160,6 +2481,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "rdm_sprints_rdm_id_fkey"
+            columns: ["rdm_id"]
+            isOneToOne: false
+            referencedRelation: "vw_rdms_sem_projeto"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "rdm_sprints_sprint_id_fkey"
             columns: ["sprint_id"]
             isOneToOne: false
@@ -2182,6 +2510,7 @@ export type Database = {
           nome: string
           objetivo: string
           observacoes: string | null
+          project_id: string | null
           risco: string
           rollback_previsto: boolean
           sistema_modulo: string
@@ -2205,6 +2534,7 @@ export type Database = {
           nome: string
           objetivo: string
           observacoes?: string | null
+          project_id?: string | null
           risco: string
           rollback_previsto?: boolean
           sistema_modulo: string
@@ -2228,6 +2558,7 @@ export type Database = {
           nome?: string
           objetivo?: string
           observacoes?: string | null
+          project_id?: string | null
           risco?: string
           rollback_previsto?: boolean
           sistema_modulo?: string
@@ -2244,6 +2575,13 @@ export type Database = {
             columns: ["criado_por"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rdms_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
@@ -2803,33 +3141,57 @@ export type Database = {
       }
       teams: {
         Row: {
+          contract_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
           id: string
           module: string
           name: string
+          project_id: string | null
+          team_type: string | null
           updated_at: string
         }
         Insert: {
+          contract_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
           module?: string
           name: string
+          project_id?: string | null
+          team_type?: string | null
           updated_at?: string
         }
         Update: {
+          contract_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
           id?: string
           module?: string
           name?: string
+          project_id?: string | null
+          team_type?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "teams_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_management_audit_log: {
         Row: {
@@ -3104,6 +3466,34 @@ export type Database = {
           },
         ]
       }
+      vw_rdms_sem_projeto: {
+        Row: {
+          codigo: string | null
+          created_at: string | null
+          id: string | null
+          nome: string | null
+          sistema_modulo: string | null
+          team_id: string | null
+          team_name: string | null
+          team_project_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rdms_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_project_id_fkey"
+            columns: ["team_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _assert_team_access: {
@@ -3126,6 +3516,10 @@ export type Database = {
           p_sla_risco_h?: number
           p_team_id: string
         }
+        Returns: Json
+      }
+      calc_sla_demanda: {
+        Args: { p_demanda_id: string; p_regime?: string; p_uf?: string }
         Returns: Json
       }
       claim_next_apf_job: {
@@ -3166,6 +3560,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      fn_check_sla_status: {
+        Args: {
+          p_contract_id: string
+          p_created_at: string
+          p_demanda_id: string
+          p_now?: string
+          p_priority: string
+        }
+        Returns: Json
+      }
+      fn_get_contract_tree: { Args: { p_contract_id?: string }; Returns: Json }
+      fn_get_project_sla_matrix: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      fn_get_team_contract: { Args: { p_team_id: string }; Returns: Json }
       fn_rdm_criar_com_checklist: {
         Args: {
           p_ambiente: string
@@ -3196,6 +3606,34 @@ export type Database = {
         Returns: boolean
       }
       fn_rdm_user_team_ids: { Args: never; Returns: string[] }
+      fn_resolve_demanda_context: {
+        Args: { p_demanda_id: string }
+        Returns: Json
+      }
+      fn_resolve_sla_limits: {
+        Args: { p_demanda_id: string; p_priority?: string }
+        Returns: {
+          business_hours: boolean
+          resolution_minutes: number
+          response_minutes: number
+          source: string
+        }[]
+      }
+      fn_sla_dashboard_batch: {
+        Args: {
+          p_contract_id?: string
+          p_limit?: number
+          p_project_id?: string
+          p_regime?: string
+          p_team_id?: string
+          p_uf?: string
+        }
+        Returns: Json
+      }
+      fn_sla_status_summary: {
+        Args: { p_contract_id?: string; p_project_id?: string }
+        Returns: Json
+      }
       get_admin_kpis: {
         Args: { p_sla_dias?: number; p_team_ids: string[] }
         Returns: Json

@@ -1,28 +1,24 @@
 -- ============================================================
--- HOTFIX: fix JOIN profiles — pr.user_id = dr.user_id
+-- HOTFIX: dois bugs na RPC get_demandas_with_responsaveis(uuid)
 --
--- Afeta APENAS: get_demandas_with_responsaveis(uuid)
--- A versão _paged já estava correta (p.user_id) — não alterada.
+-- BUG 1 (cards sumiam - erro 42803):
+--   ORDER BY d.updated_at DESC estava FORA do jsonb_agg.
+--   Como o SELECT é uma agregação sem GROUP BY, o Postgres rejeita
+--   ORDER BY referenciando coluna não-agregada → 400 Bad Request.
+--   Fix: mover ORDER BY para DENTRO do jsonb_agg(... ORDER BY d.updated_at DESC).
 --
--- Root cause:
---   As subqueries de responsaveis usavam:
---     JOIN profiles pr ON pr.id = dr.user_id   ← ERRADO
---   O JOIN nunca casava → responsavel_dev/requisitos/arquiteto/teste
---   retornavam NULL silenciosamente (sem erro 500, sem log).
---   Efeito visível: todos os cards do Kanban exibiam "Sem responsável".
+-- BUG 2 (responsáveis sempre null):
+--   JOIN profiles pr ON pr.id = dr.user_id  ← ERRADO
+--   A tabela profiles usa user_id como FK para auth.users, não id.
+--   O JOIN nunca casava → responsavel_dev/requisitos/arquiteto/teste = NULL.
+--   Fix: JOIN profiles pr ON pr.user_id = dr.user_id  ← CORRETO
 --
--- Fix:
---   JOIN profiles pr ON pr.user_id = dr.user_id  ← CORRETO
---   Aplicado nos 5 pontos da RPC principal.
---
--- Técnica: DROP + CREATE (necessário pois a função retorna jsonb e
---   CREATE OR REPLACE não altera tipo de retorno de função já existente).
+-- Técnica: DROP + CREATE pois a função retorna jsonb e
+--   CREATE OR REPLACE não pode alterar tipo de retorno de função existente.
 -- ============================================================
 
--- Derruba a versão bugada
 DROP FUNCTION IF EXISTS get_demandas_with_responsaveis(uuid);
 
--- Recria com JOIN correto
 CREATE FUNCTION get_demandas_with_responsaveis(p_team_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -62,7 +58,6 @@ BEGIN
       'updated_at',                    d.updated_at,
       'project_id',                    d.project_id,
       'contract_id',                   COALESCE(d.contract_id, t.contract_id),
-      -- HOTFIX: era pr.id = dr.user_id → corrigido para pr.user_id = dr.user_id
       'responsavel_dev',
         (SELECT pr.display_name FROM demanda_responsaveis dr
           JOIN profiles pr ON pr.user_id = dr.user_id
@@ -101,12 +96,12 @@ BEGIN
           '[]'::jsonb
         )
     )
+    ORDER BY d.updated_at DESC   -- BUG 1 fix: ORDER BY DENTRO do jsonb_agg
   )
   INTO v_result
   FROM demandas d
   LEFT JOIN teams t ON t.id = d.team_id
-  WHERE d.team_id = p_team_id
-  ORDER BY d.updated_at DESC;
+  WHERE d.team_id = p_team_id;
 
   RETURN COALESCE(v_result, '[]'::jsonb);
 END;
@@ -117,5 +112,6 @@ GRANT EXECUTE ON FUNCTION get_demandas_with_responsaveis(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_demandas_with_responsaveis(uuid) TO service_role;
 
 COMMENT ON FUNCTION get_demandas_with_responsaveis IS
-  'Retorna demandas de um time enriquecidas com responsaveis + project_id + contract_id. '
-  'HOTFIX 2026-06-04: corrigido JOIN profiles pr ON pr.user_id (era pr.id — bug silencioso).';
+  'Retorna demandas de um time com responsaveis + project_id + contract_id. '
+  'HOTFIX 2026-06-04: (1) ORDER BY movido para dentro do jsonb_agg; '
+  '(2) JOIN profiles corrigido para pr.user_id.';

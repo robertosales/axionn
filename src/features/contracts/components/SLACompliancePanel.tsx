@@ -1,10 +1,18 @@
-import { RefreshCw, TrendingUp, AlertTriangle, CheckCircle2, Clock, Zap } from 'lucide-react';
-import { Button }   from '@/components/ui/button';
-import { Badge }    from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
+import {
+  RefreshCw, TrendingUp, AlertTriangle, CheckCircle2,
+  Clock, Zap, Download, Printer,
+} from 'lucide-react';
+import { Button }     from '@/components/ui/button';
+import { Badge }      from '@/components/ui/badge';
+import { Skeleton }   from '@/components/ui/skeleton';
+import { Progress }   from '@/components/ui/progress';
+import {
+  DropdownMenu, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useSLADashboard } from '../hooks/useSLADashboard';
 import type { SLADemandaRow } from '../hooks/useSLADashboard';
+import { exportToCsv } from '@/lib/exportToCsv';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -38,7 +46,6 @@ function SlaProgressBar({ pct, color }: { pct: number; color: string }) {
     red:    'bg-red-500',
     blue:   'bg-blue-400',
   }[color] ?? 'bg-emerald-500';
-
   return (
     <div className="w-full">
       <Progress value={Math.min(pct, 100)} className="h-1.5" indicatorClassName={indicatorColor} />
@@ -47,21 +54,43 @@ function SlaProgressBar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
+// ── Export helpers ────────────────────────────────────────────────────────────
+
+function buildCsvRows(demandas: SLADemandaRow[]) {
+  return demandas.map(r => ({
+    'ID':            r.demandaId,
+    'Título':         r.titulo ?? '',
+    'Horas acumuladas': r.horasAcumuladas.toFixed(1),
+    'Prazo (h)':      r.prazoHoras.toFixed(1),
+    'Consumido %':    r.resolutionPct.toFixed(1),
+    'Status SLA':     LABEL_MAP[r.statusSLA] ?? r.statusSLA,
+    'Origem SLA':     r.slaSource === 'contract_matrix' ? 'Contrato' : 'Legado',
+  }));
+}
+
+function handlePrint(title: string) {
+  const original = document.title;
+  document.title = title;
+  window.print();
+  document.title = original;
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
 interface SLACompliancePanelProps {
-  contractId?: string | null;
-  projectId?:  string | null;
-  teamId?:     string | null;
-  /** Título exibido no header do painel */
-  title?: string;
+  contractId?:   string | null;
+  contractName?: string | null;   // usado no nome do arquivo exportado
+  projectId?:    string | null;
+  teamId?:       string | null;
+  title?:        string;
 }
 
 export function SLACompliancePanel({
-  contractId = null,
-  projectId  = null,
-  teamId     = null,
-  title      = 'SLA – Compliance',
+  contractId   = null,
+  contractName = null,
+  projectId    = null,
+  teamId       = null,
+  title        = 'SLA – Compliance',
 }: SLACompliancePanelProps) {
   const { summary, demandas, loading, error, refetch } = useSLADashboard({
     contractId,
@@ -70,7 +99,6 @@ export function SLACompliancePanel({
     enabled: !!(contractId || projectId || teamId),
   });
 
-  // ── KPI cards ────────────────────────────────────────────────────────────────
   const kpis = [
     {
       label: 'Compliance',
@@ -102,7 +130,10 @@ export function SLACompliancePanel({
     },
   ];
 
-  // ── Render ────────────────────────────────────────────────────────────────────
+  const exportSlug = contractName
+    ? `sla-compliance-${contractName.toLowerCase().replace(/\s+/g, '-')}`
+    : 'sla-compliance';
+
   if (!contractId && !projectId && !teamId) {
     return (
       <div className="rounded-lg border bg-card p-6 flex flex-col items-center gap-2 text-muted-foreground">
@@ -117,16 +148,45 @@ export function SLACompliancePanel({
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{title}</h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground"
-          onClick={() => refetch()}
-          disabled={loading}
-          aria-label="Atualizar SLA"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="flex items-center gap-1 print:hidden">
+          {/* Exportar */}
+          {!loading && demandas.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                  <Download className="h-3 w-3" /> Exportar
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() =>
+                    exportToCsv({
+                      filename: exportSlug,
+                      rows: buildCsvRows(demandas),
+                    })
+                  }
+                >
+                  Baixar CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handlePrint(title)}>
+                  <Printer className="h-3.5 w-3.5 mr-2" /> Imprimir / PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* Refresh */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground"
+            onClick={() => refetch()}
+            disabled={loading}
+            aria-label="Atualizar SLA"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -147,7 +207,6 @@ export function SLACompliancePanel({
         </div>
       )}
 
-      {/* Erro */}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-600">
           Erro ao carregar SLA: {error}
@@ -168,10 +227,9 @@ export function SLACompliancePanel({
             )}
           </div>
           <div className="divide-y max-h-96 overflow-y-auto scrollbar-none">
-            {demandas
+            {[...demandas]
               .sort((a, b) => {
-                // Ordena: violado → em_risco → dentro → concluido
-                const order = { violado: 0, em_risco: 1, dentro: 2, concluido: 3 };
+                const order: Record<string, number> = { violado: 0, em_risco: 1, dentro: 2, concluido: 3 };
                 return (order[a.statusSLA] ?? 2) - (order[b.statusSLA] ?? 2);
               })
               .map((row) => (

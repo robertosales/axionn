@@ -21,14 +21,14 @@ export function useProjectsByTeam(teamId: string | null) {
     async function load() {
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from("projects")
           .select("id, name")
           .eq("team_id", teamId)
           .order("name");
 
         if (!error && !cancelled) {
-          setProjects(data ?? []);
+          setProjects((data ?? []) as ProjectOption[]);
         }
       } finally {
         if (!cancelled) setLoading(false);

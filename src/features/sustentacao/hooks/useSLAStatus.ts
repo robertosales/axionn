@@ -101,20 +101,20 @@ export function useSLAStatus({
  */
 export function useSLAStatusRemote(params: Omit<Params, 'slaStatus'>) {
   // Importação lazy para não arrastar o módulo nos bundles de listagem
-  const { useState, useEffect } = require('react');
-  const { supabase } = require('@/integrations/supabase/client');
+  const _react = require('react') as typeof import('react');
+  const _supa  = require('@/integrations/supabase/client').supabase;
 
-  const [status, setStatus]   = useState<SLAStatus | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus]   = _react.useState<SLAStatus | null>(null);
+  const [loading, setLoading] = _react.useState<boolean>(false);
 
-  useEffect(() => {
+  _react.useEffect(() => {
     const { demandaId, contractId: cId, priority: p, createdAt: ca, enabled: en = true } = params;
     if (!en || !demandaId || !cId || !p || !ca) { setStatus(null); return; }
     let cancelled = false;
     async function load() {
       setLoading(true);
       try {
-        const { data, error } = await (supabase as any).rpc('fn_check_sla_status', {
+        const { data, error } = await (_supa as any).rpc('fn_check_sla_status', {
           p_demanda_id:  demandaId,
           p_contract_id: cId,
           p_priority:    p,

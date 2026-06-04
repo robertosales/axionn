@@ -167,3 +167,38 @@ export async function fetchActiveContracts(): Promise<{ id: string; name: string
   if (error) throw error;
   return data ?? [];
 }
+
+// ── Stubs de compatibilidade (HU-001) ────────────────────────────────────────
+// Estes helpers existem para satisfazer hooks/components legados.
+// A lógica real é coberta por RPCs no banco; aqui apenas encaminhamos.
+
+export async function fetchFreeTeams(): Promise<{ id: string; name: string; module: string }[]> {
+  const { data, error } = await (supabase as any)
+    .from('teams')
+    .select('id, name, module')
+    .order('name');
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getTeamContract(teamId: string): Promise<any> {
+  const { data, error } = await (supabase as any).rpc('fn_get_team_contract', { p_team_id: teamId });
+  if (error) throw error;
+  return data;
+}
+
+export async function checkSlaStatus(params: {
+  demandaId:  string;
+  contractId: string;
+  priority:   string;
+  createdAt:  string;
+}): Promise<any> {
+  const { data, error } = await (supabase as any).rpc('fn_check_sla_status', {
+    p_demanda_id:  params.demandaId,
+    p_contract_id: params.contractId,
+    p_priority:    params.priority,
+    p_created_at:  params.createdAt,
+  });
+  if (error) throw error;
+  return data;
+}

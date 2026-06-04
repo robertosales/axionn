@@ -416,7 +416,7 @@ export function UserRolesManager() {
         supabase.from("profiles").select("id").eq("user_id", user.user_id).single(),
       ]);
       if (!succP || !targP) throw new Error("Erro ao identificar perfis.");
-      const { error } = await supabase.rpc("fn_inactivate_user_with_migration", {
+      const { error } = await (supabase as any).rpc("fn_inactivate_user_with_migration", {
         p_target_profile_id:    targP.id,
         p_successor_profile_id: succP.id,
       });

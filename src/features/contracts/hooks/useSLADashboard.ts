@@ -78,7 +78,7 @@ export function useSLADashboard({
       if (rpcError) throw new Error(rpcError.message);
 
       // fn_sla_dashboard_batch retorna { summary, demandas }
-      const payload = raw as { summary: SLASummary; demandas: SLADemandaRow[] };
+      const payload = raw as unknown as { summary: SLASummary; demandas: SLADemandaRow[] };
 
       return {
         summary:  payload?.summary  ?? EMPTY_SUMMARY,

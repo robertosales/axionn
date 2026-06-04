@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchProjetosComContrato, type Projeto } from '../services/projetos.service';
+import {
+  fetchProjetosComContrato,
+  createProjeto,
+  updateProjeto,
+  deleteProjeto,
+  type Projeto,
+} from '../services/projetos.service';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Options {
@@ -36,5 +42,31 @@ export function useProjetos({ allTeams = false }: Options = {}) {
 
   useEffect(() => { load(); }, [load]);
 
-  return { projetos, loading, error, reload: load };
+  const create = useCallback(async (data: Partial<Projeto>) => {
+    if (!currentTeam?.id) throw new Error('Sem time selecionado');
+    const res = await createProjeto({
+      team_id:     currentTeam.id,
+      nome:        data.nome ?? '',
+      descricao:   data.descricao ?? undefined,
+      equipe:      data.equipe ?? undefined,
+      sla:         data.sla ?? undefined,
+      sla_id:      data.sla_id ?? null,
+      contract_id: data.contract_id ?? null,
+    });
+    await load();
+    return res;
+  }, [currentTeam?.id, load]);
+
+  const update = useCallback(async (id: string, updates: Partial<Projeto>) => {
+    const res = await updateProjeto(id, updates);
+    await load();
+    return res;
+  }, [load]);
+
+  const remove = useCallback(async (id: string) => {
+    await deleteProjeto(id);
+    await load();
+  }, [load]);
+
+  return { projetos, loading, error, reload: load, create, update, remove };
 }

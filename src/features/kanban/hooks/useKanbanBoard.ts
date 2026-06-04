@@ -203,7 +203,7 @@ async function fetchCardsPage(
 
   const raw  = data ?? [];
   const items = enrichCards(raw, devs, epics);
-  const last  = raw[raw.length - 1];
+  const last  = raw[raw.length - 1] as any;
   const nextCursor = items.length < KANBAN_PAGE_SIZE
     ? null
     : `${last.position}:${last.id}`;

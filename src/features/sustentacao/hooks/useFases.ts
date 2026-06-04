@@ -48,5 +48,25 @@ export function useFases() {
     return () => { supabase.removeChannel(sub); };
   }, [qc]);
 
-  return { fases, loading, reload: () => qc.invalidateQueries({ queryKey }) };
+  const reload = () => qc.invalidateQueries({ queryKey });
+
+  async function create(label: string) {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const maxOrdem = fases.reduce((m, f) => Math.max(m, f.ordem ?? 0), 0);
+    const { error } = await (supabase as any).from("demanda_fases").insert({
+      key, label: trimmed, ordem: maxOrdem + 1, ativo: true,
+    });
+    if (error) throw error;
+    await reload();
+  }
+
+  async function remove(id: string) {
+    const { error } = await (supabase as any).from("demanda_fases").delete().eq("id", id);
+    if (error) throw error;
+    await reload();
+  }
+
+  return { fases, loading, reload, create, remove };
 }

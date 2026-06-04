@@ -51,20 +51,20 @@ export function ApfPokerReference({
   useEffect(() => {
     if (!open || !currentTeamId || !activeSprint) return;
     setLoading(true);
-    supabase
+    (supabase as any)
       .from("apf_generations")
       .select(
-        "id, sprint_id, template_id, output_filename, storage_path, pf_total, pf_breakdown, created_at, sprints(name), apf_templates(name)"
+        "id, sprint_id, template_id, output_filename, pf_total, pf_breakdown, created_at, sprints(name), apf_templates(name)"
       )
       .eq("team_id", currentTeamId)
       .eq("sprint_id", activeSprint.id)
       .eq("status", "success")
       .order("created_at", { ascending: false })
       .limit(10)
-      .then(({ data }) => {
+      .then(({ data }: { data: any[] | null }) => {
         if (data) {
           setEntries(
-            data.map((d: { id: string; sprints: { name: string } | null; apf_templates: { name: string } | null; created_at: string; pf_total: number | null; pf_breakdown: Record<string, number> | null; output_filename: string | null; storage_path: string | null }) => ({
+            data.map((d: any) => ({
               id: d.id,
               sprintName: d.sprints?.name ?? "",
               templateName: d.apf_templates?.name ?? "Sem template",

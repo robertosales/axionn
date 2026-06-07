@@ -1,51 +1,67 @@
-# Sustentação Kanban sem cards — diagnóstico e correção
+# Correções no módulo Sustentação
 
-## Causa raiz
+## 1. Busca de Responsável apenas dentro do time ativo
+Hoje a busca consulta a tabela `profiles` inteira (todos os usuários do sistema). Vamos restringir aos membros do time ativo.
 
-A RPC `public.get_demandas_with_responsaveis(uuid)` está retornando **400 Bad Request** com o erro `42803: column "d.updated_at" must appear in the GROUP BY clause or be used in an aggregate function`. Sem dados da RPC, o hook `useDemandas` devolve lista vazia e o board não mostra nenhum card (apesar de existirem 251–271 demandas por time no banco).
+- Em `src/features/sustentacao/services/profiles.service.ts` → `searchProfilesByName`: aceitar um parâmetro `teamId` e fazer JOIN com `team_members` (filtrando `team_id = :teamId`).
+- Em `src/features/sustentacao/services/responsaveis.service.ts` → `searchProfiles`: idem (parâmetro `teamId` obrigatório).
+- Callers atualizados para passar `currentTeamId` do `AuthContext`:
+  - `src/features/sustentacao/components/DemandaForm.tsx` (linha 174)
+  - `src/features/sustentacao/components/DemandaDetail.tsx` (linha 598)
+- Se `teamId` for nulo (sem time ativo), retornar lista vazia.
 
-A migration de 03/jun (`20260603150000_fix_get_demandas_expose_project_contract.sql`), que adicionou os campos `project_id` e `contract_id` ao payload, **regrediu a correção anterior**: voltou a usar `ORDER BY d.updated_at DESC` no SELECT externo, fora do `jsonb_agg(...)`. Como o SELECT é uma agregação sem `GROUP BY`, o Postgres rejeita o ORDER BY referenciando coluna não-agregada.
+## 2. Board Kanban — projetos duplicados / fora do time
+Causa: o dropdown faz `set.add(d.projeto)` em string crua, então "DEMANDAS AVULSAS GLOBALWEB" e "Demandas Avulsas Globalweb" entram como entradas distintas.
 
-Trecho atual problemático (final da função):
+- Em `src/features/sustentacao/components/SustentacaoBoard.tsx` (`projetosDisponiveis`, linha 595): deduplicar por chave normalizada (`trim().toLowerCase()`), preservando uma forma canônica de exibição (a primeira ocorrência ordenada alfabeticamente). O filtro `selectedProjetos` em `filtered` (linha 628) também passa a comparar normalizado.
+- Como o board já é carregado via `get_demandas_with_responsaveis(p_team_id)`, os projetos exibidos já são do time ativo. Vou confirmar lendo o hook `useDemandasWithResponsaveis` para garantir que `p_team_id = currentTeamId` (sem fallback para outros times).
 
-```sql
-SELECT jsonb_agg( jsonb_build_object(...) )
-INTO v_result
-FROM demandas d
-LEFT JOIN teams t ON t.id = d.team_id
-WHERE d.team_id = p_team_id
-ORDER BY d.updated_at DESC;   -- ❌ inválido aqui
+## 3. Excluir do banco a demanda de teste
+Demanda encontrada: `rhm = '0123456789'`, título "TESTE DEMANDAS", projeto "Demandas Avulsas Globalweb" (id `64b0d98c-c837-46c5-a543-c81180ef0606`). Nenhum registro com título "TESTE DEMANDAS 1" existe atualmente.
+
+- Apagar a demanda e suas dependências (eventos, evidências, horas, responsáveis, transitions, fases) em uma operação única via `supabase--insert` (DELETE).
+
+## 4. Isolamento entre times
+Validar que cada time veja apenas suas demandas:
+
+- O carregamento do board e da lista já usa `get_demandas_with_responsaveis(currentTeamId)`, que filtra `demandas.team_id = p_team_id`. Vou conferir os hooks `useDemandasPaginadas` e `useDemandasWithResponsaveis` para garantir que **nenhum** caminho carregue sem `teamId` (ou faça fallback global). Se houver, adicionar guarda `if (!teamId) return []`.
+- Não há alteração de RLS — as policies de `demandas` já restringem por `team_members`.
+
+## Detalhes Técnicos
+
+```text
+profiles.service.ts
+  searchProfilesByName(query, limit, teamId)
+    .from('team_members')
+    .select('user_id, profiles!inner(id, user_id, display_name)')
+    .eq('team_id', teamId)
+    .ilike('profiles.display_name', `%${q}%`)
+    .eq('profiles.is_active', true)
+    .limit(limit)
 ```
 
-## Correção
-
-Criar nova migration que recria a função com o `ORDER BY` **dentro** do `jsonb_agg`, mantendo intactos:
-- assinatura `(p_team_id uuid) RETURNS jsonb`
-- `SECURITY DEFINER`, `STABLE`, `SET search_path = public`
-- validação de `team_members` / `auth.uid()`
-- todos os campos do payload, inclusive `project_id` e `contract_id` adicionados em 03/jun
-- subqueries de `responsaveis_*` e `responsaveis_list`
-
-Forma corrigida:
-
-```sql
-SELECT jsonb_agg(
-  jsonb_build_object( ... )
-  ORDER BY d.updated_at DESC
-)
-INTO v_result
-FROM demandas d
-LEFT JOIN teams t ON t.id = d.team_id
-WHERE d.team_id = p_team_id;
+```text
+SustentacaoBoard.tsx
+  projetosDisponiveis:
+    Map<normalized, displayLabel>  →  Array sorted by displayLabel
+  filter:
+    selectedSet = new Set(selectedProjetos.map(normalize))
+    items.filter(d => selectedSet.has(normalize(d.projeto)))
 ```
 
-## Validação após aplicar
+```text
+DELETE (via supabase--insert):
+  DELETE FROM demanda_eventos       WHERE demanda_id = '64b0d98c-...';
+  DELETE FROM demanda_evidencias    WHERE demanda_id = '64b0d98c-...';
+  DELETE FROM demanda_hours         WHERE demanda_id = '64b0d98c-...';
+  DELETE FROM demanda_responsaveis  WHERE demanda_id = '64b0d98c-...';
+  DELETE FROM demanda_transitions   WHERE demanda_id = '64b0d98c-...';
+  DELETE FROM demanda_fases         WHERE demanda_id = '64b0d98c-...';
+  DELETE FROM demandas              WHERE id = '64b0d98c-...';
+```
 
-1. `SELECT jsonb_array_length(public.get_demandas_with_responsaveis('<team_id>'))` retorna > 0 para os times com dados (271 / 251 / 114).
-2. Recarregar `/sustentacao` → board mostra os cards nas colunas do workflow.
-3. Conferir Network: chamada `rpc/get_demandas_with_responsaveis` volta com status 200.
-
-## Escopo
-
-- 1 nova migration SQL (apenas `CREATE OR REPLACE FUNCTION`). Sem alterações no frontend.
-- Não toca nos erros de build pré-existentes (módulo `contracts`, `UserRolesManager`, `ApfPokerReference`, `DataPayloadSummary`) — esses já existiam antes desta correção e são independentes do problema do Kanban.
+## Validação
+- `/sustentacao` → abrir filtro "Projetos": "DEMANDAS AVULSAS GLOBALWEB" aparece **uma única vez**.
+- Demanda RHM `0123456789` "TESTE DEMANDAS" não aparece em nenhum time.
+- Em "Nova Demanda" e "Detalhes → Responsáveis", a busca retorna **apenas** membros do time ativo.
+- Trocar de time recarrega o board com somente as demandas daquele time.

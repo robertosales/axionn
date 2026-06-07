@@ -1,67 +1,75 @@
-# Correções no módulo Sustentação
+## Objetivo
+Impedir a criação de demandas duplicadas no módulo Sustentação. Duas demandas são consideradas duplicadas quando, dentro do **mesmo time**, possuem:
+- mesmo **Título** (`titulo`)
+- mesmo **Projeto** (`projeto`)
+- mesmo **Tipo** (`tipo`)
+- mesmo **Regime/SLA** (`sla`)
 
-## 1. Busca de Responsável apenas dentro do time ativo
-Hoje a busca consulta a tabela `profiles` inteira (todos os usuários do sistema). Vamos restringir aos membros do time ativo.
+Demandas com situação `cancelada` ou `ag_aceite_final` são ignoradas (podem ser recriadas).
 
-- Em `src/features/sustentacao/services/profiles.service.ts` → `searchProfilesByName`: aceitar um parâmetro `teamId` e fazer JOIN com `team_members` (filtrando `team_id = :teamId`).
-- Em `src/features/sustentacao/services/responsaveis.service.ts` → `searchProfiles`: idem (parâmetro `teamId` obrigatório).
-- Callers atualizados para passar `currentTeamId` do `AuthContext`:
-  - `src/features/sustentacao/components/DemandaForm.tsx` (linha 174)
-  - `src/features/sustentacao/components/DemandaDetail.tsx` (linha 598)
-- Se `teamId` for nulo (sem time ativo), retornar lista vazia.
+## 1. Validação no banco (camada de garantia)
 
-## 2. Board Kanban — projetos duplicados / fora do time
-Causa: o dropdown faz `set.add(d.projeto)` em string crua, então "DEMANDAS AVULSAS GLOBALWEB" e "Demandas Avulsas Globalweb" entram como entradas distintas.
+Criar **índice único parcial** em `public.demandas` com normalização (case-insensitive, trim):
 
-- Em `src/features/sustentacao/components/SustentacaoBoard.tsx` (`projetosDisponiveis`, linha 595): deduplicar por chave normalizada (`trim().toLowerCase()`), preservando uma forma canônica de exibição (a primeira ocorrência ordenada alfabeticamente). O filtro `selectedProjetos` em `filtered` (linha 628) também passa a comparar normalizado.
-- Como o board já é carregado via `get_demandas_with_responsaveis(p_team_id)`, os projetos exibidos já são do time ativo. Vou confirmar lendo o hook `useDemandasWithResponsaveis` para garantir que `p_team_id = currentTeamId` (sem fallback para outros times).
-
-## 3. Excluir do banco a demanda de teste
-Demanda encontrada: `rhm = '0123456789'`, título "TESTE DEMANDAS", projeto "Demandas Avulsas Globalweb" (id `64b0d98c-c837-46c5-a543-c81180ef0606`). Nenhum registro com título "TESTE DEMANDAS 1" existe atualmente.
-
-- Apagar a demanda e suas dependências (eventos, evidências, horas, responsáveis, transitions, fases) em uma operação única via `supabase--insert` (DELETE).
-
-## 4. Isolamento entre times
-Validar que cada time veja apenas suas demandas:
-
-- O carregamento do board e da lista já usa `get_demandas_with_responsaveis(currentTeamId)`, que filtra `demandas.team_id = p_team_id`. Vou conferir os hooks `useDemandasPaginadas` e `useDemandasWithResponsaveis` para garantir que **nenhum** caminho carregue sem `teamId` (ou faça fallback global). Se houver, adicionar guarda `if (!teamId) return []`.
-- Não há alteração de RLS — as policies de `demandas` já restringem por `team_members`.
-
-## Detalhes Técnicos
-
-```text
-profiles.service.ts
-  searchProfilesByName(query, limit, teamId)
-    .from('team_members')
-    .select('user_id, profiles!inner(id, user_id, display_name)')
-    .eq('team_id', teamId)
-    .ilike('profiles.display_name', `%${q}%`)
-    .eq('profiles.is_active', true)
-    .limit(limit)
+```sql
+CREATE UNIQUE INDEX demandas_no_duplicates_idx
+ON public.demandas (
+  team_id,
+  lower(btrim(projeto)),
+  lower(btrim(titulo)),
+  tipo,
+  sla
+)
+WHERE situacao NOT IN ('cancelada', 'ag_aceite_final')
+  AND titulo IS NOT NULL
+  AND btrim(titulo) <> '';
 ```
 
-```text
-SustentacaoBoard.tsx
-  projetosDisponiveis:
-    Map<normalized, displayLabel>  →  Array sorted by displayLabel
-  filter:
-    selectedSet = new Set(selectedProjetos.map(normalize))
-    items.filter(d => selectedSet.has(normalize(d.projeto)))
+- Índice parcial: não bloqueia recriação após cancelar/encerrar.
+- `lower(btrim(...))`: trata "Plano de Teste" = "plano de teste" = " Plano de Teste ".
+- Demandas legadas sem `titulo` ficam fora do índice (não quebra dados existentes).
+
+**Pré-checagem:** rodar uma query antes da migration para detectar duplicatas pré-existentes que impediriam a criação do índice; se houver, alertar o usuário com a lista antes de aplicar.
+
+## 2. Validação no frontend (UX imediata)
+
+### 2a. Service helper
+Em `src/features/sustentacao/services/demandas.service.ts`, adicionar:
+
+```ts
+export async function checkDemandaDuplicada(
+  teamId: string,
+  titulo: string,
+  projeto: string,
+  tipo: string,
+  sla: string,
+  excludeId?: string,
+): Promise<boolean>
 ```
 
-```text
-DELETE (via supabase--insert):
-  DELETE FROM demanda_eventos       WHERE demanda_id = '64b0d98c-...';
-  DELETE FROM demanda_evidencias    WHERE demanda_id = '64b0d98c-...';
-  DELETE FROM demanda_hours         WHERE demanda_id = '64b0d98c-...';
-  DELETE FROM demanda_responsaveis  WHERE demanda_id = '64b0d98c-...';
-  DELETE FROM demanda_transitions   WHERE demanda_id = '64b0d98c-...';
-  DELETE FROM demanda_fases         WHERE demanda_id = '64b0d98c-...';
-  DELETE FROM demandas              WHERE id = '64b0d98c-...';
-```
+Faz `SELECT id` em `demandas` filtrando por `team_id`, `lower(trim(titulo))`, `lower(trim(projeto))`, `tipo`, `sla`, excluindo situações terminais e (em edição) o próprio id.
 
-## Validação
-- `/sustentacao` → abrir filtro "Projetos": "DEMANDAS AVULSAS GLOBALWEB" aparece **uma única vez**.
-- Demanda RHM `0123456789` "TESTE DEMANDAS" não aparece em nenhum time.
-- Em "Nova Demanda" e "Detalhes → Responsáveis", a busca retorna **apenas** membros do time ativo.
-- Trocar de time recarrega o board com somente as demandas daquele time.
+### 2b. DemandaForm
+Em `src/features/sustentacao/components/DemandaForm.tsx`:
+- No submit (antes do `create`), chamar `checkDemandaDuplicada`. Se retornar `true`, exibir `toast.error("Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time")` e abortar.
+- Capturar erro `23505` (unique violation) do Postgres no catch do `useDemandaMutations.create` e converter em mensagem amigável (caso uma race condition escape do check).
+
+### 2c. useDemandaMutations
+Em `src/features/sustentacao/hooks/useDemandaMutations.ts` → `create`: tratar erro Postgres `23505` (`unique_violation`) com toast específico de duplicidade em vez do genérico "Erro ao criar demanda".
+
+## 3. Validação na importação em massa
+
+Em `upsertDemandas` (RPC `upsert_demandas_batch`): como já é upsert por `rhm`, não há mudança imediata. O índice único permanece ativo — se uma linha importada gerar duplicidade pelos 4 campos, o erro será reportado em `erros`.
+
+## Validação esperada
+- Criar "Plano de Teste / [SUST] GESP PGDPF / Atividade Interna Sustentação / Padrão" → OK.
+- Tentar criar idêntica no mesmo time → toast bloqueia, nada salvo.
+- Variar caixa/espaços ("plano de teste ") → bloqueia.
+- Cancelar a original e recriar → permitido.
+- Outro time criando título igual → permitido (escopo por `team_id`).
+
+## Arquivos alterados
+- nova migration SQL (índice único parcial)
+- `src/features/sustentacao/services/demandas.service.ts` (novo helper)
+- `src/features/sustentacao/components/DemandaForm.tsx` (pré-check no submit)
+- `src/features/sustentacao/hooks/useDemandaMutations.ts` (tratamento erro 23505)

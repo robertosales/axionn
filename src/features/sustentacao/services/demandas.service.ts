@@ -109,6 +109,47 @@ export async function deleteDemanda(id: string) {
   if (error) throw error;
 }
 
+/**
+ * checkDemandaDuplicada — retorna true se já existe uma demanda ATIVA no mesmo time
+ * com o mesmo título + projeto + tipo + regime (case-insensitive, trim).
+ * Demandas com situação `cancelada` ou `ag_aceite_final` são ignoradas.
+ */
+export async function checkDemandaDuplicada(
+  teamId: string,
+  titulo: string,
+  projeto: string,
+  tipo: string,
+  sla: string,
+  excludeId?: string,
+): Promise<boolean> {
+  const t = (titulo ?? "").trim();
+  const p = (projeto ?? "").trim();
+  if (!t || !p || !teamId) return false;
+
+  let q = supabase
+    .from("demandas" as any)
+    .select("id,titulo,projeto,tipo,sla,situacao")
+    .eq("team_id", teamId)
+    .eq("tipo", tipo)
+    .eq("sla", sla)
+    .not("situacao", "in", "(cancelada,ag_aceite_final)")
+    .ilike("titulo", t)
+    .ilike("projeto", p);
+
+  if (excludeId) q = q.neq("id", excludeId);
+
+  const { data, error } = await q.limit(20);
+  if (error) throw error;
+
+  const tl = t.toLowerCase();
+  const pl = p.toLowerCase();
+  return ((data as any[]) ?? []).some(
+    (d) =>
+      (d.titulo ?? "").trim().toLowerCase() === tl &&
+      (d.projeto ?? "").trim().toLowerCase() === pl,
+  );
+}
+
 export async function addTransition(t: Omit<DemandaTransition, "id" | "created_at">) {
   const { error } = await supabase.from("demanda_transitions" as any).insert(t as any);
   if (error) throw error;

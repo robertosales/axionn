@@ -262,7 +262,7 @@ export function DemandaDetail({
   pendingMoveTarget,
 }: Props) {
   const demanda = rawDemanda as DemandaExt | null;
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, currentTeamId } = useAuth();
   const { fases, create: createFase, remove: removeFase } = useFases();
   const fasesMap = useMemo(() => {
     const m: Record<string, string> = { ...FASE_LABELS };

@@ -26,6 +26,7 @@ import {
   calcPrazoSolucao, isSolucaoDefinidaNaOS,
 } from "../types/imr";
 import { searchProfilesByName } from "../services/profiles.service";
+import { checkDemandaDuplicada } from "../services/demandas.service";
 import { useAuth } from "@/contexts/AuthContext";
 
 const SITUACAO_LABELS: Record<string, string> = {
@@ -205,6 +206,29 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
 
     // Retrocompatibilidade: envia project_id (FK) E projeto (nome texto) juntos
     const nomeProjetoTexto = selectedProjeto?.nome ?? demanda?.projeto ?? "";
+
+    // Bloqueio de duplicidade: mesmo time + título + projeto + tipo + regime
+    if (currentTeamId && form.descricao.trim()) {
+      try {
+        const dup = await checkDemandaDuplicada(
+          currentTeamId,
+          form.descricao,
+          nomeProjetoTexto,
+          form.tipo,
+          regime,
+          demanda?.id,
+        );
+        if (dup) {
+          toast.error(
+            "Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time.",
+          );
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // Se a checagem falhar, segue — o índice único no banco garante a regra
+      }
+    }
 
     const payload: Record<string, any> = {
       situacao,

@@ -83,16 +83,22 @@ export async function fetchResponsaveisByDemandaIds(
 export async function searchProfilesByName(
   query: string,
   limit = 5,
+  teamId?: string | null,
 ): Promise<Array<{ id: string; user_id: string; display_name: string }>> {
   if (!query || query.length < 2) return [];
+  if (!teamId) return [];
+  // Restringe a membros do time ativo via JOIN inner com team_members
   const { data } = await supabase
-    .from("profiles")
-    .select("id, user_id, display_name")
-    .eq("is_active", true)
-    .ilike("display_name", `%${query}%`)
-    .eq("is_active", true) // Filtra apenas perfis ativos para busca
+    .from("team_members")
+    .select("user_id, profiles!inner(id, user_id, display_name, is_active)")
+    .eq("team_id", teamId)
+    .eq("profiles.is_active", true)
+    .ilike("profiles.display_name", `%${query}%`)
     .limit(limit);
-  return (data ?? []) as any[];
+  return ((data ?? []) as any[])
+    .map((r) => r.profiles)
+    .filter(Boolean)
+    .map((p: any) => ({ id: p.id, user_id: p.user_id, display_name: p.display_name }));
 }
 
 /**

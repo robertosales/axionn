@@ -593,9 +593,14 @@ export function SustentacaoBoard({
     setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const projetosDisponiveis = useMemo<string[]>(() => {
-    const set = new Set<string>();
-    demandas.forEach((d) => { if (d.projeto) set.add(d.projeto); });
-    return Array.from(set).sort();
+    // Dedupe case-insensitive (preserva a primeira forma encontrada como rótulo canônico)
+    const map = new Map<string, string>();
+    demandas.forEach((d) => {
+      if (!d.projeto) return;
+      const key = d.projeto.trim().toLowerCase();
+      if (!map.has(key)) map.set(key, d.projeto.trim());
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [demandas]);
 
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
@@ -625,8 +630,10 @@ export function SustentacaoBoard({
         String(d.projeto ?? "").toLowerCase().includes(q) ||
         String(d.rhm ?? "").toLowerCase().includes(q));
     }
-    if (selectedProjetos.length > 0)
-      items = items.filter((d) => d.projeto && selectedProjetos.includes(d.projeto));
+    if (selectedProjetos.length > 0) {
+      const selSet = new Set(selectedProjetos.map((p) => p.trim().toLowerCase()));
+      items = items.filter((d) => d.projeto && selSet.has(d.projeto.trim().toLowerCase()));
+    }
     if (selectedResp.length > 0)
       items = items.filter((d) => getResponsaveisList(d).map((r) => r.nome).some((n) => selectedResp.includes(n)));
     return items;

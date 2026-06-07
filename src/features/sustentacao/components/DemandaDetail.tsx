@@ -595,7 +595,7 @@ export function DemandaDetail({
     setSearchQuery(q);
     if (q.length < 2) { setSearchResults([]); return; }
     try {
-      const results = await respSvc.searchProfiles(q);
+      const results = await respSvc.searchProfiles(q, currentTeamId);
       const existing = new Set(responsaveis.map((r) => r.user_id));
       setSearchResults(results.filter((r) => !existing.has(r.user_id)));
     } catch {}

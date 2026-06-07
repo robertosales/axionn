@@ -26,6 +26,7 @@ import {
   calcPrazoSolucao, isSolucaoDefinidaNaOS,
 } from "../types/imr";
 import { searchProfilesByName } from "../services/profiles.service";
+import { useAuth } from "@/contexts/AuthContext";
 
 const SITUACAO_LABELS: Record<string, string> = {
   fila_atendimento:         "Fila Atendimento",
@@ -52,6 +53,7 @@ interface Props {
 
 export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda }: Props) {
   const isEdit = !!demanda;
+  const { currentTeamId } = useAuth();
 
   // allTeams=true na edição para não perder projeto de outro time
   const { projetos, loading: loadingProjetos } = useProjetos({ allTeams: isEdit });

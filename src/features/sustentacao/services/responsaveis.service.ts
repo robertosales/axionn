@@ -51,15 +51,21 @@ export async function removeResponsavel(id: string) {
   if (error) throw error;
 }
 
-export async function searchProfiles(query: string) {
+export async function searchProfiles(query: string, teamId?: string | null) {
+  if (!query || !teamId) return [] as Array<{ user_id: string; display_name: string; email: string }>;
+  // Restringe aos membros do time ativo
   const { data, error } = await supabase
-    .from("profiles")
-    .select("user_id, display_name, email")
-    .eq("is_active", true)
-    .or(`display_name.ilike.%${query}%,email.ilike.%${query}%`)
+    .from("team_members")
+    .select("user_id, profiles!inner(user_id, display_name, email, is_active)")
+    .eq("team_id", teamId)
+    .eq("profiles.is_active", true)
+    .or(`display_name.ilike.%${query}%,email.ilike.%${query}%`, { foreignTable: "profiles" })
     .limit(10);
   if (error) throw error;
-  return data || [];
+  return ((data ?? []) as any[])
+    .map((r) => r.profiles)
+    .filter(Boolean)
+    .map((p: any) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }));
 }
 
 // Prioridade: papel mais específico primeiro, depois genéricos.

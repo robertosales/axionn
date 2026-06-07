@@ -171,7 +171,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
   const searchDemandante = async (q: string) => {
     setDemandanteSearch(q);
     if (q.length < 2) { setDemandanteResults([]); return; }
-    const results = await searchProfilesByName(q, 5);
+    const results = await searchProfilesByName(q, 5, currentTeamId);
     setDemandanteResults(results as any[]);
   };
 

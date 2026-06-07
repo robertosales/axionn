@@ -58,8 +58,16 @@ export function useDemandaMutations() {
       }
       toast.success('Demanda criada com sucesso');
       await invalidateAll();
-    } catch {
-      toast.error('Erro ao criar demanda');
+    } catch (err: any) {
+      const code = err?.code ?? err?.cause?.code;
+      const msg  = String(err?.message ?? '');
+      if (code === '23505' || msg.includes('demandas_no_duplicates_idx')) {
+        toast.error(
+          'Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time.',
+        );
+      } else {
+        toast.error('Erro ao criar demanda');
+      }
     }
   };
 

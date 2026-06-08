@@ -1,46 +1,43 @@
-## Contexto
+## Diagnóstico
 
-A integração já está parcialmente implementada (turno anterior). Este plano refina apenas a definição de "SLA crítico" para usar a **mesma régua** do motor canônico (`fn_check_sla_status` + `contract_slas`) em vez do limiar provisório de 24 h. Visual, cores e layout permanecem intactos.
+`teams` no `AuthContext` é construído a partir de `team_modules`, então cada time aparece **uma entrada por módulo**. TIME 1/2/3 estão cadastrados em `team_modules` com **dois módulos cada**: `sustentacao` E `rdm`.
 
-## O que já está em produção
+```
+TIME 1 | sustentacao
+TIME 1 | rdm
+TIME 2 | sustentacao
+TIME 2 | rdm
+TIME 3 | sustentacao
+TIME 3 | rdm
+```
 
-- `get_capacity_planner_sustentacao` (RPC) — calcula `wipCount` excluindo status pausados (`bloqueada`, `aguardando_cliente`, `aguardando_terceiros`, `suspensa`, `impeditivo`), expõe `pausedCount`, `slaCriticalCount` e `allocatedHours` = soma de `total_horas` das demandas ativas.
-- `useCapacityPlanner` — status do dev passa a `overloaded` quando `slaCriticalCount > 0` (prioridade sobre WIP/horas); totalizador do topo usa `totalAllocated / totalCapacity` para ambos os módulos.
-- `CapacityGrid` — subtítulo do dev mostra "X pausada(s)" e "X SLA crítico" sem mexer em cores/layout.
+No `useCapacityPlanner`, a função `uniqueTeams` dedup por `team.id` mantendo a **primeira ocorrência**. Quando a primeira entrada lida é a versão `rdm`, o filtro `t.module === "sustentacao"` devolve `[]`, a RPC `get_capacity_planner_sustentacao` não é chamada, `teamCapacities` fica vazio e o `CapacityGrid` exibe "Nenhum sprint ativo encontrado". Isso explica o sintoma — não é o layout Ágil sendo aplicado por engano; é a partição que perdeu o time.
 
-## O que muda agora
+## Correção
 
-Substituir a heurística `prazo_solucao - now() <= 24h` pelo cálculo do motor de SLA real, mantendo um fallback para demandas sem `contract_id`.
+### 1. `src/features/admin/hooks/useCapacityPlanner.ts`
 
-### 1. RPC `get_capacity_planner_sustentacao` — recalcular `slaCriticalCount`
+Trocar o dedup ingênuo por uma versão que **prioriza o módulo "real" do time** (`sala_agil` ou `sustentacao`) sobre `rdm`:
 
-Para cada demanda ativa (não fechada, não pausada) do dev no time, classificar como crítica quando:
+- Para cada `team.id`, preferir a entrada cujo `module ∈ {sala_agil, sustentacao}`; só usar `rdm` como último recurso.
+- Resultado: TIME 1/2/3 entram em `sustentacaoIds`, a RPC é executada, devs são renderizados.
 
-- **Com contrato SLA** (`d.contract_id IS NOT NULL` e existe `contract_slas` para `(contract_id, priority)`):
-  - `resolution_pct >= 85`  **OU**  `now() > created_at + resolution_time_minutes` (estourado)
-  - mesma fórmula de `fn_check_sla_status` → cores `orange`/`red`.
-  - Respeita `business_hours_only` do contrato (08h–20h, seg–sex) reaproveitando a função existente `is_feriado` quando aplicável.
-- **Sem contrato** (`d.contract_id IS NULL`) — fallback pelo deadline manual:
-  - `prazo_solucao IS NOT NULL` E (`prazo_solucao <= now()` OU `prazo_solucao - now() <= interval '24 hours'`).
+### 2. `src/features/admin/components/CapacityGrid.tsx`
 
-Implementação: subquery única dentro da função, com `LEFT JOIN public.contract_slas cs ON cs.contract_id = d.contract_id AND cs.priority = COALESCE(d.priority,'normal')`. Reusa lógica do `fn_check_sla_status` inline para evitar chamada por linha.
+Ajustar a mensagem de vazio para refletir a realidade (sem mudar layout/cores):
 
-### 2. Hook `useCapacityPlanner`
+- Quando `teamCapacities.length === 0`, exibir "Nenhum time com dados de capacidade no período" em vez de "Nenhum sprint ativo encontrado", para não confundir o caso Sustentação (onde não há sprint) com falha.
 
-Sem mudanças além das já aplicadas — continua lendo `slaCriticalCount` da RPC e promovendo status para `overloaded`.
+O badge "Sustentação" já está presente no header do time (`team.module === "sustentacao" ? <Shield…/> + Badge "Sustentação"`); ele simplesmente não aparecia porque o array vinha vazio. Com a partição corrigida, o badge volta automaticamente.
 
-### 3. `CapacityGrid.tsx`
+### 3. Validação
 
-Sem mudanças. O texto "X SLA crítico" e o ícone `AlertTriangle` (cores semânticas existentes) já refletem o novo cálculo.
-
-## Validação pós-deploy
-
-1. Selecionar 1 dev com demanda ativa cujo SLA esteja com `resolution_pct ≥ 85` no `fn_check_sla_status` → confirmar que o card mostra status sobrecarregado e contador "SLA crítico".
-2. Selecionar 1 dev com todas as demandas pausadas (`bloqueada`) → `wipCount = 0`, `pausedCount > 0`, status = `idle` se sem alocação.
-3. Conferir totalizador do topo de cada time Sustentação: `Σ alloc / Σ cap` ≠ 0%.
+- `/dashboard-admin` → selecionar TIME 1/2/3 individualmente → cada um deve mostrar o card com badge azul "Sustentação", ícone `Shield`, header "Semana corrente", lista de membros com WIP/SLA crítico e horas alocadas/realizadas.
+- Selecionar "Todos" → todos os times aparecem corretamente segregados.
+- Selecionar um time Ágil ([GESP3] - TIME A, etc.) → continua usando `get_capacity_planner` com badge verde "Sala Ágil" e dias restantes do sprint.
 
 ## Fora do escopo
 
-- Mudanças visuais, de cor ou layout.
-- Alterar a régua do motor de SLA (85 % continua sendo o limiar crítico).
-- Aplicar a mesma lógica no painel de Sala Ágil.
+- Mudanças visuais, cores ou layout.
+- Alterar `team_modules` ou a forma como `AuthContext` carrega times.
+- Tocar na lógica de SLA crítico já entregue no turno anterior.

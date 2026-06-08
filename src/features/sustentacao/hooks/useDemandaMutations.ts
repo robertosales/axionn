@@ -61,13 +61,20 @@ export function useDemandaMutations() {
     } catch (err: any) {
       const code = err?.code ?? err?.cause?.code;
       const msg  = String(err?.message ?? '');
-      if (code === '23505' || msg.includes('demandas_no_duplicates_idx')) {
+      const details = String(err?.details ?? '');
+      const blob = `${msg} ${details}`;
+      if (code === '23505' && blob.includes('demandas_team_id_rhm_key')) {
+        toast.error(
+          `Já existe uma demanda com o número #${d.rhm ?? ''} neste time. Use outro número.`,
+        );
+      } else if (code === '23505' || blob.includes('demandas_no_duplicates_idx')) {
         toast.error(
           'Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time.',
         );
       } else {
-        toast.error('Erro ao criar demanda');
+        toast.error(`Erro ao criar demanda${msg ? `: ${msg}` : ''}`);
       }
+      throw err;
     }
   };
 

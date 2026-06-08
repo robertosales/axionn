@@ -24,7 +24,7 @@ const WORKFLOW_ORDER: Record<string, number> = {
   cancelada: 13,
 };
 
-const TERMINAL_STEPS = new Set(["ag_aceite_final", "fila_concluida", "cancelada", "rejeitada"]);
+const TERMINAL_STEPS = new Set(["ag_aceite_final", "cancelada", "rejeitada"]);
 
 export function useWorkflowSteps(): WorkflowStep[] {
   return useMemo(() => {

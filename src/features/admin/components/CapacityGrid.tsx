@@ -26,7 +26,7 @@ export function CapacityGrid({ teamCapacities }: Props) {
               <div className="flex items-center gap-2">
                 {team.module === "sala_agil"
                   ? <Zap    className="h-4 w-4 text-primary" />
-                  : <Shield className="h-4 w-4 text-violet-500" />}
+                  : <Shield className="h-4 w-4 text-blue-500" />}
                 <span className="font-semibold text-sm">{team.teamName}</span>
                 <Badge variant="outline" className="text-[10px]">
                   {team.module === "sala_agil" ? "Sala Ágil" : "Sustentação"}
@@ -37,7 +37,7 @@ export function CapacityGrid({ teamCapacities }: Props) {
                   <span className="flex items-center gap-1">
                     <CalendarClock className="h-3.5 w-3.5" />
                     {team.sprintAtivo}
-                    {dias !== null && (
+                    {dias !== null && team.module === "sala_agil" && (
                       <Badge
                         variant={dias <= 1 ? "destructive" : dias <= 3 ? "secondary" : "outline"}
                         className="text-[9px] ml-1"
@@ -49,7 +49,9 @@ export function CapacityGrid({ teamCapacities }: Props) {
                 )}
                 <span className="flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />
-                  {team.totalAllocated}h / {team.totalCapacity}h
+                  {team.module === "sustentacao"
+                    ? <>{team.totalRealized}h / {team.totalCapacity}h</>
+                    : <>{team.totalAllocated}h / {team.totalCapacity}h</>}
                   <span className={`font-semibold ${
                     team.utilizationPct >= 100 ? "text-destructive" :
                     team.utilizationPct >= 80  ? "text-orange-500"  : "text-emerald-600"
@@ -60,7 +62,11 @@ export function CapacityGrid({ teamCapacities }: Props) {
 
             {/* Grade de devs */}
             {team.devs.length === 0 ? (
-              <p className="text-xs text-muted-foreground px-4 py-4">Nenhum desenvolvedor cadastrado neste time.</p>
+              <p className="text-xs text-muted-foreground px-4 py-4">
+                {team.module === "sustentacao"
+                  ? "Nenhum membro cadastrado neste time."
+                  : "Nenhum desenvolvedor cadastrado neste time."}
+              </p>
             ) : (
               <div className="divide-y divide-border">
                 {team.devs.map(dev => (
@@ -79,7 +85,7 @@ export function CapacityGrid({ teamCapacities }: Props) {
                         <span className="text-xs font-semibold truncate">{dev.devName}</span>
                       </div>
                       <span className="text-[10px] text-muted-foreground">
-                        {dev.wipCount} HU{dev.wipCount !== 1 ? "s" : ""} em andamento
+                        {dev.wipCount} {team.module === "sustentacao" ? "demanda" : "HU"}{dev.wipCount !== 1 ? "s" : ""} em andamento
                       </span>
                     </div>
 
@@ -95,13 +101,17 @@ export function CapacityGrid({ teamCapacities }: Props) {
                         <p className="text-xs font-semibold">{dev.capacityHours}h</p>
                       </div>
                       <div>
-                        <p className="text-[9px] uppercase text-muted-foreground">Aloc.</p>
-                        <p className="text-xs font-semibold">{dev.allocatedHours}h</p>
+                        <p className="text-[9px] uppercase text-muted-foreground">
+                          {team.module === "sustentacao" ? "WIP" : "Aloc."}
+                        </p>
+                        <p className="text-xs font-semibold">
+                          {team.module === "sustentacao" ? dev.wipCount : `${dev.allocatedHours}h`}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[9px] uppercase text-muted-foreground">Real.</p>
                         <p className={`text-xs font-semibold ${
-                          dev.realizedHours > dev.allocatedHours ? "text-destructive" : ""
+                          dev.realizedHours > dev.capacityHours ? "text-destructive" : ""
                         }`}>{dev.realizedHours}h</p>
                       </div>
                     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ calls: number; redirectIn: number } | null>(null);
+  const submittingRef = useRef(false);
 
   // Após sucesso, faz logout e retorna à tela de login automaticamente em 5s.
   useEffect(() => {
@@ -34,15 +35,19 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setErrorMsg(null);
     if (password.length < 6) {
       const m = "A senha deve ter ao menos 6 caracteres";
       setErrorMsg(m); toast.error(m);
+      submittingRef.current = false;
       return;
     }
     if (password !== confirm) {
       const m = "As senhas não coincidem";
       setErrorMsg(m); toast.error(m);
+      submittingRef.current = false;
       return;
     }
     setLoading(true);
@@ -100,6 +105,7 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
       setErrorMsg(friendly);
       toast.error(friendly);
       setLoading(false);
+      submittingRef.current = false;
       await supabase.auth.startAutoRefresh();
       return;
     }
@@ -117,6 +123,7 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
           "Senha trocada, mas não foi possível liberar o acesso automaticamente. Faça login novamente.",
         );
         setLoading(false);
+        submittingRef.current = false;
         await signOut();
         return;
       }

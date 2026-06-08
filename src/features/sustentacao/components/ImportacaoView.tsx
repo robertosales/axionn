@@ -668,3 +668,5 @@ function ResultCard({ value, label, colorClass }: { value: number; label: string
     </div>
   );
 }
+
+export default ImportacaoView;

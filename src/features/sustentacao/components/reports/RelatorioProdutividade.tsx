@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useDemandas } from "../../hooks/useDemandas";
 import { useAllTransitions, useAllHours, useProfiles } from "../../hooks/useAllTransitions";
 import { useFases } from "../../hooks/useFases";
@@ -21,11 +20,10 @@ import {
   ReportLegendBlock,
 } from "@/shared/components/reports";
 import type { KPIItem } from "@/shared/components/reports";
-import { ExportButton } from "@/components/dashboard/ExportButton";
 import {
   ChevronDown, ChevronRight,
   ClipboardList, CheckCircle2, Clock, AlertTriangle,
-  FileText, FileDown, Eye,
+  FileText, Eye,
 } from "lucide-react";
 import { getInitials } from "@/lib/personName";
 import {
@@ -42,7 +40,6 @@ function useDemandaResponsaveis() {
 
   useEffect(() => {
     if (!currentTeamId) return;
-    // OTIMIZAÇÃO: Filtra por time usando inner join para evitar carregar registros de outros times
     supabase.from("demanda_responsaveis" as any)
       .select("demanda_id, user_id, papel, demandas!inner(team_id)")
       .eq("demandas.team_id", currentTeamId)
@@ -304,22 +301,27 @@ export function RelatorioProdutividade({ onBack }: Props) {
   const { hours }       = useAllHours();
   const profiles        = useProfiles();
   const { responsaveis } = useDemandaResponsaveis();
-  const { teams }       = useAuth();
+  const { teams, user, isAdmin } = useAuth();
   const { fases }       = useFases();
 
   const fasesMap = useMemo(() => { const m: Record<string,string>={}; fases.forEach(f => { m[f.key]=f.label; }); return m; }, [fases]);
 
   const [teamId,        setTeamId]        = useState("all");
-  const [analista,      setAnalista]      = useState("all");
+  // Seleção automática: admin inicia com "all", usuário comum inicia com seu próprio userId
+  const [analista,      setAnalista]      = useState(() => isAdmin ? "all" : (user?.id ?? "all"));
   const [dataInicio,    setDataInicio]    = useState(daysAgo(30));
   const [dataFim,       setDataFim]       = useState(today());
   const [openGroups,    setOpenGroups]    = useState<Set<string>>(new Set());
-  const [exportingPDF,  setExportingPDF]  = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const [periodo,       setPeriodo]       = useState("30");
   const [previewUrl,    setPreviewUrl]    = useState<string | null>(null);
-  const [previewNome,   setPreviewNome]   = useState<string>("");
-  const [previewDates,  setPreviewDates]  = useState<{ ini: string; fim: string }>({ ini: "", fim: "" });
-  const [previewBlob,   setPreviewBlob]   = useState<Blob | null>(null);
+
+  // Garante sincronização caso o perfil do usuário carregue após a montagem
+  useEffect(() => {
+    if (!isAdmin && user?.id && analista === "all") {
+      setAnalista(user.id);
+    }
+  }, [user?.id, isAdmin]);
 
   const sustTeams  = teams.filter(t => t.module === "sustentacao");
   const profileIds = useMemo(() => new Set(profiles.map(p => p.user_id)), [profiles]);
@@ -348,7 +350,6 @@ export function RelatorioProdutividade({ onBack }: Props) {
 
   const resolveUserId = (h: any): string | null => h.user_id || h.lancado_por || null;
 
-  // ── CORREÇÃO: filtra hours pelo período (data do lançamento), não pela criação da demanda
   const hoursFiltradas = useMemo(() => {
     const ini = new Date(dataInicio + "T00:00:00");
     const fim = new Date(dataFim + "T23:59:59");
@@ -356,7 +357,6 @@ export function RelatorioProdutividade({ onBack }: Props) {
       if (!h.demanda_id || !resolveUserId(h)) return false;
       const d = new Date(h.created_at);
       if (d < ini || d > fim) return false;
-      // aplica filtro de time se selecionado
       if (teamId !== "all") {
         const demanda = demandasMap.get(h.demanda_id);
         if (!demanda || demanda.team_id !== teamId) return false;
@@ -365,14 +365,12 @@ export function RelatorioProdutividade({ onBack }: Props) {
     });
   }, [hours, dataInicio, dataFim, teamId, demandasMap]);
 
-  // IDs de demandas que possuem pelo menos uma hora lançada no período
   const demandaIdsNoPeriodo = useMemo(() => {
     const s = new Set<string>();
     hoursFiltradas.forEach(h => { if (h.demanda_id) s.add(h.demanda_id); });
     return s;
   }, [hoursFiltradas]);
 
-  // Demandas filtradas derivadas das horas — mantém compatibilidade com o restante do componente
   const demandasFiltradas = useMemo(() => {
     return demandas.filter(d => demandaIdsNoPeriodo.has(d.id));
   }, [demandas, demandaIdsNoPeriodo]);
@@ -468,87 +466,34 @@ export function RelatorioProdutividade({ onBack }: Props) {
     { label: "Horas Lançadas",   value: `${kpis.totalHoras.toFixed(1)}h`,                                                                                  status: "neutral", icon: <Clock         className="h-5 w-5" /> },
   ];
 
-  const getExportData = () => {
-    const nomeAnalista = isIndividual ? nomeMap.get(analista) || analista : null;
-    return {
-      title: isIndividual ? `Produtividade — ${nomeAnalista} | ${periodoLabel}` : `Relatório de Produtividade — ${periodoLabel}`,
-      analista: nomeAnalista,
-      headers: [...(isIndividual ? [] : ["Analista"]), "RHM", "Projeto", "Situação", "Data Início", "Data Fim", "Horas", "Outros Analistas"],
-      rows: grupos.flatMap(g => g.atividades.flatMap(a => {
-        const resumo = [...(isIndividual ? [] : [g.nome]), a.rhm, a.projeto, situacaoLabel(a.situacao), a.dataInicio, a.dataFim, a.horasAnalista.toFixed(1), a.outrosAnalistas.join(", ") || "—"];
-        const detalhe = a.horasDetalhadas.map(h => [...(isIndividual ? [] : [""]), "", "", `  ↳ ${h.fase}`, h.data, "", h.horas.toFixed(1), h.descricao]);
-        return [resumo, ...detalhe];
-      })),
-    };
-  };
-
-  const handleExportIndividual = async () => {
+  const handleVisualizarPDF = async () => {
     if (analista === "all" || grupos.length === 0) return;
-    setExportingPDF(true);
+    setGeneratingPDF(true);
     try {
       const grupo = grupos[0];
       const blob = await buildPDFBlob(grupo, dataInicio, dataFim);
       const url = URL.createObjectURL(blob);
-      setPreviewBlob(blob);
       setPreviewUrl(url);
-      setPreviewNome(grupo.nome);
-      setPreviewDates({ ini: dataInicio, fim: dataFim });
     } catch (err) {
       console.error(err);
       toast.error("Erro ao gerar pré-visualização do relatório");
     } finally {
-      setExportingPDF(false);
+      setGeneratingPDF(false);
     }
-  };
-
-  const handleDownloadFromPreview = () => {
-    if (!previewBlob || !previewNome) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(previewBlob);
-    a.download = `Produtividade_${previewNome.replace(/\s+/g, "_")}_${previewDates.ini}_${previewDates.fim}.pdf`;
-    a.click();
-    toast.success("Relatório individual exportado!");
   };
 
   const handleClosePreview = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
-    setPreviewBlob(null);
   };
 
   return (
     <>
-      <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) handleClosePreview(); }}>
-        <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-5 pb-3 border-b">
-            <DialogTitle className="text-sm font-semibold flex items-center gap-2">
-              <Eye className="h-4 w-4 text-primary" />
-              Pré-visualização — {previewNome}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-hidden">
-            {previewUrl && (
-              <iframe
-                src={previewUrl}
-                className="w-full h-full border-0"
-                title="Preview do relatório PDF"
-              />
-            )}
-          </div>
-          <DialogFooter className="px-6 py-3 border-t flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={handleClosePreview}>Fechar</Button>
-            <Button size="sm" className="gap-1.5" onClick={handleDownloadFromPreview}>
-              <FileDown className="h-3.5 w-3.5" /> Baixar PDF
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <ReportLayout
         header={
           <ReportPageHeader
-            title="Produtividade por Analista"
-            description="Clique na linha do RHM para ver o detalhe das horas lançadas"
+            title={reportCfg.titulo.replace("Relatório — ", "")}
+            description={reportCfg.subtitulo}
             icon={<FileText className="h-5 w-5" />}
             badge={periodoLabel}
             onBack={onBack}
@@ -559,120 +504,143 @@ export function RelatorioProdutividade({ onBack }: Props) {
             periodo={periodo}       setPeriodo={setPeriodo}
             dataInicio={dataInicio} setDataInicio={setDataInicio}
             dataFim={dataFim}       setDataFim={setDataFim}
-            analista={analista}     setAnalista={setAnalista}
+            analista={analista}     setAnalista={isAdmin ? setAnalista : undefined}
             analistas={analistasList}
+            showAnalista={true}
             modulo="sustentacao"
             totalFiltrado={demandasFiltradas.length}
-            onClear={() => { setPeriodo("30"); setDataInicio(daysAgo(30)); setDataFim(today()); setAnalista("all"); setTeamId("all"); }}
+            onClear={() => {
+              setPeriodo("30");
+              setDataInicio(daysAgo(30));
+              setDataFim(today());
+              // ao limpar, respeita o perfil: admin volta para "all", usuário comum mantém seu id
+              setAnalista(isAdmin ? "all" : (user?.id ?? "all"));
+            }}
           />
         }
         kpis={<ReportKPISummary items={kpiItems} />}
         table={
           <div className="space-y-4">
-            <div className="flex items-center justify-between print:hidden">
-              <div className="flex gap-2">
-                {grupos.length > 0 && (
-                  <>
-                    <Button size="sm" variant="ghost" className="text-xs" onClick={expandAll}>Expandir tudo</Button>
-                    <Button size="sm" variant="ghost" className="text-xs" onClick={collapseAll}>Recolher tudo</Button>
-                  </>
-                )}
+            {/* Botão Visualizar Relatório PDF — único mecanismo de relatório */}
+            {isIndividual && (
+              <div className="flex justify-end print:hidden">
+                <Button
+                  onClick={handleVisualizarPDF}
+                  disabled={generatingPDF || grupos.length === 0}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  {generatingPDF ? "Gerando..." : "Visualizar Relatório (PDF)"}
+                </Button>
               </div>
-              <div className="flex gap-2">
-                {isIndividual && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs gap-1.5 border-primary text-primary hover:bg-primary/5"
-                    onClick={handleExportIndividual}
-                    disabled={exportingPDF}
-                  >
-                    {exportingPDF
-                      ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-1" />
-                      : <Eye className="h-3.5 w-3.5" />}
-                    Visualizar Relatório (PDF)
-                  </Button>
-                )}
-                <ExportButton getData={getExportData} />
-              </div>
-            </div>
+            )}
+
             {grupos.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="py-10 text-center">
-                  <p className="text-sm text-muted-foreground">Nenhuma atividade encontrada para os filtros selecionados.</p>
-                </CardContent>
-              </Card>
+              <div className="text-center py-12 text-muted-foreground">
+                <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Nenhum dado encontrado para o período e filtros selecionados.</p>
+              </div>
             ) : (
-              <div className="space-y-3">
-                {grupos.map(grupo => {
-                  const isOpen = openGroups.has(grupo.userId);
-                  return (
-                    <Card key={grupo.userId} className="overflow-hidden">
-                      <Collapsible open={isOpen} onOpenChange={() => toggleGroup(grupo.userId)}>
-                        <CollapsibleTrigger asChild>
-                          <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-sm">{getInitials(grupo.nome)}</div>
-                              <div>
-                                <p className="text-sm font-semibold">
-                                  {grupo.nome}{grupo.cargo ? <span className="text-muted-foreground font-normal"> — {grupo.cargo}</span> : null}
-                                </p>
-                                <p className="text-xs text-muted-foreground">{grupo.atividades.length} atividade{grupo.atividades.length !== 1 ? "s" : ""} · {grupo.totalHoras.toFixed(1)}h lançadas</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Badge className={`text-[10px] ${rateColor(grupo.taxaResolucao)}`}>{grupo.taxaResolucao.toFixed(0)}% resolução</Badge>
-                              <Badge variant="outline" className="text-[10px]">{grupo.resolvidos} resolvidos</Badge>
-                              {grupo.emAberto > 0 && <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-200">{grupo.emAberto} em aberto</Badge>}
-                              {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                            </div>
-                          </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <CardContent className="pt-0 px-0 pb-0">
-                            <div className="overflow-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow className="bg-muted/30">
-                                    <TableHead className="font-semibold text-xs pl-4 w-[90px]">RHM</TableHead>
-                                    <TableHead className="font-semibold text-xs">Projeto</TableHead>
-                                    <TableHead className="font-semibold text-xs">Situação</TableHead>
-                                    <TableHead className="font-semibold text-xs text-right">Dt. Início</TableHead>
-                                    <TableHead className="font-semibold text-xs text-right">Dt. Fim</TableHead>
-                                    <TableHead className="font-semibold text-xs text-right">Horas</TableHead>
-                                    <TableHead className="font-semibold text-xs pr-4">Outros Analistas</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {grupo.atividades.map(a => <AtividadeExpandivel key={`${grupo.userId}-${a.demandaId}`} atividade={a} />)}
-                                  <TableRow className="bg-muted/20 border-t font-semibold">
-                                    <TableCell colSpan={5} className="text-xs pl-4 text-muted-foreground">Subtotal — {grupo.nome}</TableCell>
-                                    <TableCell className="text-right text-xs tabular-nums">{grupo.totalHoras.toFixed(1)}h</TableCell>
-                                    <TableCell className="pr-4" />
-                                  </TableRow>
-                                </TableBody>
-                              </Table>
-                            </div>
-                          </CardContent>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </Card>
-                  );
-                })}
+              <div className="space-y-4">
+                {grupos.length > 1 && (
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" className="text-xs h-7" onClick={expandAll}>Expandir todos</Button>
+                    <Button variant="outline" size="sm" className="text-xs h-7" onClick={collapseAll}>Recolher todos</Button>
+                  </div>
+                )}
+                {grupos.map(grupo => (
+                  <Card key={grupo.userId} className="overflow-hidden">
+                    <div
+                      className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors select-none"
+                      onClick={() => toggleGroup(grupo.userId)}
+                    >
+                      <div className="flex items-center gap-3">
+                        {openGroups.has(grupo.userId)
+                          ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        <div>
+                          <p className="font-semibold text-sm">{grupo.nome}</p>
+                          {grupo.cargo && <p className="text-xs text-muted-foreground">{grupo.cargo}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Atividades</p>
+                          <p className="text-sm font-semibold">{grupo.atividades.length}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Resolvidos</p>
+                          <p className="text-sm font-semibold text-emerald-600">{grupo.resolvidos}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Taxa</p>
+                          <Badge className={`text-[10px] ${rateColor(grupo.taxaResolucao)}`}>{grupo.taxaResolucao.toFixed(0)}%</Badge>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Horas</p>
+                          <p className="text-sm font-semibold tabular-nums">{grupo.totalHoras.toFixed(1)}h</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {openGroups.has(grupo.userId) && (
+                      <CardContent className="p-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/20">
+                              <TableHead className="text-[10px] pl-4 w-[90px]">RHM</TableHead>
+                              <TableHead className="text-[10px]">Projeto</TableHead>
+                              <TableHead className="text-[10px]">Situação</TableHead>
+                              <TableHead className="text-[10px] text-right">Início</TableHead>
+                              <TableHead className="text-[10px] text-right">Fim</TableHead>
+                              <TableHead className="text-[10px] text-right">Horas</TableHead>
+                              <TableHead className="text-[10px] pr-4">Outros Analistas</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {grupo.atividades.map(ativ => (
+                              <AtividadeExpandivel key={ativ.demandaId} atividade={ativ} />
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    )}
+                  </Card>
+                ))}
               </div>
             )}
           </div>
         }
         footer={
           <ReportLegendBlock items={[
-            { sigla: "RHM",              descricao: "Clique na linha para ver o detalhe das horas lançadas" },
-            { sigla: "Horas",            descricao: "Total de horas lançadas pelo analista nesta atividade — dentro do período selecionado" },
-            { sigla: "Outros Analistas", descricao: "Demais pessoas vinculadas à mesma atividade" },
-            { sigla: "Taxa Resolução",   descricao: "Atividades resolvidas ÷ total × 100 — por analista" },
-            { sigla: "Data Fim",         descricao: "Data de aceite ou da última transição de conclusão" },
+            { sigla: "RHM",  descricao: "Registro de Histórico de Manutenção — identificador único da demanda" },
+            { sigla: "Horas", descricao: "Total de horas lançadas pelo analista nesta demanda no período selecionado" },
           ]} />
         }
       />
+
+      {/* Dialog de preview do PDF */}
+      <Dialog open={!!previewUrl} onOpenChange={open => { if (!open) handleClosePreview(); }}>
+        <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-4 pb-2 border-b">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <FileText className="h-4 w-4" />
+              Relatório de Produtividade
+            </DialogTitle>
+          </DialogHeader>
+          {previewUrl && (
+            <iframe
+              src={previewUrl}
+              className="flex-1 w-full rounded-b-lg"
+              title="Preview do Relatório"
+            />
+          )}
+          <DialogFooter className="px-6 py-3 border-t">
+            <Button variant="outline" onClick={handleClosePreview}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

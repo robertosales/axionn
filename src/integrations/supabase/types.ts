@@ -3648,6 +3648,14 @@ export type Database = {
         }
         Returns: Json
       }
+      get_capacity_planner_sustentacao: {
+        Args: {
+          p_default_cap?: number
+          p_team_id?: string
+          p_team_ids: string[]
+        }
+        Returns: Json
+      }
       get_demandas_with_responsaveis: {
         Args: { p_team_id: string }
         Returns: Json

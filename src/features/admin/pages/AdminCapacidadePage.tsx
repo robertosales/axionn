@@ -1,4 +1,3 @@
-import { useAuth } from "@/contexts/AuthContext";
 import { useCapacityPlanner } from "../hooks/useCapacityPlanner";
 import { CapacityGrid } from "../components/CapacityGrid";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,8 +7,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export function AdminCapacidadePage() {
-  const { teams } = useAuth();
-  const { teamCapacities, overloadedDevs, loading, selectedTeam, setSelectedTeam, reload } = useCapacityPlanner();
+  const {
+    teamCapacities,
+    overloadedDevs,
+    loading,
+    selectedTeam,
+    setSelectedTeam,
+    reload,
+    /**
+     * fix(capacidade-dedup): usa uniqueTeams (dedup por team.id) ao invés
+     * de `teams` do AuthContext, que contém uma entrada por (time × módulo)
+     * e causava duplicatas no seletor.
+     */
+    uniqueTeams,
+  } = useCapacityPlanner();
 
   const totalDevs     = teamCapacities.reduce((s, t) => s + t.devs.length, 0);
   const totalCapHrs   = teamCapacities.reduce((s, t) => s + t.totalCapacity,  0);
@@ -39,7 +50,9 @@ export function AdminCapacidadePage() {
             <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="Todos os times" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="text-xs">Todos os times</SelectItem>
-              {teams.map(t => <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>)}
+              {uniqueTeams.map(t => (
+                <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={reload} title="Atualizar">

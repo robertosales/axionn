@@ -272,7 +272,7 @@ export function ImportacaoPreviewTable({
               <TableHead className="w-[160px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Projeto</TableHead>
               <TableHead className="w-[140px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status Planilha</TableHead>
               <TableHead className="w-[140px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status Sistema</TableHead>
-              <TableHead className="            text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Diferença</TableHead>
+              <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Resultado da Migração</TableHead>
               <TableHead className="w-[130px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Ação</TableHead>
               <TableHead className="w-[110px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pr-4">Progresso</TableHead>
             </TableRow>

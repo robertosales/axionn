@@ -69,6 +69,7 @@ const SITUACAO_LABELS: Record<string, string> = {
   fila_producao:             "Fila Produção",
   ag_aceite_final:           "Ag. Aceite Final",
   cancelada:                 "Cancelada",
+  fila_concluida:            "Concluída",
 };
 
 function labelSituacao(s: string | null | undefined): string {

@@ -17,7 +17,7 @@ import { DemandaForm }                        from "./components/DemandaForm";
 import { SustentacaoDashboard }               from "./components/SustentacaoDashboard";
 import { SustentacaoWorkflow }                from "./components/SustentacaoWorkflow";
 import { ProjetosManager }                   from "./components/ProjetosManager";
-import ImportacaoView                         from "./components/ImportacaoView";
+import { ImportacaoView }                     from "./components/ImportacaoView";
 import { DemandasList }                      from "./components/DemandasList";
 import { SustentacaoRelatorios }             from "./components/reports/SustentacaoRelatorios";
 import { TeamManager }                       from "@/components/TeamManager";

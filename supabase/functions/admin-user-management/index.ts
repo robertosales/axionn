@@ -3,6 +3,12 @@
  *
  * SEC-003: CORS multi-origin via allowlist, validação UUID, audit log, impede ação sobre si mesmo
  * SEC-004: Migrado de SUPABASE_SERVICE_ROLE_KEY para SUPABASE_SECRET_KEYS
+ *
+ * FIX-CORS: isLovableDomain agora cobre TODOS os padrões de preview do Lovable:
+ *   - *.lovable.app                          (ex: axionn.lovable.app)
+ *   - id-preview--*.lovable.app              (ex: id-preview--f530dea0-....lovable.app)
+ *   - *--*.lovable.app  (qualquer subdomain composto)
+ *   - *.lovableproject.com
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -41,9 +47,10 @@ function buildAllowedOrigins(): Set<string> {
 
 /**
  * Verifica se o origin é um domínio de preview/produção da plataforma Lovable.
- * Cobre:
- *   - *.lovable.app          (ex: axionn.lovable.app, preview--axionn.lovable.app)
- *   - *.lovableproject.com   (ex: f530dea0-acd2-48b7-934e-9a6bc39bcf02.lovableproject.com)
+ * Cobre TODOS os padrões:
+ *   - *.lovable.app            (ex: axionn.lovable.app)
+ *   - id-preview--*.lovable.app (ex: id-preview--f530dea0-acd2-48b7-934e-9a6bc39bcf02.lovable.app)
+ *   - *.lovableproject.com     (ex: f530dea0-acd2-48b7-934e-9a6bc39bcf02.lovableproject.com)
  */
 function isLovableDomain(origin: string): boolean {
   try {

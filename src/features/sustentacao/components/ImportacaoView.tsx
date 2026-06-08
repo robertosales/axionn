@@ -526,7 +526,7 @@ export function ImportacaoView() {
               <input
                 ref={inputRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                 onChange={isDemandas ? handleFileDemandas : handleFileProjetos}
                 className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                 disabled={loading}
@@ -543,7 +543,7 @@ export function ImportacaoView() {
                 <p className="text-sm font-semibold text-foreground">
                   {loading ? "Processando arquivo…" : "Arraste o arquivo aqui"}
                 </p>
-                <p className="text-xs text-muted-foreground">ou clique para selecionar um arquivo .csv</p>
+                <p className="text-xs text-muted-foreground">ou clique para selecionar um arquivo .csv ou .xlsx</p>
               </div>
               {!loading && (
                 <span className={cn(

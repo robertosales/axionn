@@ -53,19 +53,25 @@ export async function removeResponsavel(id: string) {
 
 export async function searchProfiles(query: string, teamId?: string | null) {
   if (!query || !teamId) return [] as Array<{ user_id: string; display_name: string; email: string }>;
-  // Restringe aos membros do time ativo
-  const { data, error } = await supabase
+  // 1) IDs do time
+  const { data: tm, error: tmErr } = await supabase
     .from("team_members")
-    .select("user_id, profiles!inner(user_id, display_name, email, is_active)")
-    .eq("team_id", teamId)
-    .eq("profiles.is_active", true)
-    .or(`display_name.ilike.%${query}%,email.ilike.%${query}%`, { foreignTable: "profiles" })
+    .select("user_id")
+    .eq("team_id", teamId);
+  if (tmErr) throw tmErr;
+  const ids = (tm ?? []).map((r: any) => r.user_id);
+  if (ids.length === 0) return [];
+  // 2) Filtra profiles ativos pelo termo
+  const q = query.replace(/[,()]/g, "");
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id, display_name, email")
+    .in("user_id", ids)
+    .eq("is_active", true)
+    .or(`display_name.ilike.%${q}%,email.ilike.%${q}%`)
     .limit(10);
   if (error) throw error;
-  return ((data ?? []) as any[])
-    .map((r) => r.profiles)
-    .filter(Boolean)
-    .map((p: any) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }));
+  return (data ?? []).map((p: any) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }));
 }
 
 // Prioridade: papel mais específico primeiro, depois genéricos.

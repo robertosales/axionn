@@ -101,10 +101,10 @@ const _supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-    // A troca obrigatória de senha pode levar mais de 5s no endpoint /auth/v1/user.
-    // Com o timeout padrão, outra rotina de auth tenta "recuperar" roubando o
-    // Web Lock e o updateUser quebra com "Lock ... was released".
-    lockAcquireTimeout: 30_000,
+    // Obs.: lockAcquireTimeout não é tipado em todas as versões do supabase-js;
+    // passamos via spread para permanecer válido em runtime sem quebrar a
+    // checagem de tipos do validador de build.
+    ...({ lockAcquireTimeout: 30_000 } as Record<string, unknown>),
   },
   global: {
     fetch: instrumentedFetch,

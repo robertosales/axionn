@@ -401,12 +401,17 @@ export function ImportacaoPreviewTable({
       </div>
 
       {/* ── Legenda ── */}
-      {counts.atualizacoes > 0 && (
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 px-6 py-2 border-t border-border/50">
-          <span className="inline-block w-2.5 h-4 rounded-sm bg-amber-400 dark:bg-amber-500 shrink-0" />
-          Linhas com borda laranja possuem diferença de status entre planilha e sistema.
+      <div className="px-6 py-2 border-t border-border/50 space-y-1">
+        {counts.atualizacoes > 0 && (
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <span className="inline-block w-2.5 h-4 rounded-sm bg-amber-400 dark:bg-amber-500 shrink-0" />
+            Linhas destacadas terão a situação do sistema substituída pela situação da planilha.
+          </p>
+        )}
+        <p className="text-[11px] text-muted-foreground italic">
+          A planilha é a fonte oficial. Em caso de divergência, a situação atual do sistema é sobrescrita pela situação da planilha.
         </p>
-      )}
+      </div>
 
       {/* ── Paginação ── */}
       {displayRows.length > 0 && (

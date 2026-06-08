@@ -69,6 +69,7 @@ const SITUACAO_MAP: Record<string, string> = {
   fila_producao: "fila_producao",
   ag_aceite_final: "ag_aceite_final",
   cancelada: "cancelada",
+  fila_concluida: "fila_concluida",
   "fila de atendimento": "fila_atendimento",
   nova: "fila_atendimento",
   "planejamento: em elaboracao": "planejamento_elaboracao",
@@ -86,11 +87,20 @@ const SITUACAO_MAP: Record<string, string> = {
   "fila para produção (infra)": "fila_producao",
   "ag. aceite final": "ag_aceite_final",
   "aguardando aceite final": "ag_aceite_final",
+  concluida: "fila_concluida",
+  "concluída": "fila_concluida",
+  "fila concluida": "fila_concluida",
+  "fila concluída": "fila_concluida",
+  "fila de concluidas": "fila_concluida",
+  "fila de concluídas": "fila_concluida",
+  cancelado: "cancelada",
+  bloqueado: "bloqueada",
+  rejeitado: "rejeitada",
 };
 
-function normalizeSituacao(raw: string): string {
+function normalizeSituacao(raw: string): string | null {
   const cleaned = raw.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return SITUACAO_MAP[cleaned] || SITUACAO_MAP[raw.trim().toLowerCase()] || "fila_atendimento";
+  return SITUACAO_MAP[cleaned] || SITUACAO_MAP[raw.trim().toLowerCase()] || null;
 }
 
 const VALID_TIPOS_MAP: Record<string, string> = {};

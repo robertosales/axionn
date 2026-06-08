@@ -55,7 +55,19 @@ const ResetPassword = () => {
 
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
-      toast.error(error.message);
+      const code = (error as any).code || "";
+      const msg = error.message || "";
+      let friendly = msg;
+      if (code === "same_password" || /should be different from the old/i.test(msg)) {
+        friendly = "A nova senha deve ser diferente da senha atual.";
+      } else if (code === "weak_password" || /weak|pwned|leaked/i.test(msg)) {
+        friendly = "Senha muito fraca ou exposta em vazamentos. Use uma senha mais forte.";
+      } else if (/at least.*characters/i.test(msg)) {
+        friendly = "A senha não atende ao tamanho mínimo exigido.";
+      } else if (/session|not authenticated|JWT/i.test(msg)) {
+        friendly = "Sessão de recuperação expirada. Solicite um novo link.";
+      }
+      toast.error(friendly);
       setLoading(false);
       return;
     }

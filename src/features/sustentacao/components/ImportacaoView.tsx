@@ -18,6 +18,42 @@ import {
 } from "./ImportacaoPreviewTable";
 import { cn } from "@/lib/utils";
 
+// ─── SheetJS CDN loader (sem npm install) ──────────────────────────────────
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    XLSX: any;
+  }
+}
+const XLSX_CDN = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
+function loadXLSX(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if (typeof window !== "undefined" && window.XLSX) return resolve(window.XLSX);
+    const s = document.createElement("script");
+    s.src = XLSX_CDN;
+    s.onload = () => resolve(window.XLSX);
+    s.onerror = () => reject(new Error("Falha ao carregar a biblioteca de leitura de Excel."));
+    document.head.appendChild(s);
+  });
+}
+function isXlsxFile(file: File): boolean {
+  const n = file.name.toLowerCase();
+  return n.endsWith(".xlsx") || n.endsWith(".xls")
+    || file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    || file.type === "application/vnd.ms-excel";
+}
+async function parseXlsxToRows(buffer: ArrayBuffer): Promise<Record<string, string>[]> {
+  const XLSX = await loadXLSX();
+  const wb = XLSX.read(buffer, { type: "array" });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const json: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
+  return json.map((row) => {
+    const out: Record<string, string> = {};
+    for (const k of Object.keys(row)) out[k.trim()] = row[k] == null ? "" : String(row[k]).trim();
+    return out;
+  });
+}
+
 // ─── Mapas de normalização ─────────────────────────────────────────────────
 
 const SITUACAO_MAP: Record<string, string> = {

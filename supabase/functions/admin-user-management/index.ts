@@ -1,26 +1,72 @@
 /**
  * SEC-003 + SEC-004 — Edge Function: admin-user-management (hardened)
  *
- * SEC-003: CORS restrito, validação UUID, audit log, impede ação sobre si mesmo
+ * SEC-003: CORS multi-origin via allowlist, validação UUID, audit log, impede ação sobre si mesmo
  * SEC-004: Migrado de SUPABASE_SERVICE_ROLE_KEY para SUPABASE_SECRET_KEYS
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// SITE_URL deve ser a URL do frontend em produção (ex: https://axion.lovable.app)
+// SITE_URL é usado apenas para o redirectTo do link de recuperação
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:8080";
 const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
 
-// Fallback de produção quando origin/referer não estão disponíveis (proxy/firewall/anônimo)
 const PUBLIC_SITE_URL =
   Deno.env.get("PUBLIC_SITE_URL") ??
   (SITE_URL && SITE_URL !== "*" ? SITE_URL : "https://usesprintflow.lovable.app");
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin":  SITE_URL,
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+/**
+ * CORS multi-origin:
+ * Lê ALLOWED_ORIGINS da env (CSV). Se não definida, usa a allowlist padrão.
+ * Exemplo de env: "https://axionn.lovable.app,https://preview--axionn.lovable.app,http://localhost:8080"
+ */
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:8080",
+  "http://localhost:3000",
+  "https://axionn.lovable.app",
+  "https://usesprintflow.lovable.app",
+];
+
+function buildAllowedOrigins(): Set<string> {
+  const envOrigins = Deno.env.get("ALLOWED_ORIGINS");
+  if (envOrigins) {
+    const parsed = envOrigins.split(",").map((o) => o.trim()).filter(Boolean);
+    if (parsed.length > 0) return new Set(parsed);
+  }
+  // Inclui SITE_URL e PUBLIC_SITE_URL dinamicamente
+  const defaults = new Set(DEFAULT_ALLOWED_ORIGINS);
+  if (SITE_URL && SITE_URL !== "*") defaults.add(SITE_URL);
+  if (PUBLIC_SITE_URL && PUBLIC_SITE_URL !== "*") defaults.add(PUBLIC_SITE_URL);
+  return defaults;
+}
+
+/** Verifica se o origin é um subdomínio *.lovable.app */
+function isLovablePreview(origin: string): boolean {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".lovable.app");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Retorna os headers CORS para um origin permitido,
+ * ou null se o origin não estiver na allowlist.
+ */
+function getCorsHeaders(origin: string | null): Record<string, string> | null {
+  if (!origin) return null;
+  const allowed = buildAllowedOrigins();
+  if (allowed.has(origin) || isLovablePreview(origin)) {
+    return {
+      "Access-Control-Allow-Origin":  origin,
+      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Vary": "Origin",
+    };
+  }
+  return null;
+}
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -66,9 +112,25 @@ function generateTempPassword(): string {
 }
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
+  // Preflight OPTIONS
   if (req.method === "OPTIONS") {
+    if (!corsHeaders) {
+      return new Response(null, { status: 403 });
+    }
     return new Response(null, { status: 204, headers: corsHeaders });
   }
+
+  // Origin não permitido em requisições normais
+  if (!corsHeaders) {
+    return new Response(JSON.stringify({ error: "Origin não permitido" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -76,7 +138,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // ── 1. Autenticação ────────────────────────────────────────────────────
+    // ── 1. Autenticação ──────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
@@ -94,7 +156,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 2. Verificação de admin ────────────────────────────────────────────
+    // ── 2. Verificação de admin ───────────────────────────────────────────
     const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data: roleRow } = await adminClient
       .from("user_roles")
@@ -109,7 +171,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 3. Validação do payload ────────────────────────────────────────────
+    // ── 3. Validação do payload ──────────────────────────────────────────
     const body = await req.json().catch(() => ({}));
     const { action, user_id, new_email, mode, email_mode } = body as {
       action:      "change_email" | "reset_password";
@@ -131,7 +193,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 4. Impede ação sobre si mesmo ─────────────────────────────────────
+    // ── 4. Impede ação sobre si mesmo ────────────────────────────────────
     if (user_id === caller.id) {
       return new Response(JSON.stringify({ error: "Use as configurações de perfil para alterar seus próprios dados" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -143,8 +205,6 @@ Deno.serve(async (req: Request) => {
       payload: Record<string, unknown> = {}
     ) => {
       try {
-        // CORREÇÃO: Tabela user_management_audit_log tem estrutura diferente da fn_audit_log_insert genérica.
-        // Inserimos diretamente para evitar falhas de schema/RPC em produção.
         const { error } = await adminClient
           .from("user_management_audit_log")
           .insert({
@@ -159,7 +219,7 @@ Deno.serve(async (req: Request) => {
       }
     };
 
-    // ── 5. AÇÃO: change_email ──────────────────────────────────────────────
+    // ── 5. AÇÃO: change_email ──────────────────────────────────────────
     if (action === "change_email") {
       if (!new_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(new_email)) {
         return new Response(JSON.stringify({ error: "E-mail inválido" }), {
@@ -204,7 +264,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // ── 6. AÇÃO: reset_password ────────────────────────────────────────────
+    // ── 6. AÇÃO: reset_password ────────────────────────────────────────
     if (action === "reset_password") {
       const { data: profile } = await adminClient
         .from("profiles").select("email").eq("user_id", user_id).maybeSingle();
@@ -216,7 +276,6 @@ Deno.serve(async (req: Request) => {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        // Resolve origem com fallbacks robustos — headers podem ser omitidos por proxy/firewall
         const rawOrigin =
           req.headers.get("origin") ??
           req.headers.get("referer") ??
@@ -227,7 +286,6 @@ Deno.serve(async (req: Request) => {
           const u = new URL(rawOrigin);
           cleanOrigin = `${u.protocol}//${u.host}`;
         } catch {
-          // rawOrigin inválido (ex.: "*"); usa fallback
           cleanOrigin = PUBLIC_SITE_URL;
         }
         const redirectTo = `${cleanOrigin}/reset-password`;

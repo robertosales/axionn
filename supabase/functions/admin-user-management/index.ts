@@ -1,31 +1,11 @@
-/**
- * SEC-003 + SEC-004 — Edge Function: admin-user-management (hardened)
- *
- * SEC-003: CORS multi-origin via allowlist, validação UUID, audit log, impede ação sobre si mesmo
- * SEC-004: Migrado de SUPABASE_SERVICE_ROLE_KEY para SUPABASE_SECRET_KEYS
- *
- * FIX-CORS: isLovableDomain agora cobre TODOS os padrões de preview do Lovable:
- *   - *.lovable.app                          (ex: axionn.lovable.app)
- *   - id-preview--*.lovable.app              (ex: id-preview--f530dea0-....lovable.app)
- *   - *--*.lovable.app  (qualquer subdomain composto)
- *   - *.lovableproject.com
- */
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// SITE_URL é usado apenas para o redirectTo do link de recuperação
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:8080";
 const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
 
 const PUBLIC_SITE_URL =
-  Deno.env.get("PUBLIC_SITE_URL") ??
-  (SITE_URL && SITE_URL !== "*" ? SITE_URL : "https://usesprintflow.lovable.app");
+  Deno.env.get("PUBLIC_SITE_URL") ?? (SITE_URL && SITE_URL !== "*" ? SITE_URL : "https://usesprintflow.lovable.app");
 
-/**
- * CORS multi-origin:
- * Lê ALLOWED_ORIGINS da env (CSV). Se não definida, usa a allowlist padrão.
- * Exemplo: "https://axionn.lovable.app,https://preview--axionn.lovable.app,http://localhost:8080"
- */
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:8080",
   "http://localhost:3000",
@@ -36,7 +16,10 @@ const DEFAULT_ALLOWED_ORIGINS = [
 function buildAllowedOrigins(): Set<string> {
   const envOrigins = Deno.env.get("ALLOWED_ORIGINS");
   if (envOrigins) {
-    const parsed = envOrigins.split(",").map((o) => o.trim()).filter(Boolean);
+    const parsed = envOrigins
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
     if (parsed.length > 0) return new Set(parsed);
   }
   const defaults = new Set(DEFAULT_ALLOWED_ORIGINS);
@@ -45,39 +28,25 @@ function buildAllowedOrigins(): Set<string> {
   return defaults;
 }
 
-/**
- * Verifica se o origin é um domínio de preview/produção da plataforma Lovable.
- * Cobre TODOS os padrões:
- *   - *.lovable.app            (ex: axionn.lovable.app)
- *   - id-preview--*.lovable.app (ex: id-preview--f530dea0-acd2-48b7-934e-9a6bc39bcf02.lovable.app)
- *   - *.lovableproject.com     (ex: f530dea0-acd2-48b7-934e-9a6bc39bcf02.lovableproject.com)
- */
 function isLovableDomain(origin: string): boolean {
   try {
     const { hostname, protocol } = new URL(origin);
     if (protocol !== "https:") return false;
-    return (
-      hostname.endsWith(".lovable.app") ||
-      hostname.endsWith(".lovableproject.com")
-    );
+    return hostname.endsWith(".lovable.app") || hostname.endsWith(".lovableproject.com");
   } catch {
     return false;
   }
 }
 
-/**
- * Retorna os headers CORS para um origin permitido,
- * ou null se o origin não estiver na allowlist.
- */
 function getCorsHeaders(origin: string | null): Record<string, string> | null {
   if (!origin) return null;
   const allowed = buildAllowedOrigins();
   if (allowed.has(origin) || isLovableDomain(origin)) {
     return {
-      "Access-Control-Allow-Origin":  origin,
+      "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Vary": "Origin",
+      Vary: "Origin",
     };
   }
   return null;
@@ -85,12 +54,11 @@ function getCorsHeaders(origin: string | null): Record<string, string> | null {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// SEC-004: novas env vars (com fallback para compatibilidade durante transição)
-const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
-const _secretKeys   = Deno.env.get("SUPABASE_SECRET_KEYS");
-const _publishKeys  = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const _secretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
+const _publishKeys = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
 let SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-let ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY");
+let ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
 if (_secretKeys) {
   try {
@@ -115,30 +83,29 @@ if (!SERVICE_KEY || !ANON_KEY) {
 }
 
 function generateTempPassword(): string {
-  const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lower   = "abcdefghijkmnpqrstuvwxyz";
-  const digits  = "23456789";
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
   const symbols = "!@#$%&*";
-  const all     = upper + lower + digits + symbols;
-  const pick    = (s: string) => s[Math.floor(Math.random() * s.length)];
+  const all = upper + lower + digits + symbols;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
   let pwd = pick(upper) + pick(lower) + pick(digits) + pick(symbols);
   for (let i = 0; i < 8; i++) pwd += pick(all);
-  return pwd.split("").sort(() => Math.random() - 0.5).join("");
+  return pwd
+    .split("")
+    .sort(() => Math.random() - 0.5)
+    .join("");
 }
 
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
 
-  // Preflight OPTIONS
   if (req.method === "OPTIONS") {
-    if (!corsHeaders) {
-      return new Response(null, { status: 403 });
-    }
+    if (!corsHeaders) return new Response(null, { status: 403 });
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // Origin não permitido em requisições normais
   if (!corsHeaders) {
     return new Response(JSON.stringify({ error: "Origin não permitido" }), {
       status: 403,
@@ -148,30 +115,34 @@ Deno.serve(async (req: Request) => {
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   try {
-    // ── 1. Autenticação ──────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user: caller }, error: authErr } = await userClient.auth.getUser();
+    const {
+      data: { user: caller },
+      error: authErr,
+    } = await userClient.auth.getUser();
     if (authErr || !caller) {
       return new Response(JSON.stringify({ error: "Token inválido" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ── 2. Verificação de admin ───────────────────────────────────────────
     const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data: roleRow } = await adminClient
       .from("user_roles")
@@ -182,68 +153,68 @@ Deno.serve(async (req: Request) => {
 
     if (!roleRow) {
       return new Response(JSON.stringify({ error: "Apenas administradores podem executar esta ação" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ── 3. Validação do payload ──────────────────────────────────────────
     const body = await req.json().catch(() => ({}));
     const { action, user_id, new_email, mode, email_mode } = body as {
-      action:      "change_email" | "reset_password";
-      user_id:     string;
-      new_email?:  string;
-      mode?:       "temp_password" | "send_link";
+      action: "change_email" | "reset_password";
+      user_id: string;
+      new_email?: string;
+      mode?: "temp_password" | "send_link";
       email_mode?: "confirm" | "direct";
     };
 
     if (!action || !user_id) {
       return new Response(JSON.stringify({ error: "action e user_id obrigatórios" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (!UUID_REGEX.test(user_id)) {
       return new Response(JSON.stringify({ error: "user_id deve ser um UUID válido" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ── 4. Impede ação sobre si mesmo ────────────────────────────────────
     if (user_id === caller.id) {
-      return new Response(JSON.stringify({ error: "Use as configurações de perfil para alterar seus próprios dados" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Use as configurações de perfil para alterar seus próprios dados" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const auditLog = async (
-      auditAction: string,
-      payload: Record<string, unknown> = {}
-    ) => {
+    const auditLog = async (auditAction: string, payload: Record<string, unknown> = {}) => {
       try {
         const { error } = await adminClient
           .from("user_management_audit_log")
-          .insert({
-            actor_id:  caller.id,
-            target_id: user_id,
-            action:    auditAction,
-            payload:   payload,
-          });
+          .insert({ actor_id: caller.id, target_id: user_id, action: auditAction, payload });
         if (error) console.error("[admin-user-management] Erro Auditoria:", error.message);
       } catch (e) {
         console.error("[admin-user-management] Falha na auditoria (best-effort):", e);
       }
     };
 
-    // ── 5. AÇÃO: change_email ──────────────────────────────────────────
     if (action === "change_email") {
       if (!new_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(new_email)) {
         return new Response(JSON.stringify({ error: "E-mail inválido" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const { data: currentProfile } = await adminClient
-        .from("profiles").select("email").eq("user_id", user_id).maybeSingle();
+        .from("profiles")
+        .select("email")
+        .eq("user_id", user_id)
+        .maybeSingle();
 
       const isDirect = email_mode === "direct";
       const { error } = await adminClient.auth.admin.updateUserById(user_id, {
@@ -263,8 +234,8 @@ Deno.serve(async (req: Request) => {
 
       await auditLog("change_email", {
         old_email: currentProfile?.email ?? null,
-        new_email: new_email,
-        mode: isDirect ? "direct" : "confirm"
+        new_email,
+        mode: isDirect ? "direct" : "confirm",
       });
 
       return new Response(
@@ -279,23 +250,19 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // ── 6. AÇÃO: reset_password ────────────────────────────────────────
     if (action === "reset_password") {
-      const { data: profile } = await adminClient
-        .from("profiles").select("email").eq("user_id", user_id).maybeSingle();
+      const { data: profile } = await adminClient.from("profiles").select("email").eq("user_id", user_id).maybeSingle();
       const targetEmail = profile?.email;
 
       if (mode === "send_link") {
         if (!targetEmail) {
           return new Response(JSON.stringify({ error: "Usuário sem e-mail cadastrado" }), {
-            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const rawOrigin =
-          req.headers.get("origin") ??
-          req.headers.get("referer") ??
-          PUBLIC_SITE_URL;
 
+        const rawOrigin = req.headers.get("origin") ?? req.headers.get("referer") ?? PUBLIC_SITE_URL;
         let cleanOrigin = PUBLIC_SITE_URL;
         try {
           const u = new URL(rawOrigin);
@@ -303,12 +270,11 @@ Deno.serve(async (req: Request) => {
         } catch {
           cleanOrigin = PUBLIC_SITE_URL;
         }
-        const redirectTo = `${cleanOrigin}/reset-password`;
 
         const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
           type: "recovery",
           email: targetEmail,
-          options: { redirectTo },
+          options: { redirectTo: `${cleanOrigin}/reset-password` },
         });
         if (linkErr) throw linkErr;
 
@@ -329,10 +295,7 @@ Deno.serve(async (req: Request) => {
       const { error: updErr } = await adminClient.auth.admin.updateUserById(user_id, { password: tempPassword });
       if (updErr) throw updErr;
 
-      await adminClient.from("profiles")
-        .update({ must_change_password: true })
-        .eq("user_id", user_id);
-
+      await adminClient.from("profiles").update({ must_change_password: true }).eq("user_id", user_id);
       await auditLog("reset_password", { mode: "temp_password", must_change_password: true });
 
       return new Response(
@@ -349,14 +312,15 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(JSON.stringify({ error: "Ação desconhecida" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Erro interno";
     console.error("[admin-user-management]", msg);
     return new Response(JSON.stringify({ error: msg }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

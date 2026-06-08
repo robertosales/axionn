@@ -9,9 +9,13 @@ import { toast }                    from 'sonner';
 import { supabase }                 from '@/integrations/supabase/client';
 import * as svc                     from '../services/demandas.service';
 import type { Demanda, DemandaHour } from '../types/demanda';
-import { REQUIRES_JUSTIFICATIVA }   from '../types/demanda';
+import { REQUIRES_JUSTIFICATIVA, ALL_SITUACOES } from '../types/demanda';
 import { KEYS }                     from '@/lib/queryKeys';
 import { STALE }                    from '@/lib/queryClient';
+
+// Exports de compatibilidade (usados por outros módulos)
+export const DEMANDAS_QUERY_KEY = 'demandas';
+export const ALL_VALID_SITUACOES = ALL_SITUACOES as readonly string[];
 
 // ── useDemandas ──────────────────────────────────────────────────────────────
 export function useDemandas() {
@@ -135,6 +139,15 @@ export function useDemandas() {
   };
 
   return { demandas, loading, error, reload: invalidateAll, create, update, moveTo, remove };
+}
+
+// Alias para compatibilidade com código legado que usava useDemandas com opções
+export function useDemandasByStatus(teamId?: string) {
+  return useDemandas();
+}
+
+export function useDemandasConcluidas(teamId?: string) {
+  return useDemandas();
 }
 
 // ── useTransitions ───────────────────────────────────────────────────────────

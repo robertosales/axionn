@@ -86,10 +86,38 @@ export function useCapacityPlanner() {
   const [selectedTeam,     setSelectedTeam]     = useState("all");
   const cancelledRef = useRef(false);
 
+  /**
+   * fix(capacidade-dedup): `useAuth().teams` contém uma entrada por
+   * (time × módulo) desde o fix teams-dedup-v2 no AuthContext.
+   * Isso causava times duplicados no <Select> e IDs repetidos enviados
+   * à RPC, resultando em integrantes e capacidades incorretos.
+   *
+   * `uniqueTeams` garante exatamente uma entrada por `team.id`,
+   * preservando o primeiro módulo encontrado para cada time.
+   */
+  const uniqueTeams = useMemo(() => {
+    const seen = new Set<string>();
+    return teams.filter(t => {
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+  }, [teams]);
+
+  /**
+   * `teamMap` indexado por id único — usado no enrichment para recuperar
+   * nome e módulo do time retornado pela RPC.
+   * Mantém compatibilidade com a lógica anterior que usava teams.map(t => [t.id, t]).
+   */
+  const teamMap = useMemo(
+    () => Object.fromEntries(uniqueTeams.map(t => [t.id, t])),
+    [uniqueTeams]
+  );
+
   const load = useCallback(async () => {
     cancelledRef.current = false;
 
-    if (teams.length === 0) {
+    if (uniqueTeams.length === 0) {
       setTeamCapacities([]);
       setLoading(false);
       return;
@@ -99,7 +127,8 @@ export function useCapacityPlanner() {
     setError(null);
 
     try {
-      const teamIds = teams.map(t => t.id);
+      // IDs únicos — sem duplicatas por (time × módulo)
+      const teamIds = uniqueTeams.map(t => t.id);
 
       // undefined → Supabase omite o parâmetro → PostgreSQL usa DEFAULT NULL
       const teamId  = selectedTeam !== "all" ? selectedTeam : undefined;
@@ -115,8 +144,7 @@ export function useCapacityPlanner() {
       if (rpcErr) throw rpcErr;
       if (cancelledRef.current) return;
 
-      const rows    = (data ?? []) as unknown as RpcTeamRow[];
-      const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
+      const rows = (data ?? []) as unknown as RpcTeamRow[];
 
       const enriched: TeamCapacity[] = rows.map(row => {
         const teamInfo   = teamMap[row.teamId];
@@ -173,7 +201,7 @@ export function useCapacityPlanner() {
     } finally {
       if (!cancelledRef.current) setLoading(false);
     }
-  }, [teams, selectedTeam]);
+  }, [uniqueTeams, teamMap, selectedTeam]);
 
   useEffect(() => {
     load();
@@ -205,5 +233,7 @@ export function useCapacityPlanner() {
     selectedTeam,
     setSelectedTeam,
     reload: load,
+    /** Lista de times sem duplicatas — use para popular o <Select> */
+    uniqueTeams,
   };
 }

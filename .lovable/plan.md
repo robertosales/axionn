@@ -1,61 +1,71 @@
-# Correção do redirecionamento de módulo no login
+## Objetivo
 
-## Diagnóstico
+Hoje o Painel de Capacidade (`/admin/capacidade`) só mostra times de Sala Ágil porque a RPC `get_capacity_planner` é baseada em `developers` + sprints + `user_stories`. Vamos estender para também listar **todos os membros dos times de Sustentação** (Time 1, Time 2, Time 3 e demais) com indicadores de ociosidade, WIP e sobrecarga — usando a fonte de dados própria de Sustentação (`team_members` + `demanda_responsaveis` + `demanda_hours`).
 
-Verifiquei o cadastro da Rejane no banco:
+## Regras combinadas
 
-- `profiles.module_access = 'sustentacao'`
-- `user_module_roles = [sustentacao:qa]`
-- `team_members`: 3 times, todos do módulo `sustentacao`
-- Nenhum vínculo com `sala_agil`
-
-Ou seja, o cadastro está **correto**. O problema é de código.
-
-### Causa raiz (race condition no AuthContext)
-
-Em `src/contexts/AuthContext.tsx`, dentro de `onAuthStateChange` (linhas 282-303), quando o usuário faz login:
-
-1. `setSession(session)` é chamado imediatamente.
-2. `loadUserData` (que busca `profile`, `user_roles` e `user_module_roles`) é disparado em `setTimeout(..., 0)` **sem reativar `loading=true`**.
-3. Como `loading` já é `false` desde o `getSession` inicial, o `AuthRoute` em `App.tsx` re-renderiza com `session` presente mas `moduleRoles` **ainda vazio** (estado do usuário anterior ou inicial).
-4. `hasModuleAccess("sustentacao")` retorna `false` → cai no `return <Navigate to="/sala-agil/dashboard" replace />` (fallback final).
-
-A mesma lógica de fallback aparece em três lugares (`AuthRoute`, `ModuleRedirect`, raiz `/`), todos defaultando para `sala-agil`, o que mascara o bug para qualquer usuário cujo carregamento de `moduleRoles` chegue depois do primeiro redirect.
+- **Capacidade**: 40h por semana corrente (segunda → sexta).
+- **Realizado**: soma de `demanda_hours.horas` lançadas pelo usuário na semana corrente.
+- **WIP**: nº de demandas em aberto (situação ≠ `aceite_final`/`cancelada`/`fila_concluida`) onde o usuário está em `demanda_responsaveis` (qualquer papel).
+- **Status do membro**:
+  - `idle` (Ocioso): WIP = 0 e Realizado = 0
+  - `overloaded` (Sobrecarregado): Realizado > 40h OU WIP > 5
+  - `warning` (Atenção): Realizado entre 32h e 40h, ou WIP entre 4 e 5
+  - `ok`: tem WIP e está dentro do limite
+- **Membros listados**: todos os usuários ativos de `team_members` cujo time tem `module = 'sustentacao'`. Não depende mais da tabela `developers`.
 
 ## Mudanças
 
-### 1. `src/contexts/AuthContext.tsx` — eliminar a race
+### 1. Backend — nova RPC `get_capacity_planner_sustentacao`
 
-No callback de `onAuthStateChange`, quando há sessão nova (login):
-- Chamar `setLoading(true)` **antes** de disparar `loadUserData`.
-- Manter `loadUserData` em `setTimeout(..., 0)` para não segurar o lock do GoTrue.
-- Garantir `setLoading(false)` no `.finally()` (já existe).
+Criar função SECURITY DEFINER que recebe `p_team_ids uuid[]` e retorna a mesma estrutura JSON usada hoje (`teamId`, `sprintAtivo` = null, `devs[]`, totais). Para cada time:
 
-Isso faz com que `AuthRoute`/`ProtectedRoute` exibam o `PageLoader` até `moduleRoles` estar populado, evitando redirect com estado parcial.
+- Lista membros via `team_members → profiles` (apenas `is_active = true`).
+- Para cada membro calcula `allocatedHours = 0` (não aplicável), `realizedHours`, `wipCount`, `husCount = wipCount`, `unestimatedCount = 0`.
+- Janela: `date_trunc('week', now())` até `date_trunc('week', now()) + interval '5 days'` (seg-sex).
+- Totais do time agregando os membros.
 
-### 2. `src/App.tsx` — fallback seguro baseado em `profile.module_access`
+Validar acesso com `_assert_team_access(p_team_ids)` (mesma função já usada).
 
-Substituir o fallback `Navigate to="/sala-agil/dashboard"` em `AuthRoute` e `ModuleRedirect` por uma função `resolveHome(profile, hasModuleAccess, isAdmin)` com a seguinte prioridade:
+### 2. Hook `useCapacityPlanner`
 
-1. `isAdmin || module_access === 'admin'` → `/dashboard-admin`
-2. Se `hasModuleAccess('sustentacao')` e não tem `sala_agil` → `/sustentacao`
-3. Se `hasModuleAccess('sala_agil')` e não tem `sustentacao` → `/sala-agil/dashboard`
-4. Se `hasModuleAccess('rdm')` exclusivo → `/rdm`
-5. Se tem **mais de um** módulo → `/modulos` (selector)
-6. Se `moduleRoles` vazio mas `profile.module_access` definido → usar `module_access` como autoridade (mesma lógica acima)
-7. Último recurso (sem profile e sem moduleRoles) → `/modulos`
+- Particionar `uniqueTeams` em `agilTeams` e `sustentacaoTeams` por `team.module`.
+- Disparar 2 chamadas RPC em paralelo:
+  - `get_capacity_planner` (apenas times ágeis)
+  - `get_capacity_planner_sustentacao` (apenas times sustentação)
+- Concatenar os resultados e enriquecer normalmente.
+- Ajustar `calcStatus` para suportar a semântica de Sustentação (WIP > 5 → overloaded; WIP = 0 e realizado = 0 → idle).
 
-Isso remove o viés de "default = sala_agil" que mascarava o problema para todos os usuários, não só a Rejane.
+### 3. UI — `CapacityGrid` / `CapacityBar`
 
-### 3. Validação
+- Adicionar variante visual para times Sustentação (ícone `Shield` violet já existe; trocar p/ azul conforme regra de cor do módulo).
+- Quando `sprintAtivo` for null e o time for Sustentação, exibir "Semana corrente (seg-sex)" no header em vez de sprint.
+- Coluna "Aloc." é substituída por "WIP" (nº de demandas em aberto) para linhas de Sustentação. Cap. fixo 40h, Real. = horas lançadas na semana.
 
-- Login da Rejane (`module_access=sustentacao`) → deve ir para `/sustentacao`.
-- Login de admin → `/dashboard-admin`.
-- Usuário com sala_agil + sustentacao → `/modulos`.
-- Usuário só sala_agil → `/sala-agil/dashboard`.
-- Verificar console: não deve haver redirect intermediário para `/sala-agil` antes do destino correto.
+### 4. `AdminCapacidadePage`
+
+- Sem mudanças estruturais; o seletor de times já popula a partir de `uniqueTeams` (que inclui ambos os módulos).
+- Atualizar contador do header para mostrar "X devs (Ágil) · Y analistas (Sustentação)".
+
+## Pontos técnicos
+
+```text
+get_capacity_planner_sustentacao(p_team_ids)
+ ├─ assert acesso
+ ├─ FOR EACH team_id:
+ │   ├─ membros = SELECT user_id FROM team_members JOIN profiles (is_active)
+ │   ├─ janela = [monday(now), friday(now) 23:59:59]
+ │   ├─ realized = SUM(demanda_hours.horas WHERE user_id=mem AND data_lancamento IN janela)
+ │   ├─ wip = COUNT(demanda_responsaveis JOIN demandas
+ │   │            WHERE user_id=mem AND situacao NOT IN
+ │   │            ('aceite_final','cancelada','fila_concluida','rejeitada'))
+ │   └─ build dev jsonb
+ └─ retorna jsonb estrutura compatível
+```
+
+A RPC e os fixes do hook/UI são pequenos e não tocam em fluxo de Sala Ágil.
 
 ## Fora de escopo
 
-- Não altero schema nem dados de usuários.
-- Não mexo na lógica de troca de senha obrigatória nem na importação de demandas.
+- Editar capacidade individual por membro (continua 40h fixos).
+- Histórico semanal / gráfico de tendência (pode vir depois).

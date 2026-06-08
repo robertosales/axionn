@@ -22,6 +22,22 @@ const instrumentedFetch: typeof fetch = (url, options) => {
     ? (() => { try { return new URL(url).pathname; } catch { return String(url); } })()
     : String(url);
 
+  // Endpoints de autenticação NÃO devem passar por retry nem circuit-breaker.
+  // O GoTrue/Supabase Auth client mantém um lock local (`lock:sb-...-auth-token`)
+  // por requisição; se nosso retry disparar uma segunda chamada concorrente,
+  // ela rouba o lock e o updateUser/getSession explode com
+  // "Lock ... was released because another request stole it".
+  // Especialmente crítico para PUT /auth/v1/user (troca de senha).
+  const isAuthRequest = /\/auth\/v\d+\//.test(path);
+  if (isAuthRequest) {
+    return fetch(url, options).then((res) => {
+      const ms = Math.round(performance.now() - start);
+      if (ms > 1_000) console.warn(`[Supabase AUTH SLOW] ${ms} ms → ${path}`);
+      if (!res.ok)    console.error(`[Supabase AUTH ERROR] HTTP ${res.status} → ${path}`);
+      return res;
+    });
+  }
+
   // AbortController para o timeout — independente do AbortController do chamador
   const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => {

@@ -30,6 +30,13 @@ const instrumentedFetch: typeof fetch = (url, options) => {
   // Especialmente crítico para PUT /auth/v1/user (troca de senha).
   const isAuthRequest = /\/auth\/v\d+\//.test(path);
   if (isAuthRequest) {
+    // Contador global de chamadas a /auth/v1/user — usado pelo
+    // ForcePasswordChange para diagnóstico (exibe quantos PUT /user
+    // foram disparados durante a troca de senha).
+    if (/\/auth\/v\d+\/user(\b|\/|\?|$)/.test(path)) {
+      const w = window as unknown as { __authUserCallCount?: number };
+      w.__authUserCallCount = (w.__authUserCallCount ?? 0) + 1;
+    }
     return fetch(url, options).then((res) => {
       const ms = Math.round(performance.now() - start);
       if (ms > 1_000) console.warn(`[Supabase AUTH SLOW] ${ms} ms → ${path}`);

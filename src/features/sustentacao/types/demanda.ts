@@ -87,7 +87,7 @@ export const FASE_LABELS: Record<string, string> = {
 };
 
 export const REQUIRES_JUSTIFICATIVA = ["rejeitada", "cancelada", "planejamento_ag_aprovacao"] as const;
-export const TERMINAL_STATUSES = ["ag_aceite_final", "cancelada", "fila_concluida"] as const;
+export const TERMINAL_STATUSES = ["ag_aceite_final", "cancelada"] as const;
 
 export interface Demanda {
   id: string;

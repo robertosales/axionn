@@ -1,8 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { DEMANDAS_QUERY_KEY } from "./useDemandas";
 import type { Demanda } from "../types/demanda";
 import { TERMINAL_STATUSES } from "../types/demanda";
+
+// Inline constant — evita dependência de import de useDemandas.ts
+const DEMANDAS_QUERY_KEY = "demandas";
 
 type UpdateDemandaPayload = Partial<Omit<Demanda, "id" | "created_at" | "team_id">> & {
   id: string;
@@ -10,14 +12,12 @@ type UpdateDemandaPayload = Partial<Omit<Demanda, "id" | "created_at" | "team_id
 
 async function updateDemanda(payload: UpdateDemandaPayload): Promise<Demanda> {
   const { id, ...rest } = payload;
-
   const { data, error } = await supabase
     .from("demandas")
     .update(rest)
     .eq("id", id)
     .select()
     .single();
-
   if (error) throw new Error(error.message);
   return data as Demanda;
 }
@@ -28,26 +28,20 @@ async function transitionDemanda(params: {
   justificativa?: string;
 }): Promise<Demanda> {
   const isTerminal = (TERMINAL_STATUSES as readonly string[]).includes(params.situacao);
-
   const updatePayload: Record<string, unknown> = {
     situacao: params.situacao,
     situacao_changed_at: new Date().toISOString(),
   };
-
-  // Para fila_concluida, registra a data de aceite automaticamente
   if (params.situacao === "fila_concluida") {
     updatePayload.aceite_data = new Date().toISOString();
   }
-
   const { data, error } = await supabase
     .from("demandas")
     .update(updatePayload)
     .eq("id", params.id)
     .select()
     .single();
-
   if (error) throw new Error(error.message);
-
   if (params.justificativa) {
     await supabase.from("demanda_transitions").insert({
       demanda_id: params.id,
@@ -55,7 +49,6 @@ async function transitionDemanda(params: {
       justificativa: params.justificativa,
     });
   }
-
   void isTerminal;
   return data as Demanda;
 }
@@ -68,7 +61,6 @@ async function createDemanda(
     .insert(payload)
     .select()
     .single();
-
   if (error) throw new Error(error.message);
   return data as Demanda;
 }

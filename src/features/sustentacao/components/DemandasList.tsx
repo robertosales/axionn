@@ -97,8 +97,8 @@ export function DemandasList() {
     return lista.find((r) => r.papel === papelEsperado)?.display_name ?? lista[0]?.display_name ?? null;
   }
 
-  const situacoesUnicas = useMemo(() => [...new Set(demandas.map((d) => d.situacao))], [demandas]);
-  const tiposUnicos     = useMemo(() => [...new Set(demandas.map((d) => d.tipo))], [demandas]);
+  const situacoesUnicas = useMemo(() => [...new Set(sourceDemandas.map((d) => d.situacao))], [sourceDemandas]);
+  const tiposUnicos     = useMemo(() => [...new Set(sourceDemandas.map((d) => d.tipo))], [sourceDemandas]);
 
   const filtered = useMemo(
     () =>

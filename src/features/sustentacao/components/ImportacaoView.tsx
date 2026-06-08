@@ -404,7 +404,7 @@ export function ImportacaoView() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-base font-semibold text-foreground">Demandas (Redmine)</p>
-              <p className="text-sm text-muted-foreground mt-0.5">Importar planilha .csv exportada do Redmine</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Importar planilha .csv ou .xlsx exportada do Redmine</p>
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
@@ -417,7 +417,7 @@ export function ImportacaoView() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-base font-semibold text-foreground">Projetos de Sustentação</p>
-              <p className="text-sm text-muted-foreground mt-0.5">Importar sistemas de sustentação via .csv</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Importar sistemas de sustentação via .csv ou .xlsx</p>
             </div>
             <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
           </button>
@@ -474,8 +474,8 @@ export function ImportacaoView() {
               </h1>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {isDemandas
-                  ? "Faça upload do arquivo .csv exportado do Redmine para revisar e migrar as demandas."
-                  : "Faça upload do arquivo .csv com os projetos de sustentação a serem cadastrados."
+                  ? "Faça upload do arquivo .csv ou .xlsx exportado do Redmine para revisar e migrar as demandas."
+                  : "Faça upload do arquivo .csv ou .xlsx com os projetos de sustentação a serem cadastrados."
                 }
               </p>
             </div>

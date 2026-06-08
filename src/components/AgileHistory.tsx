@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const db = supabase as any;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SizeKey = "P" | "M" | "G" | "GG" | "XG";
@@ -353,7 +355,7 @@ export function AgileHistory() {
   // ─── Loaders ──────────────────────────────────────────────────────────────
 
   const loadProfiles = useCallback(async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("profiles")
       .select("user_id, display_name")
       .eq("is_active", true);
@@ -368,7 +370,7 @@ export function AgileHistory() {
 
   const loadPlanningSessions = useCallback(async () => {
     if (!currentTeamId) return;
-    const { data } = await supabase
+    const { data } = await db
       .from("planning_sessions")
       .select("*")
       .eq("team_id", currentTeamId)
@@ -381,7 +383,7 @@ export function AgileHistory() {
 
     for (const s of data) {
       const sprint = sprints.find((sp) => sp.id === s.sprint_id);
-      const { data: votes } = await supabase
+      const { data: votes } = await db
         .from("planning_votes")
         .select("hu_id, user_id, vote_value")
         .eq("session_id", s.id);
@@ -442,7 +444,7 @@ export function AgileHistory() {
 
   const loadRetroSessions = useCallback(async () => {
     if (!currentTeamId) return;
-    const { data } = await supabase
+    const { data } = await db
       .from("retro_sessions")
       .select("*")
       .eq("team_id", currentTeamId)

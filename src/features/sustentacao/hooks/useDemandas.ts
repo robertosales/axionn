@@ -80,8 +80,8 @@ export function useDemandas() {
       const msg  = String(err?.message ?? '');
       const details = String(err?.details ?? '');
       const blob = `${msg} ${details}`;
-      if (code === '23505' && blob.includes('demandas_team_id_rhm_key')) {
-        toast.error(`Já existe uma demanda com o número #${d.rhm ?? ''} neste time. Use outro número.`);
+      if (code === '23505' && (blob.includes('demandas_team_rhm_projeto_uniq_idx') || blob.includes('demandas_team_id_rhm_key'))) {
+        toast.error(`Já existe uma demanda com o número #${d.rhm ?? ''} no projeto "${d.projeto ?? ''}".`);
       } else if (code === '23505' || blob.includes('demandas_no_duplicates_idx')) {
         toast.error('Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time.');
       } else {

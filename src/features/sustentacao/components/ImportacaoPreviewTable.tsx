@@ -84,7 +84,7 @@ const TIPO_ACAO_CONFIG: Record<
   { label: string; icon: React.ElementType; pill: string }
 > = {
   novo:           { label: "Novo",           icon: PlusCircle,  pill: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
-  atualizacao:    { label: "Atualização",    icon: RefreshCw,   pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" },
+  atualizacao:    { label: "Atualizar situação", icon: RefreshCw, pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" },
   sem_alteracao:  { label: "Sem alteração",  icon: MinusCircle, pill: "bg-muted text-muted-foreground border-border" },
   erro_validacao: { label: "Erro",           icon: XCircle,     pill: "bg-destructive/10 text-destructive border-destructive/20" },
 };
@@ -272,7 +272,7 @@ export function ImportacaoPreviewTable({
               <TableHead className="w-[160px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Projeto</TableHead>
               <TableHead className="w-[140px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status Planilha</TableHead>
               <TableHead className="w-[140px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status Sistema</TableHead>
-              <TableHead className="            text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Diferença</TableHead>
+              <TableHead className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Resultado da Migração</TableHead>
               <TableHead className="w-[130px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Ação</TableHead>
               <TableHead className="w-[110px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pr-4">Progresso</TableHead>
             </TableRow>
@@ -331,12 +331,39 @@ export function ImportacaoPreviewTable({
                     )}
                   </TableCell>
 
-                  {/* Diferença */}
+                  {/* Resultado da Migração */}
                   <TableCell className="text-xs py-3.5 pr-2">
-                    {row.tipoAcao === "atualizacao" && row.diferenca ? (
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">{row.diferenca}</span>
+                    {row.tipoAcao === "atualizacao" ? (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Atual:</span>
+                          <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">
+                            {labelSituacao(row.situacaoSistema)}
+                          </span>
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold">→</span>
+                          <span className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Final:</span>
+                          <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 font-semibold">
+                            {labelSituacao(row.situacao)}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground italic">
+                          Situação do sistema será substituída pela situação da planilha.
+                        </span>
+                      </div>
                     ) : row.tipoAcao === "novo" ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">Será criado</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="text-emerald-700 dark:text-emerald-400 font-medium">Será criado com situação:</span>
+                        <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-semibold">
+                          {labelSituacao(row.situacao)}
+                        </span>
+                      </span>
+                    ) : row.tipoAcao === "sem_alteracao" ? (
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        Situação mantida:
+                        <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-muted border border-border font-medium">
+                          {labelSituacao(row.situacao)}
+                        </span>
+                      </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
@@ -374,12 +401,17 @@ export function ImportacaoPreviewTable({
       </div>
 
       {/* ── Legenda ── */}
-      {counts.atualizacoes > 0 && (
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 px-6 py-2 border-t border-border/50">
-          <span className="inline-block w-2.5 h-4 rounded-sm bg-amber-400 dark:bg-amber-500 shrink-0" />
-          Linhas com borda laranja possuem diferença de status entre planilha e sistema.
+      <div className="px-6 py-2 border-t border-border/50 space-y-1">
+        {counts.atualizacoes > 0 && (
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <span className="inline-block w-2.5 h-4 rounded-sm bg-amber-400 dark:bg-amber-500 shrink-0" />
+            Linhas destacadas terão a situação do sistema substituída pela situação da planilha.
+          </p>
+        )}
+        <p className="text-[11px] text-muted-foreground italic">
+          A planilha é a fonte oficial. Em caso de divergência, a situação atual do sistema é sobrescrita pela situação da planilha.
         </p>
-      )}
+      </div>
 
       {/* ── Paginação ── */}
       {displayRows.length > 0 && (

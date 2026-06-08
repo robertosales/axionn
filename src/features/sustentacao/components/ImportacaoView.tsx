@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Upload, FileSpreadsheet, CheckCircle2, AlertCircle,
@@ -156,6 +156,9 @@ interface FailedRow { rhm: string; projeto: string; motivo: string; }
 export function ImportacaoView() {
   const { currentTeamId } = useAuth();
   const { projetos, reload: reloadProjetos } = useProjetos({ allTeams: true });
+
+  // Pré-carrega o SheetJS em background para uploads .xlsx mais rápidos
+  useEffect(() => { loadXLSX().catch(() => {}); }, []);
 
   const [mode, setMode]                         = useState<ImportMode>(null);
   const [loading, setLoading]                   = useState(false);

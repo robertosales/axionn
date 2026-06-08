@@ -280,17 +280,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (_event, session) => {
         if (!mountedRef.current) return;
         setSession(session);
         setUser(session?.user ?? null);
+
+        // IMPORTANTE: o callback de onAuthStateChange roda dentro do lock interno
+        // do auth client. Não aguardar queries aqui; isso segura o lock durante a
+        // troca de senha e permite que outra chamada o roube após o timeout.
         if (session?.user) {
           if (!initialised) return;
-          await loadUserData(session.user.id);
+          const userId = session.user.id;
+          setTimeout(() => {
+            void loadUserData(userId).finally(() => {
+              if (mountedRef.current) setLoading(false);
+            });
+          }, 0);
         } else {
           resetAuthState();
+          if (mountedRef.current && initialised) setLoading(false);
         }
-        if (mountedRef.current && initialised) setLoading(false);
       }
     );
 

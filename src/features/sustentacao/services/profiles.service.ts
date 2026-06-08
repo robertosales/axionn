@@ -79,7 +79,18 @@ export async function fetchResponsaveisByDemandaIds(
   return map;
 }
 
-/** Search profiles by display_name (ilike). Returns up to `limit` rows. Only active. */
+/**
+ * Search profiles by display_name (ilike) filtered to active team members.
+ *
+ * FIX: a abordagem anterior usava JOIN profiles!inner a partir de team_members
+ * e aplicava .eq/.ilike sobre a tabela relacionada. O PostgREST do Supabase
+ * ignora silenciosamente esses filtros quando a tabela-raiz do .from() não é
+ * a tabela filtrada, retornando [] sem erro.
+ *
+ * Nova estratégia em 2 etapas:
+ *  1. Busca os user_ids dos membros do time (team_members).
+ *  2. Filtra profiles diretamente com .in + .ilike + .eq na tabela raiz.
+ */
 export async function searchProfilesByName(
   query: string,
   limit = 5,
@@ -87,18 +98,37 @@ export async function searchProfilesByName(
 ): Promise<Array<{ id: string; user_id: string; display_name: string }>> {
   if (!query || query.length < 2) return [];
   if (!teamId) return [];
-  // Restringe a membros do time ativo via JOIN inner com team_members
-  const { data } = await supabase
+
+  // Etapa 1 — user_ids dos membros do time
+  const { data: members, error: membersError } = await supabase
     .from("team_members")
-    .select("user_id, profiles!inner(id, user_id, display_name, is_active)")
-    .eq("team_id", teamId)
-    .eq("profiles.is_active", true)
-    .ilike("profiles.display_name", `%${query}%`)
+    .select("user_id")
+    .eq("team_id", teamId);
+
+  if (membersError || !members || members.length === 0) return [];
+
+  const userIds = (members as any[]).map((m) => m.user_id).filter(Boolean);
+  if (userIds.length === 0) return [];
+
+  // Etapa 2 — filtra profiles diretamente (filtros na tabela raiz, sem JOIN)
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, user_id, display_name")
+    .in("user_id", userIds)
+    .eq("is_active", true)
+    .ilike("display_name", `%${query}%`)
     .limit(limit);
-  return ((data ?? []) as any[])
-    .map((r) => r.profiles)
-    .filter(Boolean)
-    .map((p: any) => ({ id: p.id, user_id: p.user_id, display_name: p.display_name }));
+
+  if (error) {
+    console.error("[searchProfilesByName] erro ao buscar profiles:", error.message);
+    return [];
+  }
+
+  return ((data ?? []) as any[]).map((p) => ({
+    id: p.id,
+    user_id: p.user_id,
+    display_name: p.display_name,
+  }));
 }
 
 /**

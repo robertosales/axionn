@@ -43,9 +43,7 @@ export default function ImportacaoPreviewTable({ rows }: Props) {
             return (
               <tr
                 key={i}
-                className={`border-t transition-colors hover:bg-muted/30 ${
-                  isConcluida ? "bg-green-50/40" : ""
-                }`}
+                className={`border-t transition-colors hover:bg-muted/30 ${isConcluida ? "bg-green-50/40" : ""}`}
               >
                 <td className="px-3 py-2 font-mono text-xs">{row.rhm || "—"}</td>
                 <td className="px-3 py-2 max-w-xs truncate" title={row.titulo}>

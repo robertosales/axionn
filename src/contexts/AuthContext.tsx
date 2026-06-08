@@ -291,6 +291,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           if (!initialised) return;
           const userId = session.user.id;
+          // Marca loading=true para evitar que guards de rota redirecionem
+          // com moduleRoles ainda vazio (race que mandava todos para /sala-agil).
+          if (mountedRef.current) setLoading(true);
           setTimeout(() => {
             void loadUserData(userId).finally(() => {
               if (mountedRef.current) setLoading(false);

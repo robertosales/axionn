@@ -1,28 +1,61 @@
-## Causa raiz
+# Correção do redirecionamento de módulo no login
 
-A importação mostra "155 erros / 0 atualizados" porque a tabela `demandas` tem uma CHECK constraint antiga (`demandas_situacao_check`) que **não inclui o status `fila_concluida`**. O export do Redmine traz muitas linhas "Concluída" → normalizadas para `fila_concluida` → toda tentativa de UPDATE/INSERT viola o CHECK. A RPC `upsert_demandas_batch` engole o erro num `EXCEPTION WHEN OTHERS`, conta como erro e segue, sem reportar o motivo.
+## Diagnóstico
 
-Hoje em produção há 0 demandas com `fila_concluida` (justamente porque o CHECK bloqueia), mas o trigger `validate_demanda_transition`, o front (`ALL_SITUACOES`) e o normalizador da importação já tratam esse status como válido — só faltou alinhar a constraint.
+Verifiquei o cadastro da Rejane no banco:
+
+- `profiles.module_access = 'sustentacao'`
+- `user_module_roles = [sustentacao:qa]`
+- `team_members`: 3 times, todos do módulo `sustentacao`
+- Nenhum vínculo com `sala_agil`
+
+Ou seja, o cadastro está **correto**. O problema é de código.
+
+### Causa raiz (race condition no AuthContext)
+
+Em `src/contexts/AuthContext.tsx`, dentro de `onAuthStateChange` (linhas 282-303), quando o usuário faz login:
+
+1. `setSession(session)` é chamado imediatamente.
+2. `loadUserData` (que busca `profile`, `user_roles` e `user_module_roles`) é disparado em `setTimeout(..., 0)` **sem reativar `loading=true`**.
+3. Como `loading` já é `false` desde o `getSession` inicial, o `AuthRoute` em `App.tsx` re-renderiza com `session` presente mas `moduleRoles` **ainda vazio** (estado do usuário anterior ou inicial).
+4. `hasModuleAccess("sustentacao")` retorna `false` → cai no `return <Navigate to="/sala-agil/dashboard" replace />` (fallback final).
+
+A mesma lógica de fallback aparece em três lugares (`AuthRoute`, `ModuleRedirect`, raiz `/`), todos defaultando para `sala-agil`, o que mascara o bug para qualquer usuário cujo carregamento de `moduleRoles` chegue depois do primeiro redirect.
 
 ## Mudanças
 
-### 1. Migration
+### 1. `src/contexts/AuthContext.tsx` — eliminar a race
 
-- `ALTER TABLE public.demandas DROP CONSTRAINT demandas_situacao_check` e recriar incluindo `'fila_concluida'`, mantendo todos os demais status atuais.
-- `CREATE OR REPLACE FUNCTION public.upsert_demandas_batch` adicionando coleta de `SQLERRM` por linha que falhar e retornando, além de `importados/atualizados/erros`, uma chave `falhas` (jsonb array com `rhm`, `projeto`, `motivo`). Assinatura `(p_team_id uuid, p_rows jsonb) RETURNS jsonb` preservada.
+No callback de `onAuthStateChange`, quando há sessão nova (login):
+- Chamar `setLoading(true)` **antes** de disparar `loadUserData`.
+- Manter `loadUserData` em `setTimeout(..., 0)` para não segurar o lock do GoTrue.
+- Garantir `setLoading(false)` no `.finally()` (já existe).
 
-### 2. Frontend
+Isso faz com que `AuthRoute`/`ProtectedRoute` exibam o `PageLoader` até `moduleRoles` estar populado, evitando redirect com estado parcial.
 
-- `src/features/sustentacao/services/demandas.service.ts`: estender o tipo de retorno de `upsertDemandas` para incluir `falhas?: { rhm: string; projeto: string; motivo: string }[]`.
-- `src/features/sustentacao/components/ImportacaoView.tsx`: em `handleImport`, mesclar `res.falhas` no array `falhas` local antes do `setResult`. O painel de erros já existe e passará a exibir o motivo real por linha.
+### 2. `src/App.tsx` — fallback seguro baseado em `profile.module_access`
+
+Substituir o fallback `Navigate to="/sala-agil/dashboard"` em `AuthRoute` e `ModuleRedirect` por uma função `resolveHome(profile, hasModuleAccess, isAdmin)` com a seguinte prioridade:
+
+1. `isAdmin || module_access === 'admin'` → `/dashboard-admin`
+2. Se `hasModuleAccess('sustentacao')` e não tem `sala_agil` → `/sustentacao`
+3. Se `hasModuleAccess('sala_agil')` e não tem `sustentacao` → `/sala-agil/dashboard`
+4. Se `hasModuleAccess('rdm')` exclusivo → `/rdm`
+5. Se tem **mais de um** módulo → `/modulos` (selector)
+6. Se `moduleRoles` vazio mas `profile.module_access` definido → usar `module_access` como autoridade (mesma lógica acima)
+7. Último recurso (sem profile e sem moduleRoles) → `/modulos`
+
+Isso remove o viés de "default = sala_agil" que mascarava o problema para todos os usuários, não só a Rejane.
 
 ### 3. Validação
 
-- Reimportar a planilha do print: esperado ~155 atualizados, 0 erros.
-- Caso restem erros, o painel "Erros" mostrará RHM + projeto + motivo (ex.: violação de check, mismatch de projeto, etc.) para diagnóstico imediato.
+- Login da Rejane (`module_access=sustentacao`) → deve ir para `/sustentacao`.
+- Login de admin → `/dashboard-admin`.
+- Usuário com sala_agil + sustentacao → `/modulos`.
+- Usuário só sala_agil → `/sala-agil/dashboard`.
+- Verificar console: não deve haver redirect intermediário para `/sala-agil` antes do destino correto.
 
-## Garantias
+## Fora de escopo
 
-- Nenhuma coluna/tabela é removida.
-- Assinatura da RPC preservada — chamadas existentes continuam funcionando.
-- Mudança escopada à importação da Sustentação (módulo Azul); não afeta Sala Ágil.
+- Não altero schema nem dados de usuários.
+- Não mexo na lógica de troca de senha obrigatória nem na importação de demandas.

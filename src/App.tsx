@@ -51,6 +51,41 @@ function PageLoader() {
   );
 }
 
+// ─── Resolução central de home pós-login ─────────────────────────────────────
+// Prioriza módulos explicitamente atribuídos via user_module_roles; usa
+// profile.module_access como fallback autoritativo quando moduleRoles ainda
+// não foi carregado ou está vazio. Evita o viés antigo de "default = sala_agil"
+// que mascarava bugs de carga (ex.: Rejane / sustentação caindo no Ágil).
+function resolveHomePath(opts: {
+  isAdmin: boolean;
+  moduleAccess?: string | null;
+  hasModuleAccess: (m: string) => boolean;
+  moduleRolesCount: number;
+}): string {
+  const { isAdmin, moduleAccess, hasModuleAccess, moduleRolesCount } = opts;
+
+  if (isAdmin || moduleAccess === "admin") return "/dashboard-admin";
+
+  const agil = hasModuleAccess("sala_agil");
+  const sust = hasModuleAccess("sustentacao");
+  const rdm  = hasModuleAccess("rdm");
+  const count = [agil, sust, rdm].filter(Boolean).length;
+
+  if (count >= 2) return "/modulos";
+  if (sust) return "/sustentacao";
+  if (agil) return "/sala-agil/dashboard";
+  if (rdm)  return "/rdm";
+
+  // Sem moduleRoles carregado: confia em profile.module_access
+  if (moduleRolesCount === 0 && moduleAccess) {
+    if (moduleAccess === "sustentacao") return "/sustentacao";
+    if (moduleAccess === "sala_agil")   return "/sala-agil/dashboard";
+    if (moduleAccess === "rdm")         return "/rdm";
+  }
+
+  return "/modulos";
+}
+
 // ─── Guards ───────────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, refreshProfile } = useAuth();
@@ -77,28 +112,28 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading, profile, isAdmin, hasModuleAccess } = useAuth();
-  if (loading) return null;
+  const { session, loading, profile, isAdmin, hasModuleAccess, moduleRoles } = useAuth();
+  if (loading) return <PageLoader />;
   if (!session) return <>{children}</>;
-  if (isAdmin || profile?.module_access === "admin")
-    return <Navigate to="/dashboard-admin" replace />;
-  if (hasModuleAccess("rdm") && !hasModuleAccess("sala_agil") && !hasModuleAccess("sustentacao"))
-    return <Navigate to="/rdm" replace />;
-  if (hasModuleAccess("sustentacao") && !hasModuleAccess("sala_agil"))
-    return <Navigate to="/sustentacao" replace />;
-  return <Navigate to="/sala-agil/dashboard" replace />;
+  const to = resolveHomePath({
+    isAdmin,
+    moduleAccess: profile?.module_access,
+    hasModuleAccess,
+    moduleRolesCount: moduleRoles.length,
+  });
+  return <Navigate to={to} replace />;
 }
 
 function ModuleRedirect() {
-  const { profile, loading, isAdmin, hasModuleAccess } = useAuth();
-  if (loading) return null;
-  if (isAdmin || profile?.module_access === "admin")
-    return <Navigate to="/dashboard-admin" replace />;
-  if (hasModuleAccess("rdm") && !hasModuleAccess("sala_agil") && !hasModuleAccess("sustentacao"))
-    return <Navigate to="/rdm" replace />;
-  if (hasModuleAccess("sustentacao") && !hasModuleAccess("sala_agil"))
-    return <Navigate to="/sustentacao" replace />;
-  return <Navigate to="/sala-agil/dashboard" replace />;
+  const { profile, loading, isAdmin, hasModuleAccess, moduleRoles } = useAuth();
+  if (loading) return <PageLoader />;
+  const to = resolveHomePath({
+    isAdmin,
+    moduleAccess: profile?.module_access,
+    hasModuleAccess,
+    moduleRolesCount: moduleRoles.length,
+  });
+  return <Navigate to={to} replace />;
 }
 
 function ModuleGuard({

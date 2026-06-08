@@ -213,7 +213,7 @@ export function ImportacaoView() {
     setResult(null); setShowPreview(false); setErrors([]); setValidRows([]); setProgressMap(new Map());
     try {
       const buffer = await file.arrayBuffer();
-      const rows   = parseCsvToRows(buffer);
+      const rows   = isXlsxFile(file) ? await parseXlsxToRows(buffer) : parseCsvToRows(buffer);
       const parsed: ParsedRow[]          = [];
       const errs:   ValidationError[]    = [];
       const newTypes: string[]           = [];
@@ -293,7 +293,7 @@ export function ImportacaoView() {
     setProjetoResult(null); setLoading(true);
     try {
       const buffer  = await file.arrayBuffer();
-      const rows    = parseCsvToRows(buffer);
+      const rows    = isXlsxFile(file) ? await parseXlsxToRows(buffer) : parseCsvToRows(buffer);
       const results = { importados: 0, existentes: 0, erros: 0 };
       const existingNorms = new Set(projetos.map((p) => normalize(p.nome)));
       for (const r of rows) {

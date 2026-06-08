@@ -84,7 +84,7 @@ const TIPO_ACAO_CONFIG: Record<
   { label: string; icon: React.ElementType; pill: string }
 > = {
   novo:           { label: "Novo",           icon: PlusCircle,  pill: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
-  atualizacao:    { label: "Atualização",    icon: RefreshCw,   pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" },
+  atualizacao:    { label: "Atualizar situação", icon: RefreshCw, pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" },
   sem_alteracao:  { label: "Sem alteração",  icon: MinusCircle, pill: "bg-muted text-muted-foreground border-border" },
   erro_validacao: { label: "Erro",           icon: XCircle,     pill: "bg-destructive/10 text-destructive border-destructive/20" },
 };

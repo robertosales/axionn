@@ -91,6 +91,13 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     [projetos, form.project_id],
   );
 
+  // ── Diagnóstico temporário — remover após validação do fix ─────────────────
+  useEffect(() => {
+    if (open) {
+      console.log("[DemandaForm] open=true | currentTeamId:", currentTeamId);
+    }
+  }, [open, currentTeamId]);
+
   // ── Inicialização no open ──────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
@@ -171,9 +178,15 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     }
   }, [prazoInfo?.prazoSolucao, isEdit]);
 
+  // ── FIX (CA-01 / CA-02): guard para currentTeamId nulo ────────────────────
   const searchDemandante = async (q: string) => {
     setDemandanteSearch(q);
     if (q.length < 2) { setDemandanteResults([]); return; }
+    if (!currentTeamId) {
+      // Sem time ativo não é possível filtrar membros — evita retorno vazio silencioso
+      console.warn("[DemandaForm] searchDemandante bloqueado: currentTeamId é null.");
+      return;
+    }
     const results = await searchProfilesByName(q, 5, currentTeamId);
     setDemandanteResults(results as any[]);
   };
@@ -390,9 +403,16 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                     value={demandanteSearch}
                     onChange={(e) => searchDemandante(e.target.value)}
                     onBlur={() => markTouched("demandante")}
-                    placeholder="Buscar..."
+                    placeholder={currentTeamId ? "Buscar..." : "Sem time ativo"}
+                    disabled={!currentTeamId}
                     className={cn("pl-7 h-8 text-sm", demandanteError && "border-destructive focus-visible:ring-destructive")}
                   />
+                  {/* Aviso inline quando não há time ativo (CA-01) */}
+                  {!currentTeamId && (
+                    <p className="text-[11px] text-warning mt-0.5">
+                      Nenhum time ativo. Selecione um time para buscar o autor.
+                    </p>
+                  )}
                   {demandanteResults.length > 0 && (
                     <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-auto">
                       {demandanteResults.map((r) => (

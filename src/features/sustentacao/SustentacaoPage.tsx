@@ -17,7 +17,7 @@ import { DemandaForm }                        from "./components/DemandaForm";
 import { SustentacaoDashboard }               from "./components/SustentacaoDashboard";
 import { SustentacaoWorkflow }                from "./components/SustentacaoWorkflow";
 import { ProjetosManager }                   from "./components/ProjetosManager";
-import { ImportacaoView }                    from "./components/ImportacaoView";
+import ImportacaoView                         from "./components/ImportacaoView";
 import { DemandasList }                      from "./components/DemandasList";
 import { SustentacaoRelatorios }             from "./components/reports/SustentacaoRelatorios";
 import { TeamManager }                       from "@/components/TeamManager";
@@ -103,7 +103,7 @@ export default function SustentacaoPage() {
 
 function SustentacaoSection({ active }: { active: string }) {
   const { demandas, loading, update, moveTo, create } = useDemandas();
-  const { steps: workflowSteps }                      = useWorkflowSteps();
+  const workflowSteps                                 = useWorkflowSteps();
 
   const [selected,       setSelected]       = useState<Demanda | null>(null);
   const [createSituacao, setCreateSituacao] = useState<string | undefined>();
@@ -158,8 +158,8 @@ function SustentacaoSection({ active }: { active: string }) {
   const workflowColumns = workflowSteps.map((s) => ({
     key:        s.key,
     label:      s.label,
-    color:      s.hex,
-    sort_order: s.ordem,
+    color:      undefined as string | undefined,
+    sort_order: s.order,
   }));
 
   switch (active) {

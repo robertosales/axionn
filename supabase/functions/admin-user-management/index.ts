@@ -18,7 +18,7 @@ const PUBLIC_SITE_URL =
 /**
  * CORS multi-origin:
  * Lê ALLOWED_ORIGINS da env (CSV). Se não definida, usa a allowlist padrão.
- * Exemplo de env: "https://axionn.lovable.app,https://preview--axionn.lovable.app,http://localhost:8080"
+ * Exemplo: "https://axionn.lovable.app,https://preview--axionn.lovable.app,http://localhost:8080"
  */
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:8080",
@@ -33,18 +33,26 @@ function buildAllowedOrigins(): Set<string> {
     const parsed = envOrigins.split(",").map((o) => o.trim()).filter(Boolean);
     if (parsed.length > 0) return new Set(parsed);
   }
-  // Inclui SITE_URL e PUBLIC_SITE_URL dinamicamente
   const defaults = new Set(DEFAULT_ALLOWED_ORIGINS);
   if (SITE_URL && SITE_URL !== "*") defaults.add(SITE_URL);
   if (PUBLIC_SITE_URL && PUBLIC_SITE_URL !== "*") defaults.add(PUBLIC_SITE_URL);
   return defaults;
 }
 
-/** Verifica se o origin é um subdomínio *.lovable.app */
-function isLovablePreview(origin: string): boolean {
+/**
+ * Verifica se o origin é um domínio de preview/produção da plataforma Lovable.
+ * Cobre:
+ *   - *.lovable.app          (ex: axionn.lovable.app, preview--axionn.lovable.app)
+ *   - *.lovableproject.com   (ex: f530dea0-acd2-48b7-934e-9a6bc39bcf02.lovableproject.com)
+ */
+function isLovableDomain(origin: string): boolean {
   try {
     const { hostname, protocol } = new URL(origin);
-    return protocol === "https:" && hostname.endsWith(".lovable.app");
+    if (protocol !== "https:") return false;
+    return (
+      hostname.endsWith(".lovable.app") ||
+      hostname.endsWith(".lovableproject.com")
+    );
   } catch {
     return false;
   }
@@ -57,7 +65,7 @@ function isLovablePreview(origin: string): boolean {
 function getCorsHeaders(origin: string | null): Record<string, string> | null {
   if (!origin) return null;
   const allowed = buildAllowedOrigins();
-  if (allowed.has(origin) || isLovablePreview(origin)) {
+  if (allowed.has(origin) || isLovableDomain(origin)) {
     return {
       "Access-Control-Allow-Origin":  origin,
       "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",

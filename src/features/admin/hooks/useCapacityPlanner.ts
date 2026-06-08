@@ -127,24 +127,34 @@ export function useCapacityPlanner() {
     setError(null);
 
     try {
-      // IDs únicos — sem duplicatas por (time × módulo)
-      const teamIds = uniqueTeams.map(t => t.id);
+      // Particiona times por módulo: Sala Ágil (sprints) vs Sustentação (semana corrente)
+      const agilIds        = uniqueTeams.filter(t => t.module === "sala_agil").map(t => t.id);
+      const sustentacaoIds = uniqueTeams.filter(t => t.module === "sustentacao").map(t => t.id);
 
-      // undefined → Supabase omite o parâmetro → PostgreSQL usa DEFAULT NULL
-      const teamId  = selectedTeam !== "all" ? selectedTeam : undefined;
+      const teamId = selectedTeam !== "all" ? selectedTeam : undefined;
 
-      const rpcParams: { p_team_ids: string[]; p_team_id?: string; p_default_cap?: number } = {
-        p_team_ids:    teamIds,
-        p_default_cap: 40,
+      const buildParams = (ids: string[]) => {
+        const p: { p_team_ids: string[]; p_team_id?: string; p_default_cap?: number } = {
+          p_team_ids:    ids,
+          p_default_cap: 40,
+        };
+        if (teamId !== undefined) p.p_team_id = teamId;
+        return p;
       };
-      if (teamId !== undefined) rpcParams.p_team_id = teamId;
 
-      const { data, error: rpcErr } = await supabase.rpc("get_capacity_planner", rpcParams);
+      const [agilRes, sustRes] = await Promise.all([
+        agilIds.length        ? supabase.rpc("get_capacity_planner",              buildParams(agilIds))        : Promise.resolve({ data: [], error: null } as any),
+        sustentacaoIds.length ? supabase.rpc("get_capacity_planner_sustentacao", buildParams(sustentacaoIds)) : Promise.resolve({ data: [], error: null } as any),
+      ]);
 
-      if (rpcErr) throw rpcErr;
+      if (agilRes.error) throw agilRes.error;
+      if (sustRes.error) throw sustRes.error;
       if (cancelledRef.current) return;
 
-      const rows = (data ?? []) as unknown as RpcTeamRow[];
+      const rows = ([
+        ...((agilRes.data ?? []) as any[]),
+        ...((sustRes.data ?? []) as any[]),
+      ]) as unknown as RpcTeamRow[];
 
       const enriched: TeamCapacity[] = rows.map(row => {
         const teamInfo   = teamMap[row.teamId];
@@ -156,8 +166,22 @@ export function useCapacityPlanner() {
           const cap      = Number(d.capacityHours);
           const alloc    = Number(d.allocatedHours);
           const realized = Number(d.realizedHours);
-          const utilPct  = cap > 0 ? Math.round((alloc    / cap) * 100) : 0;
+          const isSust   = teamInfo?.module === "sustentacao";
+          // Sustentação não tem alocação prevista — utilização baseia-se no Realizado/Capacidade
+          const utilBase = isSust ? realized : alloc;
+          const utilPct  = cap > 0 ? Math.round((utilBase / cap) * 100) : 0;
           const realPct  = cap > 0 ? Math.round((realized / cap) * 100) : 0;
+          const wip      = Number(d.wipCount);
+
+          let status: CapacityStatus;
+          if (isSust) {
+            if (wip === 0 && realized === 0) status = "idle";
+            else if (realized > cap || wip > 5) status = "overloaded";
+            else if (realized >= cap * 0.8 || wip >= 4) status = "warning";
+            else status = "ok";
+          } else {
+            status = calcStatus(Number(d.husCount), Number(d.unestimatedCount), utilPct);
+          }
 
           return {
             devId:            d.devId,
@@ -167,10 +191,10 @@ export function useCapacityPlanner() {
             capacityHours:    cap,
             allocatedHours:   alloc,
             realizedHours:    realized,
-            wipCount:         Number(d.wipCount),
+            wipCount:         wip,
             utilizationPct:   utilPct,
             realizationPct:   realPct,
-            status:           calcStatus(Number(d.husCount), Number(d.unestimatedCount), utilPct),
+            status:           status,
             unestimatedCount: Number(d.unestimatedCount),
             noActiveSprint:   d.noActiveSprint,
           };
@@ -185,7 +209,9 @@ export function useCapacityPlanner() {
           totalCapacity:  totalCap,
           totalAllocated: totalAlloc,
           totalRealized:  totalReal,
-          utilizationPct: totalCap > 0 ? Math.round((totalAlloc / totalCap) * 100) : 0,
+          utilizationPct: totalCap > 0
+            ? Math.round(((teamInfo?.module === "sustentacao" ? totalReal : totalAlloc) / totalCap) * 100)
+            : 0,
           realizationPct: totalCap > 0 ? Math.round((totalReal  / totalCap) * 100) : 0,
           devs,
           hasUnestimated: devs.some(d => d.unestimatedCount > 0),

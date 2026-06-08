@@ -12,7 +12,7 @@ function daysLeft(dateStr: string | null) {
 
 export function CapacityGrid({ teamCapacities }: Props) {
   if (teamCapacities.length === 0) {
-    return <p className="text-sm text-muted-foreground py-10 text-center">Nenhum sprint ativo encontrado.</p>;
+    return <p className="text-sm text-muted-foreground py-10 text-center">Nenhum time com dados de capacidade no período.</p>;
   }
 
   return (

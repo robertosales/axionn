@@ -100,12 +100,21 @@ export function useCapacityPlanner() {
    * preservando o primeiro módulo encontrado para cada time.
    */
   const uniqueTeams = useMemo(() => {
-    const seen = new Set<string>();
-    return teams.filter(t => {
-      if (seen.has(t.id)) return false;
-      seen.add(t.id);
-      return true;
-    });
+    // Prioriza módulos "reais" (sala_agil/sustentacao) sobre `rdm`, pois um
+    // mesmo time pode estar mapeado em team_modules para múltiplos módulos
+    // (ex.: TIME 1 aparece como sustentacao E rdm). Sem a priorização, a
+    // primeira entrada encontrada podia ser `rdm`, fazendo a partição
+    // sustentacao/sala_agil perder o time e a RPC não rodar.
+    const rank = (m: string) =>
+      m === "sustentacao" || m === "sala_agil" ? 0 : 1;
+    const byId = new Map<string, typeof teams[number]>();
+    for (const t of teams) {
+      const cur = byId.get(t.id);
+      if (!cur || rank(t.module) < rank(cur.module)) {
+        byId.set(t.id, t);
+      }
+    }
+    return Array.from(byId.values());
   }, [teams]);
 
   /**

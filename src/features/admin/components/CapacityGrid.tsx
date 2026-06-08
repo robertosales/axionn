@@ -49,9 +49,7 @@ export function CapacityGrid({ teamCapacities }: Props) {
                 )}
                 <span className="flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />
-                  {team.module === "sustentacao"
-                    ? <>{team.totalRealized}h / {team.totalCapacity}h</>
-                    : <>{team.totalAllocated}h / {team.totalCapacity}h</>}
+                  {team.totalAllocated}h / {team.totalCapacity}h
                   <span className={`font-semibold ${
                     team.utilizationPct >= 100 ? "text-destructive" :
                     team.utilizationPct >= 80  ? "text-orange-500"  : "text-emerald-600"
@@ -80,12 +78,21 @@ export function CapacityGrid({ teamCapacities }: Props) {
                     <div className="col-span-3 min-w-0">
                       <div className="flex items-center gap-1.5">
                         {dev.status === "overloaded" && (
-                          <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                          <AlertTriangle
+                            className="h-3.5 w-3.5 text-destructive shrink-0"
+                            aria-label={dev.slaCriticalCount > 0 ? "SLA crítico" : "Sobrecarregado"}
+                          />
                         )}
                         <span className="text-xs font-semibold truncate">{dev.devName}</span>
                       </div>
                       <span className="text-[10px] text-muted-foreground">
                         {dev.wipCount} {team.module === "sustentacao" ? "demanda" : "HU"}{dev.wipCount !== 1 ? "s" : ""} em andamento
+                        {team.module === "sustentacao" && dev.pausedCount > 0 && (
+                          <> · {dev.pausedCount} pausada{dev.pausedCount !== 1 ? "s" : ""}</>
+                        )}
+                        {team.module === "sustentacao" && dev.slaCriticalCount > 0 && (
+                          <> · <span className="text-destructive font-semibold">{dev.slaCriticalCount} SLA crítico</span></>
+                        )}
                       </span>
                     </div>
 

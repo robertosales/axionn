@@ -20,6 +20,8 @@ export interface DevCapacity {
   status:           CapacityStatus;
   unestimatedCount: number;
   noActiveSprint:   boolean;
+  pausedCount:      number;
+  slaCriticalCount: number;
 }
 
 export interface TeamCapacity {
@@ -50,6 +52,8 @@ interface RpcDevRow {
   husCount:         number;
   unestimatedCount: number;
   noActiveSprint:   boolean;
+  pausedCount?:     number;
+  slaCriticalCount?: number;
 }
 
 interface RpcTeamRow {
@@ -167,17 +171,20 @@ export function useCapacityPlanner() {
           const alloc    = Number(d.allocatedHours);
           const realized = Number(d.realizedHours);
           const isSust   = teamInfo?.module === "sustentacao";
-          // Sustentação não tem alocação prevista — utilização baseia-se no Realizado/Capacidade
-          const utilBase = isSust ? realized : alloc;
-          const utilPct  = cap > 0 ? Math.round((utilBase / cap) * 100) : 0;
+          // Utilização sempre baseada em horas alocadas (estimadas) / capacidade
+          const utilPct  = cap > 0 ? Math.round((alloc / cap) * 100) : 0;
           const realPct  = cap > 0 ? Math.round((realized / cap) * 100) : 0;
           const wip      = Number(d.wipCount);
+          const paused   = Number(d.pausedCount ?? 0);
+          const slaCrit  = Number(d.slaCriticalCount ?? 0);
 
           let status: CapacityStatus;
           if (isSust) {
-            if (wip === 0 && realized === 0) status = "idle";
-            else if (realized > cap || wip > 5) status = "overloaded";
-            else if (realized >= cap * 0.8 || wip >= 4) status = "warning";
+            // Risco de SLA tem prioridade absoluta
+            if (slaCrit > 0) status = "overloaded";
+            else if (wip === 0 && alloc === 0 && realized === 0) status = "idle";
+            else if (alloc > cap || wip > 5) status = "overloaded";
+            else if (alloc >= cap * 0.8 || wip >= 4) status = "warning";
             else status = "ok";
           } else {
             status = calcStatus(Number(d.husCount), Number(d.unestimatedCount), utilPct);
@@ -197,6 +204,8 @@ export function useCapacityPlanner() {
             status:           status,
             unestimatedCount: Number(d.unestimatedCount),
             noActiveSprint:   d.noActiveSprint,
+            pausedCount:      paused,
+            slaCriticalCount: slaCrit,
           };
         }).sort((a, b) => b.utilizationPct - a.utilizationPct);
 
@@ -209,9 +218,7 @@ export function useCapacityPlanner() {
           totalCapacity:  totalCap,
           totalAllocated: totalAlloc,
           totalRealized:  totalReal,
-          utilizationPct: totalCap > 0
-            ? Math.round(((teamInfo?.module === "sustentacao" ? totalReal : totalAlloc) / totalCap) * 100)
-            : 0,
+          utilizationPct: totalCap > 0 ? Math.round((totalAlloc / totalCap) * 100) : 0,
           realizationPct: totalCap > 0 ? Math.round((totalReal  / totalCap) * 100) : 0,
           devs,
           hasUnestimated: devs.some(d => d.unestimatedCount > 0),

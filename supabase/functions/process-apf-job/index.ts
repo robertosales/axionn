@@ -49,6 +49,36 @@ Deno.serve(async (req: Request) => {
     return new Response('Method Not Allowed', { status: 405 })
   }
 
+  // ------------------------------------------------------------------
+  // Auth guard: aceita apenas chamadas com o SERVICE_ROLE_KEY
+  // (trigger interno pg_net) ou um JWT de admin/usuário autenticado.
+  // Sem isso, qualquer um na internet podia disparar jobs pagos de IA.
+  // ------------------------------------------------------------------
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const token      = authHeader.replace(/^Bearer\s+/i, '').trim()
+
+  if (!token || !SERVICE_ROLE_KEY) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (token !== SERVICE_ROLE_KEY) {
+    // Não é o trigger interno — exige JWT válido de usuário autenticado
+    const authClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    })
+    const { data: { user }, error: userErr } = await authClient.auth.getUser(token)
+    if (userErr || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   })

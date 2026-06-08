@@ -257,7 +257,12 @@ export function ImportacaoView() {
         if (!dataInicio)    { errs.push({ linha, mensagem: "Criado em inválido ou ausente." }); return; }
 
         const situacaoRaw  = String(r["Situação"] || r["Situacao"] || r["situacao"] || "Nova").trim();
-        const situacao     = normalizeSituacao(removeEmojis(situacaoRaw));
+        const situacaoLimpa = removeEmojis(situacaoRaw);
+        const situacao = normalizeSituacao(situacaoLimpa);
+        if (!situacao) {
+          errs.push({ linha, mensagem: `Situação '${situacaoRaw}' não reconhecida. Use uma situação válida do cadastro.` });
+          return;
+        }
         const isCorretiva  = tipoNorm === "manutencao_corretiva";
         let sla            = "padrao";
         const regimeRaw    = String(r["Regime de Atendimento"] || r["Regime"] || r["regime"] || "").trim();

@@ -9,9 +9,11 @@ import { toast } from "sonner";
 import { Lock, ShieldAlert, CheckCircle2 } from "lucide-react";
 
 type AuthCallWindow = Window & { __authUserCallCount?: number };
+const AUTH_USER_URL = "https://rgikyyazotqapaxijwui.supabase.co/auth/v1/user";
+const AUTH_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnaWt5eWF6b3RxYXBheGlqd3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjM5NTIsImV4cCI6MjA4OTgzOTk1Mn0.ADQ3VDenVwNL3fgyNc2Fgu-Si66T7SHdG5se4Hvf5eg";
 
 export default function ForcePasswordChange({ onDone }: { onDone: () => void }) {
-  const { user, signOut } = useAuth();
+  const { session, user, signOut } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
@@ -56,18 +58,33 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
     const w = window as AuthCallWindow;
     w.__authUserCallCount = 0;
 
-    // Pausa auto-refresh durante a operação crítica para evitar disputa pelo
-    // Web Lock de auth enquanto o PUT /auth/v1/user ainda está em andamento.
-    await supabase.auth.stopAutoRefresh();
-
     let updData: { user?: { id?: string } | null } | null = null;
     let error: unknown = null;
     try {
-      // Chama updateUser DIRETO — não fazer getSession() antes para evitar
-      // contenção no lock interno do GoTrue (`sb-...-auth-token`).
-      const result = await supabase.auth.updateUser({ password });
-      updData = result.data;
-      error = result.error;
+      if (!session?.access_token) throw new Error("Sessão expirada. Faça login novamente para trocar a senha.");
+
+      // Chamada direta e única ao endpoint de atualização de senha.
+      // Não usa supabase.auth.updateUser(), portanto não entra no Web Lock
+      // `lock:sb-...-auth-token` que vinha sendo roubado durante requisições lentas.
+      w.__authUserCallCount = (w.__authUserCallCount ?? 0) + 1;
+      const response = await fetch(AUTH_USER_URL, {
+        method: "PUT",
+        headers: {
+          apikey: AUTH_ANON_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw {
+          code: payload?.code || payload?.error_code,
+          status: response.status,
+          message: payload?.msg || payload?.message || payload?.error_description || "Não foi possível atualizar a senha.",
+        };
+      }
+      updData = payload;
     } catch (err) {
       error = err;
     }
@@ -106,7 +123,6 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
       toast.error(friendly);
       setLoading(false);
       submittingRef.current = false;
-      await supabase.auth.startAutoRefresh();
       return;
     }
 

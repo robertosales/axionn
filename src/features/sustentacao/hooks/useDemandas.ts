@@ -1,16 +1,5 @@
 /**
  * useDemandas — F2-B: invalidação em cascata nas mutations
- *
- * ANTES: create/update/moveTo/remove chamavam invalidate() que atingia
- *   apenas KEYS.demandas.all. KPIs e infinite query ficavam defasados
- *   por até 2s (aguardando o debounce do canal RT).
- *
- * DEPOIS: mutations invalidam em cascata:
- *   1. KEYS.demandas.all(teamId)  — lista completa (Kanban)
- *   2. KEYS.kpis.all(teamId)      — KPIs do Dashboard (imediato)
- *   3. reset KEYS.demandas.infinite — lista paginada reinicia
- *
- * Alinhado com o padrão já adotado em useDemandaMutations (Fase 1).
  */
 
 import { useEffect } from 'react';
@@ -19,11 +8,12 @@ import { useAuth }                  from '@/contexts/AuthContext';
 import { toast }                    from 'sonner';
 import { supabase }                 from '@/integrations/supabase/client';
 import * as svc                     from '../services/demandas.service';
-import type { Demanda, DemandaTransition, DemandaHour } from '../types/demanda';
+import type { Demanda, DemandaHour } from '../types/demanda';
 import { REQUIRES_JUSTIFICATIVA }   from '../types/demanda';
 import { KEYS }                     from '@/lib/queryKeys';
 import { STALE }                    from '@/lib/queryClient';
 
+// ── useDemandas ──────────────────────────────────────────────────────────────
 export function useDemandas() {
   const { currentTeamId, user } = useAuth();
   const qc = useQueryClient();
@@ -39,15 +29,12 @@ export function useDemandas() {
 
   const error = queryError ? (queryError as Error).message : null;
 
-  // ── Realtime: invalidação em cascata (inalterada) ───────────────────────────────────────
   useEffect(() => {
     if (!currentTeamId) return;
     let timeoutId: ReturnType<typeof setTimeout>;
-
     const channel = supabase
       .channel(`demandas-rt-${currentTeamId}`)
-      .on(
-        'postgres_changes',
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'demandas', filter: `team_id=eq.${currentTeamId}` },
         () => {
           if (typeof document !== 'undefined' && document.hidden) return;
@@ -60,11 +47,9 @@ export function useDemandas() {
         },
       )
       .subscribe();
-
     return () => { clearTimeout(timeoutId); supabase.removeChannel(channel); };
   }, [currentTeamId, qc]);
 
-  // ── Invalidação completa (usada pelas mutations) ───────────────────────────────
   const invalidateAll = () => Promise.all([
     qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId!) }),
     qc.invalidateQueries({ queryKey: KEYS.kpis.all(currentTeamId!) }),
@@ -92,13 +77,9 @@ export function useDemandas() {
       const details = String(err?.details ?? '');
       const blob = `${msg} ${details}`;
       if (code === '23505' && blob.includes('demandas_team_id_rhm_key')) {
-        toast.error(
-          `Já existe uma demanda com o número #${d.rhm ?? ''} neste time. Use outro número.`,
-        );
+        toast.error(`Já existe uma demanda com o número #${d.rhm ?? ''} neste time. Use outro número.`);
       } else if (code === '23505' || blob.includes('demandas_no_duplicates_idx')) {
-        toast.error(
-          'Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time.',
-        );
+        toast.error('Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time.');
       } else {
         toast.error(`Erro ao criar demanda${msg ? `: ${msg}` : ''}`);
       }
@@ -121,11 +102,8 @@ export function useDemandas() {
       toast.error('Justificativa obrigatória para este status');
       return false;
     }
-    // Para fila_concluida, registra aceite_data automaticamente
     const extraUpdates: Partial<Demanda> =
-      newStatus === 'fila_concluida'
-        ? { aceite_data: new Date().toISOString() }
-        : {};
+      newStatus === 'fila_concluida' ? { aceite_data: new Date().toISOString() } : {};
     try {
       await svc.updateDemanda(demanda.id, { situacao: newStatus, ...extraUpdates });
       if (user) {
@@ -156,19 +134,10 @@ export function useDemandas() {
     }
   };
 
-  return {
-    demandas,
-    loading,
-    error,
-    reload: invalidateAll,
-    create,
-    update,
-    moveTo,
-    remove,
-  };
+  return { demandas, loading, error, reload: invalidateAll, create, update, moveTo, remove };
 }
 
-// ── useTransitions ──────────────────────────────────────────────────────────────────────────────
+// ── useTransitions ───────────────────────────────────────────────────────────
 export function useTransitions(demandaId: string | null) {
   const { data: transitions = [], isLoading: loading, refetch } = useQuery({
     queryKey:  KEYS.demandas.transitions(demandaId ?? ''),
@@ -179,7 +148,7 @@ export function useTransitions(demandaId: string | null) {
   return { transitions, loading, reload: refetch };
 }
 
-// ── useHours ────────────────────────────────────────────────────────────────────────────────────
+// ── useHours ─────────────────────────────────────────────────────────────────
 export function useHours(demandaId: string | null) {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -204,10 +173,7 @@ export function useHours(demandaId: string | null) {
     }
   };
 
-  const update = async (
-    id: string,
-    h: { horas: number; fase: string; descricao: string; user_id?: string },
-  ) => {
+  const update = async (id: string, h: { horas: number; fase: string; descricao: string; user_id?: string }) => {
     try {
       await svc.updateHour(id, h);
       toast.success('Registro atualizado com sucesso');

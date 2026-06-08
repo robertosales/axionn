@@ -353,13 +353,13 @@ export function AgileHistory() {
   // ─── Loaders ──────────────────────────────────────────────────────────────
 
   const loadProfiles = useCallback(async () => {
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("profiles")
       .select("user_id, display_name")
       .eq("is_active", true);
     if (data) {
       const map: Record<string, string> = {};
-      data.forEach((p) => {
+      (data as Array<{ user_id: string; display_name: string }>).forEach((p) => {
         map[p.user_id] = p.display_name;
       });
       setProfiles(map);
@@ -368,7 +368,7 @@ export function AgileHistory() {
 
   const loadPlanningSessions = useCallback(async () => {
     if (!currentTeamId) return;
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("planning_sessions")
       .select("*")
       .eq("team_id", currentTeamId)
@@ -379,24 +379,25 @@ export function AgileHistory() {
     const sessions: PlanningSessionHistory[] = [];
     const scores: Record<string, SprintScoreBreakdown> = {};
 
-    for (const s of data) {
+    for (const s of data as any[]) {
       const sprint = sprints.find((sp) => sp.id === s.sprint_id);
-      const { data: votes } = await supabase
+      const { data: votes } = await (supabase as any)
         .from("planning_votes")
         .select("hu_id, user_id, vote_value")
         .eq("session_id", s.id);
 
-      const uniqueHus = new Set(votes?.map((v) => v.hu_id) || []);
+      const votesArr = (votes ?? []) as Array<{ hu_id: string; user_id: string; vote_value: string }>;
+      const uniqueHus = new Set(votesArr.map((v) => v.hu_id));
       let sessionTotalHours = 0;
 
-      if (votes?.length) {
+      if (votesArr.length) {
         const sprintId = s.sprint_id;
         if (!scores[sprintId]) {
           scores[sprintId] = { P: 0, M: 0, G: 0, GG: 0, XG: 0, total: 0, totalPoints: 0, totalHours: 0 };
         }
 
         const byHu: Record<string, string[]> = {};
-        votes.forEach((v) => {
+        votesArr.forEach((v) => {
           if (!byHu[v.hu_id]) byHu[v.hu_id] = [];
           byHu[v.hu_id].push(v.vote_value);
         });
@@ -430,7 +431,7 @@ export function AgileHistory() {
         createdAt: s.created_at,
         finishedAt: s.finished_at,
         createdBy: s.created_by,
-        participantCount: new Set(votes?.map((v) => v.user_id) || []).size,
+        participantCount: new Set(votesArr.map((v) => v.user_id)).size,
         husVoted: uniqueHus.size,
         totalHours: sessionTotalHours,
       });
@@ -442,7 +443,7 @@ export function AgileHistory() {
 
   const loadRetroSessions = useCallback(async () => {
     if (!currentTeamId) return;
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("retro_sessions")
       .select("*")
       .eq("team_id", currentTeamId)
@@ -451,11 +452,11 @@ export function AgileHistory() {
     if (!data) return;
 
     const sessions: RetroSessionHistory[] = [];
-    for (const s of data) {
+    for (const s of data as any[]) {
       const sprint = sprints.find((sp) => sp.id === s.sprint_id);
       const [{ count: cardCount }, { count: actionCount }] = await Promise.all([
-        supabase.from("retro_cards").select("*", { count: "exact", head: true }).eq("session_id", s.id),
-        supabase.from("retro_actions").select("*", { count: "exact", head: true }).eq("session_id", s.id),
+        (supabase as any).from("retro_cards").select("*", { count: "exact", head: true }).eq("session_id", s.id),
+        (supabase as any).from("retro_actions").select("*", { count: "exact", head: true }).eq("session_id", s.id),
       ]);
       sessions.push({
         id: s.id,

@@ -239,12 +239,22 @@ export type UpsertDemandaRow = {
 export async function upsertDemandas(
   teamId: string,
   rows: UpsertDemandaRow[],
-): Promise<{ importados: number; atualizados: number; erros: number }> {
-  if (rows.length === 0) return { importados: 0, atualizados: 0, erros: 0 };
+): Promise<{
+  importados: number;
+  atualizados: number;
+  erros: number;
+  falhas?: { rhm: string; projeto: string; motivo: string }[];
+}> {
+  if (rows.length === 0) return { importados: 0, atualizados: 0, erros: 0, falhas: [] };
   const { data, error } = await supabase.rpc("upsert_demandas_batch" as any, {
     p_team_id: teamId,
     p_rows:    rows,
   });
   if (error) throw error;
-  return data as { importados: number; atualizados: number; erros: number };
+  return data as {
+    importados: number;
+    atualizados: number;
+    erros: number;
+    falhas?: { rhm: string; projeto: string; motivo: string }[];
+  };
 }

@@ -7,30 +7,50 @@ import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── Componentes leves — importados estaticamente ─────────────────────────────
-import { SprintManager }     from "@/components/SprintManager";
-import { DeveloperManager }  from "@/components/DeveloperManager";
-import { KanbanBoard }       from "@/components/KanbanBoard";
-import { DashboardHome }     from "@/components/DashboardHome";
+// ─── Componentes leves — importados estaticamente  ─────────────────────────────
+import { SprintManager } from "@/components/SprintManager";
+import { DeveloperManager } from "@/components/DeveloperManager";
+import { KanbanBoard } from "@/components/KanbanBoard";
+import { DashboardHome } from "@/components/DashboardHome";
 import { DemandasPorTimeSection } from "@/features/contracts/DemandasPorTimeSection";
 
 // ─── Componentes pesados — lazy loaded ────────────────────────────────────────
-const AgileHistory        = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
-const UserRolesManager    = lazy(() => import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })));
-const PlanningPoker       = lazy(() => import("@/components/PlanningPoker").then((m) => ({ default: m.PlanningPoker })));
-const UserStoryManager    = lazy(() => import("@/components/UserStoryManager").then((m) => ({ default: m.UserStoryManager })));
-const ActivityManager     = lazy(() => import("@/components/ActivityManager").then((m) => ({ default: m.ActivityManager })));
-const MetricsDashboard    = lazy(() => import("@/components/MetricsDashboard").then((m) => ({ default: m.MetricsDashboard })));
-const ImpedimentList      = lazy(() => import("@/components/ImpedimentManager").then((m) => ({ default: m.ImpedimentList })));
-const EpicManager         = lazy(() => import("@/components/EpicManager").then((m) => ({ default: m.EpicManager })));
-const WorkflowManager     = lazy(() => import("@/components/WorkflowManager").then((m) => ({ default: m.WorkflowManager })));
-const CustomFieldManager  = lazy(() => import("@/components/CustomFieldManager").then((m) => ({ default: m.CustomFieldManager })));
-const AutomationManager   = lazy(() => import("@/components/AutomationManager").then((m) => ({ default: m.AutomationManager })));
-const TeamManager         = lazy(() => import("@/components/TeamManager").then((m) => ({ default: m.TeamManager })));
-const TeamMembersManager  = lazy(() => import("@/components/TeamMembersManager").then((m) => ({ default: m.TeamMembersManager })));
-const CalendarView        = lazy(() => import("@/components/CalendarView").then((m) => ({ default: m.CalendarView })));
-const RetroManager        = lazy(() => import("@/components/RetroManager").then((m) => ({ default: m.RetroManager })));
-const ApfGeneratorPage    = lazy(() => import("@/features/apf/components/ApfGeneratorPage").then((m) => ({ default: m.ApfGeneratorPage })));
+const AgileHistory = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
+const UserRolesManager = lazy(() =>
+  import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })),
+);
+const PlanningPoker = lazy(() => import("@/components/PlanningPoker").then((m) => ({ default: m.PlanningPoker })));
+const UserStoryManager = lazy(() =>
+  import("@/components/UserStoryManager").then((m) => ({ default: m.UserStoryManager })),
+);
+const ActivityManager = lazy(() =>
+  import("@/components/ActivityManager").then((m) => ({ default: m.ActivityManager })),
+);
+const MetricsDashboard = lazy(() =>
+  import("@/components/MetricsDashboard").then((m) => ({ default: m.MetricsDashboard })),
+);
+const ImpedimentList = lazy(() =>
+  import("@/components/ImpedimentManager").then((m) => ({ default: m.ImpedimentList })),
+);
+const EpicManager = lazy(() => import("@/components/EpicManager").then((m) => ({ default: m.EpicManager })));
+const WorkflowManager = lazy(() =>
+  import("@/components/WorkflowManager").then((m) => ({ default: m.WorkflowManager })),
+);
+const CustomFieldManager = lazy(() =>
+  import("@/components/CustomFieldManager").then((m) => ({ default: m.CustomFieldManager })),
+);
+const AutomationManager = lazy(() =>
+  import("@/components/AutomationManager").then((m) => ({ default: m.AutomationManager })),
+);
+const TeamManager = lazy(() => import("@/components/TeamManager").then((m) => ({ default: m.TeamManager })));
+const TeamMembersManager = lazy(() =>
+  import("@/components/TeamMembersManager").then((m) => ({ default: m.TeamMembersManager })),
+);
+const CalendarView = lazy(() => import("@/components/CalendarView").then((m) => ({ default: m.CalendarView })));
+const RetroManager = lazy(() => import("@/components/RetroManager").then((m) => ({ default: m.RetroManager })));
+const ApfGeneratorPage = lazy(() =>
+  import("@/features/apf/components/ApfGeneratorPage").then((m) => ({ default: m.ApfGeneratorPage })),
+);
 
 // ─── Skeleton de seção — exibido enquanto o chunk lazy está carregando ────────
 function SectionSkeleton() {
@@ -65,15 +85,14 @@ function SectionLoader() {
 }
 
 /** ErrorBoundary simples para cada seção lazy */
-class SectionErrorBoundary extends React.Component<
-  { name: string; children: React.ReactNode },
-  { hasError: boolean }
-> {
+class SectionErrorBoundary extends React.Component<{ name: string; children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { name: string; children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
-  static getDerivedStateFromError() { return { hasError: true }; }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
   componentDidCatch(err: Error) {
     console.error(`[SectionErrorBoundary] Erro na seção "${this.props.name}":`, err);
   }
@@ -84,8 +103,7 @@ class SectionErrorBoundary extends React.Component<
           <ShieldAlert className="h-12 w-12 text-destructive/40" />
           <p className="text-base font-medium text-foreground">Erro ao carregar a seção</p>
           <p className="text-sm text-muted-foreground max-w-xs">
-            Ocorreu um problema ao carregar <strong>{this.props.name}</strong>.
-            Tente recarregar a página.
+            Ocorreu um problema ao carregar <strong>{this.props.name}</strong>. Tente recarregar a página.
           </p>
           <Button variant="outline" size="sm" onClick={() => this.setState({ hasError: false })}>
             Tentar novamente
@@ -101,25 +119,48 @@ class SectionErrorBoundary extends React.Component<
 function LazySection({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <SectionErrorBoundary name={name}>
-      <Suspense fallback={<SectionSkeleton />}>
-        {children}
-      </Suspense>
+      <Suspense fallback={<SectionSkeleton />}>{children}</Suspense>
     </SectionErrorBoundary>
   );
 }
 
 const VALID_SECTIONS = [
-  "dashboard", "backlog", "board", "planning-poker", "retrospectiva",
-  "releases", "relatorios", "notificacoes", "gerador-apf", "metricas",
-  "historico", "calendario", "equipe", "epicos", "atividades",
-  "impedimentos", "times", "membros", "perfis", "fluxo", "campos", "automacoes",
+  "dashboard",
+  "backlog",
+  "board",
+  "planning-poker",
+  "retrospectiva",
+  "releases",
+  "relatorios",
+  "notificacoes",
+  "gerador-apf",
+  "metricas",
+  "historico",
+  "calendario",
+  "equipe",
+  "epicos",
+  "atividades",
+  "impedimentos",
+  "times",
+  "membros",
+  "perfis",
+  "fluxo",
+  "campos",
+  "automacoes",
   "demandas-contratos",
 ] as const;
 
 export type SectionKey = (typeof VALID_SECTIONS)[number];
 
 const TEAM_FREE_SECTIONS: SectionKey[] = [
-  "planning-poker", "retrospectiva", "times", "membros", "perfis", "fluxo", "campos", "automacoes",
+  "planning-poker",
+  "retrospectiva",
+  "times",
+  "membros",
+  "perfis",
+  "fluxo",
+  "campos",
+  "automacoes",
 ];
 
 function AccessDenied() {
@@ -176,12 +217,11 @@ const Index = () => {
   }, [loading, section]);
 
   // Navegação via startTransition — sem freeze de UI
-  const handleNavigate = (key: string) =>
-    startTransition(() => navigate(`/sala-agil/${key}`));
+  const handleNavigate = (key: string) => startTransition(() => navigate(`/sala-agil/${key}`));
 
   const isTeamFreeSection = TEAM_FREE_SECTIONS.includes(active);
   const needsTeam = !loading && !isAdmin && !currentTeamId && !isTeamFreeSection;
-  const teamKey   = currentTeamId ?? "no-team";
+  const teamKey = currentTeamId ?? "no-team";
 
   return (
     <AppShell module="sala_agil" activeKey={active} onNavigate={handleNavigate}>
@@ -189,7 +229,10 @@ const Index = () => {
         open={showTeamModal}
         teams={moduleTeams}
         moduleLabel="Sala Ágil"
-        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
+        onSelect={(id) => {
+          setCurrentTeamId(id);
+          setShowTeamModal(false);
+        }}
         onClose={() => setShowTeamModal(false)}
       />
 
@@ -216,8 +259,8 @@ const Index = () => {
           <div key={teamKey}>
             {/* Seções leves — sem LazySection */}
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
-            {active === "equipe"    && <DeveloperManager />}
-            {active === "board"     && (
+            {active === "equipe" && <DeveloperManager />}
+            {active === "board" && (
               <SectionGuard permission="view_kanban">
                 <KanbanBoard />
               </SectionGuard>
@@ -305,9 +348,7 @@ const Index = () => {
             {active === "demandas-contratos" && (
               <SectionGuard permission="view_backlog">
                 <LazySection name="Demandas por Contrato">
-                  {currentTeamId && (
-                    <DemandasPorTimeSection teamId={currentTeamId} />
-                  )}
+                  {currentTeamId && <DemandasPorTimeSection teamId={currentTeamId} />}
                 </LazySection>
               </SectionGuard>
             )}

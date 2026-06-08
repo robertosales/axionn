@@ -51,20 +51,34 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
     const w = window as AuthCallWindow;
     w.__authUserCallCount = 0;
 
-    // Chama updateUser DIRETO — não fazer getSession() antes para evitar
-    // contenção no lock interno do GoTrue (`sb-...-auth-token`).
-    const { data: updData, error } = await supabase.auth.updateUser({ password });
+    // Pausa auto-refresh durante a operação crítica para evitar disputa pelo
+    // Web Lock de auth enquanto o PUT /auth/v1/user ainda está em andamento.
+    await supabase.auth.stopAutoRefresh();
+
+    let updData: { user?: { id?: string } | null } | null = null;
+    let error: unknown = null;
+    try {
+      // Chama updateUser DIRETO — não fazer getSession() antes para evitar
+      // contenção no lock interno do GoTrue (`sb-...-auth-token`).
+      const result = await supabase.auth.updateUser({ password });
+      updData = result.data;
+      error = result.error;
+    } catch (err) {
+      error = err;
+    }
 
     if (error) {
       const anyErr = error as any;
       const code = anyErr.code || anyErr.error_code || "";
       const status = anyErr.status || anyErr.statusCode || "";
-      const msg = error.message || "";
+      const msg = anyErr.message || "";
       // Log seguro para diagnóstico
       console.error("[ForcePasswordChange] updateUser falhou:", { code, status, msg });
 
       let friendly = msg;
-      if (code === "same_password" || /should be different from the old|same.*password/i.test(msg)) {
+      if (/Lock .*auth-token.*released because another request stole it/i.test(msg)) {
+        friendly = "A rotina de autenticação estava ocupada. Aguarde alguns segundos e tente novamente.";
+      } else if (code === "same_password" || /should be different from the old|same.*password/i.test(msg)) {
         friendly = "A nova senha deve ser diferente da senha atual. Escolha outra.";
       } else if (
         code === "weak_password" ||
@@ -86,6 +100,7 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
       setErrorMsg(friendly);
       toast.error(friendly);
       setLoading(false);
+      await supabase.auth.startAutoRefresh();
       return;
     }
 

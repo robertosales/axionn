@@ -220,20 +220,21 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     // Retrocompatibilidade: envia project_id (FK) E projeto (nome texto) juntos
     const nomeProjetoTexto = selectedProjeto?.nome ?? demanda?.projeto ?? "";
 
-    // Bloqueio de duplicidade: mesmo time + título + projeto + tipo + regime
-    if (currentTeamId && form.descricao.trim()) {
+    // Bloqueio de duplicidade: mesmo time + RHM + projeto.
+    // Mesmo RHM pode existir em projetos diferentes; só bloqueia repetição
+    // dentro do mesmo projeto.
+    if (currentTeamId && form.rhm.trim()) {
       try {
         const dup = await checkDemandaDuplicada(
           currentTeamId,
-          form.descricao,
+          form.rhm,
           nomeProjetoTexto,
-          form.tipo,
-          regime,
+          form.project_id || null,
           demanda?.id,
         );
         if (dup) {
           toast.error(
-            "Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time.",
+            `Já existe uma demanda com o número #${form.rhm} no projeto "${nomeProjetoTexto}".`,
           );
           setLoading(false);
           return;

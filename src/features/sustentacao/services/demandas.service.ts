@@ -110,44 +110,65 @@ export async function deleteDemanda(id: string) {
 }
 
 /**
- * checkDemandaDuplicada — retorna true se já existe uma demanda ATIVA no mesmo time
- * com o mesmo título + projeto + tipo + regime (case-insensitive, trim).
- * Demandas com situação `cancelada` ou `ag_aceite_final` são ignoradas.
+ * checkDemandaDuplicada — retorna true se já existe uma demanda no mesmo time
+ * com o mesmo RHM (#) E mesmo projeto (case-insensitive, trim).
+ * Regra: mesmo RHM pode existir em projetos diferentes; só bloqueia repetição
+ * dentro do mesmo projeto. Considera project_id quando disponível, com
+ * fallback no nome do projeto para compatibilidade com registros antigos.
  */
 export async function checkDemandaDuplicada(
   teamId: string,
-  titulo: string,
+  rhm: string,
   projeto: string,
-  tipo: string,
-  sla: string,
+  projectId?: string | null,
   excludeId?: string,
 ): Promise<boolean> {
-  const t = (titulo ?? "").trim();
+  const r = (rhm ?? "").trim();
   const p = (projeto ?? "").trim();
-  if (!t || !p || !teamId) return false;
+  if (!r || !teamId) return false;
 
   let q = supabase
     .from("demandas" as any)
-    .select("id,titulo,projeto,tipo,sla,situacao")
+    .select("id,rhm,projeto,project_id")
     .eq("team_id", teamId)
-    .eq("tipo", tipo)
-    .eq("sla", sla)
-    .not("situacao", "in", "(cancelada,ag_aceite_final)")
-    .ilike("titulo", t)
-    .ilike("projeto", p);
+    .eq("rhm", r);
 
   if (excludeId) q = q.neq("id", excludeId);
 
   const { data, error } = await q.limit(20);
   if (error) throw error;
 
-  const tl = t.toLowerCase();
   const pl = p.toLowerCase();
   return ((data as any[]) ?? []).some(
-    (d) =>
-      (d.titulo ?? "").trim().toLowerCase() === tl &&
-      (d.projeto ?? "").trim().toLowerCase() === pl,
+    (d) => {
+      if (projectId && d.project_id) return d.project_id === projectId;
+      return (d.projeto ?? "").trim().toLowerCase() === pl;
+    },
   );
+}
+
+/**
+ * searchDemandas — consulta direta ao banco por RHM / projeto / título.
+ * Usada pela tela "Consultar Demandas" para encontrar demandas que ainda
+ * não foram carregadas pela paginação infinita.
+ */
+export async function searchDemandas(
+  teamId: string,
+  query: string,
+  limit = 100,
+): Promise<Demanda[]> {
+  const q = (query ?? "").trim();
+  if (!teamId || !q) return [];
+  const like = `%${q}%`;
+  const { data, error } = await supabase
+    .from("demandas" as any)
+    .select("*")
+    .eq("team_id", teamId)
+    .or(`rhm.ilike.${like},projeto.ilike.${like},titulo.ilike.${like},descricao.ilike.${like}`)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as unknown as Demanda[]) ?? [];
 }
 
 export async function addTransition(t: Omit<DemandaTransition, "id" | "created_at">) {

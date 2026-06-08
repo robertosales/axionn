@@ -332,7 +332,7 @@ function PlanningSessionCard({
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
 export function AgileHistory() {
-  const { currentTeamId } = useAuth();
+  const { currentTeamId } = useAuth(); // history view
   const { sprints } = useSprint();
 
   const [tab, setTab] = useState("planning");

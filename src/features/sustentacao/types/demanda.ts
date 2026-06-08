@@ -11,6 +11,7 @@ export const FLOW_PRINCIPAL = [
   "hom_homologada",
   "fila_producao",
   "ag_aceite_final",
+  "fila_concluida",
 ] as const;
 
 export const ALL_SITUACOES = [
@@ -26,6 +27,7 @@ export const ALL_SITUACOES = [
   "fila_producao",
   "ag_aceite_final",
   "cancelada",
+  "fila_concluida",
 ] as const;
 
 export type DemandaSituacao = (typeof ALL_SITUACOES)[number];
@@ -43,6 +45,7 @@ export const SITUACAO_LABELS: Record<string, string> = {
   fila_producao: "Fila para Produção (Infra)",
   ag_aceite_final: "Ag. Aceite Final",
   cancelada: "Cancelada",
+  fila_concluida: "Concluída",
 };
 
 export const SITUACAO_COLORS: Record<string, string> = {
@@ -58,6 +61,7 @@ export const SITUACAO_COLORS: Record<string, string> = {
   fila_producao: "bg-orange-100 text-orange-700 border-orange-300",
   ag_aceite_final: "bg-emerald-100 text-emerald-700 border-emerald-300",
   cancelada: "bg-gray-200 text-gray-700 border-gray-300",
+  fila_concluida: "bg-green-100 text-green-700 border-green-300",
 };
 
 export const FASES = [
@@ -83,7 +87,7 @@ export const FASE_LABELS: Record<string, string> = {
 };
 
 export const REQUIRES_JUSTIFICATIVA = ["rejeitada", "cancelada", "planejamento_ag_aprovacao"] as const;
-export const TERMINAL_STATUSES = ["ag_aceite_final", "cancelada"] as const;
+export const TERMINAL_STATUSES = ["ag_aceite_final", "cancelada", "fila_concluida"] as const;
 
 export interface Demanda {
   id: string;
@@ -138,6 +142,10 @@ export function isDemandaIniciada(demanda: Demanda): boolean {
   return demanda.situacao !== "fila_atendimento";
 }
 
+export function isDemandaConcluida(demanda: Demanda): boolean {
+  return demanda.situacao === "fila_concluida";
+}
+
 export function getResponsavelAtivo(demanda: Demanda): string | null {
   const s = demanda.situacao;
 
@@ -152,7 +160,9 @@ export function getResponsavelAtivo(demanda: Demanda): string | null {
       ? demanda.responsavel_dev
       : ["hom_ag_homologacao", "hom_homologada"].includes(s)
         ? demanda.responsavel_arquiteto
-        : null;
+        : ["fila_concluida"].includes(s)
+          ? demanda.responsavel_dev
+          : null;
 
   if (porFase) return porFase;
 

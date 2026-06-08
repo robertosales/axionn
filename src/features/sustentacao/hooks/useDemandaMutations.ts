@@ -1,127 +1,103 @@
-/**
- * useDemandaMutations — P0-B: hook de mutations sem fetch
- *
- * Motivação:
- *   DemandasList precisa de create/update/moveTo/remove, mas importava
- *   useDemandas que internamente executa fetchDemandasEnriched (dataset completo).
- *   Isso causava:
- *     1. Uma RPC pesada extra no mount da página Demandas (dados ignorados)
- *     2. Um canal Realtime extra 'demandas-rt-{teamId}' em paralelo com
- *        o canal já existente em useDemandasPaginadas
- *
- *   Este hook expõe apenas as mutations. Sem useQuery, sem canal RT.
- *   A invalidação após cada mutation atinge KEYS.demandas.all E
- *   KEYS.demandas.infinite, mantendo Kanban e lista paginada sincronizados.
- *
- * fix(P1-root): resetQueries → invalidateQueries({ refetchType:'active' })
- *   resetQueries respeitava staleTime e não forçava refetch dentro da
- *   janela de frescor (STALE.REALTIME = 30s). invalidateQueries marca a
- *   query como stale e dispara refetch imediato se o componente estiver
- *   montado, garantindo que a nova demanda apareça sem reload.
- *
- * Uso:
- *   const { create, update, moveTo, remove } = useDemandaMutations();
- */
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { DEMANDAS_QUERY_KEY } from "./useDemandas";
+import type { Demanda } from "../types/demanda";
+import { TERMINAL_STATUSES } from "../types/demanda";
 
-import { useQueryClient }           from '@tanstack/react-query';
-import { useAuth }                  from '@/contexts/AuthContext';
-import { toast }                    from 'sonner';
-import * as svc                     from '../services/demandas.service';
-import type { Demanda }             from '../types/demanda';
-import { REQUIRES_JUSTIFICATIVA }   from '../types/demanda';
-import { KEYS }                     from '@/lib/queryKeys';
+type UpdateDemandaPayload = Partial<Omit<Demanda, "id" | "created_at" | "team_id">> & {
+  id: string;
+};
+
+async function updateDemanda(payload: UpdateDemandaPayload): Promise<Demanda> {
+  const { id, ...rest } = payload;
+
+  const { data, error } = await supabase
+    .from("demandas")
+    .update(rest)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as Demanda;
+}
+
+async function transitionDemanda(params: {
+  id: string;
+  situacao: string;
+  justificativa?: string;
+}): Promise<Demanda> {
+  const isTerminal = (TERMINAL_STATUSES as readonly string[]).includes(params.situacao);
+
+  const updatePayload: Record<string, unknown> = {
+    situacao: params.situacao,
+    situacao_changed_at: new Date().toISOString(),
+  };
+
+  // Para fila_concluida, registra a data de aceite automaticamente
+  if (params.situacao === "fila_concluida") {
+    updatePayload.aceite_data = new Date().toISOString();
+  }
+
+  const { data, error } = await supabase
+    .from("demandas")
+    .update(updatePayload)
+    .eq("id", params.id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  if (params.justificativa) {
+    await supabase.from("demanda_transitions").insert({
+      demanda_id: params.id,
+      to_status: params.situacao,
+      justificativa: params.justificativa,
+    });
+  }
+
+  void isTerminal;
+  return data as Demanda;
+}
+
+async function createDemanda(
+  payload: Omit<Demanda, "id" | "created_at" | "updated_at">
+): Promise<Demanda> {
+  const { data, error } = await supabase
+    .from("demandas")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as Demanda;
+}
 
 export function useDemandaMutations() {
-  const { currentTeamId, user } = useAuth();
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
-  // fix(P1-root): invalidateQueries com refetchType:'active' para a InfiniteQuery.
-  // Isso marca a query como stale E dispara refetch imediato se o componente
-  // estiver montado — ao contrário de resetQueries que respeita o staleTime.
-  const invalidateAll = () => Promise.all([
-    qc.invalidateQueries({ queryKey: KEYS.demandas.all(currentTeamId!) }),
-    qc.invalidateQueries({ queryKey: KEYS.demandas.infinite(currentTeamId!), refetchType: 'active' }),
-  ]);
-
-  const create = async (d: Partial<Demanda>) => {
-    if (!currentTeamId) return;
-    try {
-      const created = await svc.createDemanda({ ...d, team_id: currentTeamId, rhm: d.rhm! });
-      if (user) {
-        await svc.addTransition({
-          demanda_id:    created.id,
-          from_status:   null,
-          to_status:     'fila_atendimento',
-          user_id:       user.id,
-          justificativa: null,
-        });
-      }
-      toast.success('Demanda criada com sucesso');
-      await invalidateAll();
-    } catch (err: any) {
-      const code = err?.code ?? err?.cause?.code;
-      const msg  = String(err?.message ?? '');
-      const details = String(err?.details ?? '');
-      const blob = `${msg} ${details}`;
-      if (code === '23505' && blob.includes('demandas_team_id_rhm_key')) {
-        toast.error(
-          `Já existe uma demanda com o número #${d.rhm ?? ''} neste time. Use outro número.`,
-        );
-      } else if (code === '23505' || blob.includes('demandas_no_duplicates_idx')) {
-        toast.error(
-          'Já existe uma demanda ativa com mesmo título, projeto, tipo e regime neste time.',
-        );
-      } else {
-        toast.error(`Erro ao criar demanda${msg ? `: ${msg}` : ''}`);
-      }
-      throw err;
-    }
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: [DEMANDAS_QUERY_KEY] });
   };
 
-  const update = async (id: string, updates: Partial<Demanda>) => {
-    try {
-      await svc.updateDemanda(id, updates);
-      toast.success('Demanda atualizada com sucesso');
-      await invalidateAll();
-    } catch {
-      toast.error('Erro ao atualizar demanda');
-    }
-  };
+  const updateMutation = useMutation({
+    mutationFn: updateDemanda,
+    onSuccess: invalidateAll,
+  });
 
-  const moveTo = async (demanda: Demanda, newStatus: string, justificativa?: string) => {
-    if ((REQUIRES_JUSTIFICATIVA as readonly string[]).includes(newStatus) && !justificativa) {
-      toast.error('Justificativa obrigatória para este status');
-      return false;
-    }
-    try {
-      await svc.updateDemanda(demanda.id, { situacao: newStatus });
-      if (user) {
-        await svc.addTransition({
-          demanda_id:    demanda.id,
-          from_status:   demanda.situacao,
-          to_status:     newStatus,
-          user_id:       user.id,
-          justificativa: null,
-        });
-      }
-      toast.success('Status atualizado com sucesso');
-      await invalidateAll();
-      return true;
-    } catch {
-      toast.error('Erro ao atualizar status');
-      return false;
-    }
-  };
+  const transitionMutation = useMutation({
+    mutationFn: transitionDemanda,
+    onSuccess: invalidateAll,
+  });
 
-  const remove = async (id: string) => {
-    try {
-      await svc.deleteDemanda(id);
-      toast.success('Demanda excluída com sucesso');
-      await invalidateAll();
-    } catch {
-      toast.error('Erro ao excluir demanda');
-    }
-  };
+  const createMutation = useMutation({
+    mutationFn: createDemanda,
+    onSuccess: invalidateAll,
+  });
 
-  return { create, update, moveTo, remove };
+  return {
+    update: updateMutation,
+    transition: transitionMutation,
+    create: createMutation,
+  };
 }

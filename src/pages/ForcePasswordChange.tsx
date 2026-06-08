@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+// Fluxo de troca obrigatória de senha: a flag profiles.must_change_password é
+// baixada ANTES do PUT /auth/v1/user (que invalida a sessão e impede o UPDATE).
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -58,14 +60,49 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
     const w = window as AuthCallWindow;
     w.__authUserCallCount = 0;
 
+    // PASSO 1 — Baixar a flag must_change_password ANTES do PUT /auth/v1/user.
+    // Motivo: o PUT /user invalida todas as sessões existentes do usuário no
+    // GoTrue. Logo após, o auto-refresh interno do supabase-js percebe
+    // `session_not_found` e zera o JWT local; qualquer UPDATE posterior em
+    // `profiles` segue sem auth.uid(), a RLS bloqueia silenciosamente
+    // (0 linhas, sem erro) e a flag permanece true — o usuário volta para
+    // esta mesma tela no próximo login.
+    const uid = user?.id;
+    if (!uid) {
+      const m = "Sessão expirada. Faça login novamente para trocar a senha.";
+      setErrorMsg(m); toast.error(m);
+      setLoading(false);
+      submittingRef.current = false;
+      await signOut();
+      return;
+    }
+
+    const { data: flagRows, error: flagErr } = await supabase
+      .from("profiles")
+      .update({ must_change_password: false })
+      .eq("user_id", uid)
+      .select("user_id");
+
+    if (flagErr || !flagRows || flagRows.length === 0) {
+      console.error("[ForcePasswordChange] update flag falhou:", { flagErr, rows: flagRows?.length });
+      const m = flagErr?.message
+        ? `Não foi possível liberar o acesso: ${flagErr.message}`
+        : "Sessão expirada ou sem permissão para liberar o acesso. Faça login novamente.";
+      setErrorMsg(m); toast.error(m);
+      setLoading(false);
+      submittingRef.current = false;
+      await signOut();
+      return;
+    }
+
+    // PASSO 2 — Chamada direta e única ao endpoint de troca de senha.
+    // Não usa supabase.auth.updateUser(), portanto não entra no Web Lock
+    // `lock:sb-...-auth-token` que vinha sendo roubado durante requisições lentas.
     let updData: { user?: { id?: string } | null } | null = null;
     let error: unknown = null;
     try {
       if (!session?.access_token) throw new Error("Sessão expirada. Faça login novamente para trocar a senha.");
 
-      // Chamada direta e única ao endpoint de atualização de senha.
-      // Não usa supabase.auth.updateUser(), portanto não entra no Web Lock
-      // `lock:sb-...-auth-token` que vinha sendo roubado durante requisições lentas.
       w.__authUserCallCount = (w.__authUserCallCount ?? 0) + 1;
       const response = await fetch(AUTH_USER_URL, {
         method: "PUT",
@@ -90,6 +127,17 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
     }
 
     if (error) {
+      // ROLLBACK — restaura must_change_password=true para manter o estado
+      // consistente, já que o GoTrue rejeitou a nova senha.
+      try {
+        await supabase
+          .from("profiles")
+          .update({ must_change_password: true })
+          .eq("user_id", uid);
+      } catch (rbErr) {
+        console.error("[ForcePasswordChange] rollback flag falhou:", rbErr);
+      }
+
       const anyErr = error as any;
       const code = anyErr.code || anyErr.error_code || "";
       const status = anyErr.status || anyErr.statusCode || "";
@@ -126,25 +174,8 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
       return;
     }
 
-    // Limpa a flag must_change_password
-    const uid = updData?.user?.id ?? user?.id;
-    if (uid) {
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .update({ must_change_password: false })
-        .eq("user_id", uid);
-      if (profErr) {
-        console.error("[ForcePasswordChange] profiles update falhou:", profErr);
-        toast.error(
-          "Senha trocada, mas não foi possível liberar o acesso automaticamente. Faça login novamente.",
-        );
-        setLoading(false);
-        submittingRef.current = false;
-        await signOut();
-        return;
-      }
-    }
-
+    // Flag já foi baixada no PASSO 1 (e validada via .select()).
+    void updData;
     const calls = (window as AuthCallWindow).__authUserCallCount ?? 0;
     console.info(`[ForcePasswordChange] OK — chamadas /auth/v1/user: ${calls}`);
     toast.success(`Senha atualizada com sucesso! (${calls} chamada${calls === 1 ? "" : "s"} ao auth)`);

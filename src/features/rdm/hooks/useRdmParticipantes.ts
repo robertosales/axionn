@@ -35,7 +35,7 @@ export function useRdmParticipantes(rdmId: string | null) {
         .eq("rdm_id", rdmId)
         .order("created_at");
       if (err) throw err;
-      setParticipantes((data ?? []) as RdmParticipanteEnriquecido[]);
+      setParticipantes((data ?? []) as unknown as RdmParticipanteEnriquecido[]);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao carregar participantes");
     } finally {

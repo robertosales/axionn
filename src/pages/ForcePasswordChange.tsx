@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -9,14 +9,17 @@ import { toast } from "sonner";
 import { Lock, ShieldAlert, CheckCircle2 } from "lucide-react";
 
 type AuthCallWindow = Window & { __authUserCallCount?: number };
+const AUTH_USER_URL = "https://rgikyyazotqapaxijwui.supabase.co/auth/v1/user";
+const AUTH_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnaWt5eWF6b3RxYXBheGlqd3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjM5NTIsImV4cCI6MjA4OTgzOTk1Mn0.ADQ3VDenVwNL3fgyNc2Fgu-Si66T7SHdG5se4Hvf5eg";
 
 export default function ForcePasswordChange({ onDone }: { onDone: () => void }) {
-  const { user, signOut } = useAuth();
+  const { session, user, signOut } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ calls: number; redirectIn: number } | null>(null);
+  const submittingRef = useRef(false);
 
   // Após sucesso, faz logout e retorna à tela de login automaticamente em 5s.
   useEffect(() => {
@@ -34,15 +37,19 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setErrorMsg(null);
     if (password.length < 6) {
       const m = "A senha deve ter ao menos 6 caracteres";
       setErrorMsg(m); toast.error(m);
+      submittingRef.current = false;
       return;
     }
     if (password !== confirm) {
       const m = "As senhas não coincidem";
       setErrorMsg(m); toast.error(m);
+      submittingRef.current = false;
       return;
     }
     setLoading(true);
@@ -51,20 +58,49 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
     const w = window as AuthCallWindow;
     w.__authUserCallCount = 0;
 
-    // Chama updateUser DIRETO — não fazer getSession() antes para evitar
-    // contenção no lock interno do GoTrue (`sb-...-auth-token`).
-    const { data: updData, error } = await supabase.auth.updateUser({ password });
+    let updData: { user?: { id?: string } | null } | null = null;
+    let error: unknown = null;
+    try {
+      if (!session?.access_token) throw new Error("Sessão expirada. Faça login novamente para trocar a senha.");
+
+      // Chamada direta e única ao endpoint de atualização de senha.
+      // Não usa supabase.auth.updateUser(), portanto não entra no Web Lock
+      // `lock:sb-...-auth-token` que vinha sendo roubado durante requisições lentas.
+      w.__authUserCallCount = (w.__authUserCallCount ?? 0) + 1;
+      const response = await fetch(AUTH_USER_URL, {
+        method: "PUT",
+        headers: {
+          apikey: AUTH_ANON_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw {
+          code: payload?.code || payload?.error_code,
+          status: response.status,
+          message: payload?.msg || payload?.message || payload?.error_description || "Não foi possível atualizar a senha.",
+        };
+      }
+      updData = payload;
+    } catch (err) {
+      error = err;
+    }
 
     if (error) {
       const anyErr = error as any;
       const code = anyErr.code || anyErr.error_code || "";
       const status = anyErr.status || anyErr.statusCode || "";
-      const msg = error.message || "";
+      const msg = anyErr.message || "";
       // Log seguro para diagnóstico
       console.error("[ForcePasswordChange] updateUser falhou:", { code, status, msg });
 
       let friendly = msg;
-      if (code === "same_password" || /should be different from the old|same.*password/i.test(msg)) {
+      if (/Lock .*auth-token.*released because another request stole it/i.test(msg)) {
+        friendly = "A rotina de autenticação estava ocupada. Aguarde alguns segundos e tente novamente.";
+      } else if (code === "same_password" || /should be different from the old|same.*password/i.test(msg)) {
         friendly = "A nova senha deve ser diferente da senha atual. Escolha outra.";
       } else if (
         code === "weak_password" ||
@@ -86,6 +122,7 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
       setErrorMsg(friendly);
       toast.error(friendly);
       setLoading(false);
+      submittingRef.current = false;
       return;
     }
 
@@ -102,6 +139,7 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
           "Senha trocada, mas não foi possível liberar o acesso automaticamente. Faça login novamente.",
         );
         setLoading(false);
+        submittingRef.current = false;
         await signOut();
         return;
       }

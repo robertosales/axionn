@@ -186,10 +186,9 @@ function SustentacaoSection({ active }: { active: string }) {
             onSubmit={async (data) => {
               try {
                 await create(data as Partial<Demanda>);
-                toast.success("Demanda criada com sucesso!");
                 setShowCreate(false);
-              } catch (e: any) {
-                toast.error("Erro ao criar demanda: " + (e?.message ?? ""));
+              } catch {
+                // Toast já exibido por useDemandaMutations.create — manter modal aberto
               }
             }}
           />

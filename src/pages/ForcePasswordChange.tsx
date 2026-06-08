@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -9,43 +9,105 @@ import { toast } from "sonner";
 import { Lock, ShieldAlert } from "lucide-react";
 
 export default function ForcePasswordChange({ onDone }: { onDone: () => void }) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshProfile } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Garante que a sessão atual ainda é válida antes de tentar trocar a senha.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        toast.error("Sessão expirada. Faça login novamente.");
+        signOut();
+      }
+    });
+  }, [signOut]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
     if (password.length < 6) {
-      toast.error("A senha deve ter ao menos 6 caracteres");
+      const m = "A senha deve ter ao menos 6 caracteres";
+      setErrorMsg(m); toast.error(m);
       return;
     }
     if (password !== confirm) {
-      toast.error("As senhas não coincidem");
+      const m = "As senhas não coincidem";
+      setErrorMsg(m); toast.error(m);
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
+
+    // 1) Revalida sessão (evita 401/403 mascarado de 422)
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      const m = "Sessão expirada. Faça login novamente para trocar a senha.";
+      setErrorMsg(m); toast.error(m);
+      setLoading(false);
+      await signOut();
+      return;
+    }
+
+    // 2) Tenta atualizar a senha
+    const { data: updData, error } = await supabase.auth.updateUser({ password });
+
     if (error) {
-      const code = (error as any).code || "";
+      const anyErr = error as any;
+      const code = anyErr.code || anyErr.error_code || "";
+      const status = anyErr.status || anyErr.statusCode || "";
       const msg = error.message || "";
+      // Log seguro para diagnóstico
+      console.error("[ForcePasswordChange] updateUser falhou:", { code, status, msg });
+
       let friendly = msg;
-      if (code === "same_password" || /should be different from the old/i.test(msg)) {
+      if (code === "same_password" || /should be different from the old|same.*password/i.test(msg)) {
         friendly = "A nova senha deve ser diferente da senha atual. Escolha outra.";
-      } else if (code === "weak_password" || /weak|pwned|leaked/i.test(msg)) {
-        friendly = "Senha muito fraca ou exposta em vazamentos. Use uma senha mais forte.";
-      } else if (/at least.*characters/i.test(msg)) {
-        friendly = "A senha não atende ao tamanho mínimo exigido.";
+      } else if (
+        code === "weak_password" ||
+        /weak|pwned|leaked|compromised|breached|been found/i.test(msg)
+      ) {
+        friendly =
+          "Esta senha foi identificada em vazamentos públicos ou é muito fraca. Use uma senha forte (letras maiúsculas, minúsculas, números e símbolos).";
+      } else if (/at least.*characters|minimum.*length|too short/i.test(msg)) {
+        friendly = "A senha não atende ao tamanho mínimo exigido (mín. 6 caracteres).";
+      } else if (/should contain|must contain|requires/i.test(msg)) {
+        friendly = "A senha não atende aos requisitos de complexidade exigidos pelo sistema.";
+      } else if (status === 401 || status === 403 || /jwt|session|not authenticated/i.test(msg)) {
+        friendly = "Sessão expirada. Faça login novamente para trocar a senha.";
+      } else if (status === 429) {
+        friendly = "Muitas tentativas. Aguarde alguns instantes e tente novamente.";
+      } else if (!friendly) {
+        friendly = "Não foi possível atualizar a senha. Tente novamente.";
       }
+      setErrorMsg(friendly);
       toast.error(friendly);
       setLoading(false);
       return;
     }
-    if (user) {
-      await supabase.from("profiles").update({ must_change_password: false }).eq("user_id", user.id);
+
+    // 3) Limpa a flag must_change_password
+    const uid = updData?.user?.id ?? user?.id;
+    if (uid) {
+      const { error: profErr } = await supabase
+        .from("profiles")
+        .update({ must_change_password: false })
+        .eq("user_id", uid);
+      if (profErr) {
+        console.error("[ForcePasswordChange] profiles update falhou:", profErr);
+        toast.error(
+          "Senha trocada, mas não foi possível liberar o acesso automaticamente. Faça login novamente.",
+        );
+        setLoading(false);
+        await signOut();
+        return;
+      }
     }
+
     toast.success("Senha atualizada com sucesso!");
     setLoading(false);
+    await refreshProfile();
     onDone();
   };
 
@@ -65,6 +127,11 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {errorMsg && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {errorMsg}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="fpc-pwd">Nova senha *</Label>
               <div className="relative">

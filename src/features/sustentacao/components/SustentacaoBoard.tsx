@@ -96,6 +96,7 @@ export const FLOWPRINCIPAL = [
   "hom_homologada",
   "fila_producao",
   "ag_aceite_final",
+  "fila_concluida",
 ] as const;
 
 const COLUMN_COLORS: Record<string, { hex: string }> = {
@@ -110,6 +111,7 @@ const COLUMN_COLORS: Record<string, { hex: string }> = {
   rejeitada:                 { hex: "#f43f5e" },
   fila_producao:             { hex: "#f97316" },
   ag_aceite_final:           { hex: "#10b981" },
+  fila_concluida:            { hex: "#22c55e" },
 };
 
 const PAPEL_COLORS: Record<string, string> = {

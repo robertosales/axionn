@@ -279,6 +279,9 @@ Deno.serve(async (req: Request) => {
         });
         if (linkErr) throw linkErr;
 
+        // SECURITY: jamais retornar o action_link no corpo da resposta —
+        // ele é uma URL one-time que autentica o usuário sem senha.
+        // O Supabase já dispara o e-mail de recuperação via generateLink.
         await auditLog("reset_password", { mode: "send_link", email: targetEmail });
 
         return new Response(
@@ -286,7 +289,6 @@ Deno.serve(async (req: Request) => {
             success: true,
             mode: "send_link",
             message: "Link de redefinição enviado para o e-mail do usuário.",
-            recovery_link: linkData?.properties?.action_link ?? null,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );

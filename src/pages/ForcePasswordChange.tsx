@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+// Fluxo de troca obrigatória de senha — flag baixada ANTES do PUT /auth/v1/user
+// para evitar que a invalidação de sessão do GoTrue impeça o UPDATE em profiles.
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";

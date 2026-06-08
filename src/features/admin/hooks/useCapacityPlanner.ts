@@ -20,6 +20,8 @@ export interface DevCapacity {
   status:           CapacityStatus;
   unestimatedCount: number;
   noActiveSprint:   boolean;
+  pausedCount:      number;
+  slaCriticalCount: number;
 }
 
 export interface TeamCapacity {
@@ -50,6 +52,8 @@ interface RpcDevRow {
   husCount:         number;
   unestimatedCount: number;
   noActiveSprint:   boolean;
+  pausedCount?:     number;
+  slaCriticalCount?: number;
 }
 
 interface RpcTeamRow {
@@ -96,12 +100,21 @@ export function useCapacityPlanner() {
    * preservando o primeiro módulo encontrado para cada time.
    */
   const uniqueTeams = useMemo(() => {
-    const seen = new Set<string>();
-    return teams.filter(t => {
-      if (seen.has(t.id)) return false;
-      seen.add(t.id);
-      return true;
-    });
+    // Prioriza módulos "reais" (sala_agil/sustentacao) sobre `rdm`, pois um
+    // mesmo time pode estar mapeado em team_modules para múltiplos módulos
+    // (ex.: TIME 1 aparece como sustentacao E rdm). Sem a priorização, a
+    // primeira entrada encontrada podia ser `rdm`, fazendo a partição
+    // sustentacao/sala_agil perder o time e a RPC não rodar.
+    const rank = (m: string) =>
+      m === "sustentacao" || m === "sala_agil" ? 0 : 1;
+    const byId = new Map<string, typeof teams[number]>();
+    for (const t of teams) {
+      const cur = byId.get(t.id);
+      if (!cur || rank(t.module) < rank(cur.module)) {
+        byId.set(t.id, t);
+      }
+    }
+    return Array.from(byId.values());
   }, [teams]);
 
   /**
@@ -127,18 +140,23 @@ export function useCapacityPlanner() {
     setError(null);
 
     try {
-      // Particiona times por módulo: Sala Ágil (sprints) vs Sustentação (semana corrente)
-      const agilIds        = uniqueTeams.filter(t => t.module === "sala_agil").map(t => t.id);
-      const sustentacaoIds = uniqueTeams.filter(t => t.module === "sustentacao").map(t => t.id);
-
-      const teamId = selectedTeam !== "all" ? selectedTeam : undefined;
+      // Ágil e Sustentação são modos isolados: Sustentação nunca deve procurar sprint.
+      const selectedInfo = selectedTeam !== "all" ? teamMap[selectedTeam] : undefined;
+      const allAgilIds   = uniqueTeams.filter(t => t.module === "sala_agil").map(t => t.id);
+      const allSustIds   = uniqueTeams.filter(t => t.module === "sustentacao").map(t => t.id);
+      const agilIds      = selectedInfo
+        ? selectedInfo.module === "sala_agil" ? [selectedInfo.id] : []
+        : allAgilIds;
+      const sustentacaoIds = selectedInfo
+        ? selectedInfo.module === "sustentacao" ? [selectedInfo.id] : []
+        : allSustIds;
 
       const buildParams = (ids: string[]) => {
         const p: { p_team_ids: string[]; p_team_id?: string; p_default_cap?: number } = {
           p_team_ids:    ids,
           p_default_cap: 40,
         };
-        if (teamId !== undefined) p.p_team_id = teamId;
+        if (selectedInfo) p.p_team_id = selectedInfo.id;
         return p;
       };
 
@@ -167,17 +185,20 @@ export function useCapacityPlanner() {
           const alloc    = Number(d.allocatedHours);
           const realized = Number(d.realizedHours);
           const isSust   = teamInfo?.module === "sustentacao";
-          // Sustentação não tem alocação prevista — utilização baseia-se no Realizado/Capacidade
-          const utilBase = isSust ? realized : alloc;
-          const utilPct  = cap > 0 ? Math.round((utilBase / cap) * 100) : 0;
+          // Utilização sempre baseada em horas alocadas (estimadas) / capacidade
+          const utilPct  = cap > 0 ? Math.round((alloc / cap) * 100) : 0;
           const realPct  = cap > 0 ? Math.round((realized / cap) * 100) : 0;
           const wip      = Number(d.wipCount);
+          const paused   = Number(d.pausedCount ?? 0);
+          const slaCrit  = Number(d.slaCriticalCount ?? 0);
 
           let status: CapacityStatus;
           if (isSust) {
-            if (wip === 0 && realized === 0) status = "idle";
-            else if (realized > cap || wip > 5) status = "overloaded";
-            else if (realized >= cap * 0.8 || wip >= 4) status = "warning";
+            // Risco de SLA tem prioridade absoluta
+            if (slaCrit > 0) status = "overloaded";
+            else if (wip === 0 && alloc === 0 && realized === 0) status = "idle";
+            else if (alloc > cap || wip > 5) status = "overloaded";
+            else if (alloc >= cap * 0.8 || wip >= 4) status = "warning";
             else status = "ok";
           } else {
             status = calcStatus(Number(d.husCount), Number(d.unestimatedCount), utilPct);
@@ -197,6 +218,8 @@ export function useCapacityPlanner() {
             status:           status,
             unestimatedCount: Number(d.unestimatedCount),
             noActiveSprint:   d.noActiveSprint,
+            pausedCount:      paused,
+            slaCriticalCount: slaCrit,
           };
         }).sort((a, b) => b.utilizationPct - a.utilizationPct);
 
@@ -209,9 +232,7 @@ export function useCapacityPlanner() {
           totalCapacity:  totalCap,
           totalAllocated: totalAlloc,
           totalRealized:  totalReal,
-          utilizationPct: totalCap > 0
-            ? Math.round(((teamInfo?.module === "sustentacao" ? totalReal : totalAlloc) / totalCap) * 100)
-            : 0,
+          utilizationPct: totalCap > 0 ? Math.round((totalAlloc / totalCap) * 100) : 0,
           realizationPct: totalCap > 0 ? Math.round((totalReal  / totalCap) * 100) : 0,
           devs,
           hasUnestimated: devs.some(d => d.unestimatedCount > 0),

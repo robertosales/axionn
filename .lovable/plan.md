@@ -1,71 +1,43 @@
-## Objetivo
+## Diagnóstico
 
-Hoje o Painel de Capacidade (`/admin/capacidade`) só mostra times de Sala Ágil porque a RPC `get_capacity_planner` é baseada em `developers` + sprints + `user_stories`. Vamos estender para também listar **todos os membros dos times de Sustentação** (Time 1, Time 2, Time 3 e demais) com indicadores de ociosidade, WIP e sobrecarga — usando a fonte de dados própria de Sustentação (`team_members` + `demanda_responsaveis` + `demanda_hours`).
+`teams` no `AuthContext` é construído a partir de `team_modules`, então cada time aparece **uma entrada por módulo**. TIME 1/2/3 estão cadastrados em `team_modules` com **dois módulos cada**: `sustentacao` E `rdm`.
 
-## Regras combinadas
-
-- **Capacidade**: 40h por semana corrente (segunda → sexta).
-- **Realizado**: soma de `demanda_hours.horas` lançadas pelo usuário na semana corrente.
-- **WIP**: nº de demandas em aberto (situação ≠ `aceite_final`/`cancelada`/`fila_concluida`) onde o usuário está em `demanda_responsaveis` (qualquer papel).
-- **Status do membro**:
-  - `idle` (Ocioso): WIP = 0 e Realizado = 0
-  - `overloaded` (Sobrecarregado): Realizado > 40h OU WIP > 5
-  - `warning` (Atenção): Realizado entre 32h e 40h, ou WIP entre 4 e 5
-  - `ok`: tem WIP e está dentro do limite
-- **Membros listados**: todos os usuários ativos de `team_members` cujo time tem `module = 'sustentacao'`. Não depende mais da tabela `developers`.
-
-## Mudanças
-
-### 1. Backend — nova RPC `get_capacity_planner_sustentacao`
-
-Criar função SECURITY DEFINER que recebe `p_team_ids uuid[]` e retorna a mesma estrutura JSON usada hoje (`teamId`, `sprintAtivo` = null, `devs[]`, totais). Para cada time:
-
-- Lista membros via `team_members → profiles` (apenas `is_active = true`).
-- Para cada membro calcula `allocatedHours = 0` (não aplicável), `realizedHours`, `wipCount`, `husCount = wipCount`, `unestimatedCount = 0`.
-- Janela: `date_trunc('week', now())` até `date_trunc('week', now()) + interval '5 days'` (seg-sex).
-- Totais do time agregando os membros.
-
-Validar acesso com `_assert_team_access(p_team_ids)` (mesma função já usada).
-
-### 2. Hook `useCapacityPlanner`
-
-- Particionar `uniqueTeams` em `agilTeams` e `sustentacaoTeams` por `team.module`.
-- Disparar 2 chamadas RPC em paralelo:
-  - `get_capacity_planner` (apenas times ágeis)
-  - `get_capacity_planner_sustentacao` (apenas times sustentação)
-- Concatenar os resultados e enriquecer normalmente.
-- Ajustar `calcStatus` para suportar a semântica de Sustentação (WIP > 5 → overloaded; WIP = 0 e realizado = 0 → idle).
-
-### 3. UI — `CapacityGrid` / `CapacityBar`
-
-- Adicionar variante visual para times Sustentação (ícone `Shield` violet já existe; trocar p/ azul conforme regra de cor do módulo).
-- Quando `sprintAtivo` for null e o time for Sustentação, exibir "Semana corrente (seg-sex)" no header em vez de sprint.
-- Coluna "Aloc." é substituída por "WIP" (nº de demandas em aberto) para linhas de Sustentação. Cap. fixo 40h, Real. = horas lançadas na semana.
-
-### 4. `AdminCapacidadePage`
-
-- Sem mudanças estruturais; o seletor de times já popula a partir de `uniqueTeams` (que inclui ambos os módulos).
-- Atualizar contador do header para mostrar "X devs (Ágil) · Y analistas (Sustentação)".
-
-## Pontos técnicos
-
-```text
-get_capacity_planner_sustentacao(p_team_ids)
- ├─ assert acesso
- ├─ FOR EACH team_id:
- │   ├─ membros = SELECT user_id FROM team_members JOIN profiles (is_active)
- │   ├─ janela = [monday(now), friday(now) 23:59:59]
- │   ├─ realized = SUM(demanda_hours.horas WHERE user_id=mem AND data_lancamento IN janela)
- │   ├─ wip = COUNT(demanda_responsaveis JOIN demandas
- │   │            WHERE user_id=mem AND situacao NOT IN
- │   │            ('aceite_final','cancelada','fila_concluida','rejeitada'))
- │   └─ build dev jsonb
- └─ retorna jsonb estrutura compatível
+```
+TIME 1 | sustentacao
+TIME 1 | rdm
+TIME 2 | sustentacao
+TIME 2 | rdm
+TIME 3 | sustentacao
+TIME 3 | rdm
 ```
 
-A RPC e os fixes do hook/UI são pequenos e não tocam em fluxo de Sala Ágil.
+No `useCapacityPlanner`, a função `uniqueTeams` dedup por `team.id` mantendo a **primeira ocorrência**. Quando a primeira entrada lida é a versão `rdm`, o filtro `t.module === "sustentacao"` devolve `[]`, a RPC `get_capacity_planner_sustentacao` não é chamada, `teamCapacities` fica vazio e o `CapacityGrid` exibe "Nenhum sprint ativo encontrado". Isso explica o sintoma — não é o layout Ágil sendo aplicado por engano; é a partição que perdeu o time.
 
-## Fora de escopo
+## Correção
 
-- Editar capacidade individual por membro (continua 40h fixos).
-- Histórico semanal / gráfico de tendência (pode vir depois).
+### 1. `src/features/admin/hooks/useCapacityPlanner.ts`
+
+Trocar o dedup ingênuo por uma versão que **prioriza o módulo "real" do time** (`sala_agil` ou `sustentacao`) sobre `rdm`:
+
+- Para cada `team.id`, preferir a entrada cujo `module ∈ {sala_agil, sustentacao}`; só usar `rdm` como último recurso.
+- Resultado: TIME 1/2/3 entram em `sustentacaoIds`, a RPC é executada, devs são renderizados.
+
+### 2. `src/features/admin/components/CapacityGrid.tsx`
+
+Ajustar a mensagem de vazio para refletir a realidade (sem mudar layout/cores):
+
+- Quando `teamCapacities.length === 0`, exibir "Nenhum time com dados de capacidade no período" em vez de "Nenhum sprint ativo encontrado", para não confundir o caso Sustentação (onde não há sprint) com falha.
+
+O badge "Sustentação" já está presente no header do time (`team.module === "sustentacao" ? <Shield…/> + Badge "Sustentação"`); ele simplesmente não aparecia porque o array vinha vazio. Com a partição corrigida, o badge volta automaticamente.
+
+### 3. Validação
+
+- `/dashboard-admin` → selecionar TIME 1/2/3 individualmente → cada um deve mostrar o card com badge azul "Sustentação", ícone `Shield`, header "Semana corrente", lista de membros com WIP/SLA crítico e horas alocadas/realizadas.
+- Selecionar "Todos" → todos os times aparecem corretamente segregados.
+- Selecionar um time Ágil ([GESP3] - TIME A, etc.) → continua usando `get_capacity_planner` com badge verde "Sala Ágil" e dias restantes do sprint.
+
+## Fora do escopo
+
+- Mudanças visuais, cores ou layout.
+- Alterar `team_modules` ou a forma como `AuthContext` carrega times.
+- Tocar na lógica de SLA crítico já entregue no turno anterior.

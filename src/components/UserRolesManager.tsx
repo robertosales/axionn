@@ -479,8 +479,9 @@ export function UserRolesManager() {
         setResetState(p => ({ ...p, saving: false, generatedPassword: result.temp_password }));
         toast.success("Senha temporária gerada.");
       } else {
-        setResetState(p => ({ ...p, saving: false, recoveryLink: result.recovery_link ?? null }));
-        toast.success("Link de redefinição enviado.");
+        // recovery_link removido do response por segurança — usuário recebe por e-mail.
+        setResetState(p => ({ ...p, saving: false, recoveryLink: null }));
+        toast.success("Link de redefinição enviado por e-mail.");
       }
     } catch (err: any) {
       toast.error(err?.message || "Erro ao redefinir senha");

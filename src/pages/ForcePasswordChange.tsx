@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,6 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Garante que a sessão atual ainda é válida antes de tentar trocar a senha.
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) {
-        toast.error("Sessão expirada. Faça login novamente.");
-        signOut();
-      }
-    });
-  }, [signOut]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -40,17 +30,8 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
     }
     setLoading(true);
 
-    // 1) Revalida sessão (evita 401/403 mascarado de 422)
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      const m = "Sessão expirada. Faça login novamente para trocar a senha.";
-      setErrorMsg(m); toast.error(m);
-      setLoading(false);
-      await signOut();
-      return;
-    }
-
-    // 2) Tenta atualizar a senha
+    // Chama updateUser DIRETO — não fazer getSession() antes para evitar
+    // contenção no lock interno do GoTrue (`sb-...-auth-token`).
     const { data: updData, error } = await supabase.auth.updateUser({ password });
 
     if (error) {
@@ -87,7 +68,7 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
       return;
     }
 
-    // 3) Limpa a flag must_change_password
+    // Limpa a flag must_change_password
     const uid = updData?.user?.id ?? user?.id;
     if (uid) {
       const { error: profErr } = await supabase

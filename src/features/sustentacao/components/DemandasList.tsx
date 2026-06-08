@@ -17,7 +17,7 @@ import { EmptyState } from "@/shared/components/common/EmptyState";
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { useDemandasPaginadas } from "../hooks/useDemandasPaginadas";
-import { useDemandaMutations } from "../hooks/useDemandaMutations";
+import { useDemandas } from "../hooks/useDemandas";
 import { useResponsaveis } from "../hooks/useResponsaveis";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -45,7 +45,7 @@ type ViewMode = "cards" | "table";
 
 export function DemandasList() {
   const { demandas, loading, loadingMore, hasMore, loadMore, error } = useDemandasPaginadas();
-  const { create, update, moveTo, remove } = useDemandaMutations();
+  const { create, update, moveTo, remove } = useDemandas();
   const { currentTeamId } = useAuth();
   const { responsaveisMap } = useResponsaveis(currentTeamId, demandas);
 

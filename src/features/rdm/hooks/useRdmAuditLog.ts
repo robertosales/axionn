@@ -44,7 +44,7 @@ export function useRdmAuditLog(rdmId: string | null) {
         .order("created_at", { ascending: false })
         .range(from, to);
       if (err) throw err;
-      const rows = (data ?? []) as RdmAuditLogRow[];
+      const rows = (data ?? []) as unknown as RdmAuditLogRow[];
       setHasMore(rows.length === PAGE_SIZE);
       replace ? setLogs(rows) : setLogs((prev) => [...prev, ...rows]);
     } catch (e: unknown) {

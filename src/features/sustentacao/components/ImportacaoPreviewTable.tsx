@@ -331,12 +331,39 @@ export function ImportacaoPreviewTable({
                     )}
                   </TableCell>
 
-                  {/* Diferença */}
+                  {/* Resultado da Migração */}
                   <TableCell className="text-xs py-3.5 pr-2">
-                    {row.tipoAcao === "atualizacao" && row.diferenca ? (
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">{row.diferenca}</span>
+                    {row.tipoAcao === "atualizacao" ? (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Atual:</span>
+                          <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground font-medium">
+                            {labelSituacao(row.situacaoSistema)}
+                          </span>
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold">→</span>
+                          <span className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Final:</span>
+                          <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 font-semibold">
+                            {labelSituacao(row.situacao)}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground italic">
+                          Situação do sistema será substituída pela situação da planilha.
+                        </span>
+                      </div>
                     ) : row.tipoAcao === "novo" ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">Será criado</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="text-emerald-700 dark:text-emerald-400 font-medium">Será criado com situação:</span>
+                        <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-semibold">
+                          {labelSituacao(row.situacao)}
+                        </span>
+                      </span>
+                    ) : row.tipoAcao === "sem_alteracao" ? (
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        Situação mantida:
+                        <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-muted border border-border font-medium">
+                          {labelSituacao(row.situacao)}
+                        </span>
+                      </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}

@@ -1,17 +1,43 @@
-import React, { useRef, useState } from "react";
-import * as XLSX from "xlsx";
+import React, { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
 import { SITUACAO_LABELS } from "../types/demanda";
 import ImportacaoPreviewTable from "./ImportacaoPreviewTable";
 
-// Mapeamento de labels legíveis para chaves internas de situação
+// ---------------------------------------------------------------------------
+// SheetJS carregado via CDN em runtime — sem necessidade de npm install xlsx
+// ---------------------------------------------------------------------------
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    XLSX: any;
+  }
+}
+
+const XLSX_CDN = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
+
+function loadXLSX(): Promise<typeof window.XLSX> {
+  return new Promise((resolve, reject) => {
+    if (window.XLSX) {
+      resolve(window.XLSX);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = XLSX_CDN;
+    script.onload = () => resolve(window.XLSX);
+    script.onerror = () => reject(new Error("Falha ao carregar a biblioteca de leitura de Excel."));
+    document.head.appendChild(script);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Mapeamento de labels legíveis → chaves internas de situação
+// ---------------------------------------------------------------------------
 const LABEL_TO_SITUACAO: Record<string, string> = Object.entries(SITUACAO_LABELS).reduce(
   (acc, [key, label]) => ({ ...acc, [label.toLowerCase()]: key }),
   {} as Record<string, string>
 );
 
-// Aliases adicionais para compatibilidade com planilhas
 const LABEL_ALIASES: Record<string, string> = {
   "concluída": "fila_concluida",
   "concluida": "fila_concluida",
@@ -40,23 +66,19 @@ function parseRow(row: Record<string, unknown>) {
   };
 }
 
-async function parseFile(file: File): Promise<ReturnType<typeof parseRow>[]> {
-  const isXlsx =
-    file.name.endsWith(".xlsx") ||
-    file.name.endsWith(".xls") ||
-    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    file.type === "application/vnd.ms-excel";
+type ParsedRow = ReturnType<typeof parseRow>;
 
-  if (isXlsx) {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-    return rows.map(parseRow);
-  }
+async function parseXlsx(file: File): Promise<ParsedRow[]> {
+  const XLSX = await loadXLSX();
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+  return rows.map(parseRow);
+}
 
-  // CSV
+async function parseCsv(file: File): Promise<ParsedRow[]> {
   const text = await file.text();
   const lines = text.split("\n").filter(Boolean);
   if (lines.length < 2) return [];
@@ -69,12 +91,32 @@ async function parseFile(file: File): Promise<ReturnType<typeof parseRow>[]> {
   });
 }
 
+async function parseFile(file: File): Promise<ParsedRow[]> {
+  const isXlsx =
+    file.name.endsWith(".xlsx") ||
+    file.name.endsWith(".xls") ||
+    file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    file.type === "application/vnd.ms-excel";
+
+  return isXlsx ? parseXlsx(file) : parseCsv(file);
+}
+
+// ---------------------------------------------------------------------------
+// Componente principal
+// ---------------------------------------------------------------------------
 export default function ImportacaoView() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState<ReturnType<typeof parseRow>[]>([]);
+  const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Pré-carrega a lib SheetJS em background assim que o componente monta
+  useEffect(() => {
+    loadXLSX().catch(() => {
+      // silencioso — tentará novamente quando o usuário selecionar o arquivo
+    });
+  }, []);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -86,7 +128,11 @@ export default function ImportacaoView() {
       const parsed = await parseFile(file);
       setRows(parsed);
     } catch (err) {
-      setError("Erro ao processar o arquivo. Verifique o formato e tente novamente.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Erro ao processar o arquivo. Verifique o formato e tente novamente."
+      );
       console.error(err);
     } finally {
       setLoading(false);

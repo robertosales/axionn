@@ -140,18 +140,23 @@ export function useCapacityPlanner() {
     setError(null);
 
     try {
-      // Particiona times por módulo: Sala Ágil (sprints) vs Sustentação (semana corrente)
-      const agilIds        = uniqueTeams.filter(t => t.module === "sala_agil").map(t => t.id);
-      const sustentacaoIds = uniqueTeams.filter(t => t.module === "sustentacao").map(t => t.id);
-
-      const teamId = selectedTeam !== "all" ? selectedTeam : undefined;
+      // Ágil e Sustentação são modos isolados: Sustentação nunca deve procurar sprint.
+      const selectedInfo = selectedTeam !== "all" ? teamMap[selectedTeam] : undefined;
+      const allAgilIds   = uniqueTeams.filter(t => t.module === "sala_agil").map(t => t.id);
+      const allSustIds   = uniqueTeams.filter(t => t.module === "sustentacao").map(t => t.id);
+      const agilIds      = selectedInfo
+        ? selectedInfo.module === "sala_agil" ? [selectedInfo.id] : []
+        : allAgilIds;
+      const sustentacaoIds = selectedInfo
+        ? selectedInfo.module === "sustentacao" ? [selectedInfo.id] : []
+        : allSustIds;
 
       const buildParams = (ids: string[]) => {
         const p: { p_team_ids: string[]; p_team_id?: string; p_default_cap?: number } = {
           p_team_ids:    ids,
           p_default_cap: 40,
         };
-        if (teamId !== undefined) p.p_team_id = teamId;
+        if (selectedInfo) p.p_team_id = selectedInfo.id;
         return p;
       };
 

@@ -381,11 +381,23 @@ export function ImportacaoView() {
         totals.importados  += res.importados;
         totals.atualizados += res.atualizados;
         totals.erros       += res.erros;
+        if (res.falhas && res.falhas.length > 0) {
+          for (const f of res.falhas) {
+            falhas.push({ rhm: f.rhm, projeto: f.projeto, motivo: f.motivo });
+          }
+          setProgressMap((prev) => {
+            const next = new Map(prev);
+            for (const f of res.falhas!) next.set(f.rhm, "erro");
+            return next;
+          });
+        }
         setProgressMap((prev) => {
           const next = new Map(prev);
           for (const row of rows) {
             const key = `${teamId}:${row.rhm}`;
-            next.set(row.rhm, existsInDb.has(key) ? "atualizado" : "criado");
+            if (next.get(row.rhm) !== "erro") {
+              next.set(row.rhm, existsInDb.has(key) ? "atualizado" : "criado");
+            }
           }
           return next;
         });

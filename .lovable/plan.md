@@ -1,71 +1,46 @@
-## Objetivo
+## Contexto
 
-Hoje o Painel de Capacidade (`/admin/capacidade`) só mostra times de Sala Ágil porque a RPC `get_capacity_planner` é baseada em `developers` + sprints + `user_stories`. Vamos estender para também listar **todos os membros dos times de Sustentação** (Time 1, Time 2, Time 3 e demais) com indicadores de ociosidade, WIP e sobrecarga — usando a fonte de dados própria de Sustentação (`team_members` + `demanda_responsaveis` + `demanda_hours`).
+A integração já está parcialmente implementada (turno anterior). Este plano refina apenas a definição de "SLA crítico" para usar a **mesma régua** do motor canônico (`fn_check_sla_status` + `contract_slas`) em vez do limiar provisório de 24 h. Visual, cores e layout permanecem intactos.
 
-## Regras combinadas
+## O que já está em produção
 
-- **Capacidade**: 40h por semana corrente (segunda → sexta).
-- **Realizado**: soma de `demanda_hours.horas` lançadas pelo usuário na semana corrente.
-- **WIP**: nº de demandas em aberto (situação ≠ `aceite_final`/`cancelada`/`fila_concluida`) onde o usuário está em `demanda_responsaveis` (qualquer papel).
-- **Status do membro**:
-  - `idle` (Ocioso): WIP = 0 e Realizado = 0
-  - `overloaded` (Sobrecarregado): Realizado > 40h OU WIP > 5
-  - `warning` (Atenção): Realizado entre 32h e 40h, ou WIP entre 4 e 5
-  - `ok`: tem WIP e está dentro do limite
-- **Membros listados**: todos os usuários ativos de `team_members` cujo time tem `module = 'sustentacao'`. Não depende mais da tabela `developers`.
+- `get_capacity_planner_sustentacao` (RPC) — calcula `wipCount` excluindo status pausados (`bloqueada`, `aguardando_cliente`, `aguardando_terceiros`, `suspensa`, `impeditivo`), expõe `pausedCount`, `slaCriticalCount` e `allocatedHours` = soma de `total_horas` das demandas ativas.
+- `useCapacityPlanner` — status do dev passa a `overloaded` quando `slaCriticalCount > 0` (prioridade sobre WIP/horas); totalizador do topo usa `totalAllocated / totalCapacity` para ambos os módulos.
+- `CapacityGrid` — subtítulo do dev mostra "X pausada(s)" e "X SLA crítico" sem mexer em cores/layout.
 
-## Mudanças
+## O que muda agora
 
-### 1. Backend — nova RPC `get_capacity_planner_sustentacao`
+Substituir a heurística `prazo_solucao - now() <= 24h` pelo cálculo do motor de SLA real, mantendo um fallback para demandas sem `contract_id`.
 
-Criar função SECURITY DEFINER que recebe `p_team_ids uuid[]` e retorna a mesma estrutura JSON usada hoje (`teamId`, `sprintAtivo` = null, `devs[]`, totais). Para cada time:
+### 1. RPC `get_capacity_planner_sustentacao` — recalcular `slaCriticalCount`
 
-- Lista membros via `team_members → profiles` (apenas `is_active = true`).
-- Para cada membro calcula `allocatedHours = 0` (não aplicável), `realizedHours`, `wipCount`, `husCount = wipCount`, `unestimatedCount = 0`.
-- Janela: `date_trunc('week', now())` até `date_trunc('week', now()) + interval '5 days'` (seg-sex).
-- Totais do time agregando os membros.
+Para cada demanda ativa (não fechada, não pausada) do dev no time, classificar como crítica quando:
 
-Validar acesso com `_assert_team_access(p_team_ids)` (mesma função já usada).
+- **Com contrato SLA** (`d.contract_id IS NOT NULL` e existe `contract_slas` para `(contract_id, priority)`):
+  - `resolution_pct >= 85`  **OU**  `now() > created_at + resolution_time_minutes` (estourado)
+  - mesma fórmula de `fn_check_sla_status` → cores `orange`/`red`.
+  - Respeita `business_hours_only` do contrato (08h–20h, seg–sex) reaproveitando a função existente `is_feriado` quando aplicável.
+- **Sem contrato** (`d.contract_id IS NULL`) — fallback pelo deadline manual:
+  - `prazo_solucao IS NOT NULL` E (`prazo_solucao <= now()` OU `prazo_solucao - now() <= interval '24 hours'`).
+
+Implementação: subquery única dentro da função, com `LEFT JOIN public.contract_slas cs ON cs.contract_id = d.contract_id AND cs.priority = COALESCE(d.priority,'normal')`. Reusa lógica do `fn_check_sla_status` inline para evitar chamada por linha.
 
 ### 2. Hook `useCapacityPlanner`
 
-- Particionar `uniqueTeams` em `agilTeams` e `sustentacaoTeams` por `team.module`.
-- Disparar 2 chamadas RPC em paralelo:
-  - `get_capacity_planner` (apenas times ágeis)
-  - `get_capacity_planner_sustentacao` (apenas times sustentação)
-- Concatenar os resultados e enriquecer normalmente.
-- Ajustar `calcStatus` para suportar a semântica de Sustentação (WIP > 5 → overloaded; WIP = 0 e realizado = 0 → idle).
+Sem mudanças além das já aplicadas — continua lendo `slaCriticalCount` da RPC e promovendo status para `overloaded`.
 
-### 3. UI — `CapacityGrid` / `CapacityBar`
+### 3. `CapacityGrid.tsx`
 
-- Adicionar variante visual para times Sustentação (ícone `Shield` violet já existe; trocar p/ azul conforme regra de cor do módulo).
-- Quando `sprintAtivo` for null e o time for Sustentação, exibir "Semana corrente (seg-sex)" no header em vez de sprint.
-- Coluna "Aloc." é substituída por "WIP" (nº de demandas em aberto) para linhas de Sustentação. Cap. fixo 40h, Real. = horas lançadas na semana.
+Sem mudanças. O texto "X SLA crítico" e o ícone `AlertTriangle` (cores semânticas existentes) já refletem o novo cálculo.
 
-### 4. `AdminCapacidadePage`
+## Validação pós-deploy
 
-- Sem mudanças estruturais; o seletor de times já popula a partir de `uniqueTeams` (que inclui ambos os módulos).
-- Atualizar contador do header para mostrar "X devs (Ágil) · Y analistas (Sustentação)".
+1. Selecionar 1 dev com demanda ativa cujo SLA esteja com `resolution_pct ≥ 85` no `fn_check_sla_status` → confirmar que o card mostra status sobrecarregado e contador "SLA crítico".
+2. Selecionar 1 dev com todas as demandas pausadas (`bloqueada`) → `wipCount = 0`, `pausedCount > 0`, status = `idle` se sem alocação.
+3. Conferir totalizador do topo de cada time Sustentação: `Σ alloc / Σ cap` ≠ 0%.
 
-## Pontos técnicos
+## Fora do escopo
 
-```text
-get_capacity_planner_sustentacao(p_team_ids)
- ├─ assert acesso
- ├─ FOR EACH team_id:
- │   ├─ membros = SELECT user_id FROM team_members JOIN profiles (is_active)
- │   ├─ janela = [monday(now), friday(now) 23:59:59]
- │   ├─ realized = SUM(demanda_hours.horas WHERE user_id=mem AND data_lancamento IN janela)
- │   ├─ wip = COUNT(demanda_responsaveis JOIN demandas
- │   │            WHERE user_id=mem AND situacao NOT IN
- │   │            ('aceite_final','cancelada','fila_concluida','rejeitada'))
- │   └─ build dev jsonb
- └─ retorna jsonb estrutura compatível
-```
-
-A RPC e os fixes do hook/UI são pequenos e não tocam em fluxo de Sala Ágil.
-
-## Fora de escopo
-
-- Editar capacidade individual por membro (continua 40h fixos).
-- Histórico semanal / gráfico de tendência (pode vir depois).
+- Mudanças visuais, de cor ou layout.
+- Alterar a régua do motor de SLA (85 % continua sendo o limiar crítico).
+- Aplicar a mesma lógica no painel de Sala Ágil.

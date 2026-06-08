@@ -21,6 +21,8 @@ import { useDemandas } from "../hooks/useDemandas";
 import { useResponsaveis } from "../hooks/useResponsaveis";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { searchDemandas } from "../services/demandas.service";
 import { DemandaForm } from "./DemandaForm";
 import { DemandaDetail } from "./DemandaDetail";
 import { SITUACAO_LABELS, SITUACAO_COLORS, isDemandaIniciada } from "../types/demanda";
@@ -47,7 +49,6 @@ export function DemandasList() {
   const { demandas, loading, loadingMore, hasMore, loadMore, error } = useDemandasPaginadas();
   const { create, update, moveTo, remove } = useDemandas();
   const { currentTeamId } = useAuth();
-  const { responsaveisMap } = useResponsaveis(currentTeamId, demandas);
 
   const [showForm, setShowForm]         = useState(false);
   const [editTarget, setEditTarget]     = useState<Demanda | null>(null);
@@ -60,6 +61,20 @@ export function DemandasList() {
   const [viewMode, setViewMode]         = useState<ViewMode>("cards");
   const [page, setPage]                 = useState(1);
   const debouncedSearch = useDebounce(search, 300);
+
+  // ── Busca server-side: quando o usuário pesquisa, consulta direto no banco
+  //    para encontrar demandas que ainda não foram carregadas pela paginação.
+  const searchActive = debouncedSearch.trim().length > 0;
+  const { data: searchResults = [], isFetching: searching } = useQuery({
+    queryKey: ['demandas', 'search', currentTeamId, debouncedSearch],
+    queryFn:  () => searchDemandas(currentTeamId!, debouncedSearch),
+    enabled:  !!currentTeamId && searchActive,
+    staleTime: 30_000,
+  });
+
+  // Fonte ativa: resultado da busca quando há termo, senão a lista paginada
+  const sourceDemandas = searchActive ? searchResults : demandas;
+  const { responsaveisMap } = useResponsaveis(currentTeamId, sourceDemandas);
 
   // Sentinela — dispara loadMore quando o usuário chega no fim do dataset remoto
   const sentinelaRef = useRef<HTMLDivElement | null>(null);
@@ -87,20 +102,12 @@ export function DemandasList() {
 
   const filtered = useMemo(
     () =>
-      demandas.filter((d) => {
-        const q = debouncedSearch.toLowerCase();
-        if (
-          q &&
-          !d.rhm.toLowerCase().includes(q) &&
-          !d.projeto.toLowerCase().includes(q) &&
-          !(d.titulo || d.descricao || "").toLowerCase().includes(q)
-        )
-          return false;
+      sourceDemandas.filter((d) => {
         if (filterTipo !== "all" && d.tipo !== filterTipo) return false;
         if (filterSituacao !== "all" && d.situacao !== filterSituacao) return false;
         return true;
       }),
-    [demandas, debouncedSearch, filterTipo, filterSituacao],
+    [sourceDemandas, filterTipo, filterSituacao],
   );
 
   const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));

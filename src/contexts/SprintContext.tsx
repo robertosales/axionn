@@ -212,6 +212,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   // ── AbortController — race condition guard ─────────────────────────────────
   const abortRef = useRef<AbortController | null>(null);
+  const hadErrorRef = useRef(false);
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, []);
 
   // ── refreshAll ────────────────────────────────────────────────────────────────

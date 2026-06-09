@@ -606,7 +606,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .filter((h) => h.status === targetStatus)
       .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
 
-    const { error } = await supabase.from("user_stories").insert({
+    const { data, error } = await supabase.from("user_stories").insert({
       team_id: teamId, sprint_id: hu.sprintId, epic_id: hu.epicId || null,
       code: `HU-${String(count).padStart(3, "0")}`, title: hu.title,
       description: hu.description, story_points: hu.storyPoints, priority: hu.priority,
@@ -616,10 +616,15 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       estimated_hours: (hu as any).estimatedHours || null,
       function_points: (hu as any).functionPoints || null,
       assignee_id: (hu as any).assigneeId || null,
-    });
+    }).select().single();
     if (error) { toast.error("Erro ao criar HU"); return; }
-    // FIX: removido await refreshAll() — o canal Realtime INSERT acima
-    // já faz o append otimista no estado local sem disparar 9 queries.
+    // FIX: append otimista local — não depender exclusivamente do canal Realtime
+    // (que pode estar em CHANNEL_ERROR). O handler INSERT é idempotente.
+    if (data) {
+      setUserStories((prev) =>
+        prev.some((h) => h.id === data.id) ? prev : [...prev, mapUserStory(data, [])],
+      );
+    }
   }, [teamId, userStories, workflowColumns]);
 
   const updateUserStory = useCallback(async (id: string, hu: Partial<Omit<UserStory, "id" | "code" | "createdAt">>) => {

@@ -1,109 +1,87 @@
-// ─── OkrObjectiveCard ────────────────────────────────────────────────────────
-// Card de um objetivo com barra de progresso e KRs expansíveis
-
 import { useState } from "react";
-import { Target, TrendingUp, AlertTriangle, CheckCircle, ChevronDown } from "lucide-react";
-import { Badge }  from "@/components/ui/badge";
+import { Target, TrendingUp, AlertTriangle, CheckCircle, ChevronDown, Pencil } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn }     from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { OkrObjective, OkrKeyResult } from "../types";
-import { OkrKeyResultRow }  from "./OkrKeyResultRow";
-import { OkrCheckInModal }  from "./OkrCheckInModal";
-import { krProgressColor }  from "./OkrKeyResultRow";
+import { OkrKeyResultRow } from "./OkrKeyResultRow";
+import { OkrCheckInModal } from "./OkrCheckInModal";
+import { krProgressColor } from "./OkrKeyResultRow";
 
 const STATUS_CONFIG = {
-  on_track:  { label: "No Prazo",  color: "bg-emerald-500/15 text-emerald-600 border-emerald-200", icon: <TrendingUp   className="h-3 w-3" /> },
-  at_risk:   { label: "Em Risco",  color: "bg-amber-400/15 text-amber-600 border-amber-200",       icon: <AlertTriangle className="h-3 w-3" /> },
-  off_track: { label: "Atrasado",  color: "bg-red-500/15 text-red-600 border-red-200",             icon: <AlertTriangle className="h-3 w-3" /> },
-  completed: { label: "Concluído", color: "bg-blue-500/15 text-blue-600 border-blue-200",          icon: <CheckCircle   className="h-3 w-3" /> },
+  on_track:  { label: "No Prazo",  color: "bg-emerald-500/15 text-emerald-600 border-emerald-200", icon: <TrendingUp className="h-3 w-3" /> },
+  at_risk:   { label: "Em Risco",  color: "bg-amber-400/15 text-amber-600 border-amber-200", icon: <AlertTriangle className="h-3 w-3" /> },
+  off_track: { label: "Atrasado",  color: "bg-red-500/15 text-red-600 border-red-200", icon: <AlertTriangle className="h-3 w-3" /> },
+  completed: { label: "Concluído", color: "bg-blue-500/15 text-blue-600 border-blue-200", icon: <CheckCircle className="h-3 w-3" /> },
 };
 
 interface Props {
   objective: OkrObjective;
   onCheckIn: (krId: string, value: number, note: string) => void;
+  onEdit?: (objective: OkrObjective) => void;
 }
 
-export function OkrObjectiveCard({ objective: obj, onCheckIn }: Props) {
-  const [expanded,    setExpanded]    = useState(false);
-  const [checkInKr,   setCheckInKr]   = useState<OkrKeyResult | null>(null);
-
+export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit }: Props) {
+  const [expanded, setExpanded] = useState(false);
+  const [checkInKr, setCheckInKr] = useState<OkrKeyResult | null>(null);
   const status = STATUS_CONFIG[obj.status];
 
   return (
     <>
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden transition-shadow hover:shadow-md">
-        {/* ── Cabeçalho ── */}
         <div className="p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-3 min-w-0">
               <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
                 <Target className="h-4.5 w-4.5 text-primary" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="font-semibold text-sm leading-snug">{obj.title}</p>
-                {obj.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
-                    {obj.description}
-                  </p>
-                )}
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  {obj.team_name} · {obj.owner_name} · {obj.cycle}
-                </p>
+                {obj.description && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">{obj.description}</p>}
+                <p className="text-[11px] text-muted-foreground mt-1">{obj.team_name} · {obj.owner_name} · {obj.cycle}</p>
               </div>
             </div>
-            <Badge className={cn("text-[10px] gap-1 shrink-0 border", status.color)}>
-              {status.icon} {status.label}
-            </Badge>
+            <div className="flex items-center gap-2 shrink-0">
+              {onEdit && (
+                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => onEdit(obj)}>
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </Button>
+              )}
+              <Badge className={cn("text-[10px] gap-1 shrink-0 border", status.color)}>
+                {status.icon} {status.label}
+              </Badge>
+            </div>
           </div>
 
-          {/* Barra de progresso geral */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Progresso geral</span>
               <span className="text-sm font-bold text-foreground">{obj.progress}%</span>
             </div>
             <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-              <div
-                className={cn("h-2 rounded-full transition-all duration-500", krProgressColor(obj.progress))}
-                style={{ width: `${obj.progress}%` }}
-              />
+              <div className={cn("h-2 rounded-full transition-all duration-500", krProgressColor(obj.progress))} style={{ width: `${obj.progress}%` }} />
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              {obj.key_results.length} Key Result{obj.key_results.length !== 1 ? "s" : ""}
-            </p>
+            <p className="text-[11px] text-muted-foreground">{obj.key_results.length} Key Result{obj.key_results.length !== 1 ? "s" : ""}</p>
           </div>
         </div>
 
-        {/* ── Toggle Key Results ── */}
         <div className="border-t">
-          <button
-            className="w-full flex items-center justify-between px-5 py-2.5 text-xs
-                       text-muted-foreground hover:bg-muted/50 transition-colors"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            <span className="font-medium">
-              {expanded ? "Ocultar" : "Ver"} Key Results
-            </span>
-            <ChevronDown
-              className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")}
-            />
+          <button className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+            onClick={() => setExpanded((v) => !v)}>
+            <span className="font-medium">{expanded ? "Ocultar" : "Ver"} Key Results</span>
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
           </button>
 
           {expanded && (
             <div className="px-5 pb-5">
               {obj.key_results.map((kr) => (
-                <OkrKeyResultRow
-                  key={kr.id}
-                  kr={kr}
-                  onCheckIn={(kr) => setCheckInKr(kr)}
-                />
+                <OkrKeyResultRow key={kr.id} kr={kr} onCheckIn={(kr) => setCheckInKr(kr)} />
               ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* Modal de check-in */}
       <OkrCheckInModal
         kr={checkInKr}
         onClose={() => setCheckInKr(null)}

@@ -158,7 +158,7 @@ function SustentacaoSection({ active }: { active: string }) {
   const workflowColumns = workflowSteps.map((s) => ({
     key:        s.key,
     label:      s.label,
-    color:      undefined as string | undefined,
+    color:      s.hex,
     sort_order: s.order,
   }));
 

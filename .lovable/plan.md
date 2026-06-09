@@ -1,43 +1,46 @@
 ## Diagnóstico
 
-`teams` no `AuthContext` é construído a partir de `team_modules`, então cada time aparece **uma entrada por módulo**. TIME 1/2/3 estão cadastrados em `team_modules` com **dois módulos cada**: `sustentacao` E `rdm`.
+Ao alternar com ALT+TAB ou minimizar/restaurar a janela, o Supabase Auth dispara eventos de `onAuthStateChange` (tipicamente `TOKEN_REFRESHED` e/ou re-emissão de `SIGNED_IN`/`INITIAL_SESSION`) quando a aba reganha o foco e o cliente re-valida a sessão.
 
-```
-TIME 1 | sustentacao
-TIME 1 | rdm
-TIME 2 | sustentacao
-TIME 2 | rdm
-TIME 3 | sustentacao
-TIME 3 | rdm
-```
+No `src/contexts/AuthContext.tsx` (linhas ~282–307) o callback trata **todos** os eventos da mesma forma:
 
-No `useCapacityPlanner`, a função `uniqueTeams` dedup por `team.id` mantendo a **primeira ocorrência**. Quando a primeira entrada lida é a versão `rdm`, o filtro `t.module === "sustentacao"` devolve `[]`, a RPC `get_capacity_planner_sustentacao` não é chamada, `teamCapacities` fica vazio e o `CapacityGrid` exibe "Nenhum sprint ativo encontrado". Isso explica o sintoma — não é o layout Ágil sendo aplicado por engano; é a partição que perdeu o time.
+1. Marca `setLoading(true)` para "evitar race nos guards de rota";
+2. Chama `loadUserData(userId)` recarregando perfil, times, roles e module roles.
 
-## Correção
+Enquanto `loading === true`, o `ProtectedRoute` renderiza `<PageLoader />`, **desmontando toda a árvore da rota atual**. Quando a carga termina, a árvore é re-montada — e qualquer estado local de formulário (inputs, drawers de HU, modais de demanda, etc.) é perdido. Para o usuário isso parece um "reload da tela".
 
-### 1. `src/features/admin/hooks/useCapacityPlanner.ts`
+O `useAppResilience` também invalida queries ativas no `visibilitychange`, o que agrava o efeito (refetches simultâneos), mas o gatilho do unmount é o `setLoading(true)` no AuthContext.
 
-Trocar o dedup ingênuo por uma versão que **prioriza o módulo "real" do time** (`sala_agil` ou `sustentacao`) sobre `rdm`:
+## Correção (mínima, só lógica)
 
-- Para cada `team.id`, preferir a entrada cujo `module ∈ {sala_agil, sustentacao}`; só usar `rdm` como último recurso.
-- Resultado: TIME 1/2/3 entram em `sustentacaoIds`, a RPC é executada, devs são renderizados.
+### 1. `src/contexts/AuthContext.tsx`
+Tornar o callback de `onAuthStateChange` idempotente para o mesmo usuário:
 
-### 2. `src/features/admin/components/CapacityGrid.tsx`
+- Guardar o último `user.id` carregado em um `ref` (`loadedUserIdRef`).
+- No callback:
+  - Se `session?.user.id === loadedUserIdRef.current` → **não** chamar `setLoading(true)` nem `loadUserData`. Apenas atualizar `session`/`user` (necessário para token novo).
+  - Se for outro usuário (login real) ou primeira carga → manter fluxo atual (`setLoading(true)` + `loadUserData`).
+  - No logout (`!session`) → resetar `loadedUserIdRef` e seguir fluxo atual.
+- Após `loadUserData` bem-sucedido, gravar `loadedUserIdRef.current = userId`.
 
-Ajustar a mensagem de vazio para refletir a realidade (sem mudar layout/cores):
+Isso elimina o unmount/remount da árvore em `TOKEN_REFRESHED` e re-emissões de `SIGNED_IN` causadas por foco/visibilidade.
 
-- Quando `teamCapacities.length === 0`, exibir "Nenhum time com dados de capacidade no período" em vez de "Nenhum sprint ativo encontrado", para não confundir o caso Sustentação (onde não há sprint) com falha.
+### 2. `src/hooks/useAppResilience.ts`
+Suavizar a reação ao voltar do background para não disparar uma onda de refetches que também pode desmontar componentes via Suspense de queries:
 
-O badge "Sustentação" já está presente no header do time (`team.module === "sustentacao" ? <Shield…/> + Badge "Sustentação"`); ele simplesmente não aparecia porque o array vinha vazio. Com a partição corrigida, o badge volta automaticamente.
+- Ao voltar para `visible`, **não** invalidar queries ativas imediatamente. Apenas chamar `focusManager.setFocused(true)`; o React Query, com `refetchOnWindowFocus: false` (já definido em `queryClient.ts`), naturalmente não refaz fetch.
+- Manter `cancelQueries()` ao ir para background (economia de rede inalterada).
 
-### 3. Validação
+## Escopo / não-escopo
 
-- `/dashboard-admin` → selecionar TIME 1/2/3 individualmente → cada um deve mostrar o card com badge azul "Sustentação", ícone `Shield`, header "Semana corrente", lista de membros com WIP/SLA crítico e horas alocadas/realizadas.
-- Selecionar "Todos" → todos os times aparecem corretamente segregados.
-- Selecionar um time Ágil ([GESP3] - TIME A, etc.) → continua usando `get_capacity_planner` com badge verde "Sala Ágil" e dias restantes do sprint.
+- **Não** mexer em UI, estilos, layout, rotas, RLS, migrations, RPCs.
+- **Não** alterar `useSessionTimeout` nem `useIdleTimeout` (timers de inatividade continuam funcionando — eles só resetam por **interação do usuário**, não por foco da janela).
+- **Não** tocar em `selectedTeamId` / `moduleRoles`; o ref evita reload sem alterar dados persistidos.
 
-## Fora do escopo
+## Validação
 
-- Mudanças visuais, cores ou layout.
-- Alterar `team_modules` ou a forma como `AuthContext` carrega times.
-- Tocar na lógica de SLA crítico já entregue no turno anterior.
+1. Abrir uma demanda/HU, digitar texto num campo, **ALT+TAB para outro app e voltar** → o texto deve permanecer e a tela **não** deve piscar `PageLoader`.
+2. Minimizar a janela do Chrome e restaurar → idem.
+3. Login normal (de fato sair e entrar com outro usuário) → fluxo de carga completo continua acontecendo.
+4. Token refresh em segundo plano (após ~1h de sessão) → sem flash de loader.
+5. Logout funciona normalmente e redireciona para `/auth`.

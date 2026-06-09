@@ -97,5 +97,19 @@ export function useSessionTimeout({
     };
   }, [enabled, reset, clearAll]);
 
+  useEffect(() => {
+    if (!enabled) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        clearAll();
+        setShowWarning(false);
+        return;
+      }
+      reset();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [enabled, clearAll, reset]);
+
   return { showWarning, secondsLeft, continueSession };
 }

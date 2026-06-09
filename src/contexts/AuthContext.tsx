@@ -286,10 +286,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         if (!mountedRef.current) return;
-        setSession(session);
-        setUser(session?.user ?? null);
 
         // IMPORTANTE: o callback de onAuthStateChange roda dentro do lock interno
         // do auth client. Não aguardar queries aqui; isso segura o lock durante a
@@ -303,6 +301,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // minimizar/restaurar ou em token refresh — preservando estado
           // local de formulários, drawers e modais.
           if (loadedUserIdRef.current === userId) return;
+          setSession(session);
+          setUser(session.user);
           // Marca loading=true para evitar que guards de rota redirecionem
           // com moduleRoles ainda vazio (race que mandava todos para /sala-agil).
           if (mountedRef.current) setLoading(true);
@@ -312,8 +312,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (mountedRef.current) setLoading(false);
             });
           }, 0);
-        } else {
+        } else if (event === "SIGNED_OUT") {
           loadedUserIdRef.current = null;
+          setSession(null);
+          setUser(null);
           resetAuthState();
           if (mountedRef.current && initialised) setLoading(false);
         }

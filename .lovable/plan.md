@@ -1,47 +1,42 @@
-## 1. Modal de detalhes ao clicar no nome no Painel de Capacidade
+## Correções no modal de detalhes do Painel de Capacidade
 
-Hoje `CapacityGrid` apenas lista nomes. Vou tornar cada nome clicável e abrir um `Dialog` (mesmo padrão visual usado em Sala Ágil → Métricas → Desempenho Individual).
+### 1. Bug: erro ao carregar HUs (Sala Ágil)
 
-**Conteúdo do modal por módulo:**
+A query atual usa `sprints(name, is_active)` sem desambiguar — existem múltiplas FKs entre `user_stories` e `sprints` (provavelmente `sprint_id` e algum campo histórico/origem), e o PostgREST retorna:
 
-- **Sala Ágil (`module='agil'`)** — abas:
-  - **HUs em andamento** — id, título, sprint, status, story points / horas estimadas, % de progresso.
-  - **Atividades** — atividade, HU pai, status, horas planejadas vs. realizadas.
-- **Sustentação (`module='sustentacao'`)** — abas:
-  - **Demandas** — RHM, projeto, título, situação, SLA/cor, criada em.
-  - **Horas lançadas** — data, demanda, fase, horas, descrição.
+> Could not embed because more than one relationship was found for 'user_stories' and 'sprints'
 
-**Arquivos:**
-- `src/features/admin/components/CapacityMemberDetailDialog.tsx` (novo) — Dialog com `DialogTitle/Description`, tabs shadcn, tabelas compactas.
-- `src/features/admin/hooks/useMemberCapacityDetail.ts` (novo) — busca dados por `devId/userId` no módulo correto (queries em `user_stories` + `activities` para Ágil; `demandas` + `demanda_hours` para Sustentação) e respeita RLS.
-- `src/features/admin/components/CapacityGrid.tsx` — nome vira `<button>` que abre o dialog e passa `{ devId, devName, module, teamId }`.
+**Fix em `src/features/admin/hooks/useMemberCapacityDetail.ts`:**
+- Trocar o embed implícito por hint explícito: `sprint:sprints!user_stories_sprint_id_fkey(name, is_active)` (ou o nome real da FK confirmado via introspecção antes da escrita).
+- Ajustar o mapeamento `r.sprints?.name` → `r.sprint?.name`.
+- Mesma checagem no embed `activities → user_stories` (`hu:user_stories!activities_hu_id_fkey(title)`) e em `demanda_responsaveis`/`demanda_hours` para evitar o mesmo problema.
 
-Sem alteração de regra de negócio nem de schema.
+### 2. Layout mais profissional do modal
 
-## 2. Demanda 25925 → projeto SISGCORP
+Refatorar `src/features/admin/components/CapacityMemberDetailDialog.tsx` mantendo a paleta por módulo (verde Ágil / azul Sustentação) e usando apenas tokens semânticos:
 
-Há duplicidade no banco: existe `25925` em `[SUST] SINARM 2` (fila_atendimento) e em `[SUST] SISGCORP` (fila_atendimento). Vou:
-- Mover transitions/hours/evidências/eventos/responsáveis/fases da linha SINARM 2 para a linha SISGCORP (preservar histórico).
-- Excluir a linha duplicada de SINARM 2.
-- Tudo em migration única e transacional.
+**Cabeçalho:**
+- Avatar (UserAvatar) + nome em destaque, abaixo: time + módulo como chips.
+- Faixa de KPIs (4 cards compactos) — Ágil: HUs ativas · Story Points totais · Horas estimadas · Atividades abertas. Sustentação: Demandas ativas · Horas no mês · Demandas em SLA crítico · Tipo predominante.
+- Borda inferior sutil (`border-b`) separando do conteúdo.
 
-## 3. Falhas de importação (8 demandas)
+**Abas:**
+- `TabsList` em estilo "pill" alinhado à esquerda, com contadores em `Badge` discretos.
+- Conteúdo dentro de `Card` com `ScrollArea` (substitui `overflow-auto` cru), altura fixa controlada.
 
-Causa: o trigger `fn_validate_demanda_transition` só permite avançar **um passo** no fluxo principal. A planilha traz:
-- `hom_homologada → ag_aceite_final` (pula `fila_producao`) — 28425, 28413.
-- `hom_ag_homologacao → ag_aceite_final` (pula 2 passos) — 23630, 19740, 16638, 16615.
-- Demandas já em `ag_aceite_final` recebendo o mesmo status — 27450, 25485 (regra de terminal barra mesmo idempotente).
+**Tabelas:**
+- Trocar `<table>` cru pelo componente shadcn `Table` (cabeçalho sticky, zebra leve `even:bg-muted/30`, hover row).
+- Tipografia consistente (`text-sm`), espaçamento `py-2.5`.
+- Badges de status com cores semânticas (Concluída = success, Em andamento = secondary, SLA estourado = destructive).
+- Coluna de progresso nas HUs com `<Progress />` (atividades concluídas / total).
+- Datas formatadas `dd MMM yyyy` em `text-muted-foreground text-xs`.
+- Empty state com ícone + texto centrado (`EmptyState` compartilhado).
+- Loading com `SkeletonList` em vez de skeletons soltos.
 
-Correção em `upsert_demandas_batch` (RPC do banco, sem mexer no trigger nem afrouxar regra para uso manual):
+**Dimensões:**
+- `max-w-5xl`, `h-[80vh]`, layout flex em coluna para evitar scroll duplo.
 
-1. **Idempotência forte** — se a situação nova == situação atual, ignorar silenciosamente (inclui terminais como `ag_aceite_final`).
-2. **Caminhada automática no fluxo** — quando o destino está adiante no `FLOW_PRINCIPAL`, inserir transitions intermediárias (`from→next`, `next→next+1`, …) com `justificativa = 'Importação automática (planilha)'`, satisfazendo a regra de adjacência. Para passos que exigem justificativa (`planejamento_ag_aprovacao`), usar a mesma string.
-3. **Atualização final de `demandas.situacao`** segue como hoje.
+### Fora de escopo
 
-Resultado esperado: as 8 demandas passam a importar sem erro, mantendo histórico coerente.
-
-## Sem mudanças
-
-- Nenhum schema novo, nenhuma coluna/tabela removida.
-- Trigger de validação manual permanece intacto (UI manual continua exigindo passo-a-passo).
-- Paletas: Sala Ágil verde, Sustentação azul — mantidas no novo modal.
+- Sem mudança de regra de negócio, schema ou RLS.
+- Sem novos endpoints — só ajuste de embed/joins e UI.

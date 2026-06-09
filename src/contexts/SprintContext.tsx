@@ -867,13 +867,21 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   // ── SPRINTS ───────────────────────────────────────────────────────────────────
   const addSprint = useCallback(async (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => {
     if (!teamId) return;
-    const { error } = await supabase.from("sprints").insert({
+    const { data, error } = await supabase.from("sprints").insert({
       team_id: teamId, name: sprint.name, start_date: sprint.startDate,
       end_date: sprint.endDate, goal: sprint.goal, is_active: false,
       closed_at: null, delay_days: null,
-    });
+    }).select().single();
     if (error) { toast.error("Erro ao criar sprint"); return; }
-    // Realtime INSERT cuidará da atualização local — sem refreshAll() aqui
+    // FIX: append otimista local — não depender exclusivamente do canal Realtime.
+    if (data) {
+      const newSprint: Sprint = {
+        id: data.id, name: data.name, startDate: data.start_date, endDate: data.end_date,
+        goal: data.goal || "", isActive: data.is_active, createdAt: data.created_at,
+        closedAt: data.closed_at ?? null, delayDays: data.delay_days ?? null,
+      };
+      setSprints((prev) => (prev.some((s) => s.id === data.id) ? prev : [...prev, newSprint]));
+    }
   }, [teamId]);
 
   const updateSprint = useCallback(async (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => {

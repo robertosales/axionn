@@ -64,6 +64,7 @@ import { getTipoLabel, getSLAStatusDemanda, TIPOS_DEMANDA_IMR } from "../types/i
 import { useTransitions, useHours } from "../hooks/useDemandas";
 import { useProjetos } from "../hooks/useProjetos";
 import { useFases } from "../hooks/useFases";
+import { useWorkflowSteps } from "../hooks/useWorkflowSteps";
 import * as respSvc from "../services/responsaveis.service";
 import * as evidSvc from "../services/evidencias.service";
 import * as eventosSvc from "../services/eventos.service";

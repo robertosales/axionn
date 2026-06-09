@@ -399,7 +399,29 @@ export function DemandaDetail({
   const isBloqueada = demanda.situacao === "bloqueada";
 
   const currentStepIdx = STEPPER_STEPS.indexOf(demanda.situacao);
-  const allowedNextStatuses = isTerminal ? [] : getNextStatuses(demanda.situacao);
+
+  // Fluxo dinâmico: lê a tabela sustentacao_workflow_steps (com fallback estático).
+  // "Mover para" passa a espelhar exatamente as etapas configuradas em
+  // Sustentação → Fluxo de Trabalho.
+  const workflowSteps = useWorkflowSteps();
+  const dynamicFlow = useMemo(
+    () => workflowSteps.filter((s) => !s.isTerminal && s.key !== "bloqueada").map((s) => s.key),
+    [workflowSteps],
+  );
+
+  const allowedNextStatuses = useMemo<string[]>(() => {
+    if (isTerminal) return [];
+    if (isBloqueada) return [];
+    if (isRejeitada) return ["em_execucao"];
+    const idx = dynamicFlow.indexOf(demanda.situacao);
+    if (idx < 0) {
+      // Situação fora do fluxo configurado → libera todos os destinos não-terminais
+      return dynamicFlow.filter((k) => k !== demanda.situacao);
+    }
+    const next = dynamicFlow.slice(idx + 1);
+    if (demanda.situacao === "hom_homologada") return [...next, "rejeitada"];
+    return next;
+  }, [dynamicFlow, demanda.situacao, isTerminal, isBloqueada, isRejeitada]);
 
   const canBlock = !isTerminal && !isBloqueada && demanda.situacao !== "ag_aceite_final";
   const canCancel = !isTerminal && demanda.situacao !== "ag_aceite_final";

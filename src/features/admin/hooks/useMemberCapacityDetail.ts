@@ -63,14 +63,14 @@ export function useMemberCapacityDetail({ teamId, devId, module, enabled }: Para
           const [{ data: usData, error: e1 }, { data: actData, error: e2 }] = await Promise.all([
             supabase
               .from("user_stories")
-              .select("id, title, status, story_points, estimated_hours, sprint_id, sprints(name, is_active)")
+              .select("id, title, status, story_points, estimated_hours, sprint_id, sprint:sprints!user_stories_sprint_id_fkey(name, is_active)")
               .eq("team_id", teamId)
               .eq("assignee_id", devId)
               .order("updated_at", { ascending: false })
               .limit(200),
             supabase
               .from("activities")
-              .select("id, title, hours, is_closed, start_date, end_date, hu_id, user_stories(title)")
+              .select("id, title, hours, is_closed, start_date, end_date, hu_id, hu:user_stories!activities_hu_id_fkey(title)")
               .eq("team_id", teamId)
               .eq("assignee_id", devId)
               .order("end_date", { ascending: true })
@@ -82,12 +82,12 @@ export function useMemberCapacityDetail({ teamId, devId, module, enabled }: Para
           setHus(((usData ?? []) as any[]).map(r => ({
             id: r.id, title: r.title, status: r.status,
             story_points: r.story_points, estimated_hours: r.estimated_hours,
-            sprint_name: r.sprints?.name ?? null,
+            sprint_name: r.sprint?.name ?? null,
           })));
           setActivities(((actData ?? []) as any[]).map(r => ({
             id: r.id, title: r.title, hours: r.hours, is_closed: r.is_closed,
             start_date: r.start_date, end_date: r.end_date,
-            hu_title: r.user_stories?.title ?? null,
+            hu_title: r.hu?.title ?? null,
           })));
           setDemandas([]); setHours([]);
         } else {

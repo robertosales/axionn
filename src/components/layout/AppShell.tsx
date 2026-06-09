@@ -15,6 +15,7 @@ import {
   AlertTriangle, FileText, Upload, Repeat, Activity, ShieldCheck,
   ChevronRight, Building2, ChevronsUpDown, Check, PanelLeftClose,
   PanelLeftOpen, Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight,
+  Target,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { AxionLogo } from "@/components/AxionLogo";
@@ -22,14 +23,13 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
 // ─── Tokens exatos Opção A (protótipo opcao_a_fundo_suave) ────────────────────
-// Hardcoded para garantir sidebar escura independente do tema claro/escuro
 const SB = {
-  bg:       "#0f1a18",  // --sb
-  fg:       "#c0d4d0",  // --sb-fg
-  muted:    "#3d5a56",  // --sb-muted
-  acc:      "#182e2a",  // --sb-acc  (hover)
-  active:   "#0c3d38",  // --sb-active
-  teal:     "#0bbcaf",  // --teal
+  bg:       "#0f1a18",
+  fg:       "#c0d4d0",
+  muted:    "#3d5a56",
+  acc:      "#182e2a",
+  active:   "#0c3d38",
+  teal:     "#0bbcaf",
   border:   "rgba(192,212,208,0.08)",
   tealA:    (a: number) => `rgba(11,188,175,${a})`,
 } as const;
@@ -70,25 +70,27 @@ const GROUP_LABELS: Record<NavItem["group"], string> = {
 };
 
 const NAV_SALA_AGIL: NavItem[] = [
-  { key: "dashboard",      label: "Dashboard",              icon: LayoutDashboard, path: "/sala-agil",                group: "sprints" },
-  { key: "board",          label: "Board Kanban",            icon: Kanban,          path: "/sala-agil/board",          group: "sprints" },
-  { key: "backlog",        label: "Backlog",                 icon: ListTodo,        path: "/sala-agil/backlog",        group: "sprints" },
-  { key: "epicos",         label: "Épicos",                  icon: Layers,          path: "/sala-agil/epicos",         group: "sprints" },
-  { key: "planning-poker", label: "Planning Poker",          icon: PlayingCardIcon, path: "/sala-agil/planning-poker", group: "cerimonias" },
-  { key: "retrospectiva",  label: "Retrospectiva",           icon: Repeat,          path: "/sala-agil/retrospectiva",  group: "cerimonias" },
-  { key: "impedimentos",   label: "Impedimentos",            icon: AlertTriangle,   path: "/sala-agil/impedimentos",   group: "cerimonias" },
-  { key: "calendario",     label: "Calendário",              icon: Calendar,        path: "/sala-agil/calendario",     group: "operacoes" },
-  { key: "equipe",         label: "Equipe",                  icon: Users,           path: "/sala-agil/equipe",         group: "operacoes" },
-  { key: "atividades",     label: "Atividades",              icon: Activity,        path: "/sala-agil/atividades",     group: "operacoes" },
-  { key: "metricas",       label: "Métricas",                icon: BarChart3,       path: "/sala-agil/metricas",       group: "org" },
-  { key: "relatorios",     label: "Relatórios",              icon: FileText,        path: "/sala-agil/relatorios",     group: "org" },
-  { key: "historico",      label: "Histórico",               icon: History,         path: "/sala-agil/historico",      group: "org" },
-  { key: "times",          label: "Times",                   icon: Users,           path: "/sala-agil/times",          group: "config" },
-  { key: "membros",        label: "Membros",                 icon: User,            path: "/sala-agil/membros",        group: "config" },
-  { key: "perfis",         label: "Perfis (RBAC)",           icon: ShieldCheck,     path: "/sala-agil/perfis",         group: "config" },
-  { key: "fluxo",          label: "Fluxo",                   icon: GitBranch,       path: "/sala-agil/fluxo",          group: "config" },
-  { key: "campos",         label: "Campos Custom",           icon: Settings,        path: "/sala-agil/campos",         group: "config" },
-  { key: "automacoes",     label: "Automações",              icon: Repeat,          path: "/sala-agil/automacoes",     group: "config" },
+  { key: "dashboard",      label: "Dashboard",     icon: LayoutDashboard, path: "/sala-agil",                group: "sprints" },
+  { key: "board",          label: "Board Kanban",   icon: Kanban,          path: "/sala-agil/board",          group: "sprints" },
+  { key: "backlog",        label: "Backlog",        icon: ListTodo,        path: "/sala-agil/backlog",        group: "sprints" },
+  { key: "epicos",         label: "Épicos",         icon: Layers,          path: "/sala-agil/epicos",         group: "sprints" },
+  { key: "planning-poker", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning-poker", group: "cerimonias" },
+  { key: "retrospectiva",  label: "Retrospectiva",  icon: Repeat,          path: "/sala-agil/retrospectiva",  group: "cerimonias" },
+  { key: "impedimentos",   label: "Impedimentos",   icon: AlertTriangle,   path: "/sala-agil/impedimentos",   group: "cerimonias" },
+  { key: "calendario",     label: "Calendário",     icon: Calendar,        path: "/sala-agil/calendario",     group: "operacoes" },
+  { key: "equipe",         label: "Equipe",         icon: Users,           path: "/sala-agil/equipe",         group: "operacoes" },
+  { key: "atividades",     label: "Atividades",     icon: Activity,        path: "/sala-agil/atividades",     group: "operacoes" },
+  { key: "metricas",       label: "Métricas",       icon: BarChart3,       path: "/sala-agil/metricas",       group: "org" },
+  { key: "relatorios",     label: "Relatórios",     icon: FileText,        path: "/sala-agil/relatorios",     group: "org" },
+  { key: "historico",      label: "Histórico",      icon: History,         path: "/sala-agil/historico",      group: "org" },
+  // ── OKR — nova entrada no grupo Relatórios ─────────────────────────────────
+  { key: "okr",            label: "OKR",            icon: Target,          path: "/okr",                      group: "org" },
+  { key: "times",          label: "Times",          icon: Users,           path: "/sala-agil/times",          group: "config" },
+  { key: "membros",        label: "Membros",         icon: User,            path: "/sala-agil/membros",        group: "config" },
+  { key: "perfis",         label: "Perfis (RBAC)",   icon: ShieldCheck,     path: "/sala-agil/perfis",         group: "config" },
+  { key: "fluxo",          label: "Fluxo",           icon: GitBranch,       path: "/sala-agil/fluxo",          group: "config" },
+  { key: "campos",         label: "Campos Custom",   icon: Settings,        path: "/sala-agil/campos",         group: "config" },
+  { key: "automacoes",     label: "Automações",      icon: Repeat,          path: "/sala-agil/automacoes",     group: "config" },
 ];
 
 const NAV_SUSTENTACAO: NavItem[] = [
@@ -221,7 +223,6 @@ function NavItemButton({ item, module, isActive, collapsed, onNavigate }: {
       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = SB.acc; }}
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
     >
-      {/* Barra vertical esquerda no item ativo */}
       {isActive && !collapsed && (
         <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
           style={{ background: SB.teal }} />
@@ -272,6 +273,7 @@ function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
   const isItemActive = (item: NavItem) => {
     if (activeKey) return item.key === activeKey;
     const roots = ["/sala-agil", "/sustentacao", "/rdm"];
+    if (item.path === "/okr") return location.pathname === "/okr";
     if (roots.includes(item.path)) return location.pathname === item.path;
     return location.pathname.startsWith(item.path);
   };
@@ -333,7 +335,6 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
     </div>
   );
 
-  // Abas lado a lado — conforme mockup
   return (
     <div className="flex items-stretch" style={{ borderBottom: `1px solid ${SB.border}` }}>
       {modules.map(({ key, path, label, Icon }) => {
@@ -407,6 +408,7 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
     ? items.find((i) => i.key === activeKey)
     : items.find((i) => {
         const roots = ["/sala-agil", "/sustentacao", "/rdm"];
+        if (item.path === "/okr") return location.pathname === "/okr";
         if (roots.includes(i.path)) return location.pathname === i.path;
         return location.pathname.startsWith(i.path);
       });

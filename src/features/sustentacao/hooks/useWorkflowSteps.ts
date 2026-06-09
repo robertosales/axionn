@@ -1,10 +1,12 @@
-import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ALL_SITUACOES, SITUACAO_LABELS } from "../types/demanda";
+import { fetchActiveWorkflowSteps } from "../services/workflowSteps.service";
 
 export interface WorkflowStep {
   key: string;
   label: string;
   order: number;
+  hex?: string;
   isTerminal?: boolean;
 }
 
@@ -24,19 +26,68 @@ const WORKFLOW_ORDER: Record<string, number> = {
   cancelada: 13,
 };
 
-const TERMINAL_STEPS = new Set(["ag_aceite_final", "cancelada", "rejeitada"]);
+const TERMINAL_KEYS = new Set(["ag_aceite_final", "cancelada", "rejeitada", "fila_concluida"]);
 
+// Mapeia label (do DB) → key canônico. Permite que etapas padrão salvas
+// como "Em Execução" voltem ao key "em_execucao".
+const LABEL_TO_KEY: Record<string, string> = Object.fromEntries(
+  Object.entries(SITUACAO_LABELS).map(([k, v]) => [v.trim().toLowerCase(), k])
+);
+
+function slugify(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function isTerminalLabel(key: string, label: string): boolean {
+  if (TERMINAL_KEYS.has(key)) return true;
+  const l = label.toLowerCase();
+  return l.startsWith("cancelad") || l.startsWith("rejeitad") || l.includes("aceite final") || l.includes("concluíd") || l.includes("concluid");
+}
+
+function buildDefaultSteps(): WorkflowStep[] {
+  return [...ALL_SITUACOES]
+    .map((key) => ({
+      key,
+      label: SITUACAO_LABELS[key] ?? key,
+      order: WORKFLOW_ORDER[key] ?? 99,
+      isTerminal: TERMINAL_KEYS.has(key),
+    }))
+    .sort((a, b) => a.order - b.order);
+}
+
+/**
+ * Hook canônico de etapas do fluxo de Sustentação.
+ * Lê de `sustentacao_workflow_steps` (configurável pelo usuário) e cai
+ * para o conjunto estático ALL_SITUACOES quando a tabela está vazia.
+ */
 export function useWorkflowSteps(): WorkflowStep[] {
-  return useMemo(() => {
-    return [...ALL_SITUACOES]
-      .map((key) => ({
+  const { data } = useQuery({
+    queryKey: ["workflow-steps"],
+    queryFn: fetchActiveWorkflowSteps,
+    staleTime: 60_000,
+  });
+
+  if (!data || data.length === 0) return buildDefaultSteps();
+
+  return [...data]
+    .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+    .map((row, idx) => {
+      const label = (row.nome ?? "").trim();
+      const key = LABEL_TO_KEY[label.toLowerCase()] ?? slugify(label);
+      return {
         key,
-        label: SITUACAO_LABELS[key] ?? key,
-        order: WORKFLOW_ORDER[key] ?? 99,
-        isTerminal: TERMINAL_STEPS.has(key),
-      }))
-      .sort((a, b) => a.order - b.order);
-  }, []);
+        label,
+        order: row.ordem ?? idx,
+        hex: row.cor,
+        isTerminal: isTerminalLabel(key, label),
+      };
+    });
 }
 
 export function useWorkflowStep(situacao: string): WorkflowStep | undefined {

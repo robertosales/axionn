@@ -1,46 +1,51 @@
-## Diagnóstico
+## Problema
 
-Ao alternar com ALT+TAB ou minimizar/restaurar a janela, o Supabase Auth dispara eventos de `onAuthStateChange` (tipicamente `TOKEN_REFRESHED` e/ou re-emissão de `SIGNED_IN`/`INITIAL_SESSION`) quando a aba reganha o foco e o cliente re-valida a sessão.
+O **Kanban da Sustentação** e o campo **"Mover para"** no detalhe da demanda usam uma lista **estática** de etapas (`ALL_SITUACOES` / `FLOW_PRINCIPAL` no código), ignorando o que o usuário configurou em **Sustentação → Fluxo de Trabalho** (tabela `sustentacao_workflow_steps`).
 
-No `src/contexts/AuthContext.tsx` (linhas ~282–307) o callback trata **todos** os eventos da mesma forma:
+Por isso a etapa **"TESTE"** (e qualquer outra customizada) aparece no editor de fluxo mas **não aparece** no Kanban nem no seletor "Mover para" da demanda.
 
-1. Marca `setLoading(true)` para "evitar race nos guards de rota";
-2. Chama `loadUserData(userId)` recarregando perfil, times, roles e module roles.
+## Causa raiz
 
-Enquanto `loading === true`, o `ProtectedRoute` renderiza `<PageLoader />`, **desmontando toda a árvore da rota atual**. Quando a carga termina, a árvore é re-montada — e qualquer estado local de formulário (inputs, drawers de HU, modais de demanda, etc.) é perdido. Para o usuário isso parece um "reload da tela".
+1. `src/features/sustentacao/hooks/useWorkflowSteps.ts` retorna `ALL_SITUACOES` direto do código — nunca consulta o banco.
+2. `SustentacaoPage` monta `workflowColumns` a partir desse hook estático e passa para o `SustentacaoBoard` → Kanban só vê as etapas hard-coded.
+3. `DemandaDetail.tsx` calcula `getNextStatuses()` a partir do array constante `FLOW_PRINCIPAL` → "Mover para" só lista etapas hard-coded.
 
-O `useAppResilience` também invalida queries ativas no `visibilitychange`, o que agrava o efeito (refetches simultâneos), mas o gatilho do unmount é o `setLoading(true)` no AuthContext.
+## Solução (somente frontend)
 
-## Correção (mínima, só lógica)
+### 1. `useWorkflowSteps` passa a ler do banco
 
-### 1. `src/contexts/AuthContext.tsx`
-Tornar o callback de `onAuthStateChange` idempotente para o mesmo usuário:
+Transformar o hook em uma `useQuery` com `queryKey: ['workflow-steps']` (mesma key já invalidada pelo `SustentacaoWorkflow` após salvar) usando `fetchActiveWorkflowSteps()`:
 
-- Guardar o último `user.id` carregado em um `ref` (`loadedUserIdRef`).
-- No callback:
-  - Se `session?.user.id === loadedUserIdRef.current` → **não** chamar `setLoading(true)` nem `loadUserData`. Apenas atualizar `session`/`user` (necessário para token novo).
-  - Se for outro usuário (login real) ou primeira carga → manter fluxo atual (`setLoading(true)` + `loadUserData`).
-  - No logout (`!session`) → resetar `loadedUserIdRef` e seguir fluxo atual.
-- Após `loadUserData` bem-sucedido, gravar `loadedUserIdRef.current = userId`.
+- Retorna `{ steps: WorkflowStep[], loading }` onde cada step traz `key` (slug), `label`, `order`, `hex` e `isTerminal` (derivado por convenção: nomes `cancelad*`, `rejeitad*`, `aceite_final` ou marcador "terminal").
+- **Fallback**: se a tabela estiver vazia, mantém `ALL_SITUACOES` como hoje (para não quebrar instalações novas).
+- `useWorkflowStep(situacao)` continua funcionando em cima da nova fonte.
 
-Isso elimina o unmount/remount da árvore em `TOKEN_REFRESHED` e re-emissões de `SIGNED_IN` causadas por foco/visibilidade.
+### 2. `SustentacaoPage` passa cor real
 
-### 2. `src/hooks/useAppResilience.ts`
-Suavizar a reação ao voltar do background para não disparar uma onda de refetches que também pode desmontar componentes via Suspense de queries:
+`workflowColumns` passa a usar `color: s.hex` (já existe campo `hex` no DB). Sem mudanças de assinatura no `SustentacaoBoard` — ele já aceita `color` opcional por coluna.
 
-- Ao voltar para `visible`, **não** invalidar queries ativas imediatamente. Apenas chamar `focusManager.setFocused(true)`; o React Query, com `refetchOnWindowFocus: false` (já definido em `queryClient.ts`), naturalmente não refaz fetch.
-- Manter `cancelQueries()` ao ir para background (economia de rede inalterada).
+### 3. `DemandaDetail` — "Mover para" espelha o fluxo do banco
 
-## Escopo / não-escopo
+- Substituir o uso do array constante `FLOW_PRINCIPAL` por um array derivado de `useWorkflowSteps()` (ordenado por `order`, filtrando terminais).
+- Reescrever `getNextStatuses(situacao)` para:
+  - Localizar o índice da `situacao` atual nesse array dinâmico.
+  - Retornar os próximos itens (`slice(idx + 1)`), excluindo a própria atual e etapas terminais quando aplicável.
+  - Manter as exceções especiais existentes: `bloqueada` → vazio, `rejeitada` → permite voltar para a etapa de execução, `hom_homologada` → permite "rejeitada".
+- Se a demanda estiver em uma situação **fora** do fluxo configurado (ex.: status legado), exibir todas as etapas não-terminais como destino possível, evitando que a demanda fique "presa".
 
-- **Não** mexer em UI, estilos, layout, rotas, RLS, migrations, RPCs.
-- **Não** alterar `useSessionTimeout` nem `useIdleTimeout` (timers de inatividade continuam funcionando — eles só resetam por **interação do usuário**, não por foco da janela).
-- **Não** tocar em `selectedTeamId` / `moduleRoles`; o ref evita reload sem alterar dados persistidos.
+### 4. Sem mudanças em
 
-## Validação
+- Schema do banco, RLS, edge functions.
+- Trigger `validate_demanda_transition` (já permite transições quando um dos status não está no fluxo principal hard-coded — passa a se comportar bem com etapas customizadas).
+- `SustentacaoBoard.tsx` — apenas recebe colunas diferentes (já é dinâmico via prop `workflowColumns`).
 
-1. Abrir uma demanda/HU, digitar texto num campo, **ALT+TAB para outro app e voltar** → o texto deve permanecer e a tela **não** deve piscar `PageLoader`.
-2. Minimizar a janela do Chrome e restaurar → idem.
-3. Login normal (de fato sair e entrar com outro usuário) → fluxo de carga completo continua acontecendo.
-4. Token refresh em segundo plano (após ~1h de sessão) → sem flash de loader.
-5. Logout funciona normalmente e redireciona para `/auth`.
+## Arquivos alterados
+
+- `src/features/sustentacao/hooks/useWorkflowSteps.ts` — passa a buscar do banco com `useQuery`.
+- `src/features/sustentacao/SustentacaoPage.tsx` — passa `color` real e respeita `loading`.
+- `src/features/sustentacao/components/DemandaDetail.tsx` — `getNextStatuses` e o seletor "Mover para" passam a usar o fluxo dinâmico.
+
+## Resultado esperado
+
+- Adicionar a etapa "TESTE" em Fluxo de Trabalho → ela aparece como coluna no Kanban e como opção em "Mover para" em todas as demandas, com a cor configurada.
+- Reordenar/renomear/excluir etapas no Fluxo reflete imediatamente nos dois lugares (a invalidação de `['workflow-steps']` já existe após salvar).

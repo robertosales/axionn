@@ -537,8 +537,15 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           console.debug(`[Realtime] canal sprint-team-${teamId} conectado`);
+          // FIX: ao (re)conectar após uma falha, ressincroniza para recuperar
+          // eventos perdidos enquanto o canal esteve fora.
+          if (hadErrorRef.current) {
+            hadErrorRef.current = false;
+            refreshAll();
+          }
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          hadErrorRef.current = true;
           console.warn(`[Realtime] canal sprint-team-${teamId} com problema (${status}), tentando reconectar...`);
         }
       });

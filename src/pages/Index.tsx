@@ -59,15 +59,12 @@ const SalaAgilReportsPage = lazy(() =>
 function SectionSkeleton() {
   return (
     <div className="space-y-4 p-2" aria-busy="true" aria-label="Carregando seção…">
-      {/* Título da seção */}
       <div className="h-7 w-48 rounded-md bg-muted animate-pulse" />
-      {/* Linha de filtros/ações */}
       <div className="flex gap-3">
         <div className="h-9 w-32 rounded-md bg-muted animate-pulse" />
         <div className="h-9 w-24 rounded-md bg-muted animate-pulse" />
         <div className="ml-auto h-9 w-28 rounded-md bg-muted animate-pulse" />
       </div>
-      {/* Cards/linhas de conteúdo */}
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="h-20 w-full rounded-lg bg-muted animate-pulse" style={{ opacity: 1 - i * 0.15 }} />
       ))}
@@ -75,10 +72,6 @@ function SectionSkeleton() {
   );
 }
 
-/**
- * SectionLoader — fallback legado (spinner simples).
- * Mantido para compatibilidade, mas SectionSkeleton é o preferido.
- */
 function SectionLoader() {
   return (
     <div className="flex items-center justify-center py-20">
@@ -87,7 +80,6 @@ function SectionLoader() {
   );
 }
 
-/** ErrorBoundary simples para cada seção lazy */
 class SectionErrorBoundary extends React.Component<{ name: string; children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { name: string; children: React.ReactNode }) {
     super(props);
@@ -118,7 +110,6 @@ class SectionErrorBoundary extends React.Component<{ name: string; children: Rea
   }
 }
 
-/** Wrapper que combina ErrorBoundary + Suspense com skeleton robusto */
 function LazySection({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <SectionErrorBoundary name={name}>
@@ -138,7 +129,6 @@ const VALID_SECTIONS = [
   "notificacoes",
   "gerador-apf",
   "metricas",
-  "relatorios",
   "historico",
   "calendario",
   "equipe",
@@ -155,6 +145,11 @@ const VALID_SECTIONS = [
 ] as const;
 
 export type SectionKey = (typeof VALID_SECTIONS)[number];
+
+// ─── Rotas que saem do contexto /sala-agil e têm path próprio ─────────────────
+const EXTERNAL_ROUTES: Record<string, string> = {
+  okr: "/okr",
+};
 
 const TEAM_FREE_SECTIONS: SectionKey[] = [
   "planning-poker",
@@ -192,12 +187,6 @@ const Index = () => {
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
 
-  /**
-   * useTransition — navegação entre seções sem bloquear a UI.
-   * React 18: `startTransition` marca a atualização como não urgente,
-   * permitindo que interações do usuário (clique, scroll) continuem responsivas
-   * enquanto o novo conteúdo carrega em background.
-   */
   const [, startTransition] = useTransition();
 
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
@@ -220,8 +209,14 @@ const Index = () => {
     }
   }, [loading, section]);
 
-  // Navegação via startTransition — sem freeze de UI
-  const handleNavigate = (key: string) => startTransition(() => navigate(`/sala-agil/${key}`));
+  // ─── Navegação: rotas externas (ex: /okr) navegam direto; demais prefixam /sala-agil/
+  const handleNavigate = (key: string) => {
+    if (EXTERNAL_ROUTES[key]) {
+      navigate(EXTERNAL_ROUTES[key]);
+      return;
+    }
+    startTransition(() => navigate(`/sala-agil/${key}`));
+  };
 
   const isTeamFreeSection = TEAM_FREE_SECTIONS.includes(active);
   const needsTeam = !loading && !isAdmin && !currentTeamId && !isTeamFreeSection;
@@ -261,7 +256,6 @@ const Index = () => {
 
         {!loading && !needsTeam && (
           <div key={teamKey}>
-            {/* Seções leves — sem LazySection */}
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
             {active === "equipe" && <DeveloperManager />}
             {active === "board" && (
@@ -270,7 +264,6 @@ const Index = () => {
               </SectionGuard>
             )}
 
-            {/* Seções pesadas — cada uma com ErrorBoundary + Suspense + Skeleton */}
             {active === "planning-poker" && (
               <LazySection name="Planning Poker">
                 <PlanningPoker />
@@ -356,7 +349,6 @@ const Index = () => {
               </SectionGuard>
             )}
 
-            {/* ─── Demandas por Contrato — módulo contracts/SLA ───────────────── */}
             {active === "demandas-contratos" && (
               <SectionGuard permission="view_backlog">
                 <LazySection name="Demandas por Contrato">

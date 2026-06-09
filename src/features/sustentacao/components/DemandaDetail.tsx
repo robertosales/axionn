@@ -708,7 +708,12 @@ export function DemandaDetail({
   };
 
   const isCorretiva = ["manutencao_corretiva", "corretiva"].includes(demanda.tipo);
-  const resolveLabel = (s: string) => WORKFLOW_LABELS[s] || SITUACAO_LABELS[s] || s;
+  const dynamicLabelMap = useMemo(
+    () => Object.fromEntries(workflowSteps.map((s) => [s.key, s.label])),
+    [workflowSteps],
+  );
+  const resolveLabel = (s: string) =>
+    dynamicLabelMap[s] || WORKFLOW_LABELS[s] || SITUACAO_LABELS[s] || s;
   const resolveColor = (s: string) => WORKFLOW_COLORS[s] || SITUACAO_COLORS[s] || "";
 
   return (

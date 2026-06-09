@@ -81,5 +81,19 @@ export function useIdleTimeout({
     };
   }, [enabled, resetTimer, handleActivity, clearTimers]);
 
+  useEffect(() => {
+    if (!enabled) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        clearTimers();
+        warnedRef.current = false;
+        return;
+      }
+      resetTimer();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [enabled, clearTimers, resetTimer]);
+
   return { resetTimer };
 }

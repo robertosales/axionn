@@ -28,8 +28,13 @@ export function useAppResilience() {
         queryClient.cancelQueries();
         console.log('[Resilience] App em background: pausando requisições.');
       } else {
-        queryClient.invalidateQueries({ type: 'active' });
-        console.log('[Resilience] App em foreground: retomando sincronização.');
+        // NÃO invalidar queries ativas ao voltar do background.
+        // Invalidar disparava uma onda de refetches que podia desmontar
+        // componentes (Suspense / error boundaries) e fazia o usuário
+        // perder estado de formulário ao alternar com ALT+TAB.
+        // O Realtime do Supabase já cobre atualizações em tempo real;
+        // refetchOnWindowFocus está desligado no queryClient.
+        console.log('[Resilience] App em foreground: foco restaurado (sem refetch forçado).');
       }
     };
 

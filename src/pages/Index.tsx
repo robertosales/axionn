@@ -51,6 +51,9 @@ const RetroManager = lazy(() => import("@/components/RetroManager").then((m) => 
 const ApfGeneratorPage = lazy(() =>
   import("@/features/apf/components/ApfGeneratorPage").then((m) => ({ default: m.ApfGeneratorPage })),
 );
+const SalaAgilReportsPage = lazy(() =>
+  import("@/features/reports/pages/SalaAgilReportsPage").then((m) => ({ default: m.SalaAgilReportsPage })),
+);
 
 // ─── Skeleton de seção — exibido enquanto o chunk lazy está carregando ────────
 function SectionSkeleton() {
@@ -135,6 +138,7 @@ const VALID_SECTIONS = [
   "notificacoes",
   "gerador-apf",
   "metricas",
+  "relatorios",
   "historico",
   "calendario",
   "equipe",
@@ -332,6 +336,14 @@ const Index = () => {
               <SectionGuard permission="view_dashboard">
                 <LazySection name="Métricas">
                   <MetricsDashboard />
+                </LazySection>
+              </SectionGuard>
+            )}
+
+            {active === "relatorios" && (
+              <SectionGuard permission="view_dashboard">
+                <LazySection name="Relatórios">
+                  <SalaAgilReportsPage />
                 </LazySection>
               </SectionGuard>
             )}

@@ -1,45 +1,48 @@
-## Causa raiz
+## Objetivo
 
-`addUserStory` em `src/contexts/SprintContext.tsx` (l. 600–623) faz `INSERT` em `user_stories` e **não atualiza o estado local**. A atualização depende 100% do canal Realtime (`sprint-team-${teamId}` → handler INSERT, l. 323-336), que faz append otimista.
+Tornar os relatórios da Sala Ágil acessíveis diretamente pelo menu lateral, mover o "Relatório de Evidências" para dentro do catálogo de relatórios e ajustar o relatório de Produtividade para respeitar o perfil do usuário logado.
 
-Quando o canal Realtime está em `CHANNEL_ERROR` (já observado no console: `canal sprint-team-… com problema (CHANNEL_ERROR)`), o evento INSERT nunca chega ao cliente e a HU só aparece após F5 (que recarrega via `refreshAll`). O mesmo padrão existe para `addActivity`, `addSprint`, etc. — todos dependem só de Realtime após o insert.
+## Mudanças
 
-Adicionalmente, o insert atual não usa `.select()`, então nem temos a linha gravada disponível para fazer fallback local.
+### 1. Novo item de menu lateral — Sala Ágil
 
-## Correção
+`src/components/layout/AppShell.tsx` (NAV_SALA_AGIL):
+- Adicionar item `relatorios` apontando para `/sala-agil/relatorios`, grupo `org`, ícone `FileText`.
+- **Remover** o item `gerador-apf` ("Relatório de Evidências") do menu lateral.
 
-### 1. `src/contexts/SprintContext.tsx` — `addUserStory`
-- Trocar `.insert({...})` por `.insert({...}).select().single()`.
-- Após sucesso, fazer append idempotente em `setUserStories` usando `mapUserStory(data, [])` (mesma função que o handler Realtime usa). O handler Realtime continua existindo e já é idempotente (`if (prev.some(h => h.id === row.id)) return prev;`), então não há risco de duplicata.
-- Disparar `toast.success("HU criada")` para feedback consistente.
+`src/pages/Index.tsx`:
+- Adicionar `"relatorios"` em `VALID_SECTIONS`.
+- Adicionar bloco `{active === "relatorios" && ...}` renderizando `SalaAgilRelatorios` (com `LazySection` + `SectionGuard permission="view_dashboard"`), reutilizando o mesmo wrapper hoje usado dentro de `MetricsDashboard` para alimentar `sprints`, `developers`, `rawData`, `teamName` e `currentUserName`. A aba "Relatórios" dentro de `/sala-agil/metricas` continua existindo (não é o foco da remoção); apenas ganha um atalho direto pela sidebar.
+- A rota `gerador-apf` continua existindo internamente como fallback (o link some, mas o componente segue renderizável para não quebrar URLs antigas).
 
-Resultado: a HU aparece imediatamente mesmo com Realtime caído; quando o canal volta, o evento INSERT é ignorado pelo guard de duplicata.
+### 2. Catálogo de Relatórios — adicionar "Relatório de Evidências"
 
-### 2. Mesmo padrão de fallback para outros `add*` que dependem só de Realtime
-Aplicar a mesma técnica (`.select().single()` + append local idempotente) nos mutators do `SprintContext` que hoje não atualizam estado local após insert:
-- `addActivity`
-- `addSprint`
-- `addEpic`
-- `addImpediment`
+`src/components/sala-agil/reports/SalaAgilRelatorios.tsx`:
+- Adicionar item no `CATALOG`: `id: "evidencias"`, título "Relatório de Evidências", descrição curta, ícone `FileText`, badge "Ágil".
+- Quando `active === "evidencias"`, renderizar `ApfGeneratorPage` (o componente atual do `gerador-apf`) com um botão "Voltar" no topo equivalente aos demais (`onBack={() => setActive(null)}`), envolto em um wrapper simples para manter a UX consistente.
 
-`addDeveloper` já faz o append local — manter como está.
+### 3. Relatório de Produtividade — bloqueio por perfil
 
-### 3. Robustez do Realtime (defensivo, não-bloqueante)
-No `subscribe()` do canal `sprint-team-${teamId}`, ao detectar `CHANNEL_ERROR` mais de N vezes, chamar `refreshAll()` uma vez como rede de segurança. Já existe lógica de reconexão na l. 541 — apenas adicionar um `refreshAll()` após reconectar com sucesso (status `SUBSCRIBED` após erro prévio) para sincronizar mudanças perdidas durante o downtime.
+`src/components/sala-agil/reports/RelatorioAtividades.tsx`:
+- Receber o usuário logado via `useAuth()` (`user`, `isAdmin`).
+- No `useState(filters)` inicial, definir `memberId`:
+  - Admin → `"all"` (comportamento atual).
+  - Não-admin → o próprio `developer.id` correspondente ao `user.id` (match por `user_id`/`profile_id` no array `developers`); fallback `"all"` caso não haja correspondência.
+- No `ReportFilterBar`, marcar o campo "Analista" como `disabled` quando `!isAdmin`, garantindo que ele veja apenas seus próprios dados e não consiga trocar.
+- Se o `ReportFilterBar` ainda não suportar `disabled` por campo, adicionar a flag opcional ao tipo `FilterField` e propagar para o `<Select>`/`<Input>` correspondente.
 
-## Escopo de verificação em outras telas
+### 4. Sustentação — mesmo ajuste de Produtividade (consistência)
 
-- **Sustentação (`demandas`)**: usa React Query + canal Realtime via `useDemandasRealtime`. Já invalida cache no INSERT. Sem alteração.
-- **Admin / Teams / Users**: usam `reload()` explícito após mutação (ver `useTeamsAdmin.create`). Sem alteração.
-- **Releases**: já chama `await load()` após insert. Sem alteração.
-- **Retro / Planning**: salas colaborativas, dependência intencional de Realtime. Sem alteração.
+`src/features/sustentacao/components/reports/RelatorioProdutividade.tsx`:
+- O `useState(analista)` já inicializa com `user?.id` para não-admin (linha 311). Adicionar `disabled={!isAdmin}` no campo "Analista" do filtro para impedir troca.
 
-## Não fazer
+## Detalhes técnicos
 
-- Não trocar `SprintContext` por React Query (mudança grande, fora do escopo do bug).
-- Não mexer em RLS/SQL: `ALTER PUBLICATION supabase_realtime ADD TABLE user_stories` já está aplicado (o handler Realtime funciona quando o canal está saudável).
-- Não alterar `useDemandasRealtime`, `useKanbanBoard`, ou hooks do módulo Sustentação.
+- O `ApfGeneratorPage` é importado por `Index.tsx` via lazy; reaproveitar o mesmo import dentro de `SalaAgilRelatorios.tsx` via `lazy(() => import(...))` + `Suspense` para não engordar o bundle do catálogo.
+- Match `user → developer`: usar `developers.find(d => d.user_id === user?.id || d.id === user?.id)`; se a estrutura de `developers` não expuser `user_id`, fazer match por nome como fallback (`d.name === user?.name`).
+- Nenhuma mudança de schema/RLS é necessária — apenas UI/lógica de filtro.
 
-## Arquivos tocados
+## Fora de escopo
 
-- `src/contexts/SprintContext.tsx` (único arquivo).
+- Não remover a aba "Relatórios" do `MetricsDashboard` (o usuário não pediu).
+- Não alterar permissões RBAC nem rotas além das listadas.

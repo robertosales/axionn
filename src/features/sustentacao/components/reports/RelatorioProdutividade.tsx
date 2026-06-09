@@ -504,9 +504,10 @@ export function RelatorioProdutividade({ onBack }: Props) {
             periodo={periodo}       setPeriodo={setPeriodo}
             dataInicio={dataInicio} setDataInicio={setDataInicio}
             dataFim={dataFim}       setDataFim={setDataFim}
-            analista={analista}     setAnalista={isAdmin ? setAnalista : undefined}
+            analista={analista}     setAnalista={setAnalista}
             analistas={analistasList}
             showAnalista={true}
+            analistaDisabled={!isAdmin}
             modulo="sustentacao"
             totalFiltrado={demandasFiltradas.length}
             onClear={() => {

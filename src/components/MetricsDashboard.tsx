@@ -445,7 +445,7 @@ export function MetricsDashboard() {
         <TabsContent value="reports" className="mt-0 p-0">
           <SalaAgilRelatorios
             sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}
-            developers={filtered.developers.map((d: any) => ({ id: d.id, name: d.name, role: d.role || "developer" }))}
+            developers={rawData.developers.map((d: any) => ({ id: d.id, name: d.name, role: d.role || "developer" }))}
             rawData={{ sprints: rawData.sprints, hus: rawData.hus, activities: rawData.activities, impediments: rawData.impediments, developers: rawData.developers }}
             teamName={currentTeamName}
             currentUserName={(user as any)?.user_metadata?.name ?? (user as any)?.email ?? "Usuário"}

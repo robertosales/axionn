@@ -1,46 +1,47 @@
-## Diagnóstico
+## 1. Modal de detalhes ao clicar no nome no Painel de Capacidade
 
-Ao alternar com ALT+TAB ou minimizar/restaurar a janela, o Supabase Auth dispara eventos de `onAuthStateChange` (tipicamente `TOKEN_REFRESHED` e/ou re-emissão de `SIGNED_IN`/`INITIAL_SESSION`) quando a aba reganha o foco e o cliente re-valida a sessão.
+Hoje `CapacityGrid` apenas lista nomes. Vou tornar cada nome clicável e abrir um `Dialog` (mesmo padrão visual usado em Sala Ágil → Métricas → Desempenho Individual).
 
-No `src/contexts/AuthContext.tsx` (linhas ~282–307) o callback trata **todos** os eventos da mesma forma:
+**Conteúdo do modal por módulo:**
 
-1. Marca `setLoading(true)` para "evitar race nos guards de rota";
-2. Chama `loadUserData(userId)` recarregando perfil, times, roles e module roles.
+- **Sala Ágil (`module='agil'`)** — abas:
+  - **HUs em andamento** — id, título, sprint, status, story points / horas estimadas, % de progresso.
+  - **Atividades** — atividade, HU pai, status, horas planejadas vs. realizadas.
+- **Sustentação (`module='sustentacao'`)** — abas:
+  - **Demandas** — RHM, projeto, título, situação, SLA/cor, criada em.
+  - **Horas lançadas** — data, demanda, fase, horas, descrição.
 
-Enquanto `loading === true`, o `ProtectedRoute` renderiza `<PageLoader />`, **desmontando toda a árvore da rota atual**. Quando a carga termina, a árvore é re-montada — e qualquer estado local de formulário (inputs, drawers de HU, modais de demanda, etc.) é perdido. Para o usuário isso parece um "reload da tela".
+**Arquivos:**
+- `src/features/admin/components/CapacityMemberDetailDialog.tsx` (novo) — Dialog com `DialogTitle/Description`, tabs shadcn, tabelas compactas.
+- `src/features/admin/hooks/useMemberCapacityDetail.ts` (novo) — busca dados por `devId/userId` no módulo correto (queries em `user_stories` + `activities` para Ágil; `demandas` + `demanda_hours` para Sustentação) e respeita RLS.
+- `src/features/admin/components/CapacityGrid.tsx` — nome vira `<button>` que abre o dialog e passa `{ devId, devName, module, teamId }`.
 
-O `useAppResilience` também invalida queries ativas no `visibilitychange`, o que agrava o efeito (refetches simultâneos), mas o gatilho do unmount é o `setLoading(true)` no AuthContext.
+Sem alteração de regra de negócio nem de schema.
 
-## Correção (mínima, só lógica)
+## 2. Demanda 25925 → projeto SISGCORP
 
-### 1. `src/contexts/AuthContext.tsx`
-Tornar o callback de `onAuthStateChange` idempotente para o mesmo usuário:
+Há duplicidade no banco: existe `25925` em `[SUST] SINARM 2` (fila_atendimento) e em `[SUST] SISGCORP` (fila_atendimento). Vou:
+- Mover transitions/hours/evidências/eventos/responsáveis/fases da linha SINARM 2 para a linha SISGCORP (preservar histórico).
+- Excluir a linha duplicada de SINARM 2.
+- Tudo em migration única e transacional.
 
-- Guardar o último `user.id` carregado em um `ref` (`loadedUserIdRef`).
-- No callback:
-  - Se `session?.user.id === loadedUserIdRef.current` → **não** chamar `setLoading(true)` nem `loadUserData`. Apenas atualizar `session`/`user` (necessário para token novo).
-  - Se for outro usuário (login real) ou primeira carga → manter fluxo atual (`setLoading(true)` + `loadUserData`).
-  - No logout (`!session`) → resetar `loadedUserIdRef` e seguir fluxo atual.
-- Após `loadUserData` bem-sucedido, gravar `loadedUserIdRef.current = userId`.
+## 3. Falhas de importação (8 demandas)
 
-Isso elimina o unmount/remount da árvore em `TOKEN_REFRESHED` e re-emissões de `SIGNED_IN` causadas por foco/visibilidade.
+Causa: o trigger `fn_validate_demanda_transition` só permite avançar **um passo** no fluxo principal. A planilha traz:
+- `hom_homologada → ag_aceite_final` (pula `fila_producao`) — 28425, 28413.
+- `hom_ag_homologacao → ag_aceite_final` (pula 2 passos) — 23630, 19740, 16638, 16615.
+- Demandas já em `ag_aceite_final` recebendo o mesmo status — 27450, 25485 (regra de terminal barra mesmo idempotente).
 
-### 2. `src/hooks/useAppResilience.ts`
-Suavizar a reação ao voltar do background para não disparar uma onda de refetches que também pode desmontar componentes via Suspense de queries:
+Correção em `upsert_demandas_batch` (RPC do banco, sem mexer no trigger nem afrouxar regra para uso manual):
 
-- Ao voltar para `visible`, **não** invalidar queries ativas imediatamente. Apenas chamar `focusManager.setFocused(true)`; o React Query, com `refetchOnWindowFocus: false` (já definido em `queryClient.ts`), naturalmente não refaz fetch.
-- Manter `cancelQueries()` ao ir para background (economia de rede inalterada).
+1. **Idempotência forte** — se a situação nova == situação atual, ignorar silenciosamente (inclui terminais como `ag_aceite_final`).
+2. **Caminhada automática no fluxo** — quando o destino está adiante no `FLOW_PRINCIPAL`, inserir transitions intermediárias (`from→next`, `next→next+1`, …) com `justificativa = 'Importação automática (planilha)'`, satisfazendo a regra de adjacência. Para passos que exigem justificativa (`planejamento_ag_aprovacao`), usar a mesma string.
+3. **Atualização final de `demandas.situacao`** segue como hoje.
 
-## Escopo / não-escopo
+Resultado esperado: as 8 demandas passam a importar sem erro, mantendo histórico coerente.
 
-- **Não** mexer em UI, estilos, layout, rotas, RLS, migrations, RPCs.
-- **Não** alterar `useSessionTimeout` nem `useIdleTimeout` (timers de inatividade continuam funcionando — eles só resetam por **interação do usuário**, não por foco da janela).
-- **Não** tocar em `selectedTeamId` / `moduleRoles`; o ref evita reload sem alterar dados persistidos.
+## Sem mudanças
 
-## Validação
-
-1. Abrir uma demanda/HU, digitar texto num campo, **ALT+TAB para outro app e voltar** → o texto deve permanecer e a tela **não** deve piscar `PageLoader`.
-2. Minimizar a janela do Chrome e restaurar → idem.
-3. Login normal (de fato sair e entrar com outro usuário) → fluxo de carga completo continua acontecendo.
-4. Token refresh em segundo plano (após ~1h de sessão) → sem flash de loader.
-5. Logout funciona normalmente e redireciona para `/auth`.
+- Nenhum schema novo, nenhuma coluna/tabela removida.
+- Trigger de validação manual permanece intacto (UI manual continua exigindo passo-a-passo).
+- Paletas: Sala Ágil verde, Sustentação azul — mantidas no novo modal.

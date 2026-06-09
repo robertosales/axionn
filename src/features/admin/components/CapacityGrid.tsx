@@ -2,6 +2,8 @@ import { CapacityBar } from "./CapacityBar";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Clock, Zap, Shield, CalendarClock } from "lucide-react";
 import type { TeamCapacity } from "../hooks/useCapacityPlanner";
+import { useState } from "react";
+import { CapacityMemberDetailDialog } from "./CapacityMemberDetailDialog";
 
 interface Props { teamCapacities: TeamCapacity[]; }
 
@@ -11,6 +13,10 @@ function daysLeft(dateStr: string | null) {
 }
 
 export function CapacityGrid({ teamCapacities }: Props) {
+  const [selected, setSelected] = useState<{
+    teamId: string; teamName: string; module: string; devId: string; devName: string;
+  } | null>(null);
+
   if (teamCapacities.length === 0) {
     return <p className="text-sm text-muted-foreground py-10 text-center">Nenhum time com dados de capacidade no período.</p>;
   }
@@ -83,7 +89,16 @@ export function CapacityGrid({ teamCapacities }: Props) {
                             aria-label={dev.slaCriticalCount > 0 ? "SLA crítico" : "Sobrecarregado"}
                           />
                         )}
-                        <span className="text-xs font-semibold truncate">{dev.devName}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelected({
+                            teamId: team.teamId, teamName: team.teamName,
+                            module: team.module, devId: dev.devId, devName: dev.devName,
+                          })}
+                          className="text-xs font-semibold truncate text-left hover:underline hover:text-primary"
+                        >
+                          {dev.devName}
+                        </button>
                       </div>
                       <span className="text-[10px] text-muted-foreground">
                         {dev.wipCount} {team.module === "sustentacao" ? "demanda" : "HU"}{dev.wipCount !== 1 ? "s" : ""} em andamento
@@ -129,6 +144,17 @@ export function CapacityGrid({ teamCapacities }: Props) {
           </div>
         );
       })}
+      {selected && (
+        <CapacityMemberDetailDialog
+          open={!!selected}
+          onClose={() => setSelected(null)}
+          teamId={selected.teamId}
+          teamName={selected.teamName}
+          module={selected.module}
+          devId={selected.devId}
+          devName={selected.devName}
+        />
+      )}
     </div>
   );
 }

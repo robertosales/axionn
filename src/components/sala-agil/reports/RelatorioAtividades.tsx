@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye, CalendarDays } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, LineChart, Line, Legend,
@@ -16,8 +16,6 @@ import {
 } from "@/shared/components/reports";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -29,10 +27,11 @@ import { cn } from "@/lib/utils";
 import { getInitials } from "@/lib/personName";
 import { formatMinutes } from "@/lib/duration";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   sprints:     { id: string; name: string; isActive?: boolean; start_date?: string; end_date?: string }[];
-  developers:  { id: string; name: string; role: string }[];
+  developers:  { id: string; name: string; role: string; user_id?: string | null }[];
   rawData: {
     sprints:      any[];
     hus:          any[];
@@ -102,45 +101,6 @@ function lancamentoDate(act: any): string {
   return (act.start_date || act.end_date || act.created_at || "").slice(0, 10);
 }
 
-interface DayGroup {
-  date:     string;
-  rows:     any[];
-  totalMin: number;
-}
-interface HuGroup {
-  huCode:   string;
-  huTitle:  string;
-  days:     DayGroup[];
-  totalMin: number;
-}
-
-function groupByHuDate(acts: any[]): HuGroup[] {
-  const huMap = new Map<string, { huCode: string; huTitle: string; dateMap: Map<string, any[]> }>();
-  for (const row of acts) {
-    const huKey = row.hu !== "---" ? row.hu : "SEM-HU";
-    const date  = lancamentoDate(row);
-    if (!huMap.has(huKey)) huMap.set(huKey, { huCode: row.hu, huTitle: row._huTitle || "", dateMap: new Map() });
-    const huEntry = huMap.get(huKey)!;
-    if (!huEntry.dateMap.has(date)) huEntry.dateMap.set(date, []);
-    huEntry.dateMap.get(date)!.push(row);
-  }
-  const result: HuGroup[] = [];
-  for (const [, hu] of huMap) {
-    const days: DayGroup[] = [...hu.dateMap.keys()].sort().map((date) => {
-      const rows     = hu.dateMap.get(date)!;
-      const totalMin = rows.reduce((s: number, r: any) => s + toMin(r.horas), 0);
-      return { date, rows, totalMin };
-    });
-    result.push({
-      huCode: hu.huCode,
-      huTitle: hu.huTitle,
-      days,
-      totalMin: days.reduce((s, d) => s + d.totalMin, 0),
-    });
-  }
-  return result;
-}
-
 interface DateGroup {
   date:     string;
   rows:     any[];
@@ -175,9 +135,6 @@ const PDF = {
   OPEN_BG:      [254, 243, 199] as [number,number,number],
 };
 
-// 4 colunas: DATA INICIO | DESCRICAO ATIVIDADE | STATUS | HORAS
-// Na linha-cabecalho do grupo: DATA na col1 (verde, bold) | "" col2 | "" col3 | TOTAL col4
-// Nas linhas de atividade: "" col1 | titulo col2 | status col3 | horas col4
 const COL = { DATE: 30, ACTIVITY: 147, STATUS: 38, HOURS: 38 };
 
 async function buildPDFBlob(
@@ -215,7 +172,6 @@ async function buildPDFBlob(
   targets.forEach((member, idx) => {
     if (idx > 0) doc.addPage();
 
-    // Cabecalho verde
     doc.setFillColor(...AGIL_PRIMARY);
     doc.rect(0, 0, W, 26, "F");
     doc.setTextColor(255, 255, 255);
@@ -230,7 +186,6 @@ async function buildPDFBlob(
 
     let y = 31;
 
-    // Card do membro
     const cardH = periodoLabel ? 24 : 18;
     doc.setFillColor(...PDF.LIGHT_BG);
     doc.roundedRect(ML, y, CW, cardH, 2, 2, "F");
@@ -255,9 +210,8 @@ async function buildPDFBlob(
     );
     y += cardH + 5;
 
-    // KPIs
     doc.setTextColor(...PDF.DARK); doc.setFontSize(8); doc.setFont("helvetica", "bold");
-    doc.text("RESUMO DO MEMBRO", ML, y);
+    doc.text("RESUMO DO ANALISTA", ML, y);
     y += 3;
     const kpiW = CW / 5;
     const acts = memberMap.get(member.id) ?? [];
@@ -279,23 +233,12 @@ async function buildPDFBlob(
     });
     y += 20;
 
-    // ── Tabela 4 colunas ────────────────────────────────────────────────────
-    //
-    //  | DATA INICIO  | DESCRICAO ATIVIDADE         | STATUS    | HORAS    |
-    //  | 21/05/2026   |                             |           | 4h 30min |  <- linha grupo (verde)
-    //  |              | Daily - Time Agil           | Concluida | 0h 30min |
-    //  |              | Projeto SonarQube x IA      | Concluida | 1h 30min |
-    //  |              | Sprint Planning             | Concluida | 1h 00min |
-    //  | 22/05/2026   |                             |           | 3h 00min |  <- linha grupo (verde)
-    //  |              | Daily NEXO                  | Concluida | 0h 30min |
-
     const dateGroups = groupByDataInicio(acts);
     const body: any[][] = [];
 
     for (const group of dateGroups) {
       const dateFmt = group.date ? fmtDatePDF(group.date) : "Sem data";
 
-      // Linha-cabecalho do grupo: data em verde na col1, cols 2-3 vazias, total na col4
       body.push([
         {
           content: dateFmt,
@@ -337,7 +280,6 @@ async function buildPDFBlob(
         },
       ]);
 
-      // Linhas de atividade: col1 vazia, col2 titulo, col3 status, col4 horas
       group.rows.forEach((r: any, ri: number) => {
         const isDone    = !!r.status;
         const statusTxt = isDone ? "Concluida" : "Em aberto";
@@ -423,7 +365,6 @@ async function buildPDFBlob(
       rowPageBreak: "avoid",
     });
 
-    // Rodape resumo
     const finalY = (doc as any).lastAutoTable.finalY + 8;
     const pageH  = doc.internal.pageSize.getHeight();
     const summaryY = Math.min(finalY, pageH - 22);
@@ -444,7 +385,6 @@ async function buildPDFBlob(
       ML + CW - 4, summaryY + 9, { align: "right" },
     );
 
-    // Paginacao
     const totalPages = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
@@ -460,9 +400,11 @@ async function buildPDFBlob(
   return doc.output("blob");
 }
 
-function buildMemberMetrics(developers: Props["developers"], filteredActivities: any[]) {
+// Recebe TODAS as atividades filtradas por sprint/data, SEM filtro de analista,
+// para garantir que todos os membros apareçam na tabela de Produtividade.
+function buildMemberMetrics(developers: Props["developers"], allActivities: any[]) {
   return developers.map((dev) => {
-    const acts       = filteredActivities.filter((a: any) => a.assignee_id === dev.id);
+    const acts       = allActivities.filter((a: any) => a.assignee_id === dev.id);
     const closed     = acts.filter((a: any) => a.is_closed);
     const hoursP     = acts.reduce((s: number, a: any) => s + Number(a.hours), 0);
     const hoursC     = closed.reduce((s: number, a: any) => s + Number(a.hours), 0);
@@ -489,14 +431,34 @@ function buildMemberMetrics(developers: Props["developers"], filteredActivities:
 }
 
 export function RelatorioAtividades({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
+  const { user, isAdmin } = useAuth();
+
+  // FIX 1: Resolve o developer do usuário logado a partir de rawData.developers
+  // (que inclui user_id), usado apenas para travar o filtro de não-admins.
+  const ownDeveloperId = useMemo(() => {
+    if (!user || isAdmin) return null;
+    const own = (rawData.developers as any[]).find((d: any) => d.user_id === user.id);
+    return own?.id ?? null;
+  }, [rawData.developers, user, isAdmin]);
+
+  // FIX 2: Estado inicial sempre começa em "all"; o useEffect abaixo aplica
+  // a restrição de não-admin DEPOIS que rawData.developers for resolvido,
+  // evitando a race condition do lazy initializer.
   const [filters, setFilters] = useState<Record<string, string>>({
     sprintId: "all",
     memberId: "all",
-    type:     "all",
-    status:   "all",
     dateFrom: "",
     dateTo:   "",
   });
+
+  // FIX 2 (cont): Aplica/mantém o travamento do filtro para não-admins.
+  // Só dispara quando ownDeveloperId muda (i.e., quando rawData.developers carrega).
+  // Não interfere com a seleção livre do admin.
+  useEffect(() => {
+    if (!isAdmin && ownDeveloperId) {
+      setFilters((f) => ({ ...f, memberId: ownDeveloperId }));
+    }
+  }, [isAdmin, ownDeveloperId]);
 
   const [exportingPDF, setExportingPDF] = useState(false);
   const [previewUrl,   setPreviewUrl]   = useState<string | null>(null);
@@ -514,29 +476,15 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     { value: "all", label: "Todos" },
     ...developers.map((d) => ({ value: d.id, label: d.name })),
   ];
-  const typeOptions = [
-    { value: "all",         label: "Todos"    },
-    { value: "task",        label: "Tarefa"   },
-    { value: "bug",         label: "Bug"      },
-    { value: "improvement", label: "Melhoria" },
-    { value: "feature",     label: "Feature"  },
-  ];
-  const statusOptions = [
-    { value: "all",  label: "Todos"     },
-    { value: "done", label: "Concluída" },
-    { value: "open", label: "Em aberto" },
-  ];
 
-  const filteredActivities = useMemo(() => {
+  // Atividades filtradas por sprint e período — SEM filtro de analista.
+  // Usadas para construir a tabela de Produtividade por Analista (todos os membros).
+  const activitiesBySprintAndDate = useMemo(() => {
     let acts = rawData.activities;
     if (filters.sprintId !== "all") {
       const huIds = new Set(rawData.hus.filter((h: any) => h.sprint_id === filters.sprintId).map((h: any) => h.id));
       acts = acts.filter((a: any) => huIds.has(a.hu_id));
     }
-    if (filters.memberId !== "all") acts = acts.filter((a: any) => a.assignee_id === filters.memberId);
-    if (filters.type     !== "all") acts = acts.filter((a: any) => a.activity_type === filters.type);
-    if (filters.status === "done")  acts = acts.filter((a: any) =>  a.is_closed);
-    if (filters.status === "open")  acts = acts.filter((a: any) => !a.is_closed);
     if (filters.dateFrom) {
       acts = acts.filter((a: any) => {
         const d = (a.start_date || a.end_date || a.created_at || "").slice(0, 10);
@@ -550,11 +498,19 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
       });
     }
     return acts;
-  }, [rawData, filters]);
+  }, [rawData, filters.sprintId, filters.dateFrom, filters.dateTo]);
 
+  // Atividades filtradas incluindo o analista — usadas nos KPIs e no Detalhamento.
+  const filteredActivities = useMemo(() => {
+    let acts = activitiesBySprintAndDate;
+    if (filters.memberId !== "all") acts = acts.filter((a: any) => a.assignee_id === filters.memberId);
+    return acts;
+  }, [activitiesBySprintAndDate, filters.memberId]);
+
+  // Produtividade usa sempre TODOS os membros (sem filtro de analista)
   const memberMetrics = useMemo(
-    () => buildMemberMetrics(developers, filteredActivities),
-    [filteredActivities, developers],
+    () => buildMemberMetrics(developers, activitiesBySprintAndDate),
+    [activitiesBySprintAndDate, developers],
   );
 
   const totalActs   = filteredActivities.length;
@@ -569,7 +525,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     { label: "Atividades",       value: totalActs,               sub: `${totalClosed} concluídas`,              icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
     { label: "Horas Concluídas", value: formatMinutes(totalMinC), sub: `de ${formatMinutes(totalMinP)} planejadas`, icon: <Clock className="h-4 w-4" />,       status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "warning" as any },
     { label: "Eficiência Média", value: `${avgEff}%`,            sub: "meta >= 80%",                             icon: <Zap className="h-4 w-4" />,         status: effStatus(avgEff) },
-    { label: "Membros Ativos",   value: memberMetrics.length,    sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
+    { label: "Analistas Ativos", value: memberMetrics.length,    sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
   ];
 
   const hoursBarData = memberMetrics.map((m) => ({
@@ -597,12 +553,13 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   }, [rawData, developers]);
 
   const radarData = memberMetrics.slice(0, 6).map((m) => ({
-    membro:            m.name.split(" ")[0],
+    analista:          m.name.split(" ")[0],
     Eficiência:        m.eff,
     "Concluídas":      Math.min(100, Math.round((m.closed / Math.max(m.total, 1)) * 100)),
     "Bugs Resolvidos": m.bugs > 0 ? Math.round((m.bugsClosed / m.bugs) * 100) : 100,
   }));
 
+  // tableData respeita o filtro de analista — só aparece quando analista selecionado
   const tableData = useMemo(() => {
     return filteredActivities.map((a: any) => {
       const dev    = developers.find((d) => d.id === a.assignee_id);
@@ -628,7 +585,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   function handleExportCSV() {
     exportToCSV(
       tableData.map((r) => ({
-        Membro:                r.membro,
+        Analista:              r.membro,
         Código:                r._code,
         "Título da Atividade": r.titulo,
         Sprint:                r.sprint,
@@ -693,8 +650,15 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     setPreviewBlob(null);
   }
 
+  // FIX 3: handleReset respeita a restrição de não-admin —
+  // não-admins voltam ao próprio developer, não a "all".
   function handleReset() {
-    setFilters({ sprintId: "all", memberId: "all", type: "all", status: "all", dateFrom: "", dateTo: "" });
+    setFilters({
+      sprintId: "all",
+      memberId: !isAdmin && ownDeveloperId ? ownDeveloperId : "all",
+      dateFrom: "",
+      dateTo:   "",
+    });
   }
 
   const pdfDisabledReason = !periodReady
@@ -768,74 +732,30 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           extraActions={exportActions}
         />
 
+        {/* ── Filtros unificados: Sprint | Analista | Período Início | Período Fim ── */}
         <ReportFilterBar
           fields={[
-            { key: "sprintId", label: "Sprint",  type: "select", options: sprintOptions },
-            { key: "memberId", label: "Membro",  type: "select", options: memberOptions },
-            { key: "type",     label: "Tipo",    type: "select", options: typeOptions   },
-            { key: "status",   label: "Status",  type: "select", options: statusOptions },
+            { key: "sprintId", label: "Sprint",         type: "select", options: sprintOptions },
+            { key: "memberId", label: "Analista",       type: "select", options: memberOptions, disabled: !isAdmin },
+            { key: "dateFrom", label: "Período início", type: "date" },
+            { key: "dateTo",   label: "Período fim",    type: "date" },
           ]}
           values={filters}
-          onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
+          onChange={(k, v) => {
+            if (k === "memberId" && !isAdmin) return;
+            setFilters((f) => ({ ...f, [k]: v }));
+          }}
           onReset={handleReset}
+          periodValidation={periodReady && !periodValid
+            ? "A data inicial não pode ser maior que a data final."
+            : undefined
+          }
         />
-
-        <div className="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
-          <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-            <CalendarDays className="h-4 w-4 text-primary" />
-            Período do relatório
-            <span className="text-xs text-destructive font-semibold ml-0.5">*</span>
-          </div>
-          <div className="flex items-end gap-3 flex-wrap">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="dateFrom" className="text-xs text-muted-foreground">Data inicial</Label>
-              <Input
-                id="dateFrom"
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
-                className={cn(
-                  "h-8 text-sm w-40",
-                  !periodValid && "border-destructive focus-visible:ring-destructive",
-                )}
-              />
-            </div>
-            <span className="text-muted-foreground pb-1.5">até</span>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="dateTo" className="text-xs text-muted-foreground">Data final</Label>
-              <Input
-                id="dateTo"
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
-                className={cn(
-                  "h-8 text-sm w-40",
-                  !periodValid && "border-destructive focus-visible:ring-destructive",
-                )}
-              />
-            </div>
-          </div>
-          {!periodReady && (
-            <p className="text-xs text-muted-foreground italic self-end pb-1">
-              Informe o período do relatório para continuar.
-            </p>
-          )}
-          {periodReady && !periodValid && (
-            <p className="text-xs text-destructive font-medium self-end pb-1">
-              A data inicial não pode ser maior que a data final.
-            </p>
-          )}
-          {periodReady && periodValid && (
-            <p className="text-xs text-emerald-600 font-medium self-end pb-1">
-              Período válido — você já pode gerar o PDF.
-            </p>
-          )}
-        </div>
 
         <ReportKPISummary items={kpis} cols={4} />
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <ReportChart title="Horas por Membro" subtitle="Concluídas vs. pendentes" height="h-72">
+          <ReportChart title="Horas por Analista" subtitle="Concluídas vs. pendentes" height="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hoursBarData} margin={{ top: 12, right: 8, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -851,7 +771,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
             </ResponsiveContainer>
           </ReportChart>
 
-          <ReportChart title="Throughput por Sprint" subtitle="Atividades concluídas por membro" height="h-72">
+          <ReportChart title="Throughput por Sprint" subtitle="Atividades concluídas por analista" height="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={throughputData} margin={{ top: 12, right: 16, left: -8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -875,7 +795,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
                 <PolarGrid stroke="hsl(var(--border))" />
-                <PolarAngleAxis dataKey="membro" tick={{ fontSize: 11 }} />
+                <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
                 <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9 }} tickCount={4} />
                 <Radar name="Eficiência"      dataKey="Eficiência"      stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
                 <Radar name="Concluídas"      dataKey="Concluídas"      stroke="#22c55e" fill="#22c55e" fillOpacity={0.15} />
@@ -887,13 +807,14 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           </ReportChart>
         )}
 
+        {/* ── Produtividade: sempre mostra todos os analistas ── */}
         <ReportDataTable
-          title="Produtividade por Membro"
+          title="Produtividade por Analista"
           badge={memberMetrics.length}
           data={memberMetrics}
           rowKey={(r) => r.id}
           columns={[
-            { key: "name", header: "Membro",
+            { key: "name", header: "Analista",
               render: (v, row) => (
                 <div className="flex items-center gap-2">
                   <div
@@ -929,28 +850,31 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           ]}
         />
 
-        <ReportDataTable
-          title="Detalhamento por Data de Início"
-          badge={tableData.length}
-          data={tableData}
-          rowKey={(_, i) => i}
-          columns={[
-            { key: "_code",      header: "Código",
-              render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || "---"}</span> },
-            { key: "membro",     header: "Membro",              sortable: true },
-            { key: "hu",         header: "HU", align: "center",
-              render: (v) => v !== "---" ? <span className="font-mono text-xs">{v}</span> : "---" },
-            { key: "lancamento", header: "Data Início", align: "center",
-              render: (v) => v ? fmtDate(v) : "---" },
-            { key: "titulo",     header: "Descrição Atividade", sortable: true },
-            { key: "horas",      header: "Duração", align: "center", sortable: true,
-              render: (v) => <span className="font-semibold text-primary">{fmtH(v)}</span> },
-            { key: "status",     header: "Status", align: "center",
-              render: (v) => v
-                ? <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600">Concluída</Badge>
-                : <Badge className="text-[10px] bg-amber-400/15 text-amber-600">Em aberto</Badge> },
-          ]}
-        />
+        {/* ── Detalhamento: só exibe quando um analista específico estiver selecionado ── */}
+        {filters.memberId !== "all" && (
+          <ReportDataTable
+            title="Detalhamento"
+            badge={tableData.length}
+            data={tableData}
+            rowKey={(_, i) => i}
+            columns={[
+              { key: "_code",      header: "Código",
+                render: (v) => <span className="font-mono text-xs text-muted-foreground">{v || "---"}</span> },
+              { key: "membro",     header: "Analista",             sortable: true },
+              { key: "hu",         header: "HU", align: "center",
+                render: (v) => v !== "---" ? <span className="font-mono text-xs">{v}</span> : "---" },
+              { key: "lancamento", header: "Data Início", align: "center",
+                render: (v) => v ? fmtDate(v) : "---" },
+              { key: "titulo",     header: "Descrição Atividade", sortable: true },
+              { key: "horas",      header: "Duração", align: "center", sortable: true,
+                render: (v) => <span className="font-semibold text-primary">{fmtH(v)}</span> },
+              { key: "status",     header: "Status", align: "center",
+                render: (v) => v
+                  ? <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600">Concluída</Badge>
+                  : <Badge className="text-[10px] bg-amber-400/15 text-amber-600">Em aberto</Badge> },
+            ]}
+          />
+        )}
       </ReportLayout>
     </>
   );

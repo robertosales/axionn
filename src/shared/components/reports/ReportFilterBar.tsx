@@ -19,6 +19,7 @@ export interface FilterField {
   type: "select" | "date" | "text";
   options?: FilterOption[];
   placeholder?: string;
+  disabled?: boolean;
 }
 
 interface AnalistaItem { user_id: string; display_name: string; }
@@ -28,6 +29,8 @@ interface ReportFilterBarProps {
   fields?: FilterField[];
   values?: Record<string, string>;
   onChange?: (key: string, value: string) => void;
+  /** Mensagem opcional de validação (modo fields). */
+  periodValidation?: string;
   // modo relatorio
   periodo?: string;
   setPeriodo?: (v: string) => void;
@@ -39,6 +42,7 @@ interface ReportFilterBarProps {
   setAnalista?: (v: string) => void;
   analistas?: AnalistaItem[];
   showAnalista?: boolean;
+  analistaDisabled?: boolean;
   modulo?: string;
   totalFiltrado?: number;
   onClear?: () => void;
@@ -55,13 +59,14 @@ const PERIODOS = [
 ];
 
 export function ReportFilterBar({
-  fields, values, onChange,
+  fields, values, onChange, periodValidation,
   periodo, setPeriodo,
   dataInicio, setDataInicio,
   dataFim, setDataFim,
   analista, setAnalista,
   analistas = [],
   showAnalista = true,
+  analistaDisabled = false,
   totalFiltrado,
   onClear, onReset,
 }: ReportFilterBarProps) {
@@ -76,14 +81,14 @@ export function ReportFilterBar({
               <div key={f.key} className="flex flex-col gap-1 min-w-[140px]">
                 <Label className="text-[11px] text-muted-foreground uppercase tracking-wide">{f.label}</Label>
                 {f.type === "select" ? (
-                  <Select value={values[f.key] ?? "all"} onValueChange={(v) => onChange(f.key, v)}>
+                  <Select value={values[f.key] ?? "all"} onValueChange={(v) => onChange(f.key, v)} disabled={f.disabled}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={f.placeholder ?? "Todos"} /></SelectTrigger>
                     <SelectContent>
                       {f.options?.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Input type={f.type === "date" ? "date" : "text"} className="h-8 text-xs" placeholder={f.placeholder}
+                  <Input type={f.type === "date" ? "date" : "text"} className="h-8 text-xs" placeholder={f.placeholder} disabled={f.disabled}
                     value={values[f.key] ?? ""} onChange={(e) => onChange(f.key, e.target.value)} />
                 )}
               </div>
@@ -94,6 +99,9 @@ export function ReportFilterBar({
               </Button>
             )}
           </div>
+          {periodValidation && (
+            <p className="mt-2 text-[11px] text-destructive">{periodValidation}</p>
+          )}
         </CardContent>
       </Card>
     );
@@ -144,7 +152,7 @@ export function ReportFilterBar({
           {showAnalista && setAnalista && (
             <div className="flex flex-col gap-1 min-w-[160px]">
               <Label className="text-[11px] text-muted-foreground uppercase tracking-wide">Analista</Label>
-              <Select value={analista ?? "all"} onValueChange={setAnalista}>
+              <Select value={analista ?? "all"} onValueChange={setAnalista} disabled={analistaDisabled}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all" className="text-xs">Todos</SelectItem>

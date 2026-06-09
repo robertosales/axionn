@@ -14,8 +14,6 @@ import {
   TrendingUp, User, Activity as ActivityIcon, ChevronRight,
   BarChart2, List, ArrowLeft,
 } from "lucide-react";
-import { ExportButton } from "./ExportButton";
-import { getReportConfig } from "@/features/sustentacao/utils/reportConfig";
 import { MetricCard } from "@/components/sala-agil/metrics/MetricCard";
 import { AnalyticsSidebar } from "@/components/sala-agil/metrics/AnalyticsSidebar";
 import { TimelineCard } from "@/components/sala-agil/metrics/TimelineCard";
@@ -227,12 +225,11 @@ function MemberRow({ member, onClick }: { member: MemberMetrics; onClick: () => 
 // ─── MemberModal ──────────────────────────────────────────────────────────────
 
 function MemberModal({
-  member, sprintName, onClose, exportData,
+  member, sprintName, onClose,
 }: {
   member: MemberMetrics;
   sprintName: string;
   onClose: () => void;
-  exportData: () => any;
 }) {
   const grouped = useMemo(() => groupActivitiesByDate(member.activities ?? []), [member.activities]);
   const effColor = getEffColor(member.efficiency);
@@ -254,7 +251,6 @@ function MemberModal({
             <span className="ml-2 font-bold" style={{ color: effColor }}>{member.efficiency}% eficiência</span>
           </p>
         </div>
-        <ExportButton getData={exportData} />
       </div>
 
       {/* Body */}
@@ -360,18 +356,6 @@ export function IndividualPerformance({
     );
   }
 
-  const reportCfg = getReportConfig("agil_desempenho_individual");
-  const getExportData = () => ({
-    title: reportCfg.tituloExportacao,
-    headers: ["Usuário", "Título", "Descrição", "Data Início", "Data Fim", "Horas Trabalhadas"],
-    rows: members.flatMap((m) => (m.activities || []).map((a: any) => [m.name, a.title, a.description || "", a.start_date, a.end_date, a.hours])),
-  });
-  const getMemberExportData = (m: MemberMetrics) => ({
-    title: `${reportCfg.tituloExportacao} - ${m.name}`,
-    headers: ["Usuário", "Título", "Descrição", "Data Início", "Data Fim", "Horas Trabalhadas"],
-    rows: (m.activities || []).map((a: any) => [m.name, a.title, a.description || "", a.start_date, a.end_date, a.hours]),
-  });
-
   const totals = {
     tasksAssigned:  members.reduce((s, m) => s + m.tasksAssigned, 0),
     tasksCompleted: members.reduce((s, m) => s + m.tasksCompleted, 0),
@@ -394,7 +378,6 @@ export function IndividualPerformance({
             { label: "membros",     value: members.length },
             { label: "atividades",  value: totals.tasksAssigned },
           ]}
-          actions={<ExportButton getData={getExportData} />}
         />
 
         {/* KPI summary */}
@@ -489,7 +472,6 @@ export function IndividualPerformance({
               member={selectedMember}
               sprintName={sprintName}
               onClose={() => setSelectedMember(null)}
-              exportData={() => getMemberExportData(selectedMember)}
             />
           )}
         </Dialog>

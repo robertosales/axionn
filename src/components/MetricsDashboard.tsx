@@ -173,12 +173,6 @@ export function MetricsDashboard() {
     };
   }, [agileTeams, loadData]);
 
-  useEffect(() => {
-    const onVisibility = () => { if (document.visibilityState === "visible") loadData(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [loadData]);
-
   // ─── FILTROS ─────────────────────────────────────────────────────────────────
   // ✅ dep: [rawData, filters] — recalcula somente quando dados brutos ou filtros mudam
   const filtered = useMemo(() => {

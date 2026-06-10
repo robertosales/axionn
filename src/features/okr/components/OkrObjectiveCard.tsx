@@ -20,7 +20,7 @@ const UNIT_OPTIONS: { value: OkrKeyResult["unit"]; label: string; hint: string }
   { value: "count", label: "Número (contagem)",  hint: "Ex: entregar 10 features" },
   { value: "score", label: "Pontuação",          hint: "Ex: NPS de 7 para 9" },
   { value: "bool",  label: "Sim / Não",          hint: "Algo que será feito ou não" },
-  { value: "bugs",  label: "Bugs",                hint: "Ex: reduzir para menos de 5 bugs" },
+  { value: "bugs",  label: "Bugs",               hint: "Ex: reduzir para menos de 5 bugs" },
 ];
 
 interface Props {
@@ -28,25 +28,21 @@ interface Props {
   onCheckIn: (krId: string, value: number, note: string) => void;
   onEdit?: (objective: OkrObjective) => void;
   onDelete?: (id: string) => Promise<void>;
-  onAddKeyResult?: (kr: {
-    objective_id: string;
-    title: string;
-    unit: OkrKeyResult["unit"];
-    target: number;
-  }) => Promise<void>;
+  onAddKeyResult?: (kr: { objective_id: string; title: string; unit: OkrKeyResult["unit"]; target: number }) => Promise<void>;
+  onUpdateKeyResult?: (id: string, payload: { title?: string; unit?: OkrKeyResult["unit"]; target?: number }) => Promise<void>;
+  onDeleteKeyResult?: (id: string) => Promise<void>;
 }
 
-export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, onAddKeyResult }: Props) {
-  const [expanded, setExpanded] = useState(false);
-  const [checkInKr, setCheckInKr] = useState<OkrKeyResult | null>(null);
+export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, onAddKeyResult, onUpdateKeyResult, onDeleteKeyResult }: Props) {
+  const [expanded, setExpanded]       = useState(false);
+  const [checkInKr, setCheckInKr]     = useState<OkrKeyResult | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const [showKrForm, setShowKrForm] = useState(false);
-  const [krTitle, setKrTitle] = useState("");
-  const [krUnit, setKrUnit] = useState<OkrKeyResult["unit"]>("%");
-  const [krTarget, setKrTarget] = useState("");
-  const [isSavingKr, setIsSavingKr] = useState(false);
+  const [isDeleting, setIsDeleting]   = useState(false);
+  const [showKrForm, setShowKrForm]   = useState(false);
+  const [krTitle, setKrTitle]         = useState("");
+  const [krUnit, setKrUnit]           = useState<OkrKeyResult["unit"]>("%");
+  const [krTarget, setKrTarget]       = useState("");
+  const [isSavingKr, setIsSavingKr]   = useState(false);
 
   const status = STATUS_CONFIG[obj.status];
   const selectedUnit = UNIT_OPTIONS.find((u) => u.value === krUnit);
@@ -62,19 +58,12 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, 
     if (!onAddKeyResult || !krTitle.trim() || (krUnit !== "bool" && !krTarget)) return;
     setIsSavingKr(true);
     try {
-      await onAddKeyResult({
-        objective_id: obj.id,
-        title: krTitle.trim(),
-        unit: krUnit,
-        target: krUnit === "bool" ? 1 : Number(krTarget),
-      });
+      await onAddKeyResult({ objective_id: obj.id, title: krTitle.trim(), unit: krUnit, target: krUnit === "bool" ? 1 : Number(krTarget) });
       setKrTitle(""); setKrUnit("%"); setKrTarget(""); setShowKrForm(false);
     } finally { setIsSavingKr(false); }
   };
 
-  const handleCancelKr = () => {
-    setShowKrForm(false); setKrTitle(""); setKrUnit("%"); setKrTarget("");
-  };
+  const handleCancelKr = () => { setShowKrForm(false); setKrTitle(""); setKrUnit("%"); setKrTarget(""); };
 
   return (
     <>
@@ -91,7 +80,6 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, 
                 <p className="text-[11px] text-muted-foreground mt-1">{obj.team_name} · {obj.owner_name} · {obj.cycle}</p>
               </div>
             </div>
-
             <div className="flex items-center gap-2 shrink-0">
               {onEdit && (
                 <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => onEdit(obj)}>
@@ -112,9 +100,7 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, 
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setConfirmDelete(false)} disabled={isDeleting}>Cancelar</Button>
                 </div>
               )}
-              <Badge className={cn("text-[10px] gap-1 shrink-0 border", status.color)}>
-                {status.icon} {status.label}
-              </Badge>
+              <Badge className={cn("text-[10px] gap-1 shrink-0 border", status.color)}>{status.icon} {status.label}</Badge>
             </div>
           </div>
 
@@ -131,98 +117,60 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, 
         </div>
 
         <div className="border-t">
-          <button
-            className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
-            onClick={() => setExpanded((v) => !v)}
-          >
+          <button className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors" onClick={() => setExpanded((v) => !v)}>
             <span className="font-medium">{expanded ? "Ocultar" : "Ver"} Key Results</span>
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
           </button>
 
           {expanded && (
             <div className="px-5 pb-5">
-
-              {/* Lista vazia */}
               {obj.key_results.length === 0 && !showKrForm && (
-                <p className="text-xs text-muted-foreground text-center py-4 italic">
-                  Nenhum Key Result ainda. Adicione um abaixo para começar a medir o progresso.
-                </p>
+                <p className="text-xs text-muted-foreground text-center py-4 italic">Nenhum Key Result ainda. Adicione um abaixo para começar a medir o progresso.</p>
               )}
 
-              {/* KRs existentes */}
               {obj.key_results.map((kr) => (
-                <OkrKeyResultRow key={kr.id} kr={kr} onCheckIn={(kr) => setCheckInKr(kr)} />
+                <OkrKeyResultRow
+                  key={kr.id}
+                  kr={kr}
+                  onCheckIn={(kr) => setCheckInKr(kr)}
+                  onUpdate={onUpdateKeyResult}
+                  onDelete={onDeleteKeyResult}
+                />
               ))}
 
-              {/* Formulário inline */}
               {showKrForm && (
                 <div className="mt-3 rounded-lg border bg-muted/30 p-4 space-y-3">
                   <p className="text-xs font-semibold">Novo Key Result</p>
-
                   <div className="space-y-1">
                     <label className="text-[11px] font-medium text-muted-foreground">O que será medido?</label>
-                    <input
-                      value={krTitle}
-                      onChange={(e) => setKrTitle(e.target.value)}
-                      placeholder="Ex: Reduzir retorno de HUs ao backlog para menos de 5 por sprint"
-                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-                    />
+                    <input value={krTitle} onChange={(e) => setKrTitle(e.target.value)} placeholder="Ex: Reduzir retorno de HUs ao backlog para menos de 5 por sprint" className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" />
                   </div>
-
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[11px] font-medium text-muted-foreground">Tipo de métrica</label>
-                      <select
-                        value={krUnit}
-                        onChange={(e) => { setKrUnit(e.target.value as OkrKeyResult["unit"]); setKrTarget(""); }}
-                        className="h-9 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary"
-                      >
+                      <select value={krUnit} onChange={(e) => { setKrUnit(e.target.value as OkrKeyResult["unit"]); setKrTarget(""); }} className="h-9 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary">
                         {UNIT_OPTIONS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                       </select>
                       {selectedUnit && <p className="text-[10px] text-muted-foreground">{selectedUnit.hint}</p>}
                     </div>
-
                     {krUnit !== "bool" && (
                       <div className="space-y-1">
                         <label className="text-[11px] font-medium text-muted-foreground">Meta (valor alvo)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={krTarget}
-                          onChange={(e) => setKrTarget(e.target.value)}
-                          placeholder={krUnit === "%" ? "Ex: 80" : "Ex: 10"}
-                          className="h-9 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary"
-                        />
+                        <input type="number" min={0} value={krTarget} onChange={(e) => setKrTarget(e.target.value)} placeholder={krUnit === "%" ? "Ex: 80" : "Ex: 10"} className="h-9 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary" />
                       </div>
                     )}
                   </div>
-
                   <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleCancelKr} disabled={isSavingKr}>
-                      <X className="h-3 w-3" /> Cancelar
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs gap-1.5"
-                      onClick={handleAddKr}
-                      disabled={isSavingKr || !krTitle.trim() || (krUnit !== "bool" && !krTarget)}
-                    >
-                      {isSavingKr
-                        ? <span className="flex items-center gap-1"><span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Salvando...</span>
-                        : <><Plus className="h-3 w-3" /> Salvar Key Result</>}
+                    <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleCancelKr} disabled={isSavingKr}><X className="h-3 w-3" /> Cancelar</Button>
+                    <Button size="sm" className="h-7 text-xs gap-1.5" onClick={handleAddKr} disabled={isSavingKr || !krTitle.trim() || (krUnit !== "bool" && !krTarget)}>
+                      {isSavingKr ? <span className="flex items-center gap-1"><span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Salvando...</span> : <><Plus className="h-3 w-3" /> Salvar Key Result</>}
                     </Button>
                   </div>
                 </div>
               )}
 
-              {/* Botão adicionar */}
               {onAddKeyResult && !showKrForm && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 w-full h-8 gap-1.5 text-xs border-dashed"
-                  onClick={() => setShowKrForm(true)}
-                >
+                <Button variant="outline" size="sm" className="mt-3 w-full h-8 gap-1.5 text-xs border-dashed" onClick={() => setShowKrForm(true)}>
                   <Plus className="h-3.5 w-3.5" /> Adicionar Key Result
                 </Button>
               )}
@@ -231,11 +179,7 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, 
         </div>
       </div>
 
-      <OkrCheckInModal
-        kr={checkInKr}
-        onClose={() => setCheckInKr(null)}
-        onSubmit={(krId, value, note) => { onCheckIn(krId, value, note); setCheckInKr(null); }}
-      />
+      <OkrCheckInModal kr={checkInKr} onClose={() => setCheckInKr(null)} onSubmit={(krId, value, note) => { onCheckIn(krId, value, note); setCheckInKr(null); }} />
     </>
   );
 }

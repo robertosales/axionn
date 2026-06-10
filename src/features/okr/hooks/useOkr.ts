@@ -3,10 +3,6 @@ import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { OkrObjective, OkrFilters, OkrKeyResult, OkrStatus } from "../types";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function calcObjectiveMeta(krs: OkrKeyResult[]): { progress: number; status: OkrStatus } {
   if (!krs.length) return { progress: 0, status: "off_track" };
   const progress = Math.round(
@@ -24,10 +20,6 @@ function calcObjectiveMeta(krs: OkrKeyResult[]): { progress: number; status: Okr
   return { progress, status };
 }
 
-// ---------------------------------------------------------------------------
-// Fetch
-// ---------------------------------------------------------------------------
-
 async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObjective[]> {
   let query = supabase
     .from("okr_objectives")
@@ -40,24 +32,16 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
   }
 
   const { data: objectives, error: objErr } = await query;
-
-  if (objErr) {
-    console.error("[OKR] Erro ao buscar objectives:", objErr);
-    throw objErr;
-  }
-
+  if (objErr) { console.error("[OKR] Erro ao buscar objectives:", objErr); throw objErr; }
   console.log(`[OKR] fetchObjectives — cycle=${cycle} teamId=${teamId} — ${objectives?.length ?? 0} registro(s)`);
-
   if (!objectives || objectives.length === 0) return [];
 
   const objectiveIds = objectives.map((o) => o.id);
-
   const { data: keyResults, error: krErr } = await supabase
     .from("okr_key_results")
     .select("*")
     .in("objective_id", objectiveIds)
     .order("created_at", { ascending: true });
-
   if (krErr) throw krErr;
 
   const krIds = (keyResults ?? []).map((kr) => kr.id);
@@ -89,7 +73,6 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
             created_at: ci.created_at,
           })),
       }));
-
     const { progress, status } = calcObjectiveMeta(krs);
     return {
       id: obj.id,
@@ -107,20 +90,12 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
   });
 }
 
-// ---------------------------------------------------------------------------
-// Erro customizado de duplicidade
-// ---------------------------------------------------------------------------
-
 export class OkrDuplicateError extends Error {
   constructor() {
     super("Já existe um objetivo com este título para este time e ciclo.");
     this.name = "OkrDuplicateError";
   }
 }
-
-// ---------------------------------------------------------------------------
-// Hook principal
-// ---------------------------------------------------------------------------
 
 export interface UseOkrReturn {
   objectives: OkrObjective[];
@@ -130,23 +105,11 @@ export interface UseOkrReturn {
   isLoading: boolean;
   isError: boolean;
   addCheckIn: (krId: string, value: number, note: string) => Promise<void>;
-  addObjective: (obj: {
-    title: string;
-    description?: string;
-    cycle: string;
-    team_id: string;
-    owner_id?: string;
-  }) => Promise<void>;
-  addKeyResult: (kr: {
-    objective_id: string;
-    title: string;
-    unit: OkrKeyResult["unit"];
-    target: number;
-  }) => Promise<void>;
-  updateObjective: (
-    id: string,
-    payload: Partial<Pick<OkrObjective, "title" | "description" | "status">>
-  ) => Promise<void>;
+  addObjective: (obj: { title: string; description?: string; cycle: string; team_id: string; owner_id?: string }) => Promise<void>;
+  addKeyResult: (kr: { objective_id: string; title: string; unit: OkrKeyResult["unit"]; target: number }) => Promise<void>;
+  updateKeyResult: (id: string, payload: { title?: string; unit?: OkrKeyResult["unit"]; target?: number }) => Promise<void>;
+  deleteKeyResult: (id: string) => Promise<void>;
+  updateObjective: (id: string, payload: Partial<Pick<OkrObjective, "title" | "description" | "status">>) => Promise<void>;
   deleteObjective: (id: string) => Promise<void>;
 }
 
@@ -172,174 +135,85 @@ export function useOkr(teamId?: string): UseOkrReturn {
     staleTime: 30_000,
   });
 
-  // --- add check-in ---
   const checkInMutation = useMutation({
     mutationFn: async ({ krId, value, note }: { krId: string; value: number; note: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("okr_check_ins").insert({
-        key_result_id: krId,
-        value,
-        note,
-        author_id: user?.id ?? null,
-      });
+      const { error } = await supabase.from("okr_check_ins").insert({ key_result_id: krId, value, note, author_id: user?.id ?? null });
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
 
-  // --- add objective ---
   const addObjectiveMutation = useMutation({
-    mutationFn: async (obj: {
-      title: string;
-      description?: string;
-      cycle: string;
-      team_id: string;
-      owner_id?: string;
-    }) => {
-      // Verifica duplicidade: mesmo título (case-insensitive) + team_id + cycle
+    mutationFn: async (obj: { title: string; description?: string; cycle: string; team_id: string; owner_id?: string }) => {
       const { data: existing, error: checkErr } = await supabase
-        .from("okr_objectives")
-        .select("id")
-        .eq("team_id", obj.team_id)
-        .eq("cycle", obj.cycle)
-        .ilike("title", obj.title.trim())
-        .maybeSingle();
-
+        .from("okr_objectives").select("id").eq("team_id", obj.team_id).eq("cycle", obj.cycle).ilike("title", obj.title.trim()).maybeSingle();
       if (checkErr) throw checkErr;
+      if (existing) { console.warn("[OKR] Duplicidade detectada:", existing); throw new OkrDuplicateError(); }
 
-      if (existing) {
-        console.warn("[OKR] Duplicidade detectada:", existing);
-        throw new OkrDuplicateError();
-      }
-
-      // Resolve owner_id
       let ownerId = obj.owner_id;
-      if (!ownerId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        ownerId = user?.id ?? undefined;
-      }
+      if (!ownerId) { const { data: { user } } = await supabase.auth.getUser(); ownerId = user?.id ?? undefined; }
 
-      const payload = {
-        title: obj.title.trim(),
-        description: obj.description ?? null,
-        cycle: obj.cycle,
-        team_id: obj.team_id,
-        owner_id: ownerId ?? null,
-        status: "on_track",
-        progress: 0,
-      };
-
+      const payload = { title: obj.title.trim(), description: obj.description ?? null, cycle: obj.cycle, team_id: obj.team_id, owner_id: ownerId ?? null, status: "on_track", progress: 0 };
       console.log("[OKR] Inserindo objective:", payload);
-
-      const { data, error } = await supabase
-        .from("okr_objectives")
-        .insert(payload)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("[OKR] Erro no insert:", error);
-        throw error;
-      }
-
+      const { data, error } = await supabase.from("okr_objectives").insert(payload).select().single();
+      if (error) { console.error("[OKR] Erro no insert:", error); throw error; }
       console.log("[OKR] Objective inserido com sucesso:", data);
     },
-    onSuccess: () => {
-      console.log("[OKR] Invalidando queries após insert...");
-      queryClient.invalidateQueries({ queryKey: ["okr_objectives"] });
-    },
+    onSuccess: () => { console.log("[OKR] Invalidando queries após insert..."); queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }); },
   });
 
-  // --- add key result ---
   const addKeyResultMutation = useMutation({
-    mutationFn: async (kr: {
-      objective_id: string;
-      title: string;
-      unit: OkrKeyResult["unit"];
-      target: number;
-    }) => {
-      const { error } = await supabase.from("okr_key_results").insert({
-        objective_id: kr.objective_id,
-        title: kr.title,
-        unit: kr.unit,
-        target: kr.target,
-        current: 0,
-      });
+    mutationFn: async (kr: { objective_id: string; title: string; unit: OkrKeyResult["unit"]; target: number }) => {
+      const { error } = await supabase.from("okr_key_results").insert({ objective_id: kr.objective_id, title: kr.title, unit: kr.unit, target: kr.target, current: 0 });
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
 
-  // --- update objective ---
+  const updateKeyResultMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: { title?: string; unit?: OkrKeyResult["unit"]; target?: number } }) => {
+      const { error } = await supabase.from("okr_key_results").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
+  });
+
+  const deleteKeyResultMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error: ciErr } = await supabase.from("okr_check_ins").delete().eq("key_result_id", id);
+      if (ciErr) throw ciErr;
+      const { error } = await supabase.from("okr_key_results").delete().eq("id", id);
+      if (error) throw error;
+      console.log("[OKR] KR excluído:", id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
+  });
+
   const updateObjectiveMutation = useMutation({
-    mutationFn: async ({
-      id,
-      payload,
-    }: {
-      id: string;
-      payload: Partial<Pick<OkrObjective, "title" | "description" | "status">>;
-    }) => {
-      // Verifica duplicidade ao editar (exclui o próprio registro da verificação)
+    mutationFn: async ({ id, payload }: { id: string; payload: Partial<Pick<OkrObjective, "title" | "description" | "status">> }) => {
       if (payload.title) {
-        const { data: existing } = await supabase
-          .from("okr_objectives")
-          .select("id, team_id, cycle")
-          .neq("id", id)
-          .ilike("title", payload.title.trim())
-          .maybeSingle();
-
-        // Busca o objetivo atual para comparar team_id e cycle
-        const { data: current } = await supabase
-          .from("okr_objectives")
-          .select("team_id, cycle")
-          .eq("id", id)
-          .single();
-
-        if (existing && current &&
-            existing.team_id === current.team_id &&
-            existing.cycle === current.cycle) {
-          throw new OkrDuplicateError();
-        }
+        const { data: existing } = await supabase.from("okr_objectives").select("id, team_id, cycle").neq("id", id).ilike("title", payload.title.trim()).maybeSingle();
+        const { data: current } = await supabase.from("okr_objectives").select("team_id, cycle").eq("id", id).single();
+        if (existing && current && existing.team_id === current.team_id && existing.cycle === current.cycle) throw new OkrDuplicateError();
       }
-
-      const { error } = await supabase
-        .from("okr_objectives")
-        .update({ ...payload, updated_at: new Date().toISOString() })
-        .eq("id", id);
+      const { error } = await supabase.from("okr_objectives").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
 
-  // --- delete objective ---
   const deleteObjectiveMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data: krs } = await supabase
-        .from("okr_key_results")
-        .select("id")
-        .eq("objective_id", id);
-
+      const { data: krs } = await supabase.from("okr_key_results").select("id").eq("objective_id", id);
       const krIds = (krs ?? []).map((kr) => kr.id);
-
       if (krIds.length > 0) {
-        const { error: ciErr } = await supabase
-          .from("okr_check_ins")
-          .delete()
-          .in("key_result_id", krIds);
+        const { error: ciErr } = await supabase.from("okr_check_ins").delete().in("key_result_id", krIds);
         if (ciErr) throw ciErr;
-
-        const { error: krErr } = await supabase
-          .from("okr_key_results")
-          .delete()
-          .eq("objective_id", id);
+        const { error: krErr } = await supabase.from("okr_key_results").delete().eq("objective_id", id);
         if (krErr) throw krErr;
       }
-
-      const { error } = await supabase
-        .from("okr_objectives")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("okr_objectives").delete().eq("id", id);
       if (error) throw error;
       console.log("[OKR] Objective excluído:", id);
     },
@@ -351,15 +225,12 @@ export function useOkr(teamId?: string): UseOkrReturn {
   }
 
   return {
-    objectives,
-    cycles,
-    filters,
-    setFilters,
-    isLoading,
-    isError,
+    objectives, cycles, filters, setFilters, isLoading, isError,
     addCheckIn: (krId, value, note) => checkInMutation.mutateAsync({ krId, value, note }),
     addObjective: (obj) => addObjectiveMutation.mutateAsync(obj),
     addKeyResult: (kr) => addKeyResultMutation.mutateAsync(kr),
+    updateKeyResult: (id, payload) => updateKeyResultMutation.mutateAsync({ id, payload }),
+    deleteKeyResult: (id) => deleteKeyResultMutation.mutateAsync(id),
     updateObjective: (id, payload) => updateObjectiveMutation.mutateAsync({ id, payload }),
     deleteObjective: (id) => deleteObjectiveMutation.mutateAsync(id),
   };

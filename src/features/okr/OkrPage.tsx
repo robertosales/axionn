@@ -14,24 +14,11 @@ import type { OkrObjective } from "./types";
 export function OkrPage() {
   const { teams } = useAuth();
   const { toast } = useToast();
-  const {
-    objectives,
-    cycles,
-    filters,
-    setFilters,
-    isLoading,
-    addCheckIn,
-    addObjective,
-    addKeyResult,
-    updateObjective,
-    deleteObjective,
-  } = useOkr();
+  const { objectives, cycles, filters, setFilters, isLoading, addCheckIn, addObjective, addKeyResult, updateKeyResult, deleteKeyResult, updateObjective, deleteObjective } = useOkr();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<OkrObjective | null>(null);
 
-  const salaAgilTeams = teams
-    .filter((t) => t.module === "sala_agil")
-    .map((t) => ({ id: t.id, name: t.name }));
+  const salaAgilTeams = teams.filter((t) => t.module === "sala_agil").map((t) => ({ id: t.id, name: t.name }));
 
   const handleCreateSubmit = async (payload: Parameters<typeof addObjective>[0]) => {
     try {
@@ -80,10 +67,27 @@ export function OkrPage() {
     }
   };
 
+  const handleUpdateKeyResult = async (id: string, payload: Parameters<typeof updateKeyResult>[1]) => {
+    try {
+      await updateKeyResult(id, payload);
+      toast({ title: "Key Result atualizado!", variant: "default" });
+    } catch (err: any) {
+      toast({ title: "Erro ao atualizar Key Result", description: err?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteKeyResult = async (id: string) => {
+    try {
+      await deleteKeyResult(id);
+      toast({ title: "Key Result excluído!", variant: "default" });
+    } catch (err: any) {
+      toast({ title: "Erro ao excluir Key Result", description: err?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
   return (
     <AppShell module="sala_agil" activeKey="okr">
       <div className="p-6 max-w-6xl mx-auto space-y-6">
-
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -99,28 +103,16 @@ export function OkrPage() {
           </Button>
         </div>
 
-        <OkrCycleSelector
-          cycles={cycles}
-          selectedCycle={filters.cycle}
-          selectedTeam={filters.teamId}
-          teams={salaAgilTeams}
-          onCycleChange={(cycle) => setFilters({ cycle })}
-          onTeamChange={(teamId) => setFilters({ teamId })}
-        />
-
+        <OkrCycleSelector cycles={cycles} selectedCycle={filters.cycle} selectedTeam={filters.teamId} teams={salaAgilTeams} onCycleChange={(cycle) => setFilters({ cycle })} onTeamChange={(teamId) => setFilters({ teamId })} />
         <OkrSummaryKpis objectives={objectives} />
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          </div>
+          <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
         ) : objectives.length === 0 ? (
           <div className="rounded-xl border bg-card p-12 text-center">
             <Target className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm font-medium text-muted-foreground">Nenhum objetivo encontrado para este ciclo e time.</p>
-            <Button size="sm" variant="outline" className="mt-4 gap-1.5" onClick={() => setIsCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5" /> Criar primeiro objetivo
-            </Button>
+            <Button size="sm" variant="outline" className="mt-4 gap-1.5" onClick={() => setIsCreateOpen(true)}><Plus className="h-3.5 w-3.5" /> Criar primeiro objetivo</Button>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -132,28 +124,16 @@ export function OkrPage() {
                 onEdit={setEditingObjective}
                 onDelete={handleDelete}
                 onAddKeyResult={handleAddKeyResult}
+                onUpdateKeyResult={handleUpdateKeyResult}
+                onDeleteKeyResult={handleDeleteKeyResult}
               />
             ))}
           </div>
         )}
       </div>
 
-      <OkrObjectiveForm
-        open={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        teams={salaAgilTeams}
-        defaultCycle={filters.cycle}
-        onSubmit={handleCreateSubmit}
-      />
-
-      <OkrObjectiveForm
-        open={!!editingObjective}
-        onClose={() => setEditingObjective(null)}
-        teams={salaAgilTeams}
-        defaultCycle={filters.cycle}
-        objective={editingObjective}
-        onSubmit={handleEditSubmit}
-      />
+      <OkrObjectiveForm open={isCreateOpen} onClose={() => setIsCreateOpen(false)} teams={salaAgilTeams} defaultCycle={filters.cycle} onSubmit={handleCreateSubmit} />
+      <OkrObjectiveForm open={!!editingObjective} onClose={() => setEditingObjective(null)} teams={salaAgilTeams} defaultCycle={filters.cycle} objective={editingObjective} onSubmit={handleEditSubmit} />
     </AppShell>
   );
 }

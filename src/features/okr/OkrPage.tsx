@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useOkr } from "./hooks/useOkr";
+import { useOkr, OkrDuplicateError } from "./hooks/useOkr";
 import { OkrCycleSelector } from "./components/OkrCycleSelector";
 import { OkrSummaryKpis } from "./components/OkrSummaryKpis";
 import { OkrObjectiveCard } from "./components/OkrObjectiveCard";
@@ -38,11 +38,19 @@ export function OkrPage() {
       setIsCreateOpen(false);
       toast({ title: "Objetivo criado com sucesso!", variant: "default" });
     } catch (err: any) {
-      toast({
-        title: "Erro ao criar objetivo",
-        description: err?.message ?? "Tente novamente.",
-        variant: "destructive",
-      });
+      if (err instanceof OkrDuplicateError) {
+        toast({
+          title: "Objetivo duplicado",
+          description: "Já existe um objetivo com este título para este time e ciclo. Altere o título ou escolha outro ciclo.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro ao criar objetivo",
+          description: err?.message ?? "Tente novamente.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -53,11 +61,19 @@ export function OkrPage() {
       setEditingObjective(null);
       toast({ title: "Objetivo atualizado com sucesso!", variant: "default" });
     } catch (err: any) {
-      toast({
-        title: "Erro ao atualizar objetivo",
-        description: err?.message ?? "Tente novamente.",
-        variant: "destructive",
-      });
+      if (err instanceof OkrDuplicateError) {
+        toast({
+          title: "Objetivo duplicado",
+          description: "Já existe outro objetivo com este título para este time e ciclo.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro ao atualizar objetivo",
+          description: err?.message ?? "Tente novamente.",
+          variant: "destructive",
+        });
+      }
     }
   };
 

@@ -108,6 +108,17 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
 }
 
 // ---------------------------------------------------------------------------
+// Erro customizado de duplicidade
+// ---------------------------------------------------------------------------
+
+export class OkrDuplicateError extends Error {
+  constructor() {
+    super("Já existe um objetivo com este título para este time e ciclo.");
+    this.name = "OkrDuplicateError";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Hook principal
 // ---------------------------------------------------------------------------
 
@@ -185,6 +196,23 @@ export function useOkr(teamId?: string): UseOkrReturn {
       team_id: string;
       owner_id?: string;
     }) => {
+      // Verifica duplicidade: mesmo título (case-insensitive) + team_id + cycle
+      const { data: existing, error: checkErr } = await supabase
+        .from("okr_objectives")
+        .select("id")
+        .eq("team_id", obj.team_id)
+        .eq("cycle", obj.cycle)
+        .ilike("title", obj.title.trim())
+        .maybeSingle();
+
+      if (checkErr) throw checkErr;
+
+      if (existing) {
+        console.warn("[OKR] Duplicidade detectada:", existing);
+        throw new OkrDuplicateError();
+      }
+
+      // Resolve owner_id
       let ownerId = obj.owner_id;
       if (!ownerId) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -192,7 +220,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
       }
 
       const payload = {
-        title: obj.title,
+        title: obj.title.trim(),
         description: obj.description ?? null,
         cycle: obj.cycle,
         team_id: obj.team_id,
@@ -251,6 +279,29 @@ export function useOkr(teamId?: string): UseOkrReturn {
       id: string;
       payload: Partial<Pick<OkrObjective, "title" | "description" | "status">>;
     }) => {
+      // Verifica duplicidade ao editar (exclui o próprio registro da verificação)
+      if (payload.title) {
+        const { data: existing } = await supabase
+          .from("okr_objectives")
+          .select("id, team_id, cycle")
+          .neq("id", id)
+          .ilike("title", payload.title.trim())
+          .maybeSingle();
+
+        // Busca o objetivo atual para comparar team_id e cycle
+        const { data: current } = await supabase
+          .from("okr_objectives")
+          .select("team_id, cycle")
+          .eq("id", id)
+          .single();
+
+        if (existing && current &&
+            existing.team_id === current.team_id &&
+            existing.cycle === current.cycle) {
+          throw new OkrDuplicateError();
+        }
+      }
+
       const { error } = await supabase
         .from("okr_objectives")
         .update({ ...payload, updated_at: new Date().toISOString() })
@@ -263,7 +314,6 @@ export function useOkr(teamId?: string): UseOkrReturn {
   // --- delete objective ---
   const deleteObjectiveMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Deleta check-ins → key results → objective (cascade via FK, mas explícito por segurança)
       const { data: krs } = await supabase
         .from("okr_key_results")
         .select("id")
@@ -291,7 +341,6 @@ export function useOkr(teamId?: string): UseOkrReturn {
         .eq("id", id);
 
       if (error) throw error;
-
       console.log("[OKR] Objective excluído:", id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),

@@ -3,6 +3,7 @@ import { Target, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { useOkr } from "./hooks/useOkr";
 import { OkrCycleSelector } from "./components/OkrCycleSelector";
 import { OkrSummaryKpis } from "./components/OkrSummaryKpis";
@@ -12,6 +13,7 @@ import type { OkrObjective } from "./types";
 
 export function OkrPage() {
   const { teams } = useAuth();
+  const { toast } = useToast();
   const {
     objectives,
     cycles,
@@ -28,6 +30,35 @@ export function OkrPage() {
   const salaAgilTeams = teams
     .filter((t) => t.module === "sala_agil")
     .map((t) => ({ id: t.id, name: t.name }));
+
+  const handleCreateSubmit = async (payload: Parameters<typeof addObjective>[0]) => {
+    try {
+      await addObjective(payload);
+      setIsCreateOpen(false);
+      toast({ title: "Objetivo criado com sucesso!", variant: "default" });
+    } catch (err: any) {
+      toast({
+        title: "Erro ao criar objetivo",
+        description: err?.message ?? "Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditSubmit = async (payload: Parameters<typeof addObjective>[0]) => {
+    if (!editingObjective) return;
+    try {
+      await updateObjective(editingObjective.id, payload);
+      setEditingObjective(null);
+      toast({ title: "Objetivo atualizado com sucesso!", variant: "default" });
+    } catch (err: any) {
+      toast({
+        title: "Erro ao atualizar objetivo",
+        description: err?.message ?? "Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <AppShell module="sala_agil" activeKey="okr">
@@ -104,10 +135,7 @@ export function OkrPage() {
         onClose={() => setIsCreateOpen(false)}
         teams={salaAgilTeams}
         defaultCycle={filters.cycle}
-        onSubmit={(payload) => {
-          addObjective(payload);
-          setIsCreateOpen(false);
-        }}
+        onSubmit={handleCreateSubmit}
       />
 
       {/* Modal editar */}
@@ -117,12 +145,7 @@ export function OkrPage() {
         teams={salaAgilTeams}
         defaultCycle={filters.cycle}
         objective={editingObjective}
-        onSubmit={(payload) => {
-          if (editingObjective) {
-            updateObjective(editingObjective.id, payload);
-            setEditingObjective(null);
-          }
-        }}
+        onSubmit={handleEditSubmit}
       />
     </AppShell>
   );

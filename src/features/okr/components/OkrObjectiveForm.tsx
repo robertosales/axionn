@@ -18,7 +18,7 @@ interface ObjectivePayload {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSubmit: (payload: ObjectivePayload) => void;
+  onSubmit: (payload: ObjectivePayload) => Promise<void>;
   teams: { id: string; name: string }[];
   defaultCycle: string;
   objective?: OkrObjective | null;
@@ -28,6 +28,7 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [teamId, setTeamId] = useState("all");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedTeam = useMemo(() => teams.find((t) => t.id === teamId), [teams, teamId]);
   const isEdit = !!objective;
@@ -43,20 +44,22 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
 
   const handleSubmit = async () => {
     if (!title.trim() || !teamId || teamId === "all") return;
-
-    // Obtém o UUID real do usuário autenticado
-    const { data: { user } } = await supabase.auth.getUser();
-
-    onSubmit({
-      title: title.trim(),
-      description: description.trim() || undefined,
-      owner_id: objective?.owner_id ?? user?.id ?? undefined,
-      owner_name: objective?.owner_name ?? user?.email ?? undefined,
-      team_id: teamId,
-      team_name: selectedTeam?.name,
-      cycle: objective?.cycle ?? defaultCycle,
-      status: objective?.status ?? "on_track",
-    });
+    setIsSubmitting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      await onSubmit({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        owner_id: objective?.owner_id ?? user?.id ?? undefined,
+        owner_name: objective?.owner_name ?? user?.email ?? undefined,
+        team_id: teamId,
+        team_name: selectedTeam?.name,
+        cycle: objective?.cycle ?? defaultCycle,
+        status: objective?.status ?? "on_track",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -67,45 +70,66 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
             <h3 className="text-base font-semibold">{isEdit ? "Editar objetivo" : "Novo objetivo"}</h3>
             <p className="text-xs text-muted-foreground">Defina o objetivo principal do ciclo.</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" onClick={onClose} disabled={isSubmitting}>
+            <X className="h-4 w-4" />
+          </Button>
         </div>
 
         <div className="space-y-4 px-5 py-4">
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Título</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)}
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-              placeholder="Ex: Reduzir retrabalho nas entregas" />
+              placeholder="Ex: Reduzir retrabalho nas entregas"
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Descrição</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               className="min-h-[88px] w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-              placeholder="Contexto, impacto esperado e escopo do objetivo" />
+              placeholder="Contexto, impacto esperado e escopo do objetivo"
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Time</label>
-              <select value={teamId} onChange={(e) => setTeamId(e.target.value)}
-                className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary">
+              <select
+                value={teamId}
+                onChange={(e) => setTeamId(e.target.value)}
+                className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+              >
                 {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Ciclo</label>
-              <input value={objective?.cycle ?? defaultCycle} disabled
-                className="h-10 w-full rounded-lg border bg-muted px-3 text-sm text-muted-foreground" />
+              <input
+                value={objective?.cycle ?? defaultCycle}
+                disabled
+                className="h-10 w-full rounded-lg border bg-muted px-3 text-sm text-muted-foreground"
+              />
             </div>
           </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t px-5 py-4">
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} className="gap-1.5">
-            <Save className="h-4 w-4" /> {isEdit ? "Salvar alterações" : "Criar objetivo"}
+          <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting} className="gap-1.5">
+            {isSubmitting ? (
+              <span className="flex items-center gap-1.5">
+                <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
+                {isEdit ? "Salvando..." : "Criando..."}
+              </span>
+            ) : (
+              <><Save className="h-4 w-4" /> {isEdit ? "Salvar alterações" : "Criar objetivo"}</>
+            )}
           </Button>
         </div>
       </div>

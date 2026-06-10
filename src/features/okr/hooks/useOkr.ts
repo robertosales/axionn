@@ -25,18 +25,30 @@ function calcObjectiveMeta(krs: OkrKeyResult[]): { progress: number; status: Okr
 }
 
 // ---------------------------------------------------------------------------
-// Fetch
+// Fetch — suporta teamId "all" (sem filtro de time)
 // ---------------------------------------------------------------------------
 
 async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObjective[]> {
-  const { data: objectives, error: objErr } = await supabase
+  let query = supabase
     .from("okr_objectives")
     .select("*")
-    .eq("team_id", teamId)
     .eq("cycle", cycle)
     .order("created_at", { ascending: true });
 
-  if (objErr) throw objErr;
+  // Filtra por time apenas quando um time específico está selecionado
+  if (teamId && teamId !== "all") {
+    query = query.eq("team_id", teamId);
+  }
+
+  const { data: objectives, error: objErr } = await query;
+
+  if (objErr) {
+    console.error("[OKR] Erro ao buscar objectives:", objErr);
+    throw objErr;
+  }
+
+  console.log(`[OKR] fetchObjectives — cycle=${cycle} teamId=${teamId} — ${objectives?.length ?? 0} registro(s)`);
+
   if (!objectives || objectives.length === 0) return [];
 
   const objectiveIds = objectives.map((o) => o.id);
@@ -139,14 +151,16 @@ export function useOkr(teamId?: string): UseOkrReturn {
     return [`Q1/${year}`, `Q2/${year}`, `Q3/${year}`, `Q4/${year}`];
   }, []);
 
-  const effectiveTeamId = filters.teamId !== "all" ? filters.teamId : (teamId ?? "");
+  // Usa o teamId do filtro; se for "all", passa "all" para fetchObjectives buscar tudo
+  const effectiveTeamId = filters.teamId !== "all" ? filters.teamId : (teamId ?? "all");
 
   const queryKey = ["okr_objectives", effectiveTeamId, filters.cycle];
 
   const { data: objectives = [], isLoading, isError } = useQuery<OkrObjective[]>({
     queryKey,
     queryFn: () => fetchObjectives(effectiveTeamId, filters.cycle),
-    enabled: Boolean(effectiveTeamId),
+    // Query sempre habilitada — quando "all", busca todos os objetivos do ciclo
+    enabled: true,
     staleTime: 30_000,
   });
 
@@ -174,14 +188,13 @@ export function useOkr(teamId?: string): UseOkrReturn {
       team_id: string;
       owner_id?: string;
     }) => {
-      // Se owner_id não vier do form, busca o usuário autenticado
       let ownerId = obj.owner_id;
       if (!ownerId) {
         const { data: { user } } = await supabase.auth.getUser();
         ownerId = user?.id ?? undefined;
       }
 
-      const { error } = await supabase.from("okr_objectives").insert({
+      const payload = {
         title: obj.title,
         description: obj.description ?? null,
         cycle: obj.cycle,
@@ -189,10 +202,28 @@ export function useOkr(teamId?: string): UseOkrReturn {
         owner_id: ownerId ?? null,
         status: "on_track",
         progress: 0,
-      });
-      if (error) throw error;
+      };
+
+      console.log("[OKR] Inserindo objective:", payload);
+
+      const { data, error } = await supabase
+        .from("okr_objectives")
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("[OKR] Erro no insert:", error);
+        throw error;
+      }
+
+      console.log("[OKR] Objective inserido com sucesso:", data);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: () => {
+      console.log("[OKR] Invalidando queries após insert...");
+      // Invalida todas as queries de objectives independente do filtro ativo
+      queryClient.invalidateQueries({ queryKey: ["okr_objectives"] });
+    },
   });
 
   // --- add key result ---
@@ -230,7 +261,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
 
   function setFilters(partial: Partial<OkrFilters>) {

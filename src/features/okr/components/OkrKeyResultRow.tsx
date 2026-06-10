@@ -4,16 +4,20 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { OkrKeyResult } from "../types";
 
-const UNIT_OPTIONS: { value: OkrKeyResult["unit"]; label: string }[] = [
-  { value: "%",    label: "Porcentagem (%)" },
-  { value: "un",   label: "Número (contagem)" },
-  { value: "pts",  label: "Pontuação (pts)" },
-  { value: "score",label: "Score" },
-  { value: "dias", label: "Dias" },
-  { value: "R$",   label: "Valor (R$)" },
-  { value: "bool", label: "Sim / Não" },
-  { value: "bugs", label: "Bugs" },
+const UNIT_OPTIONS: { value: OkrKeyResult["unit"]; label: string; display: string }[] = [
+  { value: "%",     label: "Porcentagem (%)",  display: "%" },
+  { value: "un",    label: "Número (contagem)", display: "" },
+  { value: "pts",   label: "Pontuação (pts)",   display: "pts" },
+  { value: "score", label: "Score",             display: "pts" },
+  { value: "dias",  label: "Dias",              display: "dias" },
+  { value: "R$",    label: "Valor (R$)",         display: "R$" },
+  { value: "bool",  label: "Sim / Não",          display: "" },
+  { value: "bugs",  label: "Bugs",              display: "bug(s)" },
 ];
+
+function unitDisplay(unit: OkrKeyResult["unit"]): string {
+  return UNIT_OPTIONS.find((u) => u.value === unit)?.display ?? unit;
+}
 
 interface Props {
   kr: OkrKeyResult;
@@ -42,9 +46,12 @@ export function krProgressTextColor(pct: number): string {
 }
 
 function fmtValue(kr: OkrKeyResult): string {
-  if (kr.unit === "bool")  return kr.current >= kr.target ? "✓ Concluído" : "✗ Pendente";
-  if (kr.unit === "bugs")  return `${kr.current} bug(s) / meta: ${kr.target}`;
-  return `${kr.current} ${kr.unit} de ${kr.target} ${kr.unit}`;
+  if (kr.unit === "bool") return kr.current >= kr.target ? "✓ Concluído" : "✗ Pendente";
+  if (kr.unit === "bugs") return `${kr.current} bug(s) / meta: ${kr.target}`;
+  const d = unitDisplay(kr.unit);
+  if (d === "%") return `${kr.current}% de ${kr.target}%`;
+  if (d === "")  return `${kr.current} de ${kr.target}`;
+  return `${kr.current} ${d} de ${kr.target} ${d}`;
 }
 
 export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {

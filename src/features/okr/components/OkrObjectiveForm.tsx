@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import type { OkrObjective, OkrStatus } from "../types";
 
 interface ObjectivePayload {
   title: string;
   description?: string;
-  owner_id: string;
+  owner_id?: string;
   owner_name?: string;
   team_id: string;
   team_name?: string;
@@ -40,13 +41,17 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
 
   if (!open) return null;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!title.trim() || !teamId || teamId === "all") return;
+
+    // Obtém o UUID real do usuário autenticado
+    const { data: { user } } = await supabase.auth.getUser();
+
     onSubmit({
       title: title.trim(),
       description: description.trim() || undefined,
-      owner_id: objective?.owner_id ?? "current-user",
-      owner_name: objective?.owner_name ?? "Usuário Atual",
+      owner_id: objective?.owner_id ?? user?.id ?? undefined,
+      owner_name: objective?.owner_name ?? user?.email ?? undefined,
       team_id: teamId,
       team_name: selectedTeam?.name,
       cycle: objective?.cycle ?? defaultCycle,

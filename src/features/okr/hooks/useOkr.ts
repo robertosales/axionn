@@ -29,7 +29,6 @@ function calcObjectiveMeta(krs: OkrKeyResult[]): { progress: number; status: Okr
 // ---------------------------------------------------------------------------
 
 async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObjective[]> {
-  // 1. Busca objectives filtrados por time e ciclo
   const { data: objectives, error: objErr } = await supabase
     .from("okr_objectives")
     .select("*")
@@ -42,7 +41,6 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
 
   const objectiveIds = objectives.map((o) => o.id);
 
-  // 2. Busca todos os key results dos objectives
   const { data: keyResults, error: krErr } = await supabase
     .from("okr_key_results")
     .select("*")
@@ -51,7 +49,6 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
 
   if (krErr) throw krErr;
 
-  // 3. Busca check-ins dos key results
   const krIds = (keyResults ?? []).map((kr) => kr.id);
   let checkIns: any[] = [];
   if (krIds.length > 0) {
@@ -64,7 +61,6 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
     checkIns = ci ?? [];
   }
 
-  // 4. Monta estrutura aninhada
   return objectives.map((obj) => {
     const krs: OkrKeyResult[] = (keyResults ?? [])
       .filter((kr) => kr.objective_id === obj.id)
@@ -138,7 +134,6 @@ export function useOkr(teamId?: string): UseOkrReturn {
     teamId: teamId ?? "all",
   });
 
-  // Ciclos disponíveis: gerados dinamicamente para o ano corrente
   const cycles = useMemo(() => {
     const year = new Date().getFullYear();
     return [`Q1/${year}`, `Q2/${year}`, `Q3/${year}`, `Q4/${year}`];
@@ -179,12 +174,19 @@ export function useOkr(teamId?: string): UseOkrReturn {
       team_id: string;
       owner_id?: string;
     }) => {
+      // Se owner_id não vier do form, busca o usuário autenticado
+      let ownerId = obj.owner_id;
+      if (!ownerId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        ownerId = user?.id ?? undefined;
+      }
+
       const { error } = await supabase.from("okr_objectives").insert({
         title: obj.title,
         description: obj.description ?? null,
         cycle: obj.cycle,
         team_id: obj.team_id,
-        owner_id: obj.owner_id ?? null,
+        owner_id: ownerId ?? null,
         status: "on_track",
         progress: 0,
       });

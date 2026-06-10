@@ -22,6 +22,7 @@ export function OkrPage() {
     isLoading,
     addCheckIn,
     addObjective,
+    addKeyResult,
     updateObjective,
     deleteObjective,
   } = useOkr();
@@ -39,17 +40,9 @@ export function OkrPage() {
       toast({ title: "Objetivo criado com sucesso!", variant: "default" });
     } catch (err: any) {
       if (err instanceof OkrDuplicateError) {
-        toast({
-          title: "Objetivo duplicado",
-          description: "Já existe um objetivo com este título para este time e ciclo. Altere o título ou escolha outro ciclo.",
-          variant: "destructive",
-        });
+        toast({ title: "Objetivo duplicado", description: "Já existe um objetivo com este título para este time e ciclo.", variant: "destructive" });
       } else {
-        toast({
-          title: "Erro ao criar objetivo",
-          description: err?.message ?? "Tente novamente.",
-          variant: "destructive",
-        });
+        toast({ title: "Erro ao criar objetivo", description: err?.message ?? "Tente novamente.", variant: "destructive" });
       }
     }
   };
@@ -62,17 +55,9 @@ export function OkrPage() {
       toast({ title: "Objetivo atualizado com sucesso!", variant: "default" });
     } catch (err: any) {
       if (err instanceof OkrDuplicateError) {
-        toast({
-          title: "Objetivo duplicado",
-          description: "Já existe outro objetivo com este título para este time e ciclo.",
-          variant: "destructive",
-        });
+        toast({ title: "Objetivo duplicado", description: "Já existe outro objetivo com este título para este time e ciclo.", variant: "destructive" });
       } else {
-        toast({
-          title: "Erro ao atualizar objetivo",
-          description: err?.message ?? "Tente novamente.",
-          variant: "destructive",
-        });
+        toast({ title: "Erro ao atualizar objetivo", description: err?.message ?? "Tente novamente.", variant: "destructive" });
       }
     }
   };
@@ -82,11 +67,16 @@ export function OkrPage() {
       await deleteObjective(id);
       toast({ title: "Objetivo excluído com sucesso!", variant: "default" });
     } catch (err: any) {
-      toast({
-        title: "Erro ao excluir objetivo",
-        description: err?.message ?? "Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao excluir objetivo", description: err?.message ?? "Tente novamente.", variant: "destructive" });
+    }
+  };
+
+  const handleAddKeyResult = async (kr: Parameters<typeof addKeyResult>[0]) => {
+    try {
+      await addKeyResult(kr);
+      toast({ title: "Key Result adicionado!", variant: "default" });
+    } catch (err: any) {
+      toast({ title: "Erro ao adicionar Key Result", description: err?.message ?? "Tente novamente.", variant: "destructive" });
     }
   };
 
@@ -94,7 +84,6 @@ export function OkrPage() {
     <AppShell module="sala_agil" activeKey="okr">
       <div className="p-6 max-w-6xl mx-auto space-y-6">
 
-        {/* Header */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -102,9 +91,7 @@ export function OkrPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold">OKR</h1>
-              <p className="text-sm text-muted-foreground">
-                Objetivos e Key Results · {filters.cycle}
-              </p>
+              <p className="text-sm text-muted-foreground">Objetivos e Key Results · {filters.cycle}</p>
             </div>
           </div>
           <Button size="sm" className="gap-1.5 h-9" onClick={() => setIsCreateOpen(true)}>
@@ -112,7 +99,6 @@ export function OkrPage() {
           </Button>
         </div>
 
-        {/* Filtros */}
         <OkrCycleSelector
           cycles={cycles}
           selectedCycle={filters.cycle}
@@ -122,10 +108,8 @@ export function OkrPage() {
           onTeamChange={(teamId) => setFilters({ teamId })}
         />
 
-        {/* KPIs */}
         <OkrSummaryKpis objectives={objectives} />
 
-        {/* Lista de objetivos */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -133,15 +117,8 @@ export function OkrPage() {
         ) : objectives.length === 0 ? (
           <div className="rounded-xl border bg-card p-12 text-center">
             <Target className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">
-              Nenhum objetivo encontrado para este ciclo e time.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-4 gap-1.5"
-              onClick={() => setIsCreateOpen(true)}
-            >
+            <p className="text-sm font-medium text-muted-foreground">Nenhum objetivo encontrado para este ciclo e time.</p>
+            <Button size="sm" variant="outline" className="mt-4 gap-1.5" onClick={() => setIsCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" /> Criar primeiro objetivo
             </Button>
           </div>
@@ -154,13 +131,13 @@ export function OkrPage() {
                 onCheckIn={addCheckIn}
                 onEdit={setEditingObjective}
                 onDelete={handleDelete}
+                onAddKeyResult={handleAddKeyResult}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* Modal criar */}
       <OkrObjectiveForm
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
@@ -169,7 +146,6 @@ export function OkrPage() {
         onSubmit={handleCreateSubmit}
       />
 
-      {/* Modal editar */}
       <OkrObjectiveForm
         open={!!editingObjective}
         onClose={() => setEditingObjective(null)}

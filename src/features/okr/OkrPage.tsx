@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Target, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
@@ -12,7 +11,6 @@ import { OkrObjectiveForm } from "./components/OkrObjectiveForm";
 import type { OkrObjective } from "./types";
 
 export function OkrPage() {
-  const navigate = useNavigate();
   const { teams } = useAuth();
   const { objectives, cycles, filters, setFilters, isLoading, addCheckIn, addObjective, updateObjective } = useOkr();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -23,10 +21,7 @@ export function OkrPage() {
     .map((t) => ({ id: t.id, name: t.name }));
 
   return (
-    <AppShell module="sala_agil" activeKey="okr" onNavigate={(key) => {
-      if (key === "okr") navigate("/okr");
-      else navigate(`/sala-agil/${key}`);
-    }}>
+    <AppShell module="sala_agil" activeKey="okr">
       <div className="p-6 max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">

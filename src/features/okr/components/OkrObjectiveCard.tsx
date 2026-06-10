@@ -16,11 +16,14 @@ const STATUS_CONFIG = {
 };
 
 const UNIT_OPTIONS: { value: OkrKeyResult["unit"]; label: string; hint: string }[] = [
-  { value: "%",     label: "Porcentagem (%)",   hint: "Ex: aumentar entregas para 80%" },
-  { value: "count", label: "Número (contagem)",  hint: "Ex: entregar 10 features" },
-  { value: "score", label: "Pontuação",          hint: "Ex: NPS de 7 para 9" },
-  { value: "bool",  label: "Sim / Não",          hint: "Algo que será feito ou não" },
-  { value: "bugs",  label: "Bugs",               hint: "Ex: reduzir para menos de 5 bugs" },
+  { value: "%",    label: "Porcentagem (%)",  hint: "Ex: aumentar entregas para 80%" },
+  { value: "un",   label: "Número (contagem)", hint: "Ex: máximo 5 HUs voltando ao backlog" },
+  { value: "pts",  label: "Pontuação (pts)",   hint: "Ex: NPS de 7 para 9" },
+  { value: "score",label: "Score",             hint: "Ex: nota de qualidade 7/10" },
+  { value: "dias", label: "Dias",              hint: "Ex: reduzir ciclo para 3 dias" },
+  { value: "R$",   label: "Valor (R$)",        hint: "Ex: reduzir custo para R$ 5.000" },
+  { value: "bool", label: "Sim / Não",         hint: "Algo que será feito ou não" },
+  { value: "bugs", label: "Bugs",              hint: "Ex: reduzir para menos de 5 bugs" },
 ];
 
 interface Props {
@@ -34,15 +37,15 @@ interface Props {
 }
 
 export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, onAddKeyResult, onUpdateKeyResult, onDeleteKeyResult }: Props) {
-  const [expanded, setExpanded]       = useState(false);
-  const [checkInKr, setCheckInKr]     = useState<OkrKeyResult | null>(null);
+  const [expanded, setExpanded]         = useState(false);
+  const [checkInKr, setCheckInKr]       = useState<OkrKeyResult | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [isDeleting, setIsDeleting]   = useState(false);
-  const [showKrForm, setShowKrForm]   = useState(false);
-  const [krTitle, setKrTitle]         = useState("");
-  const [krUnit, setKrUnit]           = useState<OkrKeyResult["unit"]>("%");
-  const [krTarget, setKrTarget]       = useState("");
-  const [isSavingKr, setIsSavingKr]   = useState(false);
+  const [isDeleting, setIsDeleting]     = useState(false);
+  const [showKrForm, setShowKrForm]     = useState(false);
+  const [krTitle, setKrTitle]           = useState("");
+  const [krUnit, setKrUnit]             = useState<OkrKeyResult["unit"]>("%");
+  const [krTarget, setKrTarget]         = useState("");
+  const [isSavingKr, setIsSavingKr]     = useState(false);
 
   const status = STATUS_CONFIG[obj.status];
   const selectedUnit = UNIT_OPTIONS.find((u) => u.value === krUnit);
@@ -129,13 +132,7 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, 
               )}
 
               {obj.key_results.map((kr) => (
-                <OkrKeyResultRow
-                  key={kr.id}
-                  kr={kr}
-                  onCheckIn={(kr) => setCheckInKr(kr)}
-                  onUpdate={onUpdateKeyResult}
-                  onDelete={onDeleteKeyResult}
-                />
+                <OkrKeyResultRow key={kr.id} kr={kr} onCheckIn={(kr) => setCheckInKr(kr)} onUpdate={onUpdateKeyResult} onDelete={onDeleteKeyResult} />
               ))}
 
               {showKrForm && (
@@ -156,7 +153,7 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete, 
                     {krUnit !== "bool" && (
                       <div className="space-y-1">
                         <label className="text-[11px] font-medium text-muted-foreground">Meta (valor alvo)</label>
-                        <input type="number" min={0} value={krTarget} onChange={(e) => setKrTarget(e.target.value)} placeholder={krUnit === "%" ? "Ex: 80" : "Ex: 10"} className="h-9 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary" />
+                        <input type="number" min={0} value={krTarget} onChange={(e) => setKrTarget(e.target.value)} placeholder={krUnit === "%" ? "Ex: 80" : "Ex: 5"} className="h-9 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary" />
                       </div>
                     )}
                   </div>

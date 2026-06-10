@@ -5,11 +5,14 @@ import { cn } from "@/lib/utils";
 import type { OkrKeyResult } from "../types";
 
 const UNIT_OPTIONS: { value: OkrKeyResult["unit"]; label: string }[] = [
-  { value: "%",     label: "Porcentagem (%)" },
-  { value: "count", label: "Número" },
-  { value: "score", label: "Pontuação" },
-  { value: "bool",  label: "Sim / Não" },
-  { value: "bugs",  label: "Bugs" },
+  { value: "%",    label: "Porcentagem (%)" },
+  { value: "un",   label: "Número (contagem)" },
+  { value: "pts",  label: "Pontuação (pts)" },
+  { value: "score",label: "Score" },
+  { value: "dias", label: "Dias" },
+  { value: "R$",   label: "Valor (R$)" },
+  { value: "bool", label: "Sim / Não" },
+  { value: "bugs", label: "Bugs" },
 ];
 
 interface Props {
@@ -41,30 +44,25 @@ export function krProgressTextColor(pct: number): string {
 function fmtValue(kr: OkrKeyResult): string {
   if (kr.unit === "bool")  return kr.current >= kr.target ? "✓ Concluído" : "✗ Pendente";
   if (kr.unit === "bugs")  return `${kr.current} bug(s) / meta: ${kr.target}`;
-  if (kr.unit === "score") return `${kr.current} / ${kr.target}`;
   return `${kr.current} ${kr.unit} de ${kr.target} ${kr.unit}`;
 }
 
 export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {
   const pct = krProgress(kr);
 
-  const [editing, setEditing]         = useState(false);
-  const [editTitle, setEditTitle]     = useState(kr.title);
-  const [editUnit, setEditUnit]       = useState<OkrKeyResult["unit"]>(kr.unit);
-  const [editTarget, setEditTarget]   = useState(String(kr.target));
-  const [isSaving, setIsSaving]       = useState(false);
-  const [confirmDel, setConfirmDel]   = useState(false);
-  const [isDeleting, setIsDeleting]   = useState(false);
+  const [editing, setEditing]       = useState(false);
+  const [editTitle, setEditTitle]   = useState(kr.title);
+  const [editUnit, setEditUnit]     = useState<OkrKeyResult["unit"]>(kr.unit);
+  const [editTarget, setEditTarget] = useState(String(kr.target));
+  const [isSaving, setIsSaving]     = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleSave = async () => {
     if (!onUpdate || !editTitle.trim()) return;
     setIsSaving(true);
     try {
-      await onUpdate(kr.id, {
-        title: editTitle.trim(),
-        unit: editUnit,
-        target: editUnit === "bool" ? 1 : Number(editTarget),
-      });
+      await onUpdate(kr.id, { title: editTitle.trim(), unit: editUnit, target: editUnit === "bool" ? 1 : Number(editTarget) });
       setEditing(false);
     } finally { setIsSaving(false); }
   };
@@ -79,35 +77,17 @@ export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {
   if (editing) {
     return (
       <div className="py-3 border-b last:border-0 space-y-2">
-        <input
-          value={editTitle}
-          onChange={(e) => setEditTitle(e.target.value)}
-          className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-          placeholder="Título do Key Result"
-        />
+        <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" placeholder="Título do Key Result" />
         <div className="grid grid-cols-2 gap-2">
-          <select
-            value={editUnit}
-            onChange={(e) => { setEditUnit(e.target.value as OkrKeyResult["unit"]); setEditTarget(""); }}
-            className="h-8 rounded-lg border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
-          >
+          <select value={editUnit} onChange={(e) => { setEditUnit(e.target.value as OkrKeyResult["unit"]); setEditTarget(""); }} className="h-8 rounded-lg border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary">
             {UNIT_OPTIONS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
           </select>
           {editUnit !== "bool" && (
-            <input
-              type="number"
-              min={0}
-              value={editTarget}
-              onChange={(e) => setEditTarget(e.target.value)}
-              placeholder="Meta"
-              className="h-8 rounded-lg border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary"
-            />
+            <input type="number" min={0} value={editTarget} onChange={(e) => setEditTarget(e.target.value)} placeholder="Meta" className="h-8 rounded-lg border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-primary" />
           )}
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => setEditing(false)} disabled={isSaving}>
-            <X className="h-3 w-3" /> Cancelar
-          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => setEditing(false)} disabled={isSaving}><X className="h-3 w-3" /> Cancelar</Button>
           <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSave} disabled={isSaving || !editTitle.trim() || (editUnit !== "bool" && !editTarget)}>
             {isSaving ? <span className="flex items-center gap-1"><span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Salvando...</span> : <><Check className="h-3 w-3" /> Salvar</>}
           </Button>
@@ -123,27 +103,19 @@ export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-xs text-muted-foreground">{fmtValue(kr)}</span>
           <span className="text-xs font-bold w-10 text-right" style={{ color: krProgressTextColor(pct) }}>{pct}%</span>
-
-          {/* Check-in */}
           <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary" onClick={() => onCheckIn(kr)} title="Registrar check-in">
             <MessageSquare className="h-3.5 w-3.5" />
           </Button>
-
-          {/* Editar */}
           {onUpdate && !confirmDel && (
             <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary" onClick={() => { setEditing(true); setEditTitle(kr.title); setEditUnit(kr.unit); setEditTarget(String(kr.target)); }} title="Editar Key Result">
               <Pencil className="h-3 w-3" />
             </Button>
           )}
-
-          {/* Excluir */}
           {onDelete && !confirmDel && (
             <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => setConfirmDel(true)} title="Excluir Key Result">
               <Trash2 className="h-3 w-3" />
             </Button>
           )}
-
-          {/* Confirmar exclusão */}
           {confirmDel && (
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-destructive font-medium">Excluir?</span>
@@ -155,15 +127,11 @@ export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {
           )}
         </div>
       </div>
-
       <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
         <div className={cn("h-1.5 rounded-full transition-all duration-500", krProgressColor(pct))} style={{ width: `${pct}%` }} />
       </div>
-
       {kr.check_ins && kr.check_ins.length > 0 && (
-        <p className="text-[11px] text-muted-foreground italic">
-          Último check-in: &ldquo;{kr.check_ins[kr.check_ins.length - 1].note}&rdquo;
-        </p>
+        <p className="text-[11px] text-muted-foreground italic">Último check-in: &ldquo;{kr.check_ins[kr.check_ins.length - 1].note}&rdquo;</p>
       )}
     </div>
   );

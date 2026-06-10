@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Target, TrendingUp, AlertTriangle, CheckCircle, ChevronDown, Pencil } from "lucide-react";
+import { Target, TrendingUp, AlertTriangle, CheckCircle, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,12 +19,26 @@ interface Props {
   objective: OkrObjective;
   onCheckIn: (krId: string, value: number, note: string) => void;
   onEdit?: (objective: OkrObjective) => void;
+  onDelete?: (id: string) => Promise<void>;
 }
 
-export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit }: Props) {
+export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit, onDelete }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [checkInKr, setCheckInKr] = useState<OkrKeyResult | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const status = STATUS_CONFIG[obj.status];
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(obj.id);
+    } finally {
+      setIsDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
 
   return (
     <>
@@ -41,11 +55,50 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit }: Props) {
                 <p className="text-[11px] text-muted-foreground mt-1">{obj.team_name} · {obj.owner_name} · {obj.cycle}</p>
               </div>
             </div>
+
             <div className="flex items-center gap-2 shrink-0">
               {onEdit && (
                 <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => onEdit(obj)}>
                   <Pencil className="h-3.5 w-3.5" /> Editar
                 </Button>
+              )}
+              {onDelete && !confirmDelete && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                </Button>
+              )}
+              {confirmDelete && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-destructive font-medium">Confirmar?</span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <span className="flex items-center gap-1">
+                        <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />
+                        Excluindo...
+                      </span>
+                    ) : "Sim, excluir"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={isDeleting}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
               )}
               <Badge className={cn("text-[10px] gap-1 shrink-0 border", status.color)}>
                 {status.icon} {status.label}
@@ -66,8 +119,10 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onEdit }: Props) {
         </div>
 
         <div className="border-t">
-          <button className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
-            onClick={() => setExpanded((v) => !v)}>
+          <button
+            className="w-full flex items-center justify-between px-5 py-2.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+            onClick={() => setExpanded((v) => !v)}
+          >
             <span className="font-medium">{expanded ? "Ocultar" : "Ver"} Key Results</span>
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
           </button>

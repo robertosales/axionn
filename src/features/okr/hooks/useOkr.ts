@@ -25,7 +25,7 @@ function calcObjectiveMeta(krs: OkrKeyResult[]): { progress: number; status: Okr
 }
 
 // ---------------------------------------------------------------------------
-// Fetch — suporta teamId "all" (sem filtro de time)
+// Fetch
 // ---------------------------------------------------------------------------
 
 async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObjective[]> {
@@ -35,7 +35,6 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
     .eq("cycle", cycle)
     .order("created_at", { ascending: true });
 
-  // Filtra por time apenas quando um time específico está selecionado
   if (teamId && teamId !== "all") {
     query = query.eq("team_id", teamId);
   }
@@ -137,6 +136,7 @@ export interface UseOkrReturn {
     id: string,
     payload: Partial<Pick<OkrObjective, "title" | "description" | "status">>
   ) => Promise<void>;
+  deleteObjective: (id: string) => Promise<void>;
 }
 
 export function useOkr(teamId?: string): UseOkrReturn {
@@ -151,15 +151,12 @@ export function useOkr(teamId?: string): UseOkrReturn {
     return [`Q1/${year}`, `Q2/${year}`, `Q3/${year}`, `Q4/${year}`];
   }, []);
 
-  // Usa o teamId do filtro; se for "all", passa "all" para fetchObjectives buscar tudo
   const effectiveTeamId = filters.teamId !== "all" ? filters.teamId : (teamId ?? "all");
-
   const queryKey = ["okr_objectives", effectiveTeamId, filters.cycle];
 
   const { data: objectives = [], isLoading, isError } = useQuery<OkrObjective[]>({
     queryKey,
     queryFn: () => fetchObjectives(effectiveTeamId, filters.cycle),
-    // Query sempre habilitada — quando "all", busca todos os objetivos do ciclo
     enabled: true,
     staleTime: 30_000,
   });
@@ -176,7 +173,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
       });
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
 
   // --- add objective ---
@@ -221,7 +218,6 @@ export function useOkr(teamId?: string): UseOkrReturn {
     },
     onSuccess: () => {
       console.log("[OKR] Invalidando queries após insert...");
-      // Invalida todas as queries de objectives independente do filtro ativo
       queryClient.invalidateQueries({ queryKey: ["okr_objectives"] });
     },
   });
@@ -243,7 +239,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
       });
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
 
   // --- update objective ---
@@ -264,6 +260,43 @@ export function useOkr(teamId?: string): UseOkrReturn {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
 
+  // --- delete objective ---
+  const deleteObjectiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // Deleta check-ins → key results → objective (cascade via FK, mas explícito por segurança)
+      const { data: krs } = await supabase
+        .from("okr_key_results")
+        .select("id")
+        .eq("objective_id", id);
+
+      const krIds = (krs ?? []).map((kr) => kr.id);
+
+      if (krIds.length > 0) {
+        const { error: ciErr } = await supabase
+          .from("okr_check_ins")
+          .delete()
+          .in("key_result_id", krIds);
+        if (ciErr) throw ciErr;
+
+        const { error: krErr } = await supabase
+          .from("okr_key_results")
+          .delete()
+          .eq("objective_id", id);
+        if (krErr) throw krErr;
+      }
+
+      const { error } = await supabase
+        .from("okr_objectives")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      console.log("[OKR] Objective excluído:", id);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
+  });
+
   function setFilters(partial: Partial<OkrFilters>) {
     setFiltersState((prev) => ({ ...prev, ...partial }));
   }
@@ -279,5 +312,6 @@ export function useOkr(teamId?: string): UseOkrReturn {
     addObjective: (obj) => addObjectiveMutation.mutateAsync(obj),
     addKeyResult: (kr) => addKeyResultMutation.mutateAsync(kr),
     updateObjective: (id, payload) => updateObjectiveMutation.mutateAsync({ id, payload }),
+    deleteObjective: (id) => deleteObjectiveMutation.mutateAsync(id),
   };
 }

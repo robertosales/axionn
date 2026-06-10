@@ -23,6 +23,7 @@ export function OkrPage() {
     addCheckIn,
     addObjective,
     updateObjective,
+    deleteObjective,
   } = useOkr();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<OkrObjective | null>(null);
@@ -54,6 +55,19 @@ export function OkrPage() {
     } catch (err: any) {
       toast({
         title: "Erro ao atualizar objetivo",
+        description: err?.message ?? "Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteObjective(id);
+      toast({ title: "Objetivo excluído com sucesso!", variant: "default" });
+    } catch (err: any) {
+      toast({
+        title: "Erro ao excluir objetivo",
         description: err?.message ?? "Tente novamente.",
         variant: "destructive",
       });
@@ -123,6 +137,7 @@ export function OkrPage() {
                 objective={obj}
                 onCheckIn={addCheckIn}
                 onEdit={setEditingObjective}
+                onDelete={handleDelete}
               />
             ))}
           </div>

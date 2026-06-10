@@ -15,21 +15,20 @@ import {
   AlertTriangle, FileText, Upload, Repeat, Activity, ShieldCheck,
   ChevronRight, Building2, ChevronsUpDown, Check, PanelLeftClose,
   PanelLeftOpen, Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight,
+  Target,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { AxionLogo } from "@/components/AxionLogo";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
-// ─── Tokens exatos Opção A (protótipo opcao_a_fundo_suave) ────────────────────
-// Hardcoded para garantir sidebar escura independente do tema claro/escuro
 const SB = {
-  bg:       "#0f1a18",  // --sb
-  fg:       "#c0d4d0",  // --sb-fg
-  muted:    "#3d5a56",  // --sb-muted
-  acc:      "#182e2a",  // --sb-acc  (hover)
-  active:   "#0c3d38",  // --sb-active
-  teal:     "#0bbcaf",  // --teal
+  bg:       "#0f1a18",
+  fg:       "#c0d4d0",
+  muted:    "#3d5a56",
+  acc:      "#182e2a",
+  active:   "#0c3d38",
+  teal:     "#0bbcaf",
   border:   "rgba(192,212,208,0.08)",
   tealA:    (a: number) => `rgba(11,188,175,${a})`,
 } as const;
@@ -70,41 +69,42 @@ const GROUP_LABELS: Record<NavItem["group"], string> = {
 };
 
 const NAV_SALA_AGIL: NavItem[] = [
-  { key: "dashboard",      label: "Dashboard",              icon: LayoutDashboard, path: "/sala-agil",                group: "sprints" },
-  { key: "board",          label: "Board Kanban",            icon: Kanban,          path: "/sala-agil/board",          group: "sprints" },
-  { key: "backlog",        label: "Backlog",                 icon: ListTodo,        path: "/sala-agil/backlog",        group: "sprints" },
-  { key: "epicos",         label: "Épicos",                  icon: Layers,          path: "/sala-agil/epicos",         group: "sprints" },
-  { key: "planning-poker", label: "Planning Poker",          icon: PlayingCardIcon, path: "/sala-agil/planning-poker", group: "cerimonias" },
-  { key: "retrospectiva",  label: "Retrospectiva",           icon: Repeat,          path: "/sala-agil/retrospectiva",  group: "cerimonias" },
-  { key: "impedimentos",   label: "Impedimentos",            icon: AlertTriangle,   path: "/sala-agil/impedimentos",   group: "cerimonias" },
-  { key: "calendario",     label: "Calendário",              icon: Calendar,        path: "/sala-agil/calendario",     group: "operacoes" },
-  { key: "equipe",         label: "Equipe",                  icon: Users,           path: "/sala-agil/equipe",         group: "operacoes" },
-  { key: "atividades",     label: "Atividades",              icon: Activity,        path: "/sala-agil/atividades",     group: "operacoes" },
-  { key: "metricas",       label: "Métricas",                icon: BarChart3,       path: "/sala-agil/metricas",       group: "org" },
-  { key: "relatorios",     label: "Relatórios",              icon: FileText,        path: "/sala-agil/relatorios",     group: "org" },
-  { key: "historico",      label: "Histórico",               icon: History,         path: "/sala-agil/historico",      group: "org" },
-  { key: "times",          label: "Times",                   icon: Users,           path: "/sala-agil/times",          group: "config" },
-  { key: "membros",        label: "Membros",                 icon: User,            path: "/sala-agil/membros",        group: "config" },
-  { key: "perfis",         label: "Perfis (RBAC)",           icon: ShieldCheck,     path: "/sala-agil/perfis",         group: "config" },
-  { key: "fluxo",          label: "Fluxo",                   icon: GitBranch,       path: "/sala-agil/fluxo",          group: "config" },
-  { key: "campos",         label: "Campos Custom",           icon: Settings,        path: "/sala-agil/campos",         group: "config" },
-  { key: "automacoes",     label: "Automações",              icon: Repeat,          path: "/sala-agil/automacoes",     group: "config" },
+  { key: "dashboard",      label: "Dashboard",     icon: LayoutDashboard, path: "/sala-agil",                group: "sprints" },
+  { key: "board",          label: "Board Kanban",  icon: Kanban,          path: "/sala-agil/board",          group: "sprints" },
+  { key: "backlog",        label: "Backlog",       icon: ListTodo,        path: "/sala-agil/backlog",        group: "sprints" },
+  { key: "epicos",         label: "Épicos",        icon: Layers,          path: "/sala-agil/epicos",         group: "sprints" },
+  { key: "planning-poker", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning-poker", group: "cerimonias" },
+  { key: "retrospectiva",  label: "Retrospectiva", icon: Repeat,          path: "/sala-agil/retrospectiva",  group: "cerimonias" },
+  { key: "impedimentos",   label: "Impedimentos",  icon: AlertTriangle,   path: "/sala-agil/impedimentos",   group: "cerimonias" },
+  { key: "calendario",     label: "Calendário",    icon: Calendar,        path: "/sala-agil/calendario",     group: "operacoes" },
+  { key: "equipe",         label: "Equipe",        icon: Users,           path: "/sala-agil/equipe",         group: "operacoes" },
+  { key: "atividades",     label: "Atividades",    icon: Activity,        path: "/sala-agil/atividades",     group: "operacoes" },
+  { key: "metricas",       label: "Métricas",      icon: BarChart3,       path: "/sala-agil/metricas",       group: "org" },
+  { key: "relatorios",     label: "Relatórios",    icon: FileText,        path: "/sala-agil/relatorios",     group: "org" },
+  { key: "historico",      label: "Histórico",     icon: History,         path: "/sala-agil/historico",      group: "org" },
+  { key: "okr",            label: "OKR",           icon: Target,          path: "/okr",                      group: "org" },
+  { key: "times",          label: "Times",         icon: Users,           path: "/sala-agil/times",          group: "config" },
+  { key: "membros",        label: "Membros",       icon: User,            path: "/sala-agil/membros",        group: "config" },
+  { key: "perfis",         label: "Perfis (RBAC)", icon: ShieldCheck,     path: "/sala-agil/perfis",         group: "config" },
+  { key: "fluxo",          label: "Fluxo",         icon: GitBranch,       path: "/sala-agil/fluxo",          group: "config" },
+  { key: "campos",         label: "Campos Custom", icon: Settings,        path: "/sala-agil/campos",         group: "config" },
+  { key: "automacoes",     label: "Automações",    icon: Repeat,          path: "/sala-agil/automacoes",     group: "config" },
 ];
 
 const NAV_SUSTENTACAO: NavItem[] = [
   { key: "dashboard",  label: "Dashboard",        icon: LayoutDashboard, path: "/sustentacao",            group: "sprints" },
-  { key: "board",      label: "Board Kanban",      icon: Kanban,          path: "/sustentacao/board",      group: "sprints" },
-  { key: "demandas",   label: "Demandas",          icon: ListTodo,        path: "/sustentacao/demandas",   group: "sprints" },
-  { key: "projetos",   label: "Projetos",          icon: Layers,          path: "/sustentacao/projetos",   group: "sprints" },
-  { key: "importacao", label: "Importação Excel",  icon: Upload,          path: "/sustentacao/importacao", group: "operacoes" },
-  { key: "equipe",     label: "Equipe",            icon: Users,           path: "/sustentacao/equipe",     group: "operacoes" },
-  { key: "fluxo",      label: "Fluxo de Trabalho", icon: GitBranch,       path: "/sustentacao/fluxo",      group: "operacoes" },
-  { key: "relatorios", label: "Relatórios",        icon: FileText,        path: "/sustentacao/relatorios", group: "org" },
-  { key: "times",      label: "Times",             icon: Users,           path: "/sustentacao/times",      group: "config" },
-  { key: "membros",    label: "Membros",            icon: User,            path: "/sustentacao/membros",    group: "config" },
-  { key: "perfis",     label: "Perfis (RBAC)",      icon: ShieldCheck,     path: "/sustentacao/perfis",     group: "config" },
-  { key: "campos",     label: "Campos Custom",      icon: Settings,        path: "/sustentacao/campos",     group: "config" },
-  { key: "automacoes", label: "Automações",         icon: Repeat,          path: "/sustentacao/automacoes", group: "config" },
+  { key: "board",      label: "Board Kanban",     icon: Kanban,          path: "/sustentacao/board",      group: "sprints" },
+  { key: "demandas",   label: "Demandas",         icon: ListTodo,        path: "/sustentacao/demandas",   group: "sprints" },
+  { key: "projetos",   label: "Projetos",         icon: Layers,          path: "/sustentacao/projetos",   group: "sprints" },
+  { key: "importacao", label: "Importação Excel", icon: Upload,          path: "/sustentacao/importacao", group: "operacoes" },
+  { key: "equipe",     label: "Equipe",           icon: Users,           path: "/sustentacao/equipe",     group: "operacoes" },
+  { key: "fluxo",      label: "Fluxo de Trabalho", icon: GitBranch,      path: "/sustentacao/fluxo",      group: "operacoes" },
+  { key: "relatorios", label: "Relatórios",       icon: FileText,        path: "/sustentacao/relatorios", group: "org" },
+  { key: "times",      label: "Times",            icon: Users,           path: "/sustentacao/times",      group: "config" },
+  { key: "membros",    label: "Membros",          icon: User,            path: "/sustentacao/membros",    group: "config" },
+  { key: "perfis",     label: "Perfis (RBAC)",    icon: ShieldCheck,     path: "/sustentacao/perfis",     group: "config" },
+  { key: "campos",     label: "Campos Custom",    icon: Settings,        path: "/sustentacao/campos",     group: "config" },
+  { key: "automacoes", label: "Automações",       icon: Repeat,          path: "/sustentacao/automacoes", group: "config" },
 ];
 
 const NAV_RDM: NavItem[] = [
@@ -113,8 +113,8 @@ const NAV_RDM: NavItem[] = [
   { key: "checklist", label: "Checklists",   icon: CheckSquare,     path: "/rdm/checklist", group: "sprints" },
   { key: "gonogo",    label: "Go/No-Go",     icon: ArrowLeftRight,  path: "/rdm/gonogo",    group: "sprints" },
   { key: "times",     label: "Times",        icon: Users,           path: "/rdm/times",     group: "config" },
-  { key: "membros",   label: "Membros",       icon: User,            path: "/rdm/membros",   group: "config" },
-  { key: "perfis",    label: "Perfis (RBAC)", icon: ShieldCheck,     path: "/rdm/perfis",    group: "config" },
+  { key: "membros",   label: "Membros",      icon: User,            path: "/rdm/membros",   group: "config" },
+  { key: "perfis",    label: "Perfis (RBAC)", icon: ShieldCheck,    path: "/rdm/perfis",    group: "config" },
 ];
 
 const ACCENT = {
@@ -123,7 +123,6 @@ const ACCENT = {
   rdm:         { hex: "#7c3aed", hexAlpha: (a: number) => `rgba(124,58,237,${a})`,  avatarBg: "#6d28d9",  label: "RDM",          icon: ClipboardList, textCls: "text-violet-500", bgCls: "bg-violet-500/10" },
 } as const;
 
-// ─── TeamSwitcher ─────────────────────────────────────────────────────────────
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const { teams, currentTeamId, setCurrentTeamId } = useAuth();
   const moduleTeams = teams.filter((t) => t.module === module);
@@ -199,9 +198,8 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
   );
 }
 
-// ─── NavItemButton ────────────────────────────────────────────────────────────
-function NavItemButton({ item, module, isActive, collapsed, onNavigate }: {
-  item: NavItem; module: ActiveModule; isActive: boolean; collapsed: boolean; onNavigate?: (key: string) => void;
+function NavItemButton({ item, isActive, collapsed, onNavigate }: {
+  item: NavItem; isActive: boolean; collapsed: boolean; onNavigate?: (key: string) => void;
 }) {
   const navigate = useNavigate();
   const Icon = item.icon;
@@ -221,19 +219,14 @@ function NavItemButton({ item, module, isActive, collapsed, onNavigate }: {
       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = SB.acc; }}
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
     >
-      {/* Barra vertical esquerda no item ativo */}
       {isActive && !collapsed && (
         <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
           style={{ background: SB.teal }} />
       )}
-      <Icon
-        className={cn("shrink-0", collapsed ? "h-4 w-4" : "h-[14px] w-[14px]")}
-        style={{ color: isActive ? SB.teal : SB.muted }}
-      />
+      <Icon className={cn("shrink-0", collapsed ? "h-4 w-4" : "h-[14px] w-[14px]")}
+        style={{ color: isActive ? SB.teal : SB.muted }} />
       {!collapsed && (
-        <span className="text-[13px] font-medium truncate flex-1 text-left leading-none">
-          {item.label}
-        </span>
+        <span className="text-[13px] font-medium truncate flex-1 text-left leading-none">{item.label}</span>
       )}
       {isActive && collapsed && (
         <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full" style={{ background: SB.teal }} />
@@ -250,28 +243,22 @@ function NavItemButton({ item, module, isActive, collapsed, onNavigate }: {
   return btn;
 }
 
-// ─── SidebarNav ───────────────────────────────────────────────────────────────
 function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
   module: ActiveModule; activeKey?: string; collapsed: boolean; onNavigate?: (key: string) => void;
 }) {
   const location = useLocation();
   const { hasPermission } = useAuth();
-  const items = module === "sala_agil" ? NAV_SALA_AGIL
-    : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
+  const items = module === "sala_agil" ? NAV_SALA_AGIL : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
 
-  const filteredItems = items.filter((item) =>
-    !item.roles || item.roles.some((r) => hasPermission(r as any))
-  );
+  const filteredItems = items.filter((item) => !item.roles || item.roles.some((r) => hasPermission(r as any)));
   const groupOrder = (["sprints", "cerimonias", "operacoes", "org", "config"] as const)
     .filter((g) => filteredItems.some((i) => i.group === g));
-  const groups = groupOrder.map((g) => ({
-    group: g,
-    items: filteredItems.filter((i) => i.group === g),
-  }));
+  const groups = groupOrder.map((g) => ({ group: g, items: filteredItems.filter((i) => i.group === g) }));
 
   const isItemActive = (item: NavItem) => {
     if (activeKey) return item.key === activeKey;
     const roots = ["/sala-agil", "/sustentacao", "/rdm"];
+    if (item.path === "/okr") return location.pathname === "/okr";
     if (roots.includes(item.path)) return location.pathname === item.path;
     return location.pathname.startsWith(item.path);
   };
@@ -281,18 +268,14 @@ function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
       {groups.map(({ group, items: groupItems }) => (
         <div key={group}>
           {!collapsed && (
-            <p className="px-3 pb-1.5 pt-0.5 text-[9px] font-bold tracking-[0.16em] uppercase select-none"
-              style={{ color: SB.muted }}>
+            <p className="px-3 pb-1.5 pt-0.5 text-[9px] font-bold tracking-[0.16em] uppercase select-none" style={{ color: SB.muted }}>
               {GROUP_LABELS[group]}
             </p>
           )}
-          {collapsed && group !== "sprints" && (
-            <div className="h-px mx-1 my-1" style={{ background: SB.border }} />
-          )}
+          {collapsed && group !== "sprints" && <div className="h-px mx-1 my-1" style={{ background: SB.border }} />}
           <div className={cn("space-y-[2px]", collapsed && "flex flex-col items-center")}>
             {groupItems.map((item) => (
-              <NavItemButton key={item.key} item={item} module={module}
-                isActive={isItemActive(item)} collapsed={collapsed} onNavigate={onNavigate} />
+              <NavItemButton key={item.key} item={item} isActive={isItemActive(item)} collapsed={collapsed} onNavigate={onNavigate} />
             ))}
           </div>
         </div>
@@ -301,7 +284,6 @@ function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
   );
 }
 
-// ─── ModuleSwitcher ───────────────────────────────────────────────────────────
 function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
   const navigate = useNavigate();
   const modules = [
@@ -315,15 +297,10 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
       {modules.map(({ key, path, label, Icon }) => (
         <Tooltip key={key}>
           <TooltipTrigger asChild>
-            <button onClick={() => navigate(path)}
-              className="flex w-full items-center justify-center rounded-md p-2 transition-all"
-              style={{
-                color:      module === key ? SB.teal : SB.muted,
-                background: module === key ? SB.active : "transparent",
-              }}
+            <button onClick={() => navigate(path)} className="flex w-full items-center justify-center rounded-md p-2 transition-all"
+              style={{ color: module === key ? SB.teal : SB.muted, background: module === key ? SB.active : "transparent" }}
               onMouseEnter={e => { if (module !== key) e.currentTarget.style.background = SB.acc; }}
-              onMouseLeave={e => { if (module !== key) e.currentTarget.style.background = "transparent"; }}
-            >
+              onMouseLeave={e => { if (module !== key) e.currentTarget.style.background = "transparent"; }}>
               <Icon className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
@@ -333,27 +310,18 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
     </div>
   );
 
-  // Abas lado a lado — conforme mockup
   return (
     <div className="flex items-stretch" style={{ borderBottom: `1px solid ${SB.border}` }}>
       {modules.map(({ key, path, label, Icon }) => {
         const isActive = module === key;
         return (
-          <button key={key} onClick={() => navigate(path)}
-            className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-all relative"
-            style={{
-              color:      isActive ? SB.teal : SB.muted,
-              background: isActive ? SB.active : "transparent",
-            }}
+          <button key={key} onClick={() => navigate(path)} className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-all relative"
+            style={{ color: isActive ? SB.teal : SB.muted, background: isActive ? SB.active : "transparent" }}
             onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = SB.acc; }}
-            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
-          >
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
             <Icon className="h-3 w-3 shrink-0" />
             {label}
-            {isActive && (
-              <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full"
-                style={{ background: SB.teal }} />
-            )}
+            {isActive && <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full" style={{ background: SB.teal }} />}
           </button>
         );
       })}
@@ -361,7 +329,6 @@ function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed
   );
 }
 
-// ─── DarkModeToggle ───────────────────────────────────────────────────────────
 function getThemeIsDark(): boolean {
   const attr = document.documentElement.getAttribute("data-theme");
   if (attr === "dark") return true;
@@ -395,18 +362,17 @@ function DarkModeToggle() {
   );
 }
 
-// ─── Topbar ───────────────────────────────────────────────────────────────────
 function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: string }) {
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
-  const items = module === "sala_agil" ? NAV_SALA_AGIL
-    : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
+  const items = module === "sala_agil" ? NAV_SALA_AGIL : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
 
   const activeItem = activeKey
     ? items.find((i) => i.key === activeKey)
     : items.find((i) => {
         const roots = ["/sala-agil", "/sustentacao", "/rdm"];
+        if (i.path === "/okr") return location.pathname === "/okr";
         if (roots.includes(i.path)) return location.pathname === i.path;
         return location.pathname.startsWith(i.path);
       });
@@ -415,12 +381,9 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   const Icon = activeItem?.icon;
 
   return (
-    <header className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-border overflow-hidden"
-      style={{ background: "hsl(var(--background))" }}>
+    <header className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-border overflow-hidden" style={{ background: "hsl(var(--background))" }}>
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">
-          {accent.label}
-        </span>
+        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">{accent.label}</span>
         <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
         <div className="flex items-center gap-2 min-w-0">
           {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}
@@ -442,10 +405,8 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   );
 }
 
-// ─── AppShell ─────────────────────────────────────────────────────────────────
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
   const { profile, isAdmin, signOut, isSigningOut } = useAuth();
-  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const moduleAccess = profile?.module_access ?? "sala_agil";
   const canSwitch = isAdmin || moduleAccess === "admin";
@@ -461,20 +422,10 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
   return (
     <TooltipProvider delayDuration={80}>
       <div className="flex h-screen w-screen overflow-hidden bg-background" data-module={module}>
-
-        {/* ── Sidebar ── */}
-        <aside
-          className={cn(
-            "flex flex-col h-full shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden",
-            sidebarWidth,
-          )}
-          style={{ background: SB.bg, boxShadow: "2px 0 16px rgba(0,0,0,0.4)" }}
-        >
-          {/* Logo */}
-          <div
-            className={cn("flex items-center h-14 shrink-0 px-3", collapsed ? "justify-center" : "justify-between")}
-            style={{ borderBottom: `1px solid ${SB.border}` }}
-          >
+        <aside className={cn("flex flex-col h-full shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden", sidebarWidth)}
+          style={{ background: SB.bg, boxShadow: "2px 0 16px rgba(0,0,0,0.4)" }}>
+          <div className={cn("flex items-center h-14 shrink-0 px-3", collapsed ? "justify-center" : "justify-between")}
+            style={{ borderBottom: `1px solid ${SB.border}` }}>
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -493,12 +444,8 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                 <div className="flex items-center gap-2.5 min-w-0">
                   <AxionLogo size={24} />
                   <div className="min-w-0">
-                    <p className="text-[15px] font-bold leading-none tracking-tight" style={{ color: "#ffffff" }}>
-                      Axion
-                    </p>
-                    <p className="text-[9px] uppercase tracking-widest leading-none mt-0.5" style={{ color: SB.teal }}>
-                      {accent.label}
-                    </p>
+                    <p className="text-[15px] font-bold leading-none tracking-tight" style={{ color: "#ffffff" }}>Axion</p>
+                    <p className="text-[9px] uppercase tracking-widest leading-none mt-0.5" style={{ color: SB.teal }}>{accent.label}</p>
                   </div>
                 </div>
                 <button onClick={() => setCollapsed(true)} aria-label="Recolher sidebar"
@@ -512,41 +459,26 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           </div>
 
-          {/* Module Switcher */}
-          {canSwitch && (
-            <div className="shrink-0">
-              <ModuleSwitcher module={module} collapsed={collapsed} />
-            </div>
-          )}
+          {canSwitch && <div className="shrink-0"><ModuleSwitcher module={module} collapsed={collapsed} /></div>}
           {!canSwitch && !collapsed && (
-            <div className="mx-2 mt-2 flex items-center rounded-lg px-3 py-2 text-[12px] font-semibold gap-2"
-              style={{ background: SB.active, color: SB.teal }}>
+            <div className="mx-2 mt-2 flex items-center rounded-lg px-3 py-2 text-[12px] font-semibold gap-2" style={{ background: SB.active, color: SB.teal }}>
               <accent.icon className="h-3.5 w-3.5 shrink-0" />
               {accent.label}
             </div>
           )}
 
-          {/* Team Switcher */}
-          <div className="px-2 mt-1 shrink-0">
-            <TeamSwitcher module={module} collapsed={collapsed} />
-          </div>
+          <div className="px-2 mt-1 shrink-0"><TeamSwitcher module={module} collapsed={collapsed} /></div>
           <div className="h-px mx-2 mb-1 shrink-0" style={{ background: SB.border }} />
-
           <SidebarNav module={module} activeKey={activeKey} collapsed={collapsed} onNavigate={onNavigate} />
 
-          {/* Rodapé — usuário */}
           <div className="shrink-0 px-2 pb-3 pt-1" style={{ borderTop: `1px solid ${SB.border}` }}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
-                  className={cn("w-full flex items-center gap-2.5 rounded-lg p-2 mt-1 transition-colors", collapsed && "justify-center")}
+                <button className={cn("w-full flex items-center gap-2.5 rounded-lg p-2 mt-1 transition-colors", collapsed && "justify-center")}
                   onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                   <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="text-[11px] font-bold text-white"
-                      style={{ backgroundColor: accent.avatarBg }}>
-                      {userInitials}
-                    </AvatarFallback>
+                    <AvatarFallback className="text-[11px] font-bold text-white" style={{ backgroundColor: accent.avatarBg }}>{userInitials}</AvatarFallback>
                   </Avatar>
                   {!collapsed && (
                     <div className="flex-1 text-left min-w-0">
@@ -569,10 +501,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                 <DropdownMenuItem onClick={handleSignOut} disabled={isSigningOut}
                   className="text-red-500 focus:text-red-500 gap-2 cursor-pointer disabled:opacity-50">
                   {isSigningOut ? (
-                    <><svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" /></svg>
-                      Saindo...</>
+                    <><svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" /></svg>Saindo...</>
                   ) : (
                     <><LogOut className="h-4 w-4" /> Sair</>
                   )}
@@ -583,7 +512,6 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           </div>
         </aside>
 
-        {/* Conteúdo principal */}
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <Topbar module={module} activeKey={activeKey} />
           <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
@@ -593,20 +521,17 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
   );
 }
 
-// ─── VersionBadge ─────────────────────────────────────────────────────────────
 function VersionBadge({ collapsed }: { collapsed: boolean }) {
   if (collapsed) return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="mt-1 flex items-center justify-center text-[9px] font-mono select-none"
-          style={{ color: SB.muted }}>v{APP_VERSION}</div>
+        <div className="mt-1 flex items-center justify-center text-[9px] font-mono select-none" style={{ color: SB.muted }}>v{APP_VERSION}</div>
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">Versão {APP_VERSION} · {APP_BUILD_DATE}</TooltipContent>
     </Tooltip>
   );
   return (
-    <div className="mt-1 px-1 flex items-center justify-between text-[10px] font-mono select-none"
-      style={{ color: SB.muted }}>
+    <div className="mt-1 px-1 flex items-center justify-between text-[10px] font-mono select-none" style={{ color: SB.muted }}>
       <span>v{APP_VERSION}</span>
       <span style={{ opacity: 0.4 }}>{APP_BUILD_DATE}</span>
     </div>

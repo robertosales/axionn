@@ -39,6 +39,13 @@ const ContractsPage = lazy(() =>
   }))
 );
 
+// ─── Módulo OKR (lazy) ────────────────────────────────────────────────────────
+const OkrPage = lazy(() =>
+  import("./features/okr/OkrPage").then((m) => ({
+    default: m.OkrPage,
+  }))
+);
+
 // ─── Fallback de carregamento (Suspense) ──────────────────────────────────────
 function PageLoader() {
   return (
@@ -52,10 +59,6 @@ function PageLoader() {
 }
 
 // ─── Resolução central de home pós-login ─────────────────────────────────────
-// Prioriza módulos explicitamente atribuídos via user_module_roles; usa
-// profile.module_access como fallback autoritativo quando moduleRoles ainda
-// não foi carregado ou está vazio. Evita o viés antigo de "default = sala_agil"
-// que mascarava bugs de carga (ex.: Rejane / sustentação caindo no Ágil).
 function resolveHomePath(opts: {
   isAdmin: boolean;
   moduleAccess?: string | null;
@@ -76,7 +79,6 @@ function resolveHomePath(opts: {
   if (agil) return "/sala-agil/dashboard";
   if (rdm)  return "/rdm";
 
-  // Sem moduleRoles carregado: confia em profile.module_access
   if (moduleRolesCount === 0 && moduleAccess) {
     if (moduleAccess === "sustentacao") return "/sustentacao";
     if (moduleAccess === "sala_agil")   return "/sala-agil/dashboard";
@@ -200,6 +202,16 @@ function AppRoutes() {
             element={
               <ProtectedRoute>
                 <AdminGuard><ContractsPage /></AdminGuard>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ── OKR ─────────────────────────────────────────────────────── */}
+          <Route
+            path="/okr"
+            element={
+              <ProtectedRoute>
+                <OkrPage />
               </ProtectedRoute>
             }
           />

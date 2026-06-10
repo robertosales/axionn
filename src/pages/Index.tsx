@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── Componentes leves — importados estaticamente  ─────────────────────────────
+// ─── Componentes leves — importados estaticamente ─────────────────────────────
 import { SprintManager } from "@/components/SprintManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DashboardHome } from "@/components/DashboardHome";
 import { DemandasPorTimeSection } from "@/features/contracts/DemandasPorTimeSection";
 
-// ─── Componentes pesados — lazy loaded ────────────────────────────────────────
+// ─── Componentes pesados — lazy loaded ───────────────────────────────────────
 const AgileHistory = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
 const UserRolesManager = lazy(() =>
   import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })),
@@ -55,19 +55,16 @@ const SalaAgilReportsPage = lazy(() =>
   import("@/features/reports/pages/SalaAgilReportsPage").then((m) => ({ default: m.SalaAgilReportsPage })),
 );
 
-// ─── Skeleton de seção — exibido enquanto o chunk lazy está carregando ────────
+// ─── Skeleton de seção ────────────────────────────────────────────────────────
 function SectionSkeleton() {
   return (
     <div className="space-y-4 p-2" aria-busy="true" aria-label="Carregando seção…">
-      {/* Título da seção */}
       <div className="h-7 w-48 rounded-md bg-muted animate-pulse" />
-      {/* Linha de filtros/ações */}
       <div className="flex gap-3">
         <div className="h-9 w-32 rounded-md bg-muted animate-pulse" />
         <div className="h-9 w-24 rounded-md bg-muted animate-pulse" />
         <div className="ml-auto h-9 w-28 rounded-md bg-muted animate-pulse" />
       </div>
-      {/* Cards/linhas de conteúdo */}
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="h-20 w-full rounded-lg bg-muted animate-pulse" style={{ opacity: 1 - i * 0.15 }} />
       ))}
@@ -75,10 +72,6 @@ function SectionSkeleton() {
   );
 }
 
-/**
- * SectionLoader — fallback legado (spinner simples).
- * Mantido para compatibilidade, mas SectionSkeleton é o preferido.
- */
 function SectionLoader() {
   return (
     <div className="flex items-center justify-center py-20">
@@ -87,8 +80,10 @@ function SectionLoader() {
   );
 }
 
-/** ErrorBoundary simples para cada seção lazy */
-class SectionErrorBoundary extends React.Component<{ name: string; children: React.ReactNode }, { hasError: boolean }> {
+class SectionErrorBoundary extends React.Component<
+  { name: string; children: React.ReactNode },
+  { hasError: boolean }
+> {
   constructor(props: { name: string; children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
@@ -118,7 +113,6 @@ class SectionErrorBoundary extends React.Component<{ name: string; children: Rea
   }
 }
 
-/** Wrapper que combina ErrorBoundary + Suspense com skeleton robusto */
 function LazySection({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <SectionErrorBoundary name={name}>
@@ -138,7 +132,6 @@ const VALID_SECTIONS = [
   "notificacoes",
   "gerador-apf",
   "metricas",
-  "relatorios",
   "historico",
   "calendario",
   "equipe",
@@ -167,6 +160,11 @@ const TEAM_FREE_SECTIONS: SectionKey[] = [
   "automacoes",
 ];
 
+// Rotas que vivem fora do prefixo /sala-agil — navegação direta
+const EXTERNAL_ROUTES: Record<string, string> = {
+  okr: "/okr",
+};
+
 function AccessDenied() {
   return (
     <div className="flex flex-col items-center justify-center py-24 space-y-3">
@@ -192,12 +190,6 @@ const Index = () => {
   const { activeSprint } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
 
-  /**
-   * useTransition — navegação entre seções sem bloquear a UI.
-   * React 18: `startTransition` marca a atualização como não urgente,
-   * permitindo que interações do usuário (clique, scroll) continuem responsivas
-   * enquanto o novo conteúdo carrega em background.
-   */
   const [, startTransition] = useTransition();
 
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
@@ -218,10 +210,16 @@ const Index = () => {
     if (section && !VALID_SECTIONS.includes(section as SectionKey)) {
       navigate("/sala-agil/dashboard", { replace: true });
     }
-  }, [loading, section]);
+  }, [loading, section]); // eslint-disable-line
 
-  // Navegação via startTransition — sem freeze de UI
-  const handleNavigate = (key: string) => startTransition(() => navigate(`/sala-agil/${key}`));
+  // ── FIX: rotas externas (ex: /okr) navegam diretamente sem prefixo /sala-agil
+  const handleNavigate = (key: string) => {
+    if (key in EXTERNAL_ROUTES) {
+      navigate(EXTERNAL_ROUTES[key]);
+      return;
+    }
+    startTransition(() => navigate(`/sala-agil/${key}`));
+  };
 
   const isTeamFreeSection = TEAM_FREE_SECTIONS.includes(active);
   const needsTeam = !loading && !isAdmin && !currentTeamId && !isTeamFreeSection;
@@ -261,7 +259,6 @@ const Index = () => {
 
         {!loading && !needsTeam && (
           <div key={teamKey}>
-            {/* Seções leves — sem LazySection */}
             {active === "dashboard" && <DashboardHome key={`dash-${currentTeamId}-${activeSprint?.id ?? "none"}`} />}
             {active === "equipe" && <DeveloperManager />}
             {active === "board" && (
@@ -270,7 +267,6 @@ const Index = () => {
               </SectionGuard>
             )}
 
-            {/* Seções pesadas — cada uma com ErrorBoundary + Suspense + Skeleton */}
             {active === "planning-poker" && (
               <LazySection name="Planning Poker">
                 <PlanningPoker />
@@ -356,7 +352,6 @@ const Index = () => {
               </SectionGuard>
             )}
 
-            {/* ─── Demandas por Contrato — módulo contracts/SLA ───────────────── */}
             {active === "demandas-contratos" && (
               <SectionGuard permission="view_backlog">
                 <LazySection name="Demandas por Contrato">

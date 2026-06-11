@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
+} from "@/components/ui/sheet";
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription,
 } from "@/components/ui/form";
@@ -35,13 +35,13 @@ interface FormValues {
 }
 
 interface Props {
-  open:          boolean;
-  user?:         UserAdmin | null;
-  teams:         TeamAdmin[];
-  isCurrentUserAdmin: boolean;  // quem está editando é admin_master?
-  onClose:       () => void;
-  onCreate:      (data: FormValues & { module_roles: UserModuleRole[]; contract_role: "admin_contrato" | "member" }) => Promise<boolean>;
-  onUpdate:      (userId: string, data: Partial<FormValues> & { module_roles: UserModuleRole[]; contract_role: "admin_contrato" | "member" }) => Promise<boolean>;
+  open:               boolean;
+  user?:              UserAdmin | null;
+  teams:              TeamAdmin[];
+  isCurrentUserAdmin: boolean;
+  onClose:            () => void;
+  onCreate:           (data: FormValues & { module_roles: UserModuleRole[]; contract_role: "admin_contrato" | "member" }) => Promise<boolean>;
+  onUpdate:           (userId: string, data: Partial<FormValues> & { module_roles: UserModuleRole[]; contract_role: "admin_contrato" | "member" }) => Promise<boolean>;
 }
 
 export function UserFormDialog({ open, user, teams, isCurrentUserAdmin, onClose, onCreate, onUpdate }: Props) {
@@ -59,7 +59,6 @@ export function UserFormDialog({ open, user, teams, isCurrentUserAdmin, onClose,
   });
   const [expandedModule,  setExpandedModule]  = useState<ModuleKey | null>("sala_agil");
   const [availableRoles,  setAvailableRoles]  = useState<{ name: string; label: string }[]>([]);
-  // Papel no contrato — separado dos módulos
   const [isAdminContrato, setIsAdminContrato] = useState(false);
 
   useEffect(() => {
@@ -92,7 +91,6 @@ export function UserFormDialog({ open, user, teams, isCurrentUserAdmin, onClose,
       setExpandedModule("sala_agil");
     }
 
-    // Inicializa toggle admin_contrato com o valor atual do usuário
     setIsAdminContrato(isEdit ? user!.contract_role === "admin_contrato" : false);
   }, [open, user]);
 
@@ -102,8 +100,8 @@ export function UserFormDialog({ open, user, teams, isCurrentUserAdmin, onClose,
       .map(m => ({ module: m.key, role_name: moduleRole[m.key] }));
 
   const onSubmit = async (values: FormValues) => {
-    const moduleRoles    = buildModuleRoles();
-    const contractRole   = isAdminContrato ? "admin_contrato" : "member";
+    const moduleRoles  = buildModuleRoles();
+    const contractRole = isAdminContrato ? "admin_contrato" : "member";
     if (moduleRoles.length === 0) {
       form.setError("display_name", { message: "Ative pelo menos um módulo." });
       return;
@@ -129,205 +127,216 @@ export function UserFormDialog({ open, user, teams, isCurrentUserAdmin, onClose,
         ["rdm_gestor", "rdm_aprovador", "rdm_executor", "admin", "member"].includes(r.name)
       );
     }
-    // Exclui admin_contrato do dropdown de módulos — ele vive na seção própria
     return availableRoles.filter(r =>
       !["rdm_gestor", "rdm_aprovador", "rdm_executor", "admin_contrato"].includes(r.name)
     );
   };
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar Usuário" : "Novo Usuário"}</DialogTitle>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      {/* sm:max-w-xl = 576 px — muito mais espaço que o Dialog anterior */}
+      <SheetContent side="right" className="sm:max-w-xl w-full flex flex-col gap-0 p-0">
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        {/* Header fixo */}
+        <SheetHeader className="px-6 py-4 border-b shrink-0">
+          <SheetTitle>{isEdit ? "Editar Usuário" : "Novo Usuário"}</SheetTitle>
+        </SheetHeader>
 
-            {/* Nome */}
-            <FormField control={form.control} name="display_name" rules={{ required: "Nome obrigatório" }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome</FormLabel>
-                  <FormControl><Input placeholder="João Silva" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        {/* Corpo scrollável */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <Form {...form}>
+            <form id="user-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
 
-            {/* Email e Senha — só na criação */}
-            {!isEdit && (
-              <>
-                <FormField control={form.control} name="email" rules={{ required: "E-mail obrigatório" }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>E-mail</FormLabel>
-                      <FormControl><Input type="email" placeholder="joao@empresa.com" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField control={form.control} name="password"
-                  rules={{ required: "Senha obrigatória", minLength: { value: 6, message: "Mínimo 6 caracteres" } }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Senha temporária</FormLabel>
-                      <FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl>
-                      <FormDescription className="text-[11px]">
-                        O usuário será obrigado a trocar no primeiro acesso.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
+              {/* Nome */}
+              <FormField control={form.control} name="display_name" rules={{ required: "Nome obrigatório" }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nome de exibição</FormLabel>
+                    <FormControl><Input placeholder="João Silva" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            {/* Time */}
-            <FormField control={form.control} name="team_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Time principal</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Selecione um time" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">Sem time</SelectItem>
-                      {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* ── Admin do Contrato — só visível para admin_master ────────── */}
-            {isCurrentUserAdmin && (
-              <div className={`rounded-lg border transition-colors ${
-                isAdminContrato
-                  ? "border-amber-500/40 bg-amber-500/5"
-                  : "border-border bg-muted/20"
-              }`}>
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Building2 className={`h-4 w-4 ${
-                      isAdminContrato ? "text-amber-400" : "text-muted-foreground"
-                    }`} />
-                    <div>
-                      <p className={`text-sm font-medium ${
-                        isAdminContrato ? "text-foreground" : "text-muted-foreground"
-                      }`}>
-                        Admin do Contrato
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Gerencia usuários, times e configurações do contrato
-                      </p>
-                    </div>
-                    {isAdminContrato && (
-                      <Badge variant="outline" className="text-[9px] ml-1 text-amber-400 border-amber-400/50">
-                        admin_contrato
-                      </Badge>
+              {/* Email e Senha — só na criação */}
+              {!isEdit && (
+                <>
+                  <FormField control={form.control} name="email" rules={{ required: "E-mail obrigatório" }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>E-mail</FormLabel>
+                        <FormControl><Input type="email" placeholder="joao@empresa.com" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </div>
-                  <Switch
-                    checked={isAdminContrato}
-                    onCheckedChange={setIsAdminContrato}
-                    className="ml-3 scale-90"
                   />
-                </div>
-              </div>
-            )}
-
-            {/* ── Módulos & Perfis ───────────────────────────────────────── */}
-            <div className="space-y-2">
-              <FormLabel className="text-sm font-semibold">Módulos & Perfis</FormLabel>
-              <p className="text-[11px] text-muted-foreground">
-                Ative os módulos que este usuário pode acessar e escolha o perfil em cada um.
-              </p>
-
-              {MODULES.map(mod => {
-                const Icon    = mod.icon;
-                const isOn    = moduleEnabled[mod.key];
-                const isOpen  = expandedModule === mod.key;
-                const roles   = getRolesForModule(mod.key);
-                const noRoles = roles.length === 0;
-
-                return (
-                  <div key={mod.key}
-                    className={`rounded-lg border transition-colors ${
-                      isOn ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <button
-                        type="button"
-                        className="flex items-center gap-2 flex-1 text-left"
-                        onClick={() => isOn && setExpandedModule(isOpen ? null : mod.key)}
-                      >
-                        <Icon className={`h-4 w-4 ${isOn ? mod.color : "text-muted-foreground"}`} />
-                        <span className={`text-sm font-medium ${
-                          isOn ? "text-foreground" : "text-muted-foreground"
-                        }`}>
-                          {mod.label}
-                        </span>
-                        {isOn && (
-                          <Badge variant="outline" className={`text-[9px] ml-1 ${mod.color} border-current`}>
-                            {availableRoles.find(r => r.name === moduleRole[mod.key])?.label ?? moduleRole[mod.key]}
-                          </Badge>
-                        )}
-                        {isOn && (
-                          isOpen
-                            ? <ChevronUp   className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
-                            : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
-                        )}
-                      </button>
-                      <Switch
-                        checked={isOn}
-                        onCheckedChange={v => {
-                          setModuleEnabled(prev => ({ ...prev, [mod.key]: v }));
-                          if (v) setExpandedModule(mod.key);
-                          else if (expandedModule === mod.key) setExpandedModule(null);
-                        }}
-                        className="ml-3 scale-90"
-                      />
-                    </div>
-
-                    {isOn && isOpen && (
-                      <div className="border-t border-border px-4 pb-3 pt-2">
-                        {noRoles ? (
-                          <p className="text-xs text-muted-foreground italic">Carregando perfis...</p>
-                        ) : (
-                          <RadioGroup
-                            value={moduleRole[mod.key]}
-                            onValueChange={v => setModuleRole(prev => ({ ...prev, [mod.key]: v }))}
-                            className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1"
-                          >
-                            {roles.map(r => (
-                              <div key={r.name} className="flex items-center gap-2">
-                                <RadioGroupItem value={r.name} id={`${mod.key}-${r.name}`} />
-                                <Label htmlFor={`${mod.key}-${r.name}`} className="text-xs cursor-pointer">
-                                  {r.label}
-                                </Label>
-                              </div>
-                            ))}
-                          </RadioGroup>
-                        )}
-                      </div>
+                  <FormField control={form.control} name="password"
+                    rules={{ required: "Senha obrigatória", minLength: { value: 6, message: "Mínimo 6 caracteres" } }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Senha temporária</FormLabel>
+                        <FormControl><Input type="password" placeholder="Mínimo 6 caracteres" {...field} /></FormControl>
+                        <FormDescription className="text-[11px]">
+                          O usuário será obrigado a trocar no primeiro acesso.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </div>
-                );
-              })}
-            </div>
+                  />
+                </>
+              )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Salvando..." : "Salvar Perfil"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+              {/* Time */}
+              <FormField control={form.control} name="team_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time principal</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl><SelectTrigger><SelectValue placeholder="Selecione um time" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Sem time</SelectItem>
+                        {teams.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* ── Admin do Contrato — só visível para admin_master ─────── */}
+              {isCurrentUserAdmin && (
+                <div className={`rounded-lg border transition-colors ${
+                  isAdminContrato
+                    ? "border-amber-500/40 bg-amber-500/5"
+                    : "border-border bg-muted/20"
+                }`}>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 className={`h-4 w-4 ${
+                        isAdminContrato ? "text-amber-400" : "text-muted-foreground"
+                      }`} />
+                      <div>
+                        <p className={`text-sm font-medium ${
+                          isAdminContrato ? "text-foreground" : "text-muted-foreground"
+                        }`}>
+                          Admin do Contrato
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Gerencia usuários, times e configurações do contrato
+                        </p>
+                      </div>
+                      {isAdminContrato && (
+                        <Badge variant="outline" className="text-[9px] ml-1 text-amber-400 border-amber-400/50">
+                          admin_contrato
+                        </Badge>
+                      )}
+                    </div>
+                    <Switch
+                      checked={isAdminContrato}
+                      onCheckedChange={setIsAdminContrato}
+                      className="ml-3 scale-90"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ── Módulos & Perfis ──────────────────────────────────────── */}
+              <div className="space-y-2">
+                <FormLabel className="text-sm font-semibold">Módulos & Perfis</FormLabel>
+                <p className="text-[11px] text-muted-foreground">
+                  Ative os módulos que este usuário pode acessar e escolha o perfil em cada um.
+                </p>
+
+                {MODULES.map(mod => {
+                  const Icon   = mod.icon;
+                  const isOn   = moduleEnabled[mod.key];
+                  const isOpen = expandedModule === mod.key;
+                  const roles  = getRolesForModule(mod.key);
+
+                  return (
+                    <div key={mod.key}
+                      className={`rounded-lg border transition-colors ${
+                        isOn ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 flex-1 text-left"
+                          onClick={() => isOn && setExpandedModule(isOpen ? null : mod.key)}
+                        >
+                          <Icon className={`h-4 w-4 ${isOn ? mod.color : "text-muted-foreground"}`} />
+                          <span className={`text-sm font-medium ${
+                            isOn ? "text-foreground" : "text-muted-foreground"
+                          }`}>
+                            {mod.label}
+                          </span>
+                          {isOn && (
+                            <Badge variant="outline" className={`text-[9px] ml-1 ${mod.color} border-current`}>
+                              {availableRoles.find(r => r.name === moduleRole[mod.key])?.label ?? moduleRole[mod.key]}
+                            </Badge>
+                          )}
+                          {isOn && (
+                            isOpen
+                              ? <ChevronUp   className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
+                              : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-auto" />
+                          )}
+                        </button>
+                        <Switch
+                          checked={isOn}
+                          onCheckedChange={v => {
+                            setModuleEnabled(prev => ({ ...prev, [mod.key]: v }));
+                            if (v) setExpandedModule(mod.key);
+                            else if (expandedModule === mod.key) setExpandedModule(null);
+                          }}
+                          className="ml-3 scale-90"
+                        />
+                      </div>
+
+                      {isOn && isOpen && (
+                        <div className="border-t border-border px-4 pb-4 pt-3">
+                          {roles.length === 0 ? (
+                            <p className="text-xs text-muted-foreground italic">Carregando perfis...</p>
+                          ) : (
+                            <RadioGroup
+                              value={moduleRole[mod.key]}
+                              onValueChange={v => setModuleRole(prev => ({ ...prev, [mod.key]: v }))}
+                              className="grid grid-cols-2 gap-x-6 gap-y-2 pt-1"
+                            >
+                              {roles.map(r => (
+                                <div key={r.name} className="flex items-center gap-2">
+                                  <RadioGroupItem value={r.name} id={`${mod.key}-${r.name}`} />
+                                  <Label htmlFor={`${mod.key}-${r.name}`} className="text-xs cursor-pointer">
+                                    {r.label}
+                                  </Label>
+                                </div>
+                              ))}
+                            </RadioGroup>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+            </form>
+          </Form>
+        </div>
+
+        {/* Footer fixo na base */}
+        <SheetFooter className="px-6 py-4 border-t shrink-0 flex flex-row justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button
+            type="submit"
+            form="user-form"
+            disabled={form.formState.isSubmitting}
+          >
+            {form.formState.isSubmitting ? "Salvando..." : "Salvar Perfil"}
+          </Button>
+        </SheetFooter>
+
+      </SheetContent>
+    </Sheet>
   );
 }

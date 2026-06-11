@@ -1,223 +1,144 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-
-// ── Tipos públicos ──────────────────────────────────────────────────────────
-
-export interface DevStat {
-  developerId:    string;
-  developerName:  string;
-  husCount:       number;
-  estimatedHours: number;
-  realizedHours:  number;
-}
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface SprintMetrics {
-  id:              string;
-  sprintId:        string;
-  sprintName:      string;
-  teamId:          string;
-  teamName:        string;
-  startDate:       string;
-  endDate:         string;
-  goal:            string | null;
-  durationDays:    number;
-  totalHUs:        number;
-  husConcluidadas: number;
-  taxaConclusao:   number;
-  velocityPontos:  number;
-  horasPlanejadas: number;
-  horasRealizadas: number;
-  desvioHoras:     number;
-  impedimentos:    number;
-  devStats:        DevStat[];
-  durationWarning?: boolean;
-  delayDays?: number;
-}
-
-export type PeriodoFiltro = "3m" | "6m" | "12m" | "all";
-
-export interface SprintHistoryFilters {
-  teamId:  string;
-  periodo: PeriodoFiltro;
+  sprintId:         string;
+  sprintName:       string;
+  teamId:           string;
+  teamName:         string;
+  startDate:        string;
+  endDate:          string;
+  totalHUs:         number;
+  completedHUs:     number;
+  completionRate:   number;
+  plannedPoints:    number;
+  deliveredPoints:  number;
+  velocity:         number;
+  avgCycleTime:     number | null;
+  bugs:             number;
+  rework:           number;
+  // extra
+  sprintGoal?:      string;
+  retroNotes?:      string;
 }
 
 export interface TeamComparativo {
-  teamId:            string;
-  teamName:          string;
-  module:            string;
+  teamId:   string;
+  teamName: string;
   avgVelocity:       number;
-  avgTaxaConclusao:  number;
-  avgDesvioHoras:    number;
+  avgCompletionRate: number;
   totalSprints:      number;
-  totalImpedimentos: number;
-  semDados:          boolean;
 }
 
-// ── Helper: cutoff por período ────────────────────────────────────────────────
-
-function cutoffDateStr(periodo: PeriodoFiltro): string | undefined {
-  if (periodo === "all") return undefined; // omite o parâmetro → usa DEFAULT NULL
-  const d = new Date();
-  const months = periodo === "3m" ? 3 : periodo === "6m" ? 6 : 12;
-  d.setMonth(d.getMonth() - months);
-  return d.toISOString().split("T")[0]; // YYYY-MM-DD
+export interface HistoryFilters {
+  teamId:  string;
+  periodo: string;
 }
 
-// ── Raw shapes da RPC ───────────────────────────────────────────────────
-
-interface RpcMetricRow {
-  sprintId:        string;
-  sprintName:      string;
-  teamId:          string;
-  startDate:       string;
-  endDate:         string;
-  goal:            string | null;
-  durationDays:    number;
-  totalHUs:        number;
-  husConcluidadas: number;
-  taxaConclusao:   number;
-  velocityPontos:  number;
-  horasPlanejadas: number;
-  horasRealizadas: number;
-  desvioHoras:     number;
-  impedimentos:    number;
-  devStats:        DevStat[];
-}
-
-interface RpcComparativoRow {
-  teamId:            string;
-  totalSprints:      number;
-  avgVelocity:       number;
-  avgTaxaConclusao:  number;
-  avgDesvioHoras:    number;
-  totalImpedimentos: number;
-  semDados:          boolean;
-}
-
-// ── Hook ───────────────────────────────────────────────────────────────────────
-
-export function useSprintHistory() {
-  const { teams } = useAuth();
-  const [metrics,          setMetrics]          = useState<SprintMetrics[]>([]);
-  const [teamComparativo,  setTeamComparativo]  = useState<TeamComparativo[]>([]);
-  const [loading,          setLoading]          = useState(true);
-  const [error,            setError]            = useState<string | null>(null);
-  const [filters,          setFilters]          = useState<SprintHistoryFilters>({ teamId: "all", periodo: "6m" });
-  const cancelledRef = useRef(false);
+/**
+ * contractId: quando fornecido, filtra sprints pelos times
+ * que pertencem a projetos desse contrato.
+ */
+export function useSprintHistory(contractId?: string | null) {
+  const [metrics,         setMetrics]         = useState<SprintMetrics[]>([]);
+  const [teamComparativo, setTeamComparativo] = useState<TeamComparativo[]>([]);
+  const [loading,         setLoading]         = useState(true);
+  const [filters,         setFilters]         = useState<HistoryFilters>({ teamId: 'all', periodo: '90' });
 
   const load = useCallback(async () => {
-    cancelledRef.current = false;
-
-    if (teams.length === 0) {
-      setMetrics([]);
-      setTeamComparativo([]);
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
-    setError(null);
-
     try {
-      const teamIds = teams.map(t => t.id);
-
-      // undefined → Supabase omite o parâmetro → PostgreSQL usa DEFAULT NULL
-      const teamId  = filters.teamId !== "all" ? filters.teamId : undefined;
-      const cutoff  = cutoffDateStr(filters.periodo);
-
-      const rpcParams: { p_team_ids: string[]; p_team_id?: string; p_cutoff?: string } = { p_team_ids: teamIds };
-      if (teamId  !== undefined) rpcParams.p_team_id = teamId;
-      if (cutoff  !== undefined) rpcParams.p_cutoff  = cutoff;
-
-      const { data, error: rpcErr } = await supabase.rpc("get_sprint_history", rpcParams);
-
-      if (rpcErr) throw rpcErr;
-      if (cancelledRef.current) return;
-
-      const result  = data as unknown as { metrics: RpcMetricRow[]; comparativo: RpcComparativoRow[] };
-      const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
-
-      const enrichedMetrics: SprintMetrics[] = (result.metrics ?? []).map(row => ({
-        ...row,
-        id:              row.sprintId,
-        teamName:        teamMap[row.teamId]?.name ?? row.teamId,
-        totalHUs:        Number(row.totalHUs),
-        husConcluidadas: Number(row.husConcluidadas),
-        taxaConclusao:   Number(row.taxaConclusao),
-        velocityPontos:  Number(row.velocityPontos),
-        horasPlanejadas: Number(row.horasPlanejadas),
-        horasRealizadas: Number(row.horasRealizadas),
-        desvioHoras:     Number(row.desvioHoras),
-        impedimentos:    Number(row.impedimentos),
-        delayDays:       0,
-        durationWarning: Number(row.durationDays) < 0,
-        devStats:        (row.devStats ?? []).map(d => ({
-          ...d,
-          husCount:       Number(d.husCount),
-          estimatedHours: Number(d.estimatedHours),
-          realizedHours:  Number(d.realizedHours),
-        })),
-      }));
-
-      const enrichedComp: TeamComparativo[] = (result.comparativo ?? []).map(row => ({
-        ...row,
-        teamName:          teamMap[row.teamId]?.name   ?? row.teamId,
-        module:            teamMap[row.teamId]?.module ?? "",
-        totalSprints:      Number(row.totalSprints),
-        avgVelocity:       Number(row.avgVelocity),
-        avgTaxaConclusao:  Number(row.avgTaxaConclusao),
-        avgDesvioHoras:    Number(row.avgDesvioHoras),
-        totalImpedimentos: Number(row.totalImpedimentos),
-      }));
-
-      const rpcTeamIds = new Set(enrichedComp.map(r => r.teamId));
-      teams.forEach(t => {
-        if (!rpcTeamIds.has(t.id)) {
-          enrichedComp.push({
-            teamId: t.id, teamName: t.name, module: t.module,
-            avgVelocity: 0, avgTaxaConclusao: 0, avgDesvioHoras: 0,
-            totalSprints: 0, totalImpedimentos: 0, semDados: true,
-          });
+      // Se contractId, restringe aos times vinculados ao contrato
+      let allowedTeamIds: string[] | null = null;
+      if (contractId) {
+        const { data: projs } = await supabase
+          .from('projects')
+          .select('team_id')
+          .eq('contract_id', contractId)
+          .not('team_id', 'is', null);
+        allowedTeamIds = [...new Set((projs ?? []).map((p: any) => p.team_id as string))];
+        if (allowedTeamIds.length === 0) {
+          setMetrics([]); setTeamComparativo([]); setLoading(false); return;
         }
+      }
+
+      let sprintsQuery = supabase
+        .from('sprints')
+        .select('id, name, team_id, start_date, end_date, goal, teams(name)')
+        .eq('status', 'completed')
+        .order('end_date', { ascending: false });
+
+      if (filters.periodo !== 'all') {
+        const since = new Date();
+        since.setDate(since.getDate() - Number(filters.periodo));
+        sprintsQuery = sprintsQuery.gte('end_date', since.toISOString().slice(0, 10));
+      }
+      if (filters.teamId !== 'all') {
+        sprintsQuery = sprintsQuery.eq('team_id', filters.teamId);
+      } else if (allowedTeamIds) {
+        sprintsQuery = sprintsQuery.in('team_id', allowedTeamIds);
+      }
+
+      const { data: sprints, error: spErr } = await sprintsQuery;
+      if (spErr || !sprints?.length) { setMetrics([]); setTeamComparativo([]); setLoading(false); return; }
+
+      const sprintIds = sprints.map((s: any) => s.id);
+
+      const [husRes, demandasRes] = await Promise.all([
+        supabase.from('user_stories')
+          .select('sprint_id, status, story_points, cycle_time_days, is_bug, is_rework')
+          .in('sprint_id', sprintIds),
+        supabase.from('demandas')
+          .select('sprint_id, status, pontos, cycle_time_days, is_bug, is_rework')
+          .in('sprint_id', sprintIds),
+      ]);
+
+      const hus      = husRes.data      ?? [];
+      const demandas = demandasRes.data  ?? [];
+
+      const result: SprintMetrics[] = sprints.map((s: any) => {
+        const spHus = hus.filter((h: any) => h.sprint_id === s.id);
+        const spDem = demandas.filter((d: any) => d.sprint_id === s.id);
+        const allItems = [
+          ...spHus.map((h: any) => ({ completed: ['done','accepted'].includes(h.status), points: h.story_points ?? 0, cycleTime: h.cycle_time_days ?? null, isBug: h.is_bug, isRework: h.is_rework })),
+          ...spDem.map((d: any) => ({ completed: ['done','accepted'].includes(d.status), points: d.pontos ?? 0, cycleTime: d.cycle_time_days ?? null, isBug: d.is_bug, isRework: d.is_rework })),
+        ];
+        const total     = allItems.length;
+        const completed = allItems.filter(i => i.completed).length;
+        const planned   = allItems.reduce((a, i) => a + i.points, 0);
+        const delivered = allItems.filter(i => i.completed).reduce((a, i) => a + i.points, 0);
+        const cycleTimes = allItems.map(i => i.cycleTime).filter((c): c is number => c !== null);
+        return {
+          sprintId: s.id, sprintName: s.name,
+          teamId: s.team_id, teamName: (Array.isArray(s.teams) ? s.teams[0]?.name : s.teams?.name) ?? s.team_id,
+          startDate: s.start_date, endDate: s.end_date,
+          totalHUs: total, completedHUs: completed,
+          completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+          plannedPoints: planned, deliveredPoints: delivered, velocity: delivered,
+          avgCycleTime: cycleTimes.length ? Math.round(cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) : null,
+          bugs: allItems.filter(i => i.isBug).length,
+          rework: allItems.filter(i => i.isRework).length,
+          sprintGoal: s.goal ?? undefined,
+        };
       });
 
-      setMetrics(enrichedMetrics);
-      setTeamComparativo(
-        filters.teamId === "all"
-          ? enrichedComp
-          : enrichedComp.filter(t => t.teamId === filters.teamId)
-      );
-    } catch (err: any) {
-      if (!cancelledRef.current) {
-        console.error("[useSprintHistory] Erro na RPC:", err);
-        setError(err?.message ?? "Erro ao carregar histórico");
-      }
+      setMetrics(result);
+
+      // Comparativo por time
+      const byTeam: Record<string, SprintMetrics[]> = {};
+      result.forEach(m => { if (!byTeam[m.teamId]) byTeam[m.teamId] = []; byTeam[m.teamId].push(m); });
+      setTeamComparativo(Object.entries(byTeam).map(([teamId, ms]) => ({
+        teamId, teamName: ms[0].teamName,
+        avgVelocity:       Math.round(ms.reduce((a, m) => a + m.velocity, 0) / ms.length),
+        avgCompletionRate: Math.round(ms.reduce((a, m) => a + m.completionRate, 0) / ms.length),
+        totalSprints: ms.length,
+      })));
     } finally {
-      if (!cancelledRef.current) setLoading(false);
+      setLoading(false);
     }
-  }, [teams, filters]);
+  }, [contractId, filters]);
 
-  useEffect(() => {
-    load();
-    return () => { cancelledRef.current = true; };
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  const setFilterTeam   = useCallback((teamId: string) =>
-    setFilters(f => ({ ...f, teamId })), []);
-  const setFilterPeriod = useCallback((periodo: PeriodoFiltro) =>
-    setFilters(f => ({ ...f, periodo })), []);
-
-  return {
-    metrics,
-    sprints: metrics,
-    teamComparativo,
-    loading,
-    error,
-    filters,
-    setFilters,
-    setFilterTeam,
-    setFilterPeriod,
-    reload: load,
-  };
+  return { metrics, teamComparativo, loading, filters, setFilters };
 }

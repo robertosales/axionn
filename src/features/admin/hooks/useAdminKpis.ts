@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SprintStatusType } from "@/utils/sprintStatus";
@@ -11,9 +11,7 @@ export interface TeamKpis {
   module:   string;
   sprintAtivo:           string | null;
   sprintEndDate:         string | null;
-  /** Status semântico da sprint ativa: ativa | ativa_atrasada | encerrada | encerrada_sem_registro */
   sprintStatus:          SprintStatusType | null;
-  /** Dias de atraso da sprint */
   sprintDelayDays:       number;
   totalHUs:              number;
   husConcluidasNoSprint: number;
@@ -45,11 +43,8 @@ export interface AdminKpis {
   byTeam:       TeamKpis[];
   loading:      boolean;
   error:        string | null;
-  /** Mantido por compatibilidade — vazio quando RPC está em uso */
   dataWarnings: string[];
 }
-
-// ─── Raw shape retornado pela RPC ─────────────────────────────────────────────
 
 interface RpcTeamRow {
   teamId:                string;
@@ -68,16 +63,43 @@ interface RpcTeamRow {
   slaEmRisco:            number;
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
-export function useAdminKpis(): AdminKpis {
-  const { teams } = useAuth();
+/**
+ * contractId: quando fornecido, restringe os KPIs aos times que possuem
+ * pelo menos um projeto vinculado a esse contrato.
+ * null = todos os times (sem filtro).
+ */
+export function useAdminKpis(contractId?: string | null): AdminKpis {
+  const { teams: allTeams } = useAuth();
+  const [filteredTeamIds, setFilteredTeamIds] = useState<string[] | null>(null);
   const [byTeam,  setByTeam]  = useState<TeamKpis[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
   const cancelledRef = useRef(false);
 
+  // Resolve quais team_ids pertencem ao contrato selecionado
   useEffect(() => {
+    if (!contractId) { setFilteredTeamIds(null); return; }
+    supabase
+      .from("projects")
+      .select("team_id")
+      .eq("contract_id", contractId)
+      .not("team_id", "is", null)
+      .then(({ data }) => {
+        const ids = [...new Set((data ?? []).map((p: any) => p.team_id as string))];
+        setFilteredTeamIds(ids);
+      });
+  }, [contractId]);
+
+  // teams efetivos: todos ou filtrados pelo contrato
+  const teams = useMemo(() => {
+    if (!contractId || filteredTeamIds === null) return allTeams;
+    return allTeams.filter(t => filteredTeamIds.includes(t.id));
+  }, [allTeams, contractId, filteredTeamIds]);
+
+  useEffect(() => {
+    // Enquanto o filtro ainda não resolveu (contractId definido mas filteredTeamIds null), aguarda
+    if (contractId && filteredTeamIds === null) return;
+
     cancelledRef.current = false;
 
     async function load() {
@@ -100,8 +122,6 @@ export function useAdminKpis(): AdminKpis {
         if (cancelledRef.current) return;
 
         const rows = (data ?? []) as unknown as RpcTeamRow[];
-
-        // Enriquece com nome e módulo do time (vêm do AuthContext, não da RPC)
         const teamMap = Object.fromEntries(teams.map(t => [t.id, t]));
 
         const enriched: TeamKpis[] = rows.map(row => ({
@@ -133,9 +153,8 @@ export function useAdminKpis(): AdminKpis {
 
     load();
     return () => { cancelledRef.current = true; };
-  }, [teams]);
+  }, [teams, contractId, filteredTeamIds]);
 
-  // ── Totais globais ────────────────────────────────────────────────────────
   const global = useMemo(() => {
     const sum = (fn: (t: TeamKpis) => number) =>
       byTeam.reduce((acc, t) => acc + fn(t), 0);

@@ -39,6 +39,12 @@ const ContractsPage = lazy(() =>
   }))
 );
 
+const MeuContratoDashboard = lazy(() =>
+  import("./features/contracts/pages/MeuContratoDashboard").then((m) => ({
+    default: m.MeuContratoDashboard,
+  }))
+);
+
 // ─── Módulo OKR (lazy) ────────────────────────────────────────────────────────
 const OkrPage = lazy(() =>
   import("./features/okr/OkrPage").then((m) => ({
@@ -64,10 +70,14 @@ function resolveHomePath(opts: {
   moduleAccess?: string | null;
   hasModuleAccess: (m: string) => boolean;
   moduleRolesCount: number;
+  roles: string[];
 }): string {
-  const { isAdmin, moduleAccess, hasModuleAccess, moduleRolesCount } = opts;
+  const { isAdmin, moduleAccess, hasModuleAccess, moduleRolesCount, roles } = opts;
 
   if (isAdmin || moduleAccess === "admin") return "/dashboard-admin";
+
+  // admin_contrato: painel isolado por contrato
+  if (roles.includes("admin_contrato") && !isAdmin) return "/meu-contrato";
 
   const agil = hasModuleAccess("sala_agil");
   const sust = hasModuleAccess("sustentacao");
@@ -114,7 +124,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading, profile, isAdmin, hasModuleAccess, moduleRoles } = useAuth();
+  const { session, loading, profile, isAdmin, hasModuleAccess, moduleRoles, roles } = useAuth();
   if (loading) return <PageLoader />;
   if (!session) return <>{children}</>;
   const to = resolveHomePath({
@@ -122,18 +132,20 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
     moduleAccess: profile?.module_access,
     hasModuleAccess,
     moduleRolesCount: moduleRoles.length,
+    roles,
   });
   return <Navigate to={to} replace />;
 }
 
 function ModuleRedirect() {
-  const { profile, loading, isAdmin, hasModuleAccess, moduleRoles } = useAuth();
+  const { profile, loading, isAdmin, hasModuleAccess, moduleRoles, roles } = useAuth();
   if (loading) return <PageLoader />;
   const to = resolveHomePath({
     isAdmin,
     moduleAccess: profile?.module_access,
     hasModuleAccess,
     moduleRolesCount: moduleRoles.length,
+    roles,
   });
   return <Navigate to={to} replace />;
 }
@@ -164,6 +176,14 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** Exige role 'admin_contrato'. Super-admins também passam. */
+function ContractAdminGuard({ children }: { children: React.ReactNode }) {
+  const { isAdmin, roles, loading } = useAuth();
+  if (loading) return null;
+  if (isAdmin || roles.includes("admin_contrato")) return <>{children}</>;
+  return <Navigate to="/modulos" replace />;
+}
+
 // ─── Rotas ────────────────────────────────────────────────────────────────────
 function AppRoutes() {
   return (
@@ -192,6 +212,16 @@ function AppRoutes() {
             element={
               <ProtectedRoute>
                 <AdminGuard><AdminDashboard /></AdminGuard>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* ── Painel admin_contrato ────────────────────────────────────── */}
+          <Route
+            path="/meu-contrato"
+            element={
+              <ProtectedRoute>
+                <ContractAdminGuard><MeuContratoDashboard /></ContractAdminGuard>
               </ProtectedRoute>
             }
           />

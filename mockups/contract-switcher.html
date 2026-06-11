@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mockup — Contract Switcher</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    background: #0a0d12;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+  h1 { font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
+
+  /* ── Shell ── */
+  .shell {
+    display: flex;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.07);
+    background: #111418;
+    height: 520px;
+    box-shadow: 0 24px 80px rgba(0,0,0,.6);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 200px;
+    background: #0d1117;
+    border-right: 1px solid rgba(255,255,255,.06);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar-logo {
+    padding: 16px 16px 14px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-mark {
+    width: 28px; height: 28px;
+    background: #0bbcaf;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 900; color: #0d1117;
+  }
+  .logo-text .name { font-size: 15px; font-weight: 700; color: #fff; line-height: 1; }
+  .logo-text .role { font-size: 9px; text-transform: uppercase; letter-spacing: .15em; color: #0bbcaf; margin-top: 2px; }
+  nav { flex: 1; padding: 10px 8px; display: flex; flex-direction: column; gap: 1px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 10px; border-radius: 6px;
+    font-size: 13px; color: rgba(192,212,208,.65);
+    cursor: default;
+    position: relative;
+  }
+  .nav-item.active {
+    background: rgba(11,188,175,.12);
+    color: #fff;
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute; left: 0; top: 6px; bottom: 6px;
+    width: 3px; border-radius: 3px;
+    background: #0bbcaf;
+  }
+  .nav-icon { width: 14px; height: 14px; opacity: .5; }
+  .nav-item.active .nav-icon { opacity: 1; color: #0bbcaf; }
+  .nav-badge {
+    margin-left: auto;
+    font-size: 9px; font-weight: 700;
+    padding: 1px 5px; border-radius: 99px;
+    background: rgba(99,102,241,.25); color: #a5b4fc;
+  }
+
+  /* ── Main ── */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  /* ── Topbar ── */
+  .topbar {
+    height: 52px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    padding: 0 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(17,20,24,.95);
+    backdrop-filter: blur(8px);
+    flex-shrink: 0;
+    position: relative;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .topbar-title { font-size: 13px; font-weight: 600; color: #f1f5f9; }
+  .topbar-date { font-size: 11px; color: #475569; }
+  .topbar-right { display: flex; align-items: center; gap: 6px; }
+
+  /* Badge estático (Admin Contrato) */
+  .contract-badge-static {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 99px;
+    border: 1px solid rgba(251,191,36,.35);
+    background: rgba(251,191,36,.06);
+    font-size: 11px; font-weight: 500; color: #fbbf24;
+  }
+
+  /* Seletor dropdown (Gestor) */
+  .contract-switcher {
+    position: relative;
+    display: inline-flex;
+  }
+  .contract-switcher-trigger {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 7px;
+    border: 1px solid rgba(11,188,175,.35);
+    background: rgba(11,188,175,.08);
+    font-size: 11px; font-weight: 500; color: #0bbcaf;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .contract-switcher-trigger:hover { background: rgba(11,188,175,.14); }
+  .chevron { font-size: 9px; opacity: .7; }
+  .dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 200px;
+    background: #1a1f28;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 9px;
+    box-shadow: 0 16px 48px rgba(0,0,0,.7);
+    padding: 4px;
+    z-index: 100;
+  }
+  .dropdown-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+    color: #475569; padding: 6px 10px 4px;
+  }
+  .dropdown-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 12px; color: #cbd5e1;
+    cursor: pointer;
+  }
+  .dropdown-item:hover { background: rgba(255,255,255,.05); }
+  .dropdown-item.selected { color: #f1f5f9; background: rgba(11,188,175,.1); }
+  .check { color: #0bbcaf; font-size: 12px; margin-left: auto; }
+  .dropdown-sep { height: 1px; background: rgba(255,255,255,.07); margin: 4px 0; }
+  .dropdown-item.all { color: #64748b; font-size: 11px; }
+  .dropdown-item.all:hover { color: #94a3b8; }
+
+  /* ── Page content ── */
+  .page { flex: 1; padding: 20px; overflow: hidden; }
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .page-header-left { display: flex; align-items: center; gap: 8px; }
+  .page-icon { font-size: 14px; }
+  .page-sub { font-size: 11px; color: #64748b; }
+  .contract-badge-sub {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; border-radius: 99px;
+    border: 1px solid rgba(251,191,36,.3);
+    background: rgba(251,191,36,.05);
+    font-size: 10px; font-weight: 500; color: #f59e0b;
+  }
+  .btn-new {
+    padding: 5px 12px; border-radius: 6px;
+    background: #0bbcaf; color: #0d1117;
+    font-size: 11px; font-weight: 600;
+    border: none; cursor: pointer;
+    display: flex; align-items: center; gap: 5px;
+  }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  thead th {
+    text-align: left; padding: 6px 10px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; color: #475569;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  tbody tr { border-bottom: 1px solid rgba(255,255,255,.04); }
+  tbody tr:hover { background: rgba(255,255,255,.025); }
+  td { padding: 8px 10px; color: #cbd5e1; vertical-align: middle; }
+  td.name { font-weight: 500; color: #f1f5f9; }
+  td.email { font-size: 10px; color: #475569; }
+  .module-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 2px 7px; border-radius: 99px;
+    font-size: 10px; border: 1px solid;
+  }
+  .mod-sust { color: #34d399; border-color: rgba(52,211,153,.3); background: rgba(52,211,153,.06); }
+  .mod-agil { color: #60a5fa; border-color: rgba(96,165,250,.3); background: rgba(96,165,250,.06); }
+  .status-dot {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: #34d399;
+  }
+  .status-dot::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: #34d399;
+  }
+  .status-dot.inactive { color: #ef4444; }
+  .status-dot.inactive::before { background: #ef4444; }
+
+  /* ── Label badge ── */
+  .scenario-label {
+    display: inline-block;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+    padding: 3px 10px; border-radius: 99px; margin-bottom: 10px;
+  }
+  .label-admin { background: rgba(99,102,241,.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,.3); }
+  .label-gestor { background: rgba(11,188,175,.12); color: #0bbcaf; border: 1px solid rgba(11,188,175,.3); }
+
+  /* ── Topbar icons ── */
+  .icon-btn {
+    width: 30px; height: 30px; border-radius: 7px;
+    background: rgba(255,255,255,.05);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.06);
+  }
+
+  .ghost-row { opacity: .35; }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 99px;
+    background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.25);
+    font-size: 10px; color: #a5b4fc;
+    margin-left: 6px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- CENÁRIO 1 — Admin do Contrato                                  -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div>
+  <span class="scenario-label label-admin">👤 Admin do Contrato — vê apenas seu contrato</span>
+  <div class="shell">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark">A</div>
+        <div class="logo-text">
+          <div class="name">Axion</div>
+          <div class="role">Admin</div>
+        </div>
+      </div>
+      <nav>
+        <div class="nav-item">📊 Visão Geral</div>
+        <div class="nav-item">📜 Histórico</div>
+        <div class="nav-item">⚡ Capacidade</div>
+        <div class="nav-item">👥 Times</div>
+        <div class="nav-item active">👤 Usuários</div>
+        <div class="nav-item">📁 Projetos</div>
+        <div class="nav-item">✨ IA</div>
+        <div class="nav-item">📄 Contratos <span class="nav-badge">Novo</span></div>
+      </nav>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+      <!-- Topbar -->
+      <div class="topbar">
+        <div class="topbar-left">
+          <div>
+            <div class="topbar-title">Usuários</div>
+            <div class="topbar-date">quinta-feira, 11 de junho de 2026 · 10:19</div>
+          </div>
+          <!-- Badge ESTÁTICO — sem dropdown -->
+          <div class="contract-badge-static">📄 Fábrica PF</div>
+        </div>
+        <div class="topbar-right">
+          <div class="icon-btn">🌙</div>
+          <div class="icon-btn">🔔</div>
+        </div>
+      </div>
+
+      <!-- Page -->
+      <div class="page">
+        <div class="page-header">
+          <div class="page-header-left">
+            <span class="page-icon" style="color:#0bbcaf">👤</span>
+            <span class="page-sub">Usuários cadastrados no contrato</span>
+            <span class="contract-badge-sub">📄 Fábrica PF</span>
+          </div>
+          <button class="btn-new">+ Novo Usuário</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Usuário</th>
+              <th>Módulo & Perfil</th>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="name">Adeilton Filho</div><div class="email">adeilton.aguiar@globalweb.com.br</div></td>
+              <td><span class="module-badge mod-sust">🔵 Sustentação: Arquiteto</span></td>
+              <td>TIME 1</td>
+              <td><span class="status-dot">ativo</span></td>
+              <td>···</td>
+            </tr>
+            <tr>
+              <td><div class="name">Anderson Leite</div><div class="email">andersonpl@globalweb.com.br</div></td>
+              <td><span class="module-badge mod-sust">🔵 Sustentação: Dev</span></td>
+              <td>TIME 1</td>
+              <td><span class="status-dot">ativo</span></td>
+              <td>···</td>
+            </tr>
+            <tr>
+              <td><div class="name">Bruno Reis</div><div class="email">bruno.reis@globalweb.com.br</div></td>
+              <td><span class="module-badge mod-sust">🔵 Sustentação: Dev</span></td>
+              <td>TIME 3</td>
+              <td><span class="status-dot">ativo</span></td>
+              <td>···</td>
+            </tr>
+            <tr>
+              <td><div class="name">Carol Gebrim</div><div class="email">carolgebrim@gmail.com</div></td>
+              <td><span class="module-badge mod-sust">🔵 Sustentação: Admin</span></td>
+              <td>TIME 1</td>
+              <td><span class="status-dot">ativo</span></td>
+              <td>···</td>
+            </tr>
+            <tr>
+              <td><div class="name">Diego Silva</div><div class="email">diego.boaventura@globalweb.com.br</div></td>
+              <td><span class="module-badge mod-agil">⚡ Sala Ágil: Dev</span></td>
+              <td>TIME 2</td>
+              <td><span class="status-dot">ativo</span></td>
+              <td>···</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- CENÁRIO 2 — Gestor Master                                      -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div>
+  <span class="scenario-label label-gestor">🔑 Gestor Master — navega entre contratos</span>
+  <div class="shell">
+
+    <!-- Sidebar (igual) -->
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark">A</div>
+        <div class="logo-text">
+          <div class="name">Axion</div>
+          <div class="role">Admin</div>
+        </div>
+      </div>
+      <nav>
+        <div class="nav-item">📊 Visão Geral</div>
+        <div class="nav-item">📜 Histórico</div>
+        <div class="nav-item">⚡ Capacidade</div>
+        <div class="nav-item">👥 Times</div>
+        <div class="nav-item active">👤 Usuários</div>
+        <div class="nav-item">📁 Projetos</div>
+        <div class="nav-item">✨ IA</div>
+        <div class="nav-item">📄 Contratos <span class="nav-badge">Novo</span></div>
+      </nav>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+      <!-- Topbar com SELETOR DROPDOWN -->
+      <div class="topbar">
+        <div class="topbar-left">
+          <div>
+            <div class="topbar-title">Usuários</div>
+            <div class="topbar-date">quinta-feira, 11 de junho de 2026 · 10:19</div>
+          </div>
+
+          <!-- SELETOR INTERATIVO (dropdown aberto para ilustrar) -->
+          <div class="contract-switcher">
+            <div class="contract-switcher-trigger">
+              📄 Fábrica PF <span class="chevron">▼</span>
+            </div>
+            <!-- Dropdown aberto -->
+            <div class="dropdown">
+              <div class="dropdown-label">Selecionar contrato</div>
+              <div class="dropdown-item selected">📄 Fábrica PF <span class="check">✓</span></div>
+              <div class="dropdown-item">📄 Fábrica Detran-GO</div>
+              <div class="dropdown-sep"></div>
+              <div class="dropdown-item all">🌐 Todos os contratos</div>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <div class="icon-btn">🌙</div>
+          <div class="icon-btn">🔔</div>
+        </div>
+      </div>
+
+      <!-- Page com filtro ativo visível -->
+      <div class="page">
+        <div class="page-header">
+          <div class="page-header-left">
+            <span class="page-icon" style="color:#0bbcaf">👤</span>
+            <span class="page-sub">Usuários cadastrados no contrato</span>
+            <span class="contract-badge-sub">📄 Fábrica PF</span>
+            <span class="filter-chip">🔍 filtrado</span>
+          </div>
+          <button class="btn-new">+ Novo Usuário</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Usuário</th>
+              <th>Módulo & Perfil</th>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Usuários do contrato Fábrica PF em destaque -->
+            <tr>
+              <td><div class="name">Adeilton Filho</div><div class="email">adeilton.aguiar@globalweb.com.br</div></td>
+              <td><span class="module-badge mod-sust">🔵 Sustentação: Arquiteto</span></td>
+              <td>TIME 1</td>
+              <td><span class="status-dot">ativo</span></td>
+              <td>···</td>
+            </tr>
+            <tr>
+              <td><div class="name">Anderson Leite</div><div class="email">andersonpl@globalweb.com.br</div></td>
+              <td><span class="module-badge mod-sust">🔵 Sustentação: Dev</span></td>
+              <td>TIME 1</td>
+              <td><span class="status-dot">ativo</span></td>
+              <td>···</td>
+            </tr>
+            <tr>
+              <td><div class="name">Bruno Reis</div><div class="email">bruno.reis@globalweb.com.br</div></td>
+              <td><span class="module-badge mod-sust">🔵 Sustentação: Dev</span></td>
+              <td>TIME 3</td>
+              <td><span class="status-dot">ativo</span></td>
+              <td>···</td>
+            </tr>
+            <!-- Usuários de outro contrato aparecem esmaecidos -->
+            <tr class="ghost-row">
+              <td><div class="name">Kayo Detran</div><div class="email">kayo@detran-go.gov.br</div></td>
+              <td><span class="module-badge mod-agil">⚡ Sala Ágil: Dev</span></td>
+              <td>SQUAD A</td>
+              <td><span class="status-dot inactive">outro contrato</span></td>
+              <td>—</td>
+            </tr>
+            <tr class="ghost-row">
+              <td><div class="name">Mariana Detran</div><div class="email">mariana@detran-go.gov.br</div></td>
+              <td><span class="module-badge mod-sust">🔵 Sustentação: Admin</span></td>
+              <td>SQUAD B</td>
+              <td><span class="status-dot inactive">outro contrato</span></td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top:10px; font-size:10px; color:#475569">Mostrando 3 usuários do contrato <strong style="color:#f59e0b">Fábrica PF</strong> · 2 de outros contratos ocultos</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

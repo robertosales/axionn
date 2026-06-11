@@ -12,11 +12,11 @@
 --   ✅ Zero breaking change
 --   ✅ Nenhuma tabela existente alterada
 --   ✅ RLS atual (por team_id) permanece intacto
---   ✅ Backfill automático: 47 usuários únicos (CONTRATO PF) validado
+--   ✅ Backfill: 47 usuários únicos (CONTRATO PF) validado
 --
 -- PRÓXIMAS FASES:
---   Fase 2: RLS por contrato (usando esta tabela)
---   Fase 3: fn_get_user_contracts no login do frontend
+--   Fase 2: RLS por contrato
+--   Fase 3: contexto de contrato no login (frontend)
 --   Fase 4: role admin por contrato
 -- ============================================================
 
@@ -96,7 +96,7 @@ ON CONFLICT (contract_id, user_id) DO NOTHING;
 
 -- ============================================================
 -- STEP 6: RPC fn_get_user_contracts
---   Retorna todos os contratos de um usuário.
+--   Retorna todos os contratos ativos de um usuário.
 --   Usado pelo frontend no momento do login para:
 --     - 1 contrato  → entra direto
 --     - N contratos → tela de seleção
@@ -129,7 +129,7 @@ AS $$
   JOIN   public.contracts c ON c.id = cm.contract_id
   LEFT   JOIN public.teams t ON t.contract_id = c.id
   WHERE  cm.user_id = p_user_id
-    AND  c.status   = 'ativo'
+    AND  c.status   = 'active'
   GROUP  BY c.id, c.name, c.room_mode, c.status, cm.role
   ORDER  BY c.name;
 $$;
@@ -137,12 +137,11 @@ $$;
 GRANT EXECUTE ON FUNCTION public.fn_get_user_contracts(UUID) TO authenticated;
 
 COMMENT ON FUNCTION public.fn_get_user_contracts IS
-  'Retorna contratos ativos do usuário com role e total de times. '
-  'Frontend usa no login: 1 contrato = entra direto, N = tela seleção, 0 = acesso negado. '
-  'Fix 2026-06-11: modalidade → room_mode (coluna real da tabela contracts).';
+  'Retorna contratos ativos (status=active) do usuário com role e total de times. '
+  'Frontend: 1 contrato = entra direto, N = tela seleção, 0 = acesso negado.';
 
 -- ============================================================
--- VALIDAÇÃO PÓS-APPLY (executado e validado em 2026-06-11):
+-- VALIDAÇÃO PÓS-APPLY (validado em 2026-06-11):
 --
 --   SELECT c.name, COUNT(*) AS membros
 --   FROM public.contract_members cm
@@ -153,5 +152,6 @@ COMMENT ON FUNCTION public.fn_get_user_contracts IS
 --   SELECT * FROM public.fn_get_user_contracts(
 --     '3c472f37-eabb-4a95-a859-1a1cf89f5d37'
 --   );
---   Esperado: 1 linha, contract_name = 'CONTRATO DE FABRICA PF'
+--   Resultado: contract_name=CONTRATO DE FABRICA PF, role=admin,
+--              room_mode=hibrido, status=active, total_teams=7
 -- ============================================================

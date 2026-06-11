@@ -11,22 +11,45 @@ export interface TeamAdmin {
   memberCount?: number;
 }
 
-export function useTeamsAdmin() {
+/**
+ * contractId: quando fornecido, retorna apenas os times que possuem
+ * ao menos um projeto vinculado a esse contrato.
+ * null = todos os times (sem filtro).
+ */
+export function useTeamsAdmin(contractId?: string | null) {
   const { refreshTeams } = useAuth();
-  const [teams, setTeams] = useState<TeamAdmin[]>([]);
+  const [teams,   setTeams]   = useState<TeamAdmin[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: teamsData } = await supabase
+      let teamIds: string[] | null = null;
+
+      // Se um contrato foi selecionado, descobre quais times têm projetos nele
+      if (contractId) {
+        const { data: projs } = await supabase
+          .from("projects")
+          .select("team_id")
+          .eq("contract_id", contractId)
+          .not("team_id", "is", null);
+        teamIds = [...new Set((projs ?? []).map((p: any) => p.team_id as string))];
+        // Sem projetos vinculados → lista vazia
+        if (teamIds.length === 0) {
+          setTeams([]); setLoading(false); return;
+        }
+      }
+
+      let query = supabase
         .from("teams")
         .select("id, name, module, created_at")
         .order("created_at", { ascending: true });
 
+      if (teamIds) query = query.in("id", teamIds);
+
+      const { data: teamsData } = await query;
       const teamList = (teamsData || []) as TeamAdmin[];
 
-      // Conta membros por time via team_members (tabela correta de associação)
       const { data: membersData } = await supabase
         .from("team_members")
         .select("team_id");
@@ -40,7 +63,7 @@ export function useTeamsAdmin() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [contractId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -48,22 +71,17 @@ export function useTeamsAdmin() {
     const { error } = await supabase.from("teams").insert(data);
     if (error) { toast.error("Erro ao criar time"); return false; }
     toast.success("Time criado com sucesso");
-    await load();
-    await refreshTeams();
-    return true;
+    await load(); await refreshTeams(); return true;
   };
 
   const update = async (id: string, data: { name?: string; module?: string }) => {
     const { error } = await supabase.from("teams").update(data).eq("id", id);
     if (error) { toast.error("Erro ao atualizar time"); return false; }
     toast.success("Time atualizado");
-    await load();
-    await refreshTeams();
-    return true;
+    await load(); await refreshTeams(); return true;
   };
 
   const remove = async (id: string) => {
-    // Verifica se há HUs ou demandas vinculadas
     const [{ count: huCount }, { count: demCount }] = await Promise.all([
       supabase.from("user_stories").select("id", { count: "exact", head: true }).eq("team_id", id),
       supabase.from("demandas").select("id", { count: "exact", head: true }).eq("team_id", id),
@@ -75,9 +93,7 @@ export function useTeamsAdmin() {
     const { error } = await supabase.from("teams").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir time"); return false; }
     toast.success("Time excluído");
-    await load();
-    await refreshTeams();
-    return true;
+    await load(); await refreshTeams(); return true;
   };
 
   return { teams, loading, reload: load, create, update, remove };

@@ -33,7 +33,6 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
 
   const { data: objectives, error: objErr } = await query;
   if (objErr) { console.error("[OKR] Erro ao buscar objectives:", objErr); throw objErr; }
-  console.log(`[OKR] fetchObjectives — cycle=${cycle} teamId=${teamId} — ${objectives?.length ?? 0} registro(s)`);
   if (!objectives || objectives.length === 0) return [];
 
   const objectiveIds = objectives.map((o) => o.id);
@@ -149,18 +148,16 @@ export function useOkr(teamId?: string): UseOkrReturn {
       const { data: existing, error: checkErr } = await supabase
         .from("okr_objectives").select("id").eq("team_id", obj.team_id).eq("cycle", obj.cycle).ilike("title", obj.title.trim()).maybeSingle();
       if (checkErr) throw checkErr;
-      if (existing) { console.warn("[OKR] Duplicidade detectada:", existing); throw new OkrDuplicateError(); }
+      if (existing) { throw new OkrDuplicateError(); }
 
       let ownerId = obj.owner_id;
       if (!ownerId) { const { data: { user } } = await supabase.auth.getUser(); ownerId = user?.id ?? undefined; }
 
       const payload = { title: obj.title.trim(), description: obj.description ?? null, cycle: obj.cycle, team_id: obj.team_id, owner_id: ownerId ?? null, status: "on_track", progress: 0 };
-      console.log("[OKR] Inserindo objective:", payload);
-      const { data, error } = await supabase.from("okr_objectives").insert(payload).select().single();
-      if (error) { console.error("[OKR] Erro no insert:", error); throw error; }
-      console.log("[OKR] Objective inserido com sucesso:", data);
+      const { error } = await supabase.from("okr_objectives").insert(payload).select().single();
+      if (error) throw error;
     },
-    onSuccess: () => { console.log("[OKR] Invalidando queries após insert..."); queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }); },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
 
   const addKeyResultMutation = useMutation({
@@ -185,7 +182,6 @@ export function useOkr(teamId?: string): UseOkrReturn {
       if (ciErr) throw ciErr;
       const { error } = await supabase.from("okr_key_results").delete().eq("id", id);
       if (error) throw error;
-      console.log("[OKR] KR excluído:", id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
@@ -215,7 +211,6 @@ export function useOkr(teamId?: string): UseOkrReturn {
       }
       const { error } = await supabase.from("okr_objectives").delete().eq("id", id);
       if (error) throw error;
-      console.log("[OKR] Objective excluído:", id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });

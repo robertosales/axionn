@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminKpis } from "@/features/admin/hooks/useAdminKpis";
 import { useNotifications } from "@/features/admin/hooks/useNotifications";
+import { ContractProvider, useContractContext } from "@/features/admin/contexts/ContractContext";
+import { ContractSwitcher }   from "@/features/admin/components/ContractSwitcher";
 import { SalaAgilKpis }        from "@/features/admin/components/SalaAgilKpis";
 import { SustentacaoKpis }     from "@/features/admin/components/SustentacaoKpis";
 import { ModuleQuickAccess }   from "@/features/admin/components/ModuleQuickAccess";
@@ -13,7 +15,7 @@ import { AdminUsuariosPage }   from "@/features/admin/pages/AdminUsuariosPage";
 import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
 import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
 import { AdminIAsPage }        from "@/features/admin/pages/AdminIAsPage";
-import { ContractsDashboard }  from "@/features/contracts/components/ContractsDashboard";
+import { AdminContratosPage }  from "@/features/admin/pages/AdminContratosPage";
 import { ProjetosAdminPanel }  from "@/features/admin/components/ProjetosAdminPanel";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { ThemeToggle }         from "@/components/ThemeToggle";
@@ -43,9 +45,13 @@ const NAV_ITEMS = [
 
 type PageKey = typeof NAV_ITEMS[number]["key"];
 
-export default function AdminDashboard() {
-  const { profile, signOut, teams } = useAuth();
-  const { global: g, byTeam, loading, dataWarnings } = useAdminKpis();
+// ── Inner component (tem acesso ao ContractContext) ───────────────────────────
+function AdminDashboardInner() {
+  const { profile, signOut, teams: allTeams } = useAuth();
+  const { selectedContractId, selectedContract, isGestor } = useContractContext();
+
+  // KPIs já filtrados pelo contrato selecionado
+  const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam);
   const navigate = useNavigate();
   const [selectedTeam, setSelectedTeam] = useState("all");
@@ -60,6 +66,9 @@ export default function AdminDashboard() {
   const hora = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const data = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
+  // Reseta o time selecionado sempre que o contrato mudar
+  useEffect(() => { setSelectedTeam("all"); }, [selectedContractId]);
+
   const sprintLabel = selectedTeam === "all"
     ? (() => {
         const comSprint = byTeam.filter(t => t.sprintAtivo);
@@ -71,7 +80,7 @@ export default function AdminDashboard() {
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
 
-  // ── Sidebar ──────────────────────────────────────────────────────────────────
+  // ── Sidebar ────────────────────────────────────────────────────────────────
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
       className={[
@@ -80,6 +89,7 @@ export default function AdminDashboard() {
       ].join(" ")}
       style={{ background: "hsl(var(--sidebar))", color: "hsl(var(--sidebar-foreground))" }}
     >
+      {/* Logo */}
       <div
         className="flex items-center gap-2.5 px-4 h-14 shrink-0"
         style={{ borderBottom: "1px solid rgba(192,212,208,0.08)" }}
@@ -105,6 +115,10 @@ export default function AdminDashboard() {
         )}
       </div>
 
+      {/* Contract Switcher — só exibe para gestor master */}
+      {isGestor && <ContractSwitcher />}
+
+      {/* Nav */}
       <nav
         className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-none"
         aria-label="Navegação admin"
@@ -147,7 +161,6 @@ export default function AdminDashboard() {
                 aria-hidden="true"
               />
               {label}
-              {/* Badge "Novo" no item Contratos */}
               {key === "contratos" && (
                 <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300">
                   Novo
@@ -158,6 +171,7 @@ export default function AdminDashboard() {
         })}
       </nav>
 
+      {/* Footer */}
       <div
         className="px-3 py-3 space-y-2 shrink-0"
         style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}
@@ -170,12 +184,11 @@ export default function AdminDashboard() {
             className="ml-auto text-[9px] shrink-0 border-transparent"
             style={{ background: "hsl(var(--sidebar-accent))", color: "rgba(192,212,208,0.8)" }}
           >
-            {teams.length} time{teams.length !== 1 ? "s" : ""}
+            {g.totalTimes} time{g.totalTimes !== 1 ? "s" : ""}
           </Badge>
         </div>
         <Button
-          variant="ghost"
-          size="sm"
+          variant="ghost" size="sm"
           className="w-full justify-start h-8 text-xs gap-2 transition-colors"
           style={{ color: "rgba(192,212,208,0.6)" }}
           onMouseEnter={e => {
@@ -194,6 +207,18 @@ export default function AdminDashboard() {
     </aside>
   );
 
+  // ── Cabeçalho da página de conteúdo ─────────────────────────────────────────
+  const pageTitle = NAV_ITEMS.find(n => n.key === activePage)?.label ?? "Dashboard Admin";
+  const contractBadge = selectedContract ? (
+    <span
+      className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border"
+      style={{ color: "#f59e0b", borderColor: "rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.06)" }}
+    >
+      <FileText className="h-2.5 w-2.5" />
+      {selectedContract.name}
+    </span>
+  ) : null;
+
   // ── Conteúdo da aba ativa ─────────────────────────────────────────────────
   const renderContent = () => {
     switch (activePage) {
@@ -203,19 +228,15 @@ export default function AdminDashboard() {
       case "usuarios":   return <AdminUsuariosPage />;
       case "projetos":   return <ProjetosAdminPanel />;
       case "ias":        return <AdminIAsPage />;
-      case "contratos":  return <ContractsDashboard />;
+      case "contratos":  return <AdminContratosPage />;
       default: return (
         <div className="space-y-8">
           {loading ? <Skeleton className="h-40 w-full rounded-xl" /> : <ModuleQuickAccess kpis={g} />}
           {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SalaAgilKpis kpis={g} sprintAtivo={sprintLabel} />}
           {loading ? <Skeleton className="h-32 w-full rounded-xl" /> : <SustentacaoKpis kpis={g} />}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <div>
-              {loading ? <Skeleton className="h-48 w-full rounded-xl" /> : <TeamDetailPanel byTeam={byTeam} selectedTeam={selectedTeam} onSelect={setSelectedTeam} />}
-            </div>
-            <div>
-              {loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}
-            </div>
+            <div>{loading ? <Skeleton className="h-48 w-full rounded-xl" /> : <TeamDetailPanel byTeam={byTeam} selectedTeam={selectedTeam} onSelect={setSelectedTeam} />}</div>
+            <div>{loading ? <Skeleton className="h-56 w-full rounded-xl" /> : <ComparativeChart byTeam={byTeam} selectedTeam={selectedTeam} />}</div>
           </div>
         </div>
       );
@@ -234,7 +255,6 @@ export default function AdminDashboard() {
           aria-hidden="true"
         />
       )}
-
       {sidebarOpen && (
         <div className="fixed top-0 left-0 z-50 h-screen lg:hidden">
           <Sidebar mobile />
@@ -257,9 +277,10 @@ export default function AdminDashboard() {
                 <Menu className="h-5 w-5" />
               </button>
               <div>
-                <h1 className="text-sm font-semibold leading-tight">
-                  {NAV_ITEMS.find(n => n.key === activePage)?.label ?? "Dashboard Admin"}
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-sm font-semibold leading-tight">{pageTitle}</h1>
+                  {contractBadge}
+                </div>
                 <p className="text-[11px] hidden sm:block" style={{ color: "hsl(var(--muted-foreground))" }}>
                   {data} · {hora}
                 </p>
@@ -294,5 +315,14 @@ export default function AdminDashboard() {
         </main>
       </div>
     </div>
+  );
+}
+
+// ── Export: envolve tudo no ContractProvider ──────────────────────────────────
+export default function AdminDashboard() {
+  return (
+    <ContractProvider>
+      <AdminDashboardInner />
+    </ContractProvider>
   );
 }

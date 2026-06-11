@@ -27,7 +27,7 @@ interface Props {
 export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle, objective }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [teamId, setTeamId] = useState("all");
+  const [teamId, setTeamId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedTeam = useMemo(() => teams.find((t) => t.id === teamId), [teams, teamId]);
@@ -37,13 +37,17 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
     if (!open) return;
     setTitle(objective?.title ?? "");
     setDescription(objective?.description ?? "");
-    setTeamId(objective?.team_id ?? teams[0]?.id ?? "all");
+    // Prioriza: team do objective editado → primeiro time disponível → string vazia
+    const resolvedTeamId = objective?.team_id ?? teams[0]?.id ?? "";
+    setTeamId(resolvedTeamId);
   }, [open, objective, teams]);
 
   if (!open) return null;
 
+  const isTeamValid = !!teamId && teamId !== "all" && teams.some((t) => t.id === teamId);
+
   const handleSubmit = async () => {
-    if (!title.trim() || !teamId || teamId === "all") return;
+    if (!title.trim() || !isTeamValid) return;
     setIsSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -99,13 +103,17 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Time</label>
-              <select
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
-                className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary"
-              >
-                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              {teams.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-2">Carregando times...</p>
+              ) : (
+                <select
+                  value={teamId}
+                  onChange={(e) => setTeamId(e.target.value)}
+                  className="h-10 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -117,11 +125,15 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
               />
             </div>
           </div>
+
+          {!isTeamValid && teams.length > 0 && (
+            <p className="text-xs text-destructive">Selecione um time válido para continuar.</p>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t px-5 py-4">
           <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting} className="gap-1.5">
+          <Button onClick={handleSubmit} disabled={isSubmitting || !isTeamValid || !title.trim()} className="gap-1.5">
             {isSubmitting ? (
               <span className="flex items-center gap-1.5">
                 <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />

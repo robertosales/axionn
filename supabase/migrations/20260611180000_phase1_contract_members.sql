@@ -12,7 +12,7 @@
 --   ✅ Zero breaking change
 --   ✅ Nenhuma tabela existente alterada
 --   ✅ RLS atual (por team_id) permanece intacto
---   ✅ Backfill automático dos 60 usuários existentes (CONTRATO PF)
+--   ✅ Backfill automático: 47 usuários únicos (CONTRATO PF) validado
 --
 -- PRÓXIMAS FASES:
 --   Fase 2: RLS por contrato (usando esta tabela)
@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_contract_members_contract_id
 COMMENT ON TABLE public.contract_members IS
   'Vínculo direto usuário ↔ contrato. '
   'Criado na Fase 1 (2026-06-11) para suportar múltiplos contratos (PF, DETRAN-GO...). '
-  'Backfill via team_members → teams.contract_id.';
+  'Backfill via team_members → teams.contract_id. 47 usuários únicos validado.';
 
 -- ============================================================
 -- STEP 2: Trigger updated_at
@@ -108,7 +108,7 @@ CREATE OR REPLACE FUNCTION public.fn_get_user_contracts(
 RETURNS TABLE (
   contract_id   UUID,
   contract_name TEXT,
-  modalidade    TEXT,
+  room_mode     TEXT,
   status        TEXT,
   role          TEXT,
   total_teams   BIGINT
@@ -119,18 +119,18 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT
-    c.id            AS contract_id,
-    c.name          AS contract_name,
-    c.modalidade    AS modalidade,
-    c.status        AS status,
-    cm.role         AS role,
+    c.id                 AS contract_id,
+    c.name               AS contract_name,
+    c.room_mode          AS room_mode,
+    c.status             AS status,
+    cm.role              AS role,
     COUNT(DISTINCT t.id) AS total_teams
   FROM   public.contract_members cm
   JOIN   public.contracts c ON c.id = cm.contract_id
   LEFT   JOIN public.teams t ON t.contract_id = c.id
   WHERE  cm.user_id = p_user_id
     AND  c.status   = 'ativo'
-  GROUP  BY c.id, c.name, c.modalidade, c.status, cm.role
+  GROUP  BY c.id, c.name, c.room_mode, c.status, cm.role
   ORDER  BY c.name;
 $$;
 
@@ -138,21 +138,18 @@ GRANT EXECUTE ON FUNCTION public.fn_get_user_contracts(UUID) TO authenticated;
 
 COMMENT ON FUNCTION public.fn_get_user_contracts IS
   'Retorna contratos ativos do usuário com role e total de times. '
-  'Frontend usa no login: 1 contrato = entra direto, N = tela seleção, 0 = acesso negado.';
+  'Frontend usa no login: 1 contrato = entra direto, N = tela seleção, 0 = acesso negado. '
+  'Fix 2026-06-11: modalidade → room_mode (coluna real da tabela contracts).';
 
 -- ============================================================
--- VALIDAÇÃO PÓS-APPLY:
+-- VALIDAÇÃO PÓS-APPLY (executado e validado em 2026-06-11):
 --
---   -- Total de vínculos criados (esperado: ~60 linhas únicas)
---   SELECT COUNT(*) FROM public.contract_members;
---
---   -- Distribuição por contrato
 --   SELECT c.name, COUNT(*) AS membros
 --   FROM public.contract_members cm
 --   JOIN public.contracts c ON c.id = cm.contract_id
 --   GROUP BY c.name;
+--   Resultado: CONTRATO DE FABRICA PF | 47
 --
---   -- Teste da RPC (substitua pelo seu user_id)
 --   SELECT * FROM public.fn_get_user_contracts(
 --     '3c472f37-eabb-4a95-a859-1a1cf89f5d37'
 --   );

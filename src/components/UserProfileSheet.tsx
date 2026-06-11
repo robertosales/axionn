@@ -7,12 +7,7 @@
  *   - Abas: Perfil & Modulos | Historico
  *   - Acoes Rapidas: trocar email, resetar senha, ativar/desativar
  *   - Footer fixo: Cancelar + Salvar Perfil
- *
- * STYLE GUIDE:
- *   Avatar header: h-12 w-12 rounded-full bg-primary/10 text-primary text-base font-bold
- *   Tab ativa: border-b-2 border-primary text-primary text-xs font-semibold
- *   Module card ativo: border-primary bg-primary/5
- *   Botoes acao: text-xs gap-1.5 h-8
+ *   - Bloco Admin do Contrato (visivel apenas para admin_master)
  */
 import { useState } from "react";
 import {
@@ -29,13 +24,13 @@ import {
 } from "@/components/ui/select";
 import {
   Save, Mail, KeyRound, UserX, UserCheck,
-  Zap, Shield, BookOpen,
+  Zap, Shield, BookOpen, Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getInitials, formatPersonName } from "@/lib/personName";
 import { AuditLogInline } from "./UserRolesManager";
 
-// ─── Tipos (re-exportados para uso no UserRolesManager) ─────────────────────
+// ─── Tipos ──────────────────────────────────────────────────────────────────
 export type ModuleKey = "sala_agil" | "sustentacao" | "rdm";
 
 export const MODULES: {
@@ -103,6 +98,7 @@ export interface UserRow {
   must_change_password: boolean;
   teams:                { id: string; name: string }[];
   moduleRoles:          ModuleAccess[];
+  contract_role?:       "admin_contrato" | "member" | null;
 }
 
 export interface PendingModules {
@@ -110,25 +106,30 @@ export interface PendingModules {
 }
 
 interface Props {
-  user:           UserRow | null;
-  open:           boolean;
-  pendingName:    string;
-  pendingModules: PendingModules;
-  saving:         boolean;
-  onClose:        () => void;
-  onSave:         () => void;
-  onNameChange:   (v: string) => void;
-  onToggleModule: (key: ModuleKey) => void;
-  onRoleChange:   (key: ModuleKey, role: string) => void;
-  onEmail:        () => void;
-  onReset:        () => void;
-  onToggleActive: () => void;
+  user:                UserRow | null;
+  open:                boolean;
+  pendingName:         string;
+  pendingModules:      PendingModules;
+  pendingContractRole: boolean;          // toggle local do admin_contrato
+  isCurrentUserAdmin:  boolean;          // quem edita é admin_master?
+  saving:              boolean;
+  onClose:             () => void;
+  onSave:              () => void;
+  onNameChange:        (v: string) => void;
+  onToggleModule:      (key: ModuleKey) => void;
+  onRoleChange:        (key: ModuleKey, role: string) => void;
+  onContractRoleChange:(v: boolean) => void;
+  onEmail:             () => void;
+  onReset:             () => void;
+  onToggleActive:      () => void;
 }
 
 export function UserProfileSheet({
-  user, open, pendingName, pendingModules, saving,
+  user, open,
+  pendingName, pendingModules, pendingContractRole, isCurrentUserAdmin,
+  saving,
   onClose, onSave, onNameChange,
-  onToggleModule, onRoleChange,
+  onToggleModule, onRoleChange, onContractRoleChange,
   onEmail, onReset, onToggleActive,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"perfil" | "historico">("perfil");
@@ -161,6 +162,11 @@ export function UserProfileSheet({
                 )}
                 {user.must_change_password && (
                   <Badge variant="outline" className="text-[9px] border-orange-400 text-orange-500 py-0">troca senha</Badge>
+                )}
+                {user.contract_role === "admin_contrato" && (
+                  <Badge className="text-[9px] gap-1 px-1.5 py-0 bg-amber-500/15 text-amber-700 border-amber-400/30 dark:text-amber-300">
+                    <Building2 className="h-2.5 w-2.5" /> Admin Contrato
+                  </Badge>
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
@@ -213,6 +219,38 @@ export function UserProfileSheet({
                   maxLength={80}
                 />
               </div>
+
+              {/* ── Admin do Contrato — só admin_master vê ── */}
+              {isCurrentUserAdmin && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Papel no Contrato</p>
+                  <div className={cn(
+                    "rounded-lg border p-3 transition-colors",
+                    pendingContractRole
+                      ? "border-amber-500/40 bg-amber-500/5"
+                      : "border-border bg-muted/20",
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Building2 className={cn("h-4 w-4", pendingContractRole ? "text-amber-400" : "text-muted-foreground")} />
+                        <div>
+                          <p className={cn("text-xs font-medium", pendingContractRole ? "text-foreground" : "text-muted-foreground")}>
+                            Admin do Contrato
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Gerencia usuários, times e configurações do contrato
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={pendingContractRole}
+                        onCheckedChange={onContractRoleChange}
+                        className="scale-90 ml-3"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Módulos */}
               <div>
@@ -280,20 +318,10 @@ export function UserProfileSheet({
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Ações Rápidas</p>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 text-xs h-8"
-                    onClick={onEmail}
-                  >
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onEmail}>
                     <Mail className="h-3.5 w-3.5" /> Trocar e-mail
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 text-xs h-8"
-                    onClick={onReset}
-                  >
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs h-8" onClick={onReset}>
                     <KeyRound className="h-3.5 w-3.5" /> Resetar senha
                   </Button>
                   <Button
@@ -308,14 +336,13 @@ export function UserProfileSheet({
                     onClick={onToggleActive}
                   >
                     {user.is_active
-                      ? <><UserX className="h-3.5 w-3.5" /> Desativar</>        
+                      ? <><UserX className="h-3.5 w-3.5" /> Desativar</>
                       : <><UserCheck className="h-3.5 w-3.5" /> Ativar</>}
                   </Button>
                 </div>
               </div>
             </>
           ) : (
-            /* Aba Histórico */
             <AuditLogInline userId={user.user_id} />
           )}
         </div>
@@ -352,7 +379,7 @@ export function legacyToModuleRoles(module_access: string): ModuleAccess[] {
   return [];
 }
 
-// ─── ModuleTags (reutilizavel em outros contextos do sistema) ─────────────────
+// ─── ModuleTags ───────────────────────────────────────────────────────────────
 export function ModuleTags({
   moduleRoles,
   module_access,

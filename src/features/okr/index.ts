@@ -11,6 +11,6 @@ export type {
   OkrKeyResult,
   OkrCheckIn,
   OkrStatus,
-  OkrUnit,
+  OkrKeyResultUnit,
   OkrFilters,
 } from "./types";

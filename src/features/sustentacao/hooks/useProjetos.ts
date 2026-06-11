@@ -1,3 +1,16 @@
+/**
+ * useProjetos — hook da tabela LEGADA `projetos`.
+ *
+ * ⚠️  DEPRECADO para novos desenvolvimentos.
+ *     A fonte de verdade de projetos migrou para `public.projects` (Fase 5c).
+ *     Para listagem de projetos use useProjetosAdmin (src/features/admin/hooks/useProjetosAdmin.ts).
+ *     Para importação de demandas use fetchProjetosForImport (src/features/admin/services/projects.service.ts).
+ *     Este hook é mantido para compatibilidade com telas que ainda precisem do shape `Projeto` legado.
+ *
+ * P1a: a opção allTeams filtra somente pelos times do usuário autenticado;
+ *      para cobrir projetos de outros times (ex: importação cross-team) use
+ *      fetchProjetosForImport, que não aplica nenhum filtro de time.
+ */
 import { useState, useEffect, useCallback } from 'react';
 import {
   fetchProjetosComContrato,
@@ -28,7 +41,6 @@ export function useProjetos({ allTeams = false }: Options = {}) {
     setLoading(true);
     setError(null);
     try {
-      // fetchProjetosComContrato ja carrega contract_name via join
       const results = await Promise.all(teamIds.map((id) => fetchProjetosComContrato(id)));
       const map = new Map<string, Projeto>();
       results.flat().forEach((p) => map.set(p.id, p));

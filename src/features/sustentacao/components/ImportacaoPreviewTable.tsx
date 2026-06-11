@@ -4,7 +4,7 @@
  * - Dark mode: todas as classes hardcoded substituídas por tokens do design system
  * - Paginação client-side: 20 itens por página (opções 10 / 20 / 50)
  * - Seleção de checkboxes mantém estado global independente da página visível
- * - Nenhuma alteração em lógica de negócio
+ * - P1b: projectId? adicionado a PreviewRow (UUID de public.projects) — elimina cast (row as any)
  */
 
 import { useState, useMemo, useEffect } from "react";
@@ -25,18 +25,20 @@ import { cn } from "@/lib/utils";
 // ─── Tipos ───────────────────────────────────────────────────────────────
 
 export interface PreviewRow {
-  rhm: string;
-  projeto: string;
-  teamId: string;
-  situacao?: string;
-  tipo: string;
-  sla?: string;
-  descricao?: string;
+  rhm:                        string;
+  projeto:                    string;
+  teamId:                     string;
+  /** UUID de public.projects — resolvido na leitura do arquivo para gravar a FK */
+  projectId?:                 string | null;
+  situacao?:                  string;
+  tipo:                       string;
+  sla?:                       string;
+  descricao?:                 string;
   data_previsao_encerramento?: string;
-  prazo_inicio_atendimento?: string;
-  prazo_solucao?: string;
-  tipo_defeito?: string;
-  originada_diagnostico?: boolean;
+  prazo_inicio_atendimento?:  string;
+  prazo_solucao?:             string;
+  tipo_defeito?:              string;
+  originada_diagnostico?:     boolean;
 }
 
 export type RowStatus =
@@ -83,10 +85,10 @@ const TIPO_ACAO_CONFIG: Record<
   TipoAcao,
   { label: string; icon: React.ElementType; pill: string }
 > = {
-  novo:           { label: "Novo",           icon: PlusCircle,  pill: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
-  atualizacao:    { label: "Atualizar situação", icon: RefreshCw, pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" },
-  sem_alteracao:  { label: "Sem alteração",  icon: MinusCircle, pill: "bg-muted text-muted-foreground border-border" },
-  erro_validacao: { label: "Erro",           icon: XCircle,     pill: "bg-destructive/10 text-destructive border-destructive/20" },
+  novo:           { label: "Novo",              icon: PlusCircle,  pill: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" },
+  atualizacao:    { label: "Atualizar situação", icon: RefreshCw,   pill: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20" },
+  sem_alteracao:  { label: "Sem alteração",      icon: MinusCircle, pill: "bg-muted text-muted-foreground border-border" },
+  erro_validacao: { label: "Erro",               icon: XCircle,     pill: "bg-destructive/10 text-destructive border-destructive/20" },
 };
 
 const ROW_STATUS_CONFIG: Record<
@@ -184,9 +186,9 @@ export function ImportacaoPreviewTable({
   );
 
   // ─── Paginação derivada ──────────────────────────────────────────────────
-  const totalPages   = Math.max(1, Math.ceil(displayRows.length / pageSize));
-  const safePage     = Math.min(currentPage, totalPages);
-  const pagedRows    = useMemo(
+  const totalPages = Math.max(1, Math.ceil(displayRows.length / pageSize));
+  const safePage   = Math.min(currentPage, totalPages);
+  const pagedRows  = useMemo(
     () => displayRows.slice((safePage - 1) * pageSize, safePage * pageSize),
     [displayRows, safePage, pageSize],
   );
@@ -208,7 +210,6 @@ export function ImportacaoPreviewTable({
   const someSelected = selectedRhms.size > 0 && !allSelected;
 
   function toggleAll() {
-    // Seleciona/deseleciona TODOS os registros (não só a página atual)
     setSelectedRhms(allSelected ? new Set() : new Set(selectableRhms));
   }
   function toggleRow(rhm: string) {
@@ -416,7 +417,6 @@ export function ImportacaoPreviewTable({
       {/* ── Paginação ── */}
       {displayRows.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-t border-border bg-muted/20">
-          {/* Info e seletor de tamanho */}
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground">
               {displayRows.length} registro(s) — {counts.selecionados} selecionado(s)
@@ -439,8 +439,6 @@ export function ImportacaoPreviewTable({
               ))}
             </div>
           </div>
-
-          {/* Navegação */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}

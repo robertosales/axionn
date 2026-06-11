@@ -656,22 +656,31 @@ export type Database = {
           contract_id: string
           created_at: string
           id: string
+          is_active: boolean
+          project_id: string | null
           room_type: string
           team_id: string
+          updated_at: string
         }
         Insert: {
           contract_id: string
           created_at?: string
           id?: string
+          is_active?: boolean
+          project_id?: string | null
           room_type: string
           team_id: string
+          updated_at?: string
         }
         Update: {
           contract_id?: string
           created_at?: string
           id?: string
+          is_active?: boolean
+          project_id?: string | null
           room_type?: string
           team_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -679,6 +688,13 @@ export type Database = {
             columns: ["contract_id"]
             isOneToOne: false
             referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_room_teams_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
@@ -1614,6 +1630,129 @@ export type Database = {
           },
         ]
       }
+      okr_check_ins: {
+        Row: {
+          author_id: string | null
+          created_at: string
+          id: string
+          key_result_id: string
+          note: string | null
+          value: number
+        }
+        Insert: {
+          author_id?: string | null
+          created_at?: string
+          id?: string
+          key_result_id: string
+          note?: string | null
+          value: number
+        }
+        Update: {
+          author_id?: string | null
+          created_at?: string
+          id?: string
+          key_result_id?: string
+          note?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_check_ins_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_key_results: {
+        Row: {
+          created_at: string
+          current: number
+          id: string
+          objective_id: string
+          target: number
+          title: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current?: number
+          id?: string
+          objective_id: string
+          target?: number
+          title: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current?: number
+          id?: string
+          objective_id?: string
+          target?: number
+          title?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_key_results_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_objectives: {
+        Row: {
+          created_at: string
+          cycle: string
+          description: string | null
+          id: string
+          owner_id: string | null
+          progress: number
+          status: string
+          team_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cycle: string
+          description?: string | null
+          id?: string
+          owner_id?: string | null
+          progress?: number
+          status?: string
+          team_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cycle?: string
+          description?: string | null
+          id?: string
+          owner_id?: string | null
+          progress?: number
+          status?: string
+          team_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_objectives_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planning_participants: {
         Row: {
           id: string
@@ -1950,7 +2089,7 @@ export type Database = {
       projects: {
         Row: {
           code: string | null
-          contract_id: string
+          contract_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -1964,7 +2103,7 @@ export type Database = {
         }
         Insert: {
           code?: string | null
-          contract_id: string
+          contract_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1978,7 +2117,7 @@ export type Database = {
         }
         Update: {
           code?: string | null
-          contract_id?: string
+          contract_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -3193,6 +3332,41 @@ export type Database = {
           },
         ]
       }
+      user_contracts: {
+        Row: {
+          contract_id: string
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_contracts_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_management_audit_log: {
         Row: {
           action: string
@@ -3268,6 +3442,7 @@ export type Database = {
           assignee_id: string | null
           backlog_order: number | null
           code: string
+          contract_id: string | null
           created_at: string
           custom_fields: Json | null
           description: string | null
@@ -3297,6 +3472,7 @@ export type Database = {
           assignee_id?: string | null
           backlog_order?: number | null
           code: string
+          contract_id?: string | null
           created_at?: string
           custom_fields?: Json | null
           description?: string | null
@@ -3326,6 +3502,7 @@ export type Database = {
           assignee_id?: string | null
           backlog_order?: number | null
           code?: string
+          contract_id?: string | null
           created_at?: string
           custom_fields?: Json | null
           description?: string | null
@@ -3351,6 +3528,13 @@ export type Database = {
           voted_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "user_stories_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_stories_epic_id_fkey"
             columns: ["epic_id"]
@@ -3466,6 +3650,15 @@ export type Database = {
           },
         ]
       }
+      vw_contract_coverage: {
+        Row: {
+          com_contrato: number | null
+          sem_contrato: number | null
+          tabela: string | null
+          total: number | null
+        }
+        Relationships: []
+      }
       vw_rdms_sem_projeto: {
         Row: {
           codigo: string | null
@@ -3490,6 +3683,25 @@ export type Database = {
             columns: ["team_project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_user_contract_roles: {
+        Row: {
+          contract_id: string | null
+          contract_name: string | null
+          display_name: string | null
+          email: string | null
+          role_contrato: Database["public"]["Enums"]["app_role"] | null
+          role_global: Database["public"]["Enums"]["app_role"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_contracts_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
             referencedColumns: ["id"]
           },
         ]
@@ -3560,22 +3772,11 @@ export type Database = {
         }
         Returns: undefined
       }
-      fn_check_sla_status: {
-        Args: {
-          p_contract_id: string
-          p_created_at: string
-          p_demanda_id: string
-          p_now?: string
-          p_priority: string
-        }
-        Returns: Json
-      }
       fn_get_contract_tree: { Args: { p_contract_id?: string }; Returns: Json }
       fn_get_project_sla_matrix: {
         Args: { p_project_id: string }
         Returns: Json
       }
-      fn_get_team_contract: { Args: { p_team_id: string }; Returns: Json }
       fn_rdm_criar_com_checklist: {
         Args: {
           p_ambiente: string
@@ -3664,12 +3865,25 @@ export type Database = {
         Args: { p_cursor?: string; p_limit?: number; p_team_id: string }
         Returns: Json[]
       }
+      get_my_contract_id: { Args: { _user_id?: string }; Returns: string }
+      get_my_contracts: {
+        Args: { _user_id?: string }
+        Returns: {
+          contract_id: string
+          role: Database["public"]["Enums"]["app_role"]
+        }[]
+      }
       get_my_module_access: { Args: never; Returns: string }
       get_project_api_url: { Args: never; Returns: string }
       get_service_role_key: { Args: never; Returns: string }
       get_sprint_history: {
         Args: { p_cutoff?: string; p_team_id?: string; p_team_ids: string[] }
         Returns: Json
+      }
+      get_user_contract_id: { Args: never; Returns: string }
+      has_contract_access: {
+        Args: { _contract_id: string; _user_id?: string }
+        Returns: boolean
       }
       has_role: {
         Args: {
@@ -3679,6 +3893,11 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_admin_master: { Args: { _user_id?: string }; Returns: boolean }
+      is_admin_of_contract: {
+        Args: { _contract_id: string; _user_id?: string }
+        Returns: boolean
+      }
       is_feriado: {
         Args: { p_data: string; p_team_id?: string }
         Returns: boolean
@@ -3712,6 +3931,7 @@ export type Database = {
         | "analyst"
         | "architect"
         | "qa_analyst"
+        | "admin_contrato"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3848,6 +4068,7 @@ export const Constants = {
         "analyst",
         "architect",
         "qa_analyst",
+        "admin_contrato",
       ],
     },
   },

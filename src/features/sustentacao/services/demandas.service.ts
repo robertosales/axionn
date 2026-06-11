@@ -223,17 +223,19 @@ export async function deleteHour(id: string) {
 }
 
 export type UpsertDemandaRow = {
-  rhm: string;
-  projeto: string;
-  situacao: string;
-  tipo: string;
-  sla?: string;
-  descricao?: string;
-  tipo_defeito?: string;
-  originada_diagnostico?: boolean;
+  rhm:                        string;
+  projeto:                    string;
+  /** project_id (UUID) de public.projects — preenchido pela importação quando disponível */
+  project_id?:                string | null;
+  situacao:                   string;
+  tipo:                       string;
+  sla?:                       string;
+  descricao?:                 string;
+  tipo_defeito?:              string;
+  originada_diagnostico?:     boolean;
   data_previsao_encerramento?: string;
-  prazo_inicio_atendimento?: string;
-  prazo_solucao?: string;
+  prazo_inicio_atendimento?:  string;
+  prazo_solucao?:             string;
 };
 
 export async function upsertDemandas(

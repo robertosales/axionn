@@ -18,9 +18,9 @@ export async function fetchAllRoles(): Promise<{ name: string; label: string }[]
 }
 
 // Mantido para compatibilidade com componentes que ainda usam síncronamente
-// Remover gradualmente conforme os componentes forem migrados
 export const ALL_ROLES: AppRole[] = [
   "admin",
+  "admin_contrato",
   "scrum_master",
   "product_owner",
   "developer",
@@ -32,14 +32,15 @@ export const ALL_ROLES: AppRole[] = [
 
 export function getRoleLabel(role: string): string {
   const labels: Record<string, string> = {
-    admin: "Administrador",
-    scrum_master: "Scrum Master",
-    product_owner: "Product Owner",
-    developer: "Desenvolvedor",
-    analyst: "Analista de Requisitos",
-    architect: "Arquiteto",
-    qa_analyst: "Analista de QA",
-    member: "Membro",
+    admin:          "Administrador",
+    admin_contrato: "Admin do Contrato",
+    scrum_master:   "Scrum Master",
+    product_owner:  "Product Owner",
+    developer:      "Desenvolvedor",
+    analyst:        "Analista de Requisitos",
+    architect:      "Arquiteto",
+    qa_analyst:     "Analista de QA",
+    member:         "Membro",
   };
   return labels[role] || role;
 }

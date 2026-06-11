@@ -1,3 +1,12 @@
+/**
+ * projetos.service.ts — tabela LEGADA `projetos`
+ *
+ * ⚠️  DEPRECADO para novos desenvolvimentos.
+ *     A fonte de verdade de projetos migrou para `public.projects` (Fase 5c).
+ *     Use src/features/admin/services/projects.service.ts para criar/editar projetos.
+ *     Este arquivo é mantido para compatibilidade com código existente que ainda leia
+ *     da tabela legada via fetchProjetos / fetchProjetosComContrato.
+ */
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Projeto {
@@ -25,7 +34,7 @@ export async function fetchProjetos(teamId: string): Promise<Projeto[]> {
   return (data || []) as unknown as Projeto[];
 }
 
-/** Busca projetos ja com o nome do contrato vinculado (para exibir no select do DemandaForm) */
+/** Busca projetos já com o nome do contrato vinculado (para exibir no select do DemandaForm) */
 export async function fetchProjetosComContrato(teamId: string): Promise<Projeto[]> {
   const { data, error } = await (supabase as any)
     .from("projetos")
@@ -80,18 +89,32 @@ export async function deleteProjeto(id: string) {
   if (error) throw error;
 }
 
+/**
+ * upsertProjetos — importação em lote na tabela LEGADA.
+ *
+ * ⚠️  A ImportacaoView agora grava em public.projects.
+ *     Este método existe para retrocompatibilidade com qualquer chamador remanescente.
+ *
+ * P2a: usa upsert real (onConflict: nome,team_id) em vez de insert puro,
+ * evitando erros de unique-constraint quando a função for chamada duas vezes
+ * com os mesmos dados.
+ */
 export async function upsertProjetos(
   teamId: string,
   rows: Array<{ nome: string; descricao?: string; equipe?: string; sla?: string }>,
 ) {
-  for (const row of rows) {
-    const { error } = await supabase.from("projetos" as any).insert({
-      team_id:   teamId,
-      nome:      row.nome,
-      descricao: row.descricao || "",
-      equipe:    row.equipe || "",
-      sla:       row.sla || "padrao",
-    } as any);
-    if (error) throw error;
-  }
+  if (rows.length === 0) return;
+  const payload = rows.map((row) => ({
+    team_id:   teamId,
+    nome:      row.nome,
+    descricao: row.descricao || "",
+    equipe:    row.equipe    || "",
+    sla:       row.sla       || "padrao",
+  }));
+  // ignoreDuplicates: true — se o par (nome, team_id) já existir, mantém o registro
+  // atual sem sobrescrever; use updateProjeto para edições explícitas.
+  const { error } = await (supabase as any)
+    .from("projetos")
+    .upsert(payload, { onConflict: "nome,team_id", ignoreDuplicates: true });
+  if (error) throw error;
 }

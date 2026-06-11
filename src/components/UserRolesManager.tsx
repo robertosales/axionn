@@ -66,6 +66,8 @@ import {
   type PendingModules,
 } from "./UserProfileSheet";
 
+const CONTRACT_ID = "d59ab6dc-421f-41b4-b415-ae0bc072ebd4";
+
 // ─── AuditLog exportado para uso no Sheet ────────────────────────────────────
 
 interface AuditEntry {
@@ -219,13 +221,15 @@ export function UserRolesManager() {
   const [users,         setUsers]         = useState<UserRow[]>([]);
   const [loading,       setLoading]       = useState(false);
   const [searchFilter,  setSearchFilter]  = useState("");
+  const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
   const debouncedSearch = useDebounce(searchFilter);
 
   // Sheet
-  const [sheetUser,       setSheetUser]       = useState<UserRow | null>(null);
-  const [pendingName,     setPendingName]     = useState("");
-  const [pendingModules,  setPendingModules]  = useState<PendingModules>({} as any);
-  const [saving,          setSaving]          = useState(false);
+  const [sheetUser,           setSheetUser]           = useState<UserRow | null>(null);
+  const [pendingName,         setPendingName]         = useState("");
+  const [pendingModules,      setPendingModules]      = useState<PendingModules>({} as any);
+  const [pendingContractRole, setPendingContractRole] = useState(false);
+  const [saving,              setSaving]              = useState(false);
 
   // Dialogs
   const [inactivateState, setInactivateState] = useState<DeleteState>(DEL0);
@@ -237,15 +241,29 @@ export function UserRolesManager() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const [profilesRes, umrRes, membersRes] = await Promise.all([
+      // Verifica se o usuário atual é admin_master
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", authUser.id)
+          .eq("role", "admin")
+          .maybeSingle();
+        setIsCurrentUserAdmin(!!roleData);
+      }
+
+      const [profilesRes, umrRes, membersRes, contractRolesRes] = await Promise.all([
         supabase.from("profiles").select("user_id, display_name, email, module_access, is_active, must_change_password"),
         supabase.from("user_module_roles").select("user_id, module, role_name"),
         supabase.from("team_members").select("user_id, teams(id, name)"),
+        supabase.from("user_contracts").select("user_id, role"),
       ]);
 
-      const profileList = (profilesRes.data || []) as any[];
-      const umrList     = (umrRes.data     || []) as any[];
-      const memberList  = (membersRes.data || []) as any[];
+      const profileList     = (profilesRes.data     || []) as any[];
+      const umrList         = (umrRes.data           || []) as any[];
+      const memberList      = (membersRes.data       || []) as any[];
+      const contractRoles   = contractRolesRes.error  ? [] : (contractRolesRes.data || []) as any[];
 
       const teamsMap: Record<string, { id: string; name: string }[]> = {};
       memberList.forEach((m: any) => {
@@ -255,6 +273,11 @@ export function UserRolesManager() {
         t.forEach((team: any) => {
           if (team?.id && team?.name) teamsMap[m.user_id].push({ id: team.id, name: team.name });
         });
+      });
+
+      const contractRoleMap: Record<string, "admin_contrato" | "member"> = {};
+      contractRoles.forEach((cr: any) => {
+        if (cr.user_id) contractRoleMap[cr.user_id] = cr.role;
       });
 
       setUsers(
@@ -269,6 +292,7 @@ export function UserRolesManager() {
           moduleRoles:          umrList
             .filter((r: any) => r.user_id === p.user_id)
             .map((r: any) => ({ module: r.module as ModuleKey, role: r.role_name })),
+          contract_role:        contractRoleMap[p.user_id] ?? null,
         }))
       );
     } catch {
@@ -309,10 +333,15 @@ export function UserRolesManager() {
     });
     setPendingName(user.display_name === "—" ? "" : user.display_name);
     setPendingModules(init);
+    setPendingContractRole(user.contract_role === "admin_contrato");
     setSheetUser(user);
   }
 
-  function closeSheet() { setSheetUser(null); setPendingName(""); }
+  function closeSheet() {
+    setSheetUser(null);
+    setPendingName("");
+    setPendingContractRole(false);
+  }
 
   function toggleModule(key: ModuleKey) {
     setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], enabled: !prev[key].enabled } }));
@@ -333,6 +362,7 @@ export function UserRolesManager() {
 
     setSaving(true);
     try {
+      // Salva module_roles
       const { error: delErr } = await supabase.from("user_module_roles").delete().eq("user_id", user.user_id);
       if (delErr) throw delErr;
       const { error: insErr } = await supabase.from("user_module_roles").insert(
@@ -349,11 +379,24 @@ export function UserRolesManager() {
       }).eq("user_id", user.user_id);
       if (profErr) throw profErr;
 
+      // Salva papel no contrato (somente se admin_master está editando)
+      if (isCurrentUserAdmin) {
+        const newContractRole = pendingContractRole ? "admin_contrato" : "member";
+        const { error: crErr } = await supabase
+          .from("user_contracts")
+          .upsert(
+            { user_id: user.user_id, contract_id: CONTRACT_ID, role: newContractRole },
+            { onConflict: "user_id,contract_id" }
+          );
+        if (crErr) throw crErr;
+      }
+
       const { data: { user: actor } } = await supabase.auth.getUser();
       if (actor) {
         await writeAudit(actor.id, user.user_id, "change_role", {
           modules: enabled.map(m => `${m.key}:${pendingModules[m.key].role}`).join(", "),
           ...(nameChanged && { nome: trimmed }),
+          ...(isCurrentUserAdmin && { contrato: pendingContractRole ? "admin_contrato" : "member" }),
         });
       }
       toast.success("Perfil atualizado!");
@@ -479,7 +522,6 @@ export function UserRolesManager() {
         setResetState(p => ({ ...p, saving: false, generatedPassword: result.temp_password }));
         toast.success("Senha temporária gerada.");
       } else {
-        // recovery_link removido do response por segurança — usuário recebe por e-mail.
         setResetState(p => ({ ...p, saving: false, recoveryLink: null }));
         toast.success("Link de redefinição enviado por e-mail.");
       }
@@ -499,7 +541,7 @@ export function UserRolesManager() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* Busca + contador — fundo suave */}
+      {/* Busca + contador */}
       <div className="flex items-center gap-3 bg-muted/40 rounded-xl px-4 py-3 border border-border/60">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -563,6 +605,9 @@ export function UserRolesManager() {
                           )}
                           {user.must_change_password && (
                             <Badge variant="outline" className="text-[8px] border-orange-400 text-orange-500 py-0 px-1 shrink-0">↻ senha</Badge>
+                          )}
+                          {user.contract_role === "admin_contrato" && (
+                            <Badge className="text-[8px] px-1 py-0 shrink-0 bg-amber-500/15 text-amber-700 border-amber-400/30 dark:text-amber-300">contrato</Badge>
                           )}
                         </div>
                         <p className="text-[10.5px] text-muted-foreground truncate">{user.email}</p>
@@ -657,12 +702,15 @@ export function UserRolesManager() {
         open={!!sheetUser}
         pendingName={pendingName}
         pendingModules={pendingModules}
+        pendingContractRole={pendingContractRole}
+        isCurrentUserAdmin={isCurrentUserAdmin}
         saving={saving}
         onClose={closeSheet}
         onSave={saveUser}
         onNameChange={setPendingName}
         onToggleModule={toggleModule}
         onRoleChange={setModuleRole}
+        onContractRoleChange={setPendingContractRole}
         onEmail={() => {
           if (!sheetUser) return;
           setEmailState({ user: sheetUser, newEmail: sheetUser.email, saving: false });

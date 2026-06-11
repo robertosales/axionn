@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  fetchProjectsByContract,
+  fetchProjectsByTeam,
   createProject,
   updateProject,
   archiveProject,
@@ -20,7 +20,7 @@ export function useProjects(contractId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      setProjects(await fetchProjectsByContract(contractId));
+      setProjects(await fetchProjectsByTeam(contractId));
     } catch (e: any) {
       setError(e?.message ?? 'Erro ao carregar projetos');
     } finally {
@@ -46,7 +46,7 @@ export function useProjects(contractId: string | null) {
   }, [load]);
 
   const linkTeam = useCallback(async (projectId: string, teamId: string) => {
-    await linkTeamToProject(projectId, teamId);
+    await linkTeamToProject({ name: projectId } as any);
     await load();
   }, [load]);
 

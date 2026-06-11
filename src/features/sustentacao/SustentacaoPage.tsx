@@ -1,10 +1,8 @@
 /**
  * SustentacaoPage — fix(sustentacao/team-scope)
  *
- * Usa useModuleTeam('sustentacao') em vez de currentTeamId global.
- * Isso garante que o teamId passado à RPC get_demandas_with_responsaveis
- * seja sempre um time do módulo sustentacao, nunca um time de sala_agil
- * que estava salvo em 'selectedTeamId' pelo AuthContext.
+ * Fase 5d: remove aba Projetos da Sustentação.
+ * Gestão de projetos foi centralizada no painel Admin (fase 5c).
  */
 import { useState, useCallback, useEffect }   from "react";
 import { SustentacaoBoard }                   from "./components/SustentacaoBoard";
@@ -16,7 +14,6 @@ import { DemandaDetail }                      from "./components/DemandaDetail";
 import { DemandaForm }                        from "./components/DemandaForm";
 import { SustentacaoDashboard }               from "./components/SustentacaoDashboard";
 import { SustentacaoWorkflow }                from "./components/SustentacaoWorkflow";
-import { ProjetosManager }                   from "./components/ProjetosManager";
 import { ImportacaoView }                     from "./components/ImportacaoView";
 import { DemandasList }                      from "./components/DemandasList";
 import { SustentacaoRelatorios }             from "./components/reports/SustentacaoRelatorios";
@@ -109,7 +106,6 @@ function SustentacaoSection({ active }: { active: string }) {
   const [createSituacao, setCreateSituacao] = useState<string | undefined>();
   const [showCreate,     setShowCreate]     = useState(false);
 
-  // Limpa card selecionado ao sair do board
   useEffect(() => {
     if (active !== "board") setSelected(null);
   }, [active]);
@@ -195,7 +191,6 @@ function SustentacaoSection({ active }: { active: string }) {
         </div>
       );
     case "demandas":   return <DemandasList />;
-    case "projetos":   return <ProjetosManager />;
     case "importacao": return <ImportacaoView />;
     case "equipe":     return <DeveloperManager />;
     case "fluxo":      return <SustentacaoWorkflow />;

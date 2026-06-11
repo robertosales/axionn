@@ -91,11 +91,11 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "automacoes",     label: "Automações",    icon: Repeat,          path: "/sala-agil/automacoes",     group: "config" },
 ];
 
+// 5d: item "projetos" removido — gestão centralizada no Admin
 const NAV_SUSTENTACAO: NavItem[] = [
   { key: "dashboard",  label: "Dashboard",        icon: LayoutDashboard, path: "/sustentacao",            group: "sprints" },
   { key: "board",      label: "Board Kanban",     icon: Kanban,          path: "/sustentacao/board",      group: "sprints" },
   { key: "demandas",   label: "Demandas",         icon: ListTodo,        path: "/sustentacao/demandas",   group: "sprints" },
-  { key: "projetos",   label: "Projetos",         icon: Layers,          path: "/sustentacao/projetos",   group: "sprints" },
   { key: "importacao", label: "Importação Excel", icon: Upload,          path: "/sustentacao/importacao", group: "operacoes" },
   { key: "equipe",     label: "Equipe",           icon: Users,           path: "/sustentacao/equipe",     group: "operacoes" },
   { key: "fluxo",      label: "Fluxo de Trabalho", icon: GitBranch,      path: "/sustentacao/fluxo",      group: "operacoes" },

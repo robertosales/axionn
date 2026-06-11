@@ -14,6 +14,7 @@ import { AdminHistoricoPage }  from "@/features/admin/pages/AdminHistoricoPage";
 import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
 import { AdminIAsPage }        from "@/features/admin/pages/AdminIAsPage";
 import { ContractsDashboard }  from "@/features/contracts/components/ContractsDashboard";
+import { ProjetosAdminPanel }  from "@/features/admin/components/ProjetosAdminPanel";
 import { NotificationBell }    from "@/features/admin/components/NotificationBell";
 import { ThemeToggle }         from "@/components/ThemeToggle";
 import { Button }   from "@/components/ui/button";
@@ -24,18 +25,20 @@ import { AxionLogo } from "@/components/AxionLogo";
 import {
   LogOut, Users, UsersRound,
   BarChart3, History, Gauge, AlertTriangle, Sparkles, Menu, X, FileText,
+  FolderKanban,
 } from "lucide-react";
 
 const TEAL = "#0bbcaf";
 
 const NAV_ITEMS = [
-  { key: "visao-geral", label: "Vis\u00e3o Geral", icon: BarChart3  },
-  { key: "historico",   label: "Hist\u00f3rico",   icon: History    },
-  { key: "capacidade",  label: "Capacidade",  icon: Gauge      },
-  { key: "times",       label: "Times",       icon: UsersRound },
-  { key: "usuarios",    label: "Usu\u00e1rios",    icon: Users      },
-  { key: "ias",         label: "IA",          icon: Sparkles   },
-  { key: "contratos",   label: "Contratos",   icon: FileText   },
+  { key: "visao-geral", label: "Visão Geral", icon: BarChart3     },
+  { key: "historico",   label: "Histórico",   icon: History       },
+  { key: "capacidade",  label: "Capacidade",  icon: Gauge         },
+  { key: "times",       label: "Times",       icon: UsersRound    },
+  { key: "usuarios",    label: "Usuários",    icon: Users         },
+  { key: "projetos",    label: "Projetos",    icon: FolderKanban  },
+  { key: "ias",         label: "IA",          icon: Sparkles      },
+  { key: "contratos",   label: "Contratos",   icon: FileText      },
 ] as const;
 
 type PageKey = typeof NAV_ITEMS[number]["key"];
@@ -198,6 +201,7 @@ export default function AdminDashboard() {
       case "capacidade": return <AdminCapacidadePage />;
       case "times":      return <AdminTimesPage />;
       case "usuarios":   return <AdminUsuariosPage />;
+      case "projetos":   return <ProjetosAdminPanel />;
       case "ias":        return <AdminIAsPage />;
       case "contratos":  return <ContractsDashboard />;
       default: return (

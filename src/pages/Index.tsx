@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── Componentes leves — importados estaticamente ─────────────────────────────
+// ─── Componentes leves — importados estaticamente  ─────────────────────────────
 import { SprintManager } from "@/components/SprintManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
 import { KanbanBoard } from "@/components/KanbanBoard";
@@ -80,10 +80,7 @@ function SectionLoader() {
   );
 }
 
-class SectionErrorBoundary extends React.Component<
-  { name: string; children: React.ReactNode },
-  { hasError: boolean }
-> {
+class SectionErrorBoundary extends React.Component<{ name: string; children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { name: string; children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };

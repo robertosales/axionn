@@ -1,6 +1,23 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+/**
+ * ProjectTeamsPanel — Tela de Gestão do Contrato: aba Projetos & Times.
+ *
+ * Arquitetura:
+ *   - Lê vínculos de contract_room_teams (contrato + time + projeto + sala)
+ *   - Botão "+ Vincular Time / Projeto" abre modal com seleção em cascata:
+ *       1. Dropdown: todos os times globais (dedup por id)
+ *       2. Dropdown: projetos do time selecionado (habilitado após step 1)
+ *   - Desvincular remove a linha de contract_room_teams
+ *   - Projetos são agrupados por Time Pai na renderização
+ *
+ * fix(bind-modal-dedup): AuthContext armazena uma entrada por (time × módulo)
+ *   intencionalmente (para t.module filtros internos do board). O dropdown de
+ *   times no BindModal precisa deduplicar por id antes de renderizar para
+ *   evitar que o mesmo time apareça duas vezes quando ele pertence a mais
+ *   de um módulo (ex: sustentacao + sala_agil).
+ */
+import { useState, useEffect } from 'react';
+import { Button }  from '@/components/ui/button';
+import { Badge }   from '@/components/ui/badge';
 import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
@@ -10,296 +27,411 @@ import {
 } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { useProjects } from '../hooks/useProjects';
-import { useAuth } from '@/contexts/AuthContext';
 import {
   FolderKanban, Plus, Trash2, Loader2,
-  Archive, Edit2, Users, Info, Zap, Wrench,
+  Info, Zap, Wrench, Users, Link2, X,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  fetchBindingsByContract,
+  fetchProjectsByTeam,
+  createBinding,
+  removeBinding,
+  createProject,
+  type ContractRoomBinding,
+  type Project,
+  type ProjectInput,
+} from '../services/projects.service';
 import { ProjectForm } from './ProjectForm';
-import type { Project, ProjectInput } from '../services/projects.service';
 import type { RoomMode } from '../types/contract';
 
-const MODULE_CONFIG = {
-  sustenance: { label: '🛠 Sustentação', className: 'bg-purple-950 text-purple-300 border-purple-800' },
-  agile:      { label: '⚡ Ágil',        className: 'bg-blue-950   text-blue-300   border-blue-800'   },
-  mixed:      { label: '🔀 Misto',       className: 'bg-orange-950 text-orange-300 border-orange-800' },
+const MODULE_BADGE: Record<string, string> = {
+  sustenance: 'bg-purple-950 text-purple-300 border-purple-800',
+  agile:      'bg-blue-950   text-blue-300   border-blue-800',
+  mixed:      'bg-orange-950 text-orange-300 border-orange-800',
+};
+const MODULE_LABEL: Record<string, string> = {
+  sustenance: '🛠 Sustentação',
+  agile:      '⚡ Ágil',
+  mixed:      '🔀 Misto',
 };
 
 interface Props {
   contractId: string;
-  roomMode?: RoomMode;   // Passado pelo ContractDetail para filtrar abas
+  roomMode?: RoomMode;
 }
 
-export function ProjectTeamsPanel({ contractId, roomMode = 'hibrido' }: Props) {
-  const { projects, loading, addProject, editProject, removeProject, linkTeam, unlinkTeam } =
-    useProjects(contractId);
+// ── Modal de vínculo (seleção em cascata Time → Projeto) ──────────────────────
+interface BindModalProps {
+  contractId: string;
+  roomType:   'agil' | 'sustentacao';
+  existingBindings: ContractRoomBinding[];
+  onClose:    () => void;
+  onSuccess:  () => void;
+}
+
+function BindModal({ contractId, roomType, existingBindings, onClose, onSuccess }: BindModalProps) {
   const { teams } = useAuth();
+  const [teamId,    setTeamId]    = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [projects,  setProjects]  = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [activeTab, setActiveTab]           = useState<'sustentacao' | 'agil'>('sustentacao');
-  const [showForm, setShowForm]             = useState(false);
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [linkingProject, setLinkingProject] = useState<string | null>(null);
-  const [selectedTeam, setSelectedTeam]     = useState<string>('');
+  // fix(bind-modal-dedup): AuthContext armazena (id × módulo), então um time
+  // que pertence a sustentacao + sala_agil aparece duas vezes em `teams`.
+  // Deduplicamos por id antes de renderizar o dropdown.
+  const uniqueTeams = (teams as any[]).filter(
+    (t, idx, arr) => arr.findIndex((x: any) => x.id === t.id) === idx
+  );
 
-  // RN04: times de sustentação e ágeis disponíveis separadamente
-  const sustentacaoTeams = (teams as any[]).filter(t => t.module === 'sustentacao');
-  const agilTeams        = (teams as any[]).filter(t => t.module === 'sala_agil');
+  // Quando muda o time, carrega projetos dele
+  useEffect(() => {
+    if (!teamId) { setProjects([]); setProjectId(''); return; }
+    setLoadingProjects(true);
+    fetchProjectsByTeam(teamId)
+      .then(setProjects)
+      .catch(() => toast.error('Erro ao carregar projetos do time'))
+      .finally(() => setLoadingProjects(false));
+    setProjectId('');
+  }, [teamId]);
 
-  // Decide quais abas mostrar conforme room_mode do contrato
+  // Times já vinculados nesta sala (para desabilitar no dropdown)
+  const boundTeamProjectPairs = new Set(
+    existingBindings
+      .filter(b => b.room_type === roomType)
+      .map(b => `${b.team_id}::${b.project_id ?? 'null'}`)
+  );
+
+  async function handleSave() {
+    if (!teamId) { toast.error('Selecione um time'); return; }
+    const pairKey = `${teamId}::${projectId || 'null'}`;
+    if (boundTeamProjectPairs.has(pairKey)) {
+      toast.error('Este vínculo já existe nesta sala'); return;
+    }
+    setSaving(true);
+    try {
+      await createBinding(contractId, teamId, roomType, projectId || null);
+      toast.success('Vínculo criado com sucesso!');
+      onSuccess();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Erro ao criar vínculo');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const roomLabel = roomType === 'sustentacao' ? 'Sustentação' : 'Ágil';
+  const roomIcon  = roomType === 'sustentacao'
+    ? <Wrench className="h-3.5 w-3.5 text-purple-400" />
+    : <Zap    className="h-3.5 w-3.5 text-blue-400"   />;
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 z-[60]" onClick={onClose} />
+      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[70]
+                      w-full max-w-md bg-background border rounded-xl shadow-2xl flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Vincular Time / Projeto</h3>
+            <Badge variant="outline" className="text-[10px] flex items-center gap-1">
+              {roomIcon} {roomLabel}
+            </Badge>
+          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-4">
+
+          {/* Step 1 — Time */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full bg-primary text-primary-foreground
+                               text-[10px] flex items-center justify-center font-bold">1</span>
+              Selecione o Time <span className="text-destructive">*</span>
+            </label>
+            <Select value={teamId || '_none'} onValueChange={v => setTeamId(v === '_none' ? '' : v)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Selecionar time..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none" disabled>Selecionar time...</SelectItem>
+                {uniqueTeams.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      {t.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Step 2 — Projeto (habilitado após selecionar time) */}
+          <div className="space-y-1.5">
+            <label className={`text-xs font-medium flex items-center gap-1.5 ${
+              !teamId ? 'opacity-40' : ''
+            }`}>
+              <span className="w-4 h-4 rounded-full bg-muted text-muted-foreground
+                               text-[10px] flex items-center justify-center font-bold">2</span>
+              Selecione o Projeto
+              <span className="text-[10px] text-muted-foreground">(opcional)</span>
+            </label>
+            {loadingProjects ? (
+              <div className="flex items-center gap-2 h-9 px-3 border rounded-md text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Carregando projetos...
+              </div>
+            ) : (
+              <Select
+                value={projectId || '_none'}
+                onValueChange={v => setProjectId(v === '_none' ? '' : v)}
+                disabled={!teamId}
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder={!teamId ? 'Selecione um time primeiro' : 'Selecionar projeto...'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">
+                    {projects.length === 0 && teamId
+                      ? 'Nenhum projeto neste time'
+                      : 'Vincular apenas o time (sem projeto)'}
+                  </SelectItem>
+                  {projects.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <div className="flex items-center gap-2">
+                        <FolderKanban className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{p.name}</span>
+                        {p.code && <span className="text-[10px] text-muted-foreground font-mono">({p.code})</span>}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Dica */}
+          <div className="flex items-start gap-2 rounded-lg bg-muted/30 border px-3 py-2">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+            <p className="text-[11px] text-muted-foreground">
+              Você pode vincular apenas um time agora e adicionar os projetos depois,
+              clicando novamente em <strong>+ Vincular</strong>.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-muted/20 rounded-b-xl">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" disabled={!teamId || saving} onClick={handleSave} className="min-w-[90px]">
+            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar Vínculo'}
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Painel principal ──────────────────────────────────────────────────────────
+export function ProjectTeamsPanel({ contractId, roomMode = 'hibrido' }: Props) {
+  const [bindings,   setBindings]   = useState<ContractRoomBinding[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [activeTab,  setActiveTab]  = useState<'sustentacao' | 'agil'>('sustentacao');
+  const [showBind,   setShowBind]   = useState(false);
+  const [showForm,   setShowForm]   = useState(false);
+
   const showSustentacao = roomMode === 'sustentacao' || roomMode === 'hibrido';
   const showAgil        = roomMode === 'agil'        || roomMode === 'hibrido';
 
-  const handleLink = async (projectId: string) => {
-    if (!selectedTeam) { toast.error('Selecione um time'); return; }
-    try {
-      await linkTeam(projectId, selectedTeam);
-      toast.success('Time vinculado ao projeto!');
-      setLinkingProject(null);
-      setSelectedTeam('');
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro ao vincular');
-    }
-  };
-
-  const handleUnlink = async (teamId: string) => {
-    if (!confirm('Desvincular este time do projeto?')) return;
-    try {
-      await unlinkTeam(teamId);
-      toast.success('Time desvinculado.');
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro ao desvincular');
-    }
-  };
-
-  const handleArchive = async (projectId: string, name: string) => {
-    if (!confirm(`Arquivar o projeto "${name}"?`)) return;
-    try {
-      await removeProject(projectId);
-      toast.success('Projeto arquivado.');
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro ao arquivar');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" /> Carregando projetos...
-      </div>
-    );
+  async function load() {
+    setLoading(true);
+    try { setBindings(await fetchBindingsByContract(contractId)); }
+    catch (e: any) { toast.error(e?.message ?? 'Erro ao carregar vínculos'); }
+    finally { setLoading(false); }
   }
 
-  // Filtra projetos por room_type conforme aba ativa
-  const filteredProjects = projects.filter((p: any) => {
-    if (activeTab === 'sustentacao') return p.room_type === 'sustentacao' || !p.room_type;
-    return p.room_type === 'agil';
-  });
+  useEffect(() => { load(); }, [contractId]);
 
-  const renderProjectList = (teamsPool: any[]) => (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-          onClick={() => setShowForm(true)}>
-          <Plus className="h-3 w-3" /> Novo Projeto
-        </Button>
-      </div>
+  async function handleRemove(bindingId: string) {
+    if (!confirm('Remover este vínculo do contrato?')) return;
+    try {
+      await removeBinding(bindingId);
+      toast.success('Vínculo removido.');
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Erro ao remover');
+    }
+  }
 
-      {filteredProjects.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center">
-          <FolderKanban className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
-          <p className="text-xs text-muted-foreground">
-            Nenhum projeto ativo nesta sala.
-          </p>
+  // Agrupa vínculos por sala e depois por time (para renderização)
+  function bindingsForRoom(room: 'agil' | 'sustentacao') {
+    const roomBindings = bindings.filter(b => b.room_type === room);
+    const grouped = new Map<string, { teamName: string; items: ContractRoomBinding[] }>();
+    for (const b of roomBindings) {
+      if (!grouped.has(b.team_id)) {
+        grouped.set(b.team_id, { teamName: b.team_name ?? b.team_id, items: [] });
+      }
+      grouped.get(b.team_id)!.items.push(b);
+    }
+    return grouped;
+  }
+
+  const renderRoom = (room: 'agil' | 'sustentacao') => {
+    const grouped  = bindingsForRoom(room);
+    const isEmpty  = grouped.size === 0;
+    const isSust   = room === 'sustentacao';
+    const infoClass = isSust
+      ? 'bg-purple-950/30 border-purple-800/40 text-purple-300'
+      : 'bg-blue-950/30   border-blue-800/40   text-blue-300';
+    const infoIcon  = isSust
+      ? <Wrench className="h-3.5 w-3.5 mt-0.5 shrink-0 text-purple-400" />
+      : <Zap    className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-400"   />;
+    const infoText  = isSust
+      ? 'Times de sustentação têm SLA contratual. O compliance é monitorado no painel.'
+      : 'Times ágeis não possuem SLA contratual neste módulo.';
+
+    return (
+      <div className="space-y-3">
+        {/* Banner informativo */}
+        <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${infoClass}`}>
+          {infoIcon}
+          <p className="text-[11px]">{infoText}</p>
         </div>
-      ) : (
-        filteredProjects.map((project: any) => {
-          const moduleCfg      = MODULE_CONFIG[project.module_type as keyof typeof MODULE_CONFIG]
-                                  ?? MODULE_CONFIG.sustenance;
-          const linkedTeamIds  = new Set((project.teams ?? []).map((t: any) => t.id));
-          // RN04: permite vincular mesmo time em salas diferentes
-          const availableTeams = teamsPool.filter(t => !linkedTeamIds.has(t.id));
-          const isLinking      = linkingProject === project.id;
 
-          return (
-            <div key={project.id} className="rounded-lg border bg-card">
-              <div className="flex items-center justify-between px-4 py-3 border-b">
-                <div className="flex items-center gap-2 min-w-0">
-                  <FolderKanban className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="text-sm font-semibold truncate">{project.name}</span>
-                  {project.code && (
-                    <span className="text-[10px] text-muted-foreground font-mono">({project.code})</span>
-                  )}
-                  <Badge variant="outline" className={`text-[10px] border shrink-0 ${moduleCfg.className}`}>
-                    {moduleCfg.label}
+        {/* Botão vincular */}
+        <div className="flex justify-end">
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+            onClick={() => setShowBind(true)}>
+            <Plus className="h-3 w-3" /> Vincular Time / Projeto
+          </Button>
+        </div>
+
+        {/* Lista de vínculos agrupados por time */}
+        {loading ? (
+          <div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+          </div>
+        ) : isEmpty ? (
+          <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center">
+            <FolderKanban className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
+            <p className="text-xs text-muted-foreground">Nenhum projeto ativo nesta sala.</p>
+            <p className="text-[11px] text-muted-foreground/60 mt-1">
+              Clique em <strong>+ Vincular Time / Projeto</strong> para começar.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {Array.from(grouped.entries()).map(([teamId, { teamName, items }]) => (
+              <div key={teamId} className="rounded-lg border bg-card overflow-hidden">
+                {/* Time header */}
+                <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30">
+                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-semibold">{teamName}</span>
+                  <Badge variant="outline" className="text-[10px] ml-auto">
+                    {items.length} {items.length === 1 ? 'projeto' : 'projetos'}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7"
-                        onClick={() => setEditingProject(project)}>
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Editar projeto</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleArchive(project.id, project.name)}>
-                        <Archive className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Arquivar projeto</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
-                        onClick={() => {
-                          setLinkingProject(isLinking ? null : project.id);
-                          setSelectedTeam('');
-                        }}>
-                        <Plus className="h-3 w-3" />
-                        {isLinking ? 'Cancelar' : 'Time'}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Vincular time</TooltipContent>
-                  </Tooltip>
+
+                {/* Projetos do time */}
+                <div className="divide-y">
+                  {items.map(b => (
+                    <div key={b.id} className="flex items-center justify-between px-4 py-2.5
+                                               hover:bg-muted/20 transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FolderKanban className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        {b.project_name ? (
+                          <>
+                            <span className="text-sm truncate">{b.project_name}</span>
+                            {b.project_code && (
+                              <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                                ({b.project_code})
+                              </span>
+                            )}
+                            {b.project_module_type && (
+                              <Badge variant="outline"
+                                className={`text-[10px] shrink-0 ${
+                                  MODULE_BADGE[b.project_module_type] ?? ''
+                                }`}>
+                                {MODULE_LABEL[b.project_module_type] ?? b.project_module_type}
+                              </Badge>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-sm text-muted-foreground italic">Sem projeto</span>
+                        )}
+                      </div>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                              onClick={() => handleRemove(b.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Remover vínculo</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              <div className="px-4 py-2 space-y-1.5">
-                {(project.teams ?? []).length === 0 && !isLinking && (
-                  <p className="text-[11px] text-muted-foreground py-1">Nenhum time vinculado.</p>
-                )}
-                {(project.teams ?? []).map((team: any) => (
-                  <div key={team.id} className="flex items-center justify-between py-1.5">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-sm">{team.name}</span>
-                      {team.team_type && (
-                        <Badge variant="outline" className="text-[10px]">{team.team_type}</Badge>
-                      )}
-                    </div>
-                    <Button variant="ghost" size="icon"
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleUnlink(team.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-
-                {isLinking && (
-                  <div className="flex items-center gap-2 pt-2 pb-1 border-t mt-1">
-                    {availableTeams.length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-1">Nenhum time disponível.</p>
-                    ) : (
-                      <>
-                        <Select value={selectedTeam || '_none'}
-                          onValueChange={v => setSelectedTeam(v === '_none' ? '' : v)}>
-                          <SelectTrigger className="h-8 flex-1 text-xs">
-                            <SelectValue placeholder="Selecione o time" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="_none">Selecione...</SelectItem>
-                            {availableTeams.map(t => (
-                              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button size="sm" className="h-8 text-xs px-3"
-                          disabled={!selectedTeam}
-                          onClick={() => handleLink(project.id)}>
-                          Vincular
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })
-      )}
-    </div>
-  );
-
-  return (
-    <TooltipProvider>
-      <div className="space-y-3">
-
-        {/* RN02/RN04: Abas por tipo de sala — só mostra abas relevantes ao room_mode */}
-        {showSustentacao && showAgil ? (
-          <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)}>
-            <TabsList className="w-full">
-              <TabsTrigger value="sustentacao" className="flex-1 gap-1">
-                <Wrench className="h-3.5 w-3.5" /> Sustentação
-              </TabsTrigger>
-              <TabsTrigger value="agil" className="flex-1 gap-1">
-                <Zap className="h-3.5 w-3.5" /> Ágil
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="sustentacao" className="mt-3">
-              <div className="flex items-start gap-2 rounded-lg bg-purple-950/30 border border-purple-800/40 px-3 py-2 mb-3">
-                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-purple-400" />
-                <p className="text-[11px] text-purple-300">
-                  Times de sustentação têm SLA contratual. O compliance é monitorado no painel.
-                </p>
-              </div>
-              {renderProjectList(sustentacaoTeams)}
-            </TabsContent>
-            <TabsContent value="agil" className="mt-3">
-              <div className="flex items-start gap-2 rounded-lg bg-blue-950/30 border border-blue-800/40 px-3 py-2 mb-3">
-                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-400" />
-                <p className="text-[11px] text-blue-300">
-                  Times ágeis não possuem SLA contratual neste módulo.
-                </p>
-              </div>
-              {renderProjectList(agilTeams)}
-            </TabsContent>
-          </Tabs>
-        ) : showSustentacao ? (
-          <>
-            <div className="flex items-start gap-2 rounded-lg bg-purple-950/30 border border-purple-800/40 px-3 py-2">
-              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-purple-400" />
-              <p className="text-[11px] text-purple-300">
-                Apenas <strong>salas de sustentação</strong> podem ser vinculadas a contratos com SLA.
-              </p>
-            </div>
-            {renderProjectList(sustentacaoTeams)}
-          </>
-        ) : (
-          <>
-            <div className="flex items-start gap-2 rounded-lg bg-blue-950/30 border border-blue-800/40 px-3 py-2">
-              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-400" />
-              <p className="text-[11px] text-blue-300">
-                Contrato ágil puro — SLA não aplicável a estes projetos.
-              </p>
-            </div>
-            {renderProjectList(agilTeams)}
-          </>
-        )}
-
-        {showForm && (
-          <ProjectForm
-            contractId={contractId}
-            onClose={() => setShowForm(false)}
-            onSuccess={() => setShowForm(false)}
-            onSubmit={async (input: ProjectInput) => { await addProject(input); }}
-          />
-        )}
-        {editingProject && (
-          <ProjectForm
-            contractId={contractId}
-            initialData={editingProject}
-            onClose={() => setEditingProject(null)}
-            onSuccess={() => setEditingProject(null)}
-            onSubmit={async (input: ProjectInput) => { await editProject(editingProject.id, input); }}
-          />
+            ))}
+          </div>
         )}
       </div>
-    </TooltipProvider>
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Abas dinâmicas conforme room_mode */}
+      {showSustentacao && showAgil ? (
+        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as any)}>
+          <TabsList className="w-full">
+            <TabsTrigger value="sustentacao" className="flex-1 gap-1.5">
+              <Wrench className="h-3.5 w-3.5" /> Sustentação
+            </TabsTrigger>
+            <TabsTrigger value="agil" className="flex-1 gap-1.5">
+              <Zap className="h-3.5 w-3.5" /> Ágil
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="sustentacao" className="mt-3">{renderRoom('sustentacao')}</TabsContent>
+          <TabsContent value="agil"        className="mt-3">{renderRoom('agil')}</TabsContent>
+        </Tabs>
+      ) : showSustentacao ? (
+        renderRoom('sustentacao')
+      ) : (
+        renderRoom('agil')
+      )}
+
+      {/* Modal: Vincular Time / Projeto */}
+      {showBind && (
+        <BindModal
+          contractId={contractId}
+          roomType={activeTab}
+          existingBindings={bindings}
+          onClose={() => setShowBind(false)}
+          onSuccess={load}
+        />
+      )}
+
+      {/* Modal: Novo Projeto (catálogo global) */}
+      {showForm && (
+        <ProjectForm
+          onClose={() => setShowForm(false)}
+          onSuccess={() => { setShowForm(false); }}
+          onSubmit={async (input: ProjectInput) => { await createProject(input); }}
+        />
+      )}
+    </div>
   );
 }

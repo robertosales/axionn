@@ -6,19 +6,19 @@ import {
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription,
 } from "@/components/ui/form";
-import { Input }  from "@/components/ui/input";
+import { Input }   from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { Badge }  from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import { Button }  from "@/components/ui/button";
+import { Badge }   from "@/components/ui/badge";
+import { Switch }  from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label }  from "@/components/ui/label";
-import { Zap, Shield, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { Label }   from "@/components/ui/label";
+import { Zap, Shield, FileText, ChevronDown, ChevronUp, Building2 } from "lucide-react";
 import type { UserAdmin, UserModuleRole } from "../hooks/useUsersAdmin";
 import type { TeamAdmin } from "../hooks/useTeamsAdmin";
 import { fetchAllRoles } from "@/hooks/usePermissions";
 
-// ── Definição dos módulos disponíveis ────────────────────────────────────────
+// ── Módulos disponíveis ────────────────────────────────────────────────────
 const MODULES = [
   { key: "sala_agil",   label: "Sala Ágil",   icon: Zap,      color: "text-blue-400" },
   { key: "sustentacao", label: "Sustentação", icon: Shield,   color: "text-emerald-400" },
@@ -35,37 +35,37 @@ interface FormValues {
 }
 
 interface Props {
-  open:     boolean;
-  user?:    UserAdmin | null;
-  teams:    TeamAdmin[];
-  onClose:  () => void;
-  onCreate: (data: FormValues & { module_roles: UserModuleRole[] }) => Promise<boolean>;
-  onUpdate: (userId: string, data: Partial<FormValues> & { module_roles: UserModuleRole[] }) => Promise<boolean>;
+  open:          boolean;
+  user?:         UserAdmin | null;
+  teams:         TeamAdmin[];
+  isCurrentUserAdmin: boolean;  // quem está editando é admin_master?
+  onClose:       () => void;
+  onCreate:      (data: FormValues & { module_roles: UserModuleRole[]; contract_role: "admin_contrato" | "member" }) => Promise<boolean>;
+  onUpdate:      (userId: string, data: Partial<FormValues> & { module_roles: UserModuleRole[]; contract_role: "admin_contrato" | "member" }) => Promise<boolean>;
 }
 
-export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate }: Props) {
+export function UserFormDialog({ open, user, teams, isCurrentUserAdmin, onClose, onCreate, onUpdate }: Props) {
   const isEdit = !!user;
 
   const form = useForm<FormValues>({
     defaultValues: { display_name: "", email: "", password: "", team_id: "none" },
   });
 
-  // Estado dos módulos ativos e perfis selecionados
   const [moduleEnabled, setModuleEnabled] = useState<Record<ModuleKey, boolean>>({
     sala_agil: true, sustentacao: false, rdm: false,
   });
   const [moduleRole, setModuleRole] = useState<Record<ModuleKey, string>>({
     sala_agil: "member", sustentacao: "member", rdm: "member",
   });
-  const [expandedModule, setExpandedModule] = useState<ModuleKey | null>("sala_agil");
-  const [availableRoles, setAvailableRoles] = useState<{ name: string; label: string }[]>([]);
+  const [expandedModule,  setExpandedModule]  = useState<ModuleKey | null>("sala_agil");
+  const [availableRoles,  setAvailableRoles]  = useState<{ name: string; label: string }[]>([]);
+  // Papel no contrato — separado dos módulos
+  const [isAdminContrato, setIsAdminContrato] = useState(false);
 
-  // Carrega roles do banco
   useEffect(() => {
     fetchAllRoles().then(setAvailableRoles);
   }, []);
 
-  // Inicializa form ao abrir
   useEffect(() => {
     if (!open) return;
     form.reset(
@@ -75,8 +75,8 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
     );
 
     if (isEdit && user!.module_roles.length > 0) {
-      const enabled: Record<ModuleKey, boolean>  = { sala_agil: false, sustentacao: false, rdm: false };
-      const roles:   Record<ModuleKey, string>   = { sala_agil: "member", sustentacao: "member", rdm: "member" };
+      const enabled: Record<ModuleKey, boolean> = { sala_agil: false, sustentacao: false, rdm: false };
+      const roles:   Record<ModuleKey, string>  = { sala_agil: "member", sustentacao: "member", rdm: "member" };
       user!.module_roles.forEach(mr => {
         if (mr.module in enabled) {
           enabled[mr.module as ModuleKey] = true;
@@ -85,13 +85,15 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
       });
       setModuleEnabled(enabled);
       setModuleRole(roles);
-      const firstActive = MODULES.find(m => enabled[m.key])?.key ?? null;
-      setExpandedModule(firstActive);
+      setExpandedModule(MODULES.find(m => enabled[m.key])?.key ?? null);
     } else {
       setModuleEnabled({ sala_agil: true, sustentacao: false, rdm: false });
       setModuleRole({ sala_agil: "member", sustentacao: "member", rdm: "member" });
       setExpandedModule("sala_agil");
     }
+
+    // Inicializa toggle admin_contrato com o valor atual do usuário
+    setIsAdminContrato(isEdit ? user!.contract_role === "admin_contrato" : false);
   }, [open, user]);
 
   const buildModuleRoles = (): UserModuleRole[] =>
@@ -100,7 +102,8 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
       .map(m => ({ module: m.key, role_name: moduleRole[m.key] }));
 
   const onSubmit = async (values: FormValues) => {
-    const moduleRoles = buildModuleRoles();
+    const moduleRoles    = buildModuleRoles();
+    const contractRole   = isAdminContrato ? "admin_contrato" : "member";
     if (moduleRoles.length === 0) {
       form.setError("display_name", { message: "Ative pelo menos um módulo." });
       return;
@@ -109,25 +112,26 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
     let ok: boolean;
     if (isEdit) {
       ok = await onUpdate(user!.user_id, {
-        display_name: values.display_name,
-        team_id:      teamId,
-        module_roles: moduleRoles,
+        display_name:  values.display_name,
+        team_id:       teamId,
+        module_roles:  moduleRoles,
+        contract_role: contractRole,
       });
     } else {
-      ok = await onCreate({ ...values, team_id: teamId, module_roles: moduleRoles });
+      ok = await onCreate({ ...values, team_id: teamId, module_roles: moduleRoles, contract_role: contractRole });
     }
     if (ok) onClose();
   };
 
-  // Filtro de roles por módulo: RDM usa roles próprios, demais usam os genéricos
   const getRolesForModule = (moduleKey: ModuleKey) => {
     if (moduleKey === "rdm") {
       return availableRoles.filter(r =>
         ["rdm_gestor", "rdm_aprovador", "rdm_executor", "admin", "member"].includes(r.name)
       );
     }
+    // Exclui admin_contrato do dropdown de módulos — ele vive na seção própria
     return availableRoles.filter(r =>
-      !["rdm_gestor", "rdm_aprovador", "rdm_executor"].includes(r.name)
+      !["rdm_gestor", "rdm_aprovador", "rdm_executor", "admin_contrato"].includes(r.name)
     );
   };
 
@@ -197,7 +201,44 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
               )}
             />
 
-            {/* ── Módulos & Perfis ───────────────────────────────────────────── */}
+            {/* ── Admin do Contrato — só visível para admin_master ────────── */}
+            {isCurrentUserAdmin && (
+              <div className={`rounded-lg border transition-colors ${
+                isAdminContrato
+                  ? "border-amber-500/40 bg-amber-500/5"
+                  : "border-border bg-muted/20"
+              }`}>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className={`h-4 w-4 ${
+                      isAdminContrato ? "text-amber-400" : "text-muted-foreground"
+                    }`} />
+                    <div>
+                      <p className={`text-sm font-medium ${
+                        isAdminContrato ? "text-foreground" : "text-muted-foreground"
+                      }`}>
+                        Admin do Contrato
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Gerencia usuários, times e configurações do contrato
+                      </p>
+                    </div>
+                    {isAdminContrato && (
+                      <Badge variant="outline" className="text-[9px] ml-1 text-amber-400 border-amber-400/50">
+                        admin_contrato
+                      </Badge>
+                    )}
+                  </div>
+                  <Switch
+                    checked={isAdminContrato}
+                    onCheckedChange={setIsAdminContrato}
+                    className="ml-3 scale-90"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── Módulos & Perfis ───────────────────────────────────────── */}
             <div className="space-y-2">
               <FormLabel className="text-sm font-semibold">Módulos & Perfis</FormLabel>
               <p className="text-[11px] text-muted-foreground">
@@ -205,11 +246,11 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
               </p>
 
               {MODULES.map(mod => {
-                const Icon      = mod.icon;
-                const isOn      = moduleEnabled[mod.key];
-                const isOpen    = expandedModule === mod.key;
-                const roles     = getRolesForModule(mod.key);
-                const noRoles   = roles.length === 0;
+                const Icon    = mod.icon;
+                const isOn    = moduleEnabled[mod.key];
+                const isOpen  = expandedModule === mod.key;
+                const roles   = getRolesForModule(mod.key);
+                const noRoles = roles.length === 0;
 
                 return (
                   <div key={mod.key}
@@ -217,7 +258,6 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
                       isOn ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"
                     }`}
                   >
-                    {/* Cabeçalho do módulo */}
                     <div className="flex items-center justify-between px-4 py-3">
                       <button
                         type="button"
@@ -252,28 +292,20 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
                       />
                     </div>
 
-                    {/* Perfis do módulo — expande ao ligar */}
                     {isOn && isOpen && (
                       <div className="border-t border-border px-4 pb-3 pt-2">
                         {noRoles ? (
-                          <p className="text-xs text-muted-foreground italic">
-                            Carregando perfis...
-                          </p>
+                          <p className="text-xs text-muted-foreground italic">Carregando perfis...</p>
                         ) : (
                           <RadioGroup
                             value={moduleRole[mod.key]}
-                            onValueChange={v =>
-                              setModuleRole(prev => ({ ...prev, [mod.key]: v }))
-                            }
+                            onValueChange={v => setModuleRole(prev => ({ ...prev, [mod.key]: v }))}
                             className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1"
                           >
                             {roles.map(r => (
                               <div key={r.name} className="flex items-center gap-2">
                                 <RadioGroupItem value={r.name} id={`${mod.key}-${r.name}`} />
-                                <Label
-                                  htmlFor={`${mod.key}-${r.name}`}
-                                  className="text-xs cursor-pointer"
-                                >
+                                <Label htmlFor={`${mod.key}-${r.name}`} className="text-xs cursor-pointer">
                                   {r.label}
                                 </Label>
                               </div>
@@ -290,7 +322,7 @@ export function UserFormDialog({ open, user, teams, onClose, onCreate, onUpdate 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Salvando..." : "Salvar"}
+                {form.formState.isSubmitting ? "Salvando..." : "Salvar Perfil"}
               </Button>
             </DialogFooter>
           </form>

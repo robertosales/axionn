@@ -16,7 +16,8 @@ export interface UserAdmin {
   team_id:              string | null;
   team_name?:           string;
   teams:                { id: string; name: string }[];
-  module_roles:         UserModuleRole[];  // NOVO — fonte de verdade
+  module_roles:         UserModuleRole[];  // fonte de verdade por módulo
+  contract_role:        "admin_contrato" | "member" | null; // papel no contrato
   is_admin:             boolean;
   is_active:            boolean;
   must_change_password: boolean;
@@ -32,15 +33,16 @@ export function useUsersAdmin() {
     setLoading(true);
     setError(null);
     try {
-      const [profilesRes, rolesRes, membersRes, moduleRolesRes] = await Promise.all([
+      const [profilesRes, rolesRes, membersRes, moduleRolesRes, contractRolesRes] = await Promise.all([
         supabase
           .from("profiles")
           .select("id, user_id, display_name, email, module_access, team_id, must_change_password, is_active, created_at")
           .order("created_at"),
         supabase.from("user_roles").select("user_id, role"),
         supabase.from("team_members").select("user_id, teams(id, name)"),
-        // NOVO: leitura da tabela user_module_roles
         supabase.from("user_module_roles").select("user_id, module, role_name"),
+        // Busca papel de cada usuário no contrato
+        supabase.from("user_contracts").select("user_id, role"),
       ]);
 
       if (profilesRes.error) {
@@ -48,11 +50,11 @@ export function useUsersAdmin() {
         return;
       }
 
-      const profiles    = profilesRes.data    || [];
-      const roles       = rolesRes.data       || [];
-      const members     = membersRes.data     || [];
-      // dual-read: se tabela nova nao existe ainda, cai sem erro
-      const moduleRoles = moduleRolesRes.error ? [] : (moduleRolesRes.data || []);
+      const profiles      = profilesRes.data    || [];
+      const roles         = rolesRes.data        || [];
+      const members       = membersRes.data      || [];
+      const moduleRoles   = moduleRolesRes.error  ? [] : (moduleRolesRes.data || []);
+      const contractRoles = contractRolesRes.error ? [] : (contractRolesRes.data || []);
 
       const adminSet = new Set(
         roles.filter((r: any) => r.role === "admin").map((r: any) => r.user_id)
@@ -77,14 +79,16 @@ export function useUsersAdmin() {
         moduleRolesMap[mr.user_id].push({ module: mr.module, role_name: mr.role_name });
       });
 
+      // mapa user_id → papel no contrato
+      const contractRoleMap: Record<string, "admin_contrato" | "member"> = {};
+      contractRoles.forEach((cr: any) => {
+        if (cr.user_id) contractRoleMap[cr.user_id] = cr.role;
+      });
+
       setUsers(profiles.map((p: any) => {
         const umr = moduleRolesMap[p.user_id] || [];
-        // fallback: se user_module_roles vazio, sintetiza do campo legado
         const fallbackRoles: UserModuleRole[] = umr.length === 0
-          ? [{
-              module:    p.module_access === "admin" ? "sala_agil" : (p.module_access || "sala_agil"),
-              role_name: "member",
-            }]
+          ? [{ module: p.module_access === "admin" ? "sala_agil" : (p.module_access || "sala_agil"), role_name: "member" }]
           : umr;
 
         return {
@@ -97,6 +101,7 @@ export function useUsersAdmin() {
           team_name:            undefined,
           teams:                teamsMap[p.user_id] || [],
           module_roles:         fallbackRoles,
+          contract_role:        contractRoleMap[p.user_id] ?? null,
           is_admin:             adminSet.has(p.user_id),
           is_active:            p.is_active ?? true,
           must_change_password: p.must_change_password ?? false,
@@ -113,16 +118,14 @@ export function useUsersAdmin() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Salva module_roles na nova tabela ─────────────────────────────────────
+  // ── Salva module_roles na tabela user_module_roles ────────────────────────
   const saveModuleRoles = async (userId: string, moduleRoles: UserModuleRole[]) => {
-    // Remove todos os registros existentes do usuário
     const { error: delErr } = await supabase
       .from("user_module_roles")
       .delete()
       .eq("user_id", userId);
     if (delErr) throw delErr;
 
-    // Insere os novos
     if (moduleRoles.length > 0) {
       const { error: insErr } = await supabase
         .from("user_module_roles")
@@ -130,10 +133,23 @@ export function useUsersAdmin() {
       if (insErr) throw insErr;
     }
 
-    // Mantém module_access legado como primeiro módulo (compatibilidade)
     const primaryModule = moduleRoles[0]?.module || "sala_agil";
     const legacyValue   = moduleRoles.length > 1 ? "admin" : primaryModule;
     await supabase.from("profiles").update({ module_access: legacyValue }).eq("user_id", userId);
+  };
+
+  // ── Salva papel no contrato em user_contracts ─────────────────────────────
+  const saveContractRole = async (
+    userId:       string,
+    contractRole: "admin_contrato" | "member"
+  ) => {
+    const { error } = await supabase
+      .from("user_contracts")
+      .upsert(
+        { user_id: userId, contract_id: "d59ab6dc-421f-41b4-b415-ae0bc072ebd4", role: contractRole },
+        { onConflict: "user_id,contract_id" }
+      );
+    if (error) throw error;
   };
 
   const update = async (userId: string, data: {
@@ -142,6 +158,7 @@ export function useUsersAdmin() {
     team_id?:       string | null;
     is_active?:     boolean;
     module_roles?:  UserModuleRole[];
+    contract_role?: "admin_contrato" | "member";
   }) => {
     try {
       const profileData: Record<string, any> = {};
@@ -155,9 +172,8 @@ export function useUsersAdmin() {
         if (error) throw error;
       }
 
-      if (data.module_roles) {
-        await saveModuleRoles(userId, data.module_roles);
-      }
+      if (data.module_roles)  await saveModuleRoles(userId, data.module_roles);
+      if (data.contract_role) await saveContractRole(userId, data.contract_role);
 
       toast.success("Usuário atualizado");
       await load();
@@ -200,17 +216,18 @@ export function useUsersAdmin() {
   };
 
   const createUser = async (data: {
-    email:         string;
-    password:      string;
-    display_name:  string;
-    module_roles:  UserModuleRole[];
-    team_id:       string | null;
+    email:          string;
+    password:       string;
+    display_name:   string;
+    module_roles:   UserModuleRole[];
+    team_id:        string | null;
+    contract_role?: "admin_contrato" | "member";
   }) => {
     try {
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email:   data.email,
+        email:    data.email,
         password: data.password,
-        options: { data: { display_name: data.display_name } },
+        options:  { data: { display_name: data.display_name } },
       });
       if (authError || !authData.user) {
         toast.error("Erro ao criar usuário: " + authError?.message);
@@ -228,6 +245,11 @@ export function useUsersAdmin() {
       }).eq("user_id", authData.user.id);
 
       await saveModuleRoles(authData.user.id, data.module_roles);
+
+      // Salva papel no contrato se informado
+      if (data.contract_role) {
+        await saveContractRole(authData.user.id, data.contract_role);
+      }
 
       if (data.team_id) {
         await supabase.from("team_members").upsert({

@@ -3,6 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth }  from "@/contexts/AuthContext";
 import { toast }    from "sonner";
 
+// Helper: rejeita strings vazias, null, undefined e valores não-UUID
+// que causam HTTP 400 (22P02) no PostgREST ao usar .in()
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isValidUUID = (v: unknown): v is string => typeof v === "string" && UUID_RE.test(v);
+
 export type ReportType = "sprint_summary" | "velocity" | "dev_performance" | "impediments" | "burndown" | "planning_results";
 
 export interface ReportFilter {
@@ -81,8 +86,10 @@ export function useReports() {
         let q = supabase.from("user_stories").select("code, title, status, story_points, estimated_hours, end_date, assignee_id").eq("team_id", teamId);
         if (f.sprintId) q = q.eq("sprint_id", f.sprintId);
         const { data: hus } = await q.order("code");
-        const devIds = [...new Set((hus ?? []).map((h: any) => h.assignee_id).filter(Boolean))];
-        const { data: devData } = devIds.length > 0 ? await supabase.from("developers").select("id, name").in("id", devIds) : { data: [] };
+        const devIds = [...new Set((hus ?? []).map((h: any) => h.assignee_id).filter(isValidUUID))];
+        const { data: devData } = devIds.length > 0
+          ? await supabase.from("developers").select("id, name").in("id", devIds)
+          : { data: [] };
         const devMap: Record<string, string> = {};
         (devData ?? []).forEach((d: any) => { devMap[d.id] = d.name; });
         const result: SprintSummaryRow[] = (hus ?? []).map((h: any) => ({
@@ -95,8 +102,10 @@ export function useReports() {
 
       } else if (f.reportType === "velocity") {
         const { data: sps } = await supabase.from("sprints").select("id, name").eq("team_id", teamId).order("start_date", { ascending: false }).limit(12);
-        const spIds = (sps ?? []).map((s: any) => s.id);
-        const { data: hus } = spIds.length > 0 ? await supabase.from("user_stories").select("sprint_id, status, story_points").in("sprint_id", spIds) : { data: [] };
+        const spIds = (sps ?? []).map((s: any) => s.id).filter(isValidUUID);
+        const { data: hus } = spIds.length > 0
+          ? await supabase.from("user_stories").select("sprint_id, status, story_points").in("sprint_id", spIds)
+          : { data: [] };
         const result: VelocityRow[] = (sps ?? []).map((s: any) => {
           const spHUs = (hus ?? []).filter((h: any) => h.sprint_id === s.id);
           const done  = spHUs.filter((h: any) => DONE_STATUSES.some(ds => h.status?.toLowerCase().includes(ds)));
@@ -127,8 +136,10 @@ export function useReports() {
 
       } else if (f.reportType === "impediments") {
         const { data: imps } = await supabase.from("impediments").select("title, created_by, created_at, resolved_at, sprint_id").eq("team_id", teamId).order("created_at", { ascending: false });
-        const sprintIds = [...new Set((imps ?? []).map((i: any) => i.sprint_id).filter(Boolean))];
-        const { data: spData } = sprintIds.length > 0 ? await supabase.from("sprints").select("id, name").in("id", sprintIds) : { data: [] };
+        const sprintIds = [...new Set((imps ?? []).map((i: any) => i.sprint_id).filter(isValidUUID))];
+        const { data: spData } = sprintIds.length > 0
+          ? await supabase.from("sprints").select("id, name").in("id", sprintIds)
+          : { data: [] };
         const spMap: Record<string, string> = {};
         (spData ?? []).forEach((s: any) => { spMap[s.id] = s.name; });
         const result: ImpedimentRow[] = (imps ?? []).map((i: any) => ({

@@ -6,8 +6,7 @@
 -- para o próprio usuário, a função sempre retorna false,
 -- fazendo o dashboard mostrar "Sem time" para membros comuns.
 --
--- Solução: garantir policies de SELECT em team_members e teams
--- que permitam ao usuário ver seus próprios vínculos.
+-- Estrutura real: team_members.user_id = auth.users.id (direto)
 -- ============================================================
 
 BEGIN;
@@ -17,20 +16,14 @@ BEGIN;
 -- ────────────────────────────────────────────────────────────
 ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "tm_select_own"    ON public.team_members;
-DROP POLICY IF EXISTS "tm_select_admin"  ON public.team_members;
-DROP POLICY IF EXISTS "tm_admin_write"   ON public.team_members;
+DROP POLICY IF EXISTS "tm_select_own"   ON public.team_members;
+DROP POLICY IF EXISTS "tm_select_admin" ON public.team_members;
+DROP POLICY IF EXISTS "tm_admin_write"  ON public.team_members;
 
 -- Usuário vê suas próprias linhas (necessário para is_team_member() funcionar)
 CREATE POLICY "tm_select_own"
 ON public.team_members FOR SELECT
-USING (
-  profile_id = (
-    SELECT id FROM public.profiles
-    WHERE user_id = auth.uid()
-    LIMIT 1
-  )
-);
+USING (user_id = auth.uid());
 
 -- Admin vê todos
 CREATE POLICY "tm_select_admin"
@@ -58,9 +51,8 @@ ON public.teams FOR SELECT
 USING (
   EXISTS (
     SELECT 1 FROM public.team_members tm
-    JOIN public.profiles p ON p.id = tm.profile_id
     WHERE tm.team_id = teams.id
-    AND p.user_id = auth.uid()
+    AND tm.user_id = auth.uid()
   )
 );
 

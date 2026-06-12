@@ -1,17 +1,19 @@
 // src/contexts/AuthContext.tsx
 /**
- * F4-fix: resolução eager de currentTeamId no boot
+ * fix(auth): refreshTeams ancorado em team_members
  *
- * fix(teams-dedup-v2): o dedup anterior usava team.id como chave única,
- *   descartando linhas com módulos distintos para o mesmo time.
- *   Isso fazia SustentacaoPage.teams.filter(t => t.module === 'sustentacao')
- *   retornar [] quando a primeira ocorrência do time era de outro módulo
- *   (ex: sala_agil), resultando em currentTeamId=null e board sem cards.
+ * PROBLEMA RAIZ (resolvido):
+ *   refreshTeams buscava em team_modules sem filtro por usuário.
+ *   O RLS de team_modules usa is_contract_member(), que libera TODOS os
+ *   times do contrato — não apenas os times onde o usuário é membro.
+ *   Com isso, useModuleTeam recebia TIME 1, TIME 2 e TIME 3 como opções
+ *   de sustentação, abria modal de seleção sem time pré-selecionado,
+ *   e a tela ficava vazia para usuários com um único time real.
  *
- *   CORRIGIDO: dedup agora usa `${id}::${module}` como chave, preservando
- *   uma entrada por (time × módulo). O dedup ainda evita linhas 100%
- *   duplicadas (mesmo id E mesmo module), que podem ocorrer se team_modules
- *   tiver entradas repetidas.
+ * CORREÇÃO:
+ *   A query parte de team_members (filtrado pelo userId) e faz join em
+ *   team_modules para obter o módulo de cada time. Resultado: teams[]
+ *   contém apenas os times onde o usuário é membro de fato.
  */
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { mountedRef.current = false; };
   }, []);
 
-  // F4-fix: boot-sync — pré-popula currentTeamIdRef a partir do localStorage
+  // boot-sync — pré-popula currentTeamIdRef a partir do localStorage
   useEffect(() => {
     const saved = localStorage.getItem("selectedTeamId");
     if (saved && !currentTeamIdRef.current) {
@@ -161,22 +163,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setModuleRoles(data.map((r: any) => ({ module: r.module, role_name: r.role_name })));
   };
 
-  const refreshTeams = async () => {
+  const refreshTeams = async (userId?: string) => {
+    // fix(auth): ancoramos em team_members (times onde o usuário É membro)
+    // em vez de team_modules (todos os times do contrato via is_contract_member).
+    // Isso garante que teams[] reflita apenas os times reais do usuário,
+    // evitando que useModuleTeam ofereça times de outros membros do contrato
+    // e abra modal de seleção desnecessário deixando a tela vazia.
+    const uid = userId ?? (await supabase.auth.getUser()).data.user?.id;
+    if (!uid) return;
+
     const { data, error } = await supabase
-      .from("team_modules")
-      .select("module, team:team_id(id, name)");
+      .from("team_members")
+      .select("team:team_id(id, name, team_modules(module))")
+      .eq("user_id", uid);
 
     if (error) { console.error("[Auth] refreshTeams:", error); return; }
 
     const rawList: AuthTeam[] = (data ?? []).flatMap((row: any) => {
       if (!row.team) return [];
-      return [{ id: row.team.id, name: row.team.name, module: row.module }];
+      const modules: string[] = (row.team.team_modules ?? []).map((tm: any) => tm.module);
+      return modules.map((mod) => ({ id: row.team.id, name: row.team.name, module: mod }));
     });
 
-    // fix(teams-dedup-v2): dedup por (id × module) — preserva uma entrada
-    // por combinação única de time+módulo. Isso garante que
-    // teams.filter(t => t.module === 'sustentacao') nunca retorne []
-    // quando o time também pertence a outros módulos.
+    // dedup por (id × module) — evita duplicatas caso team_modules tenha
+    // entradas repetidas para o mesmo par (team_id, module)
     const seen = new Set<string>();
     const teamList = rawList.filter(t => {
       const key = `${t.id}::${t.module}`;
@@ -228,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await Promise.all([
         fetchRoles(userId),
-        refreshTeams(),
+        refreshTeams(userId),
         fetchModuleRoles(userId, profileData as Profile),
       ]);
     } catch (err) {

@@ -1,19 +1,17 @@
 // src/contexts/AuthContext.tsx
 /**
- * fix(auth): refreshTeams ancorado em team_members
+ * fix(auth): refreshTeams via team_members — sem dependência de team_modules
  *
- * PROBLEMA RAIZ (resolvido):
- *   refreshTeams buscava em team_modules sem filtro por usuário.
- *   O RLS de team_modules usa is_contract_member(), que libera TODOS os
- *   times do contrato — não apenas os times onde o usuário é membro.
- *   Com isso, useModuleTeam recebia TIME 1, TIME 2 e TIME 3 como opções
- *   de sustentação, abria modal de seleção sem time pré-selecionado,
- *   e a tela ficava vazia para usuários com um único time real.
+ * PROBLEMA RAIZ:
+ *   refreshTeams buscava em team_modules com is_contract_member() que
+ *   bloqueava membros comuns retornando []. Resultado: "Sem time" no dashboard.
  *
  * CORREÇÃO:
- *   A query parte de team_members (filtrado pelo userId) e faz join em
- *   team_modules para obter o módulo de cada time. Resultado: teams[]
- *   contém apenas os times onde o usuário é membro de fato.
+ *   Query em team_members com join direto em teams(id, name, module).
+ *   A policy tm_select_own (user_id = auth.uid()) garante que cada usuário
+ *   vê apenas seus próprios times, sem precisar passar userId como parâmetro.
+ *
+ * fix(teams-dedup-v2): dedup usa `${id}::${module}` como chave.
  */
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -85,8 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const currentTeamIdRef = useRef<string | null>(null);
   const mountedRef       = useRef(true);
-  // Evita reload da árvore quando onAuthStateChange re-emite eventos para o
-  // mesmo usuário (TOKEN_REFRESHED, re-SIGNED_IN ao voltar de ALT+TAB, etc).
   const loadedUserIdRef  = useRef<string | null>(null);
 
   useEffect(() => {
@@ -163,30 +159,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setModuleRoles(data.map((r: any) => ({ module: r.module, role_name: r.role_name })));
   };
 
-  const refreshTeams = async (userId?: string) => {
-    // fix(auth): ancoramos em team_members (times onde o usuário É membro)
-    // em vez de team_modules (todos os times do contrato via is_contract_member).
-    // Isso garante que teams[] reflita apenas os times reais do usuário,
-    // evitando que useModuleTeam ofereça times de outros membros do contrato
-    // e abra modal de seleção desnecessário deixando a tela vazia.
-    const uid = userId ?? (await supabase.auth.getUser()).data.user?.id;
-    if (!uid) return;
-
+  const refreshTeams = async () => {
+    // fix(auth): team_members filtrado por RLS (tm_select_own: user_id = auth.uid())
+    // Join direto em teams para obter name e module.
+    // Não usa team_modules — policy is_contract_member() bloqueia membros comuns.
     const { data, error } = await supabase
       .from("team_members")
-      .select("team:team_id(id, name, team_modules(module))")
-      .eq("user_id", uid);
+      .select("team:team_id(id, name, module)");
 
     if (error) { console.error("[Auth] refreshTeams:", error); return; }
 
     const rawList: AuthTeam[] = (data ?? []).flatMap((row: any) => {
       if (!row.team) return [];
-      const modules: string[] = (row.team.team_modules ?? []).map((tm: any) => tm.module);
-      return modules.map((mod) => ({ id: row.team.id, name: row.team.name, module: mod }));
+      return [{ id: row.team.id, name: row.team.name, module: row.team.module ?? "" }];
     });
 
-    // dedup por (id × module) — evita duplicatas caso team_modules tenha
-    // entradas repetidas para o mesmo par (team_id, module)
+    // dedup por (id × module)
     const seen = new Set<string>();
     const teamList = rawList.filter(t => {
       const key = `${t.id}::${t.module}`;
@@ -211,6 +199,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (saved) {
         localStorage.removeItem("selectedTeamId");
         console.warn("[Auth] selectedTeamId inválido removido do localStorage:", saved);
+      }
+      // Auto-seleciona o primeiro time disponível
+      if (teamList.length > 0) {
+        setCurrentTeamId(teamList[0].id);
       }
     }
   };
@@ -238,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await Promise.all([
         fetchRoles(userId),
-        refreshTeams(userId),
+        refreshTeams(),
         fetchModuleRoles(userId, profileData as Profile),
       ]);
     } catch (err) {
@@ -299,22 +291,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (event, session) => {
         if (!mountedRef.current) return;
 
-        // IMPORTANTE: o callback de onAuthStateChange roda dentro do lock interno
-        // do auth client. Não aguardar queries aqui; isso segura o lock durante a
-        // troca de senha e permite que outra chamada o roube após o timeout.
         if (session?.user) {
           if (!initialised) return;
           const userId = session.user.id;
-          // Idempotência: se já carregamos dados deste usuário, NÃO ativar
-          // loading=true nem refazer loadUserData. Isso evita o unmount da
-          // árvore (PageLoader em ProtectedRoute) ao voltar de ALT+TAB,
-          // minimizar/restaurar ou em token refresh — preservando estado
-          // local de formulários, drawers e modais.
           if (loadedUserIdRef.current === userId) return;
           setSession(session);
           setUser(session.user);
-          // Marca loading=true para evitar que guards de rota redirecionem
-          // com moduleRoles ainda vazio (race que mandava todos para /sala-agil).
           if (mountedRef.current) setLoading(true);
           setTimeout(() => {
             void loadUserData(userId).finally(() => {

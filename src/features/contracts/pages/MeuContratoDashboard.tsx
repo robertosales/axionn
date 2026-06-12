@@ -236,7 +236,7 @@ export function MeuContratoDashboard() {
     }
 
     if (activePage === 'relatorio') {
-      return <RelatorioSLAContrato contractId={contract.id} />;
+      return <RelatorioSLAContrato contractId={contract.id} contractName={contract.name} />;
     }
 
     // visao-geral

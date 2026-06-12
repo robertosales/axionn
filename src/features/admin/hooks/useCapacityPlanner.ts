@@ -1,23 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+export type CapacityStatus = 'ok' | 'warning' | 'overloaded' | 'idle' | 'unknown';
+
 export interface DevCapacity {
-  userId:        string;
-  devName:       string;
-  declaredHours: number;
-  allocatedHours: number;
-  utilizationPct: number;
-  isOverloaded:   boolean;
-  tasks:          { title: string; estimatedHours: number; status: string }[];
+  userId:           string;
+  devId:            string;   // alias de userId
+  devName:          string;
+  declaredHours:    number;
+  capacityHours:    number;   // alias de declaredHours
+  allocatedHours:   number;
+  realizedHours:    number;
+  utilizationPct:   number;
+  isOverloaded:     boolean;
+  status:           CapacityStatus;
+  wipCount:         number;
+  pausedCount:      number;
+  slaCriticalCount: number;
+  tasks:            { title: string; estimatedHours: number; status: string }[];
 }
 
 export interface TeamCapacity {
-  teamId:        string;
-  teamName:      string;
-  totalCapacity: number;
+  teamId:         string;
+  teamName:       string;
+  module:         string;
+  sprintAtivo:    string | null;
+  sprintEndDate:  string | null;
+  totalCapacity:  number;
   totalAllocated: number;
   utilizationPct: number;
-  devs:          DevCapacity[];
+  devs:           DevCapacity[];
 }
 
 /**
@@ -83,16 +95,27 @@ export function useCapacityPlanner(contractId?: string | null) {
             .map((s: any) => ({ title: s.title, estimatedHours: (s.story_points ?? 0) * 4, status: s.status }));
           const alloc   = tasks.reduce((a, t) => a + t.estimatedHours, 0);
           const utilPct = decl > 0 ? Math.round((alloc / decl) * 100) : (alloc > 0 ? 100 : 0);
+          const status: CapacityStatus =
+            decl === 0 && alloc === 0 ? 'idle'
+            : utilPct > 100           ? 'overloaded'
+            : utilPct >= 80           ? 'warning'
+            : utilPct > 0             ? 'ok'
+            : 'unknown';
           return {
-            userId: m.user_id, devName: name ?? 'Sem nome',
-            declaredHours: decl, allocatedHours: alloc,
-            utilizationPct: utilPct, isOverloaded: utilPct > 100, tasks,
+            userId: m.user_id, devId: m.user_id, devName: name ?? 'Sem nome',
+            declaredHours: decl, capacityHours: decl,
+            allocatedHours: alloc, realizedHours: 0,
+            utilizationPct: utilPct, isOverloaded: utilPct > 100,
+            status, wipCount: tasks.length, pausedCount: 0, slaCriticalCount: 0,
+            tasks,
           };
         });
         const totCap   = devs.reduce((a, d) => a + d.declaredHours,  0);
         const totAlloc = devs.reduce((a, d) => a + d.allocatedHours, 0);
         return {
           teamId: team.id, teamName: team.name,
+          module: 'sala_agil',
+          sprintAtivo: null, sprintEndDate: null,
           totalCapacity: totCap, totalAllocated: totAlloc,
           utilizationPct: totCap > 0 ? Math.round((totAlloc / totCap) * 100) : 0,
           devs,

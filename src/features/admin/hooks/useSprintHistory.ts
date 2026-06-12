@@ -1,6 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+export type PeriodoFiltro = '3m' | '6m' | '12m' | 'all';
+
+export interface SprintDevStat {
+  developerId:    string;
+  developerName:  string;
+  husCount:       number;
+  estimatedHours: number;
+  realizedHours:  number;
+}
+
 export interface SprintMetrics {
   sprintId:         string;
   sprintName:       string;
@@ -8,32 +18,48 @@ export interface SprintMetrics {
   teamName:         string;
   startDate:        string;
   endDate:          string;
+  durationDays:     number;
+  goal?:            string;
   totalHUs:         number;
   completedHUs:     number;
+  husConcluidadas:  number;
   completionRate:   number;
+  taxaConclusao:    number;
   plannedPoints:    number;
   deliveredPoints:  number;
   velocity:         number;
+  velocityPontos:   number;
+  horasPlanejadas:  number;
+  horasRealizadas:  number;
+  desvioHoras:      number;
+  impedimentos:     number;
   avgCycleTime:     number | null;
   bugs:             number;
   rework:           number;
-  // extra
   sprintGoal?:      string;
   retroNotes?:      string;
+  devStats:         SprintDevStat[];
 }
 
 export interface TeamComparativo {
-  teamId:   string;
-  teamName: string;
-  avgVelocity:       number;
-  avgCompletionRate: number;
-  totalSprints:      number;
+  teamId:             string;
+  teamName:           string;
+  module?:            string;
+  avgVelocity:        number;
+  avgCompletionRate:  number;
+  avgTaxaConclusao:   number;
+  avgDesvioHoras:     number;
+  totalImpedimentos:  number;
+  totalSprints:       number;
 }
 
 export interface HistoryFilters {
   teamId:  string;
-  periodo: string;
+  periodo: PeriodoFiltro | string;
 }
+
+// Alias mantido para componentes que importam SprintHistoryFilters.
+export type SprintHistoryFilters = HistoryFilters;
 
 /**
  * contractId: quando fornecido, filtra sprints pelos times
@@ -65,13 +91,18 @@ export function useSprintHistory(contractId?: string | null) {
       let sprintsQuery = supabase
         .from('sprints')
         .select('id, name, team_id, start_date, end_date, goal, teams(name)')
-        .eq('status', 'completed')
+        .eq('is_active', false)
         .order('end_date', { ascending: false });
 
       if (filters.periodo !== 'all') {
-        const since = new Date();
-        since.setDate(since.getDate() - Number(filters.periodo));
-        sprintsQuery = sprintsQuery.gte('end_date', since.toISOString().slice(0, 10));
+        const months = filters.periodo.endsWith('m')
+          ? Number(filters.periodo.replace('m', ''))
+          : Number(filters.periodo);
+        if (!Number.isNaN(months) && months > 0) {
+          const since = new Date();
+          since.setMonth(since.getMonth() - months);
+          sprintsQuery = sprintsQuery.gte('end_date', since.toISOString().slice(0, 10));
+        }
       }
       if (filters.teamId !== 'all') {
         sprintsQuery = sprintsQuery.eq('team_id', filters.teamId);
@@ -108,17 +139,31 @@ export function useSprintHistory(contractId?: string | null) {
         const planned   = allItems.reduce((a, i) => a + i.points, 0);
         const delivered = allItems.filter(i => i.completed).reduce((a, i) => a + i.points, 0);
         const cycleTimes = allItems.map(i => i.cycleTime).filter((c): c is number => c !== null);
+        const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const durationDays = s.start_date && s.end_date
+          ? Math.max(1, Math.round((new Date(s.end_date).getTime() - new Date(s.start_date).getTime()) / 86_400_000))
+          : 0;
         return {
           sprintId: s.id, sprintName: s.name,
           teamId: s.team_id, teamName: (Array.isArray(s.teams) ? s.teams[0]?.name : s.teams?.name) ?? s.team_id,
           startDate: s.start_date, endDate: s.end_date,
+          durationDays,
+          goal: s.goal ?? undefined,
           totalHUs: total, completedHUs: completed,
-          completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+          husConcluidadas: completed,
+          completionRate,
+          taxaConclusao: completionRate,
           plannedPoints: planned, deliveredPoints: delivered, velocity: delivered,
+          velocityPontos: delivered,
+          horasPlanejadas: 0,
+          horasRealizadas: 0,
+          desvioHoras: 0,
+          impedimentos: 0,
           avgCycleTime: cycleTimes.length ? Math.round(cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length) : null,
           bugs: allItems.filter(i => i.isBug).length,
           rework: allItems.filter(i => i.isRework).length,
           sprintGoal: s.goal ?? undefined,
+          devStats: [],
         };
       });
 
@@ -127,12 +172,18 @@ export function useSprintHistory(contractId?: string | null) {
       // Comparativo por time
       const byTeam: Record<string, SprintMetrics[]> = {};
       result.forEach(m => { if (!byTeam[m.teamId]) byTeam[m.teamId] = []; byTeam[m.teamId].push(m); });
-      setTeamComparativo(Object.entries(byTeam).map(([teamId, ms]) => ({
-        teamId, teamName: ms[0].teamName,
-        avgVelocity:       Math.round(ms.reduce((a, m) => a + m.velocity, 0) / ms.length),
-        avgCompletionRate: Math.round(ms.reduce((a, m) => a + m.completionRate, 0) / ms.length),
-        totalSprints: ms.length,
-      })));
+      setTeamComparativo(Object.entries(byTeam).map(([teamId, ms]) => {
+        const avgCompletion = Math.round(ms.reduce((a, m) => a + m.completionRate, 0) / ms.length);
+        return {
+          teamId, teamName: ms[0].teamName,
+          avgVelocity:       Math.round(ms.reduce((a, m) => a + m.velocity, 0) / ms.length),
+          avgCompletionRate: avgCompletion,
+          avgTaxaConclusao:  avgCompletion,
+          avgDesvioHoras:    0,
+          totalImpedimentos: 0,
+          totalSprints:      ms.length,
+        };
+      }));
     } finally {
       setLoading(false);
     }

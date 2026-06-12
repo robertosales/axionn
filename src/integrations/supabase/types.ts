@@ -651,6 +651,41 @@ export type Database = {
           },
         ]
       }
+      contract_members: {
+        Row: {
+          contract_id: string
+          created_at: string
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_members_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_room_teams: {
         Row: {
           contract_id: string
@@ -2094,11 +2129,14 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          legacy_projetos_id: string | null
           module_type: string
           name: string
           redmine_id: number | null
           room_type: string
+          sla_id: string | null
           status: string
+          team_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2108,11 +2146,14 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          legacy_projetos_id?: string | null
           module_type?: string
           name: string
           redmine_id?: number | null
           room_type?: string
+          sla_id?: string | null
           status?: string
+          team_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2122,11 +2163,14 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          legacy_projetos_id?: string | null
           module_type?: string
           name?: string
           redmine_id?: number | null
           room_type?: string
+          sla_id?: string | null
           status?: string
+          team_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2135,6 +2179,20 @@ export type Database = {
             columns: ["contract_id"]
             isOneToOne: false
             referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_sla_id_fkey"
+            columns: ["sla_id"]
+            isOneToOne: false
+            referencedRelation: "contract_slas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -3659,6 +3717,23 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_projetos: {
+        Row: {
+          contract_id: string | null
+          contract_name: string | null
+          created_at: string | null
+          descricao: string | null
+          equipe: string | null
+          id: string | null
+          nome: string | null
+          sla: string | null
+          sla_id: string | null
+          source: string | null
+          team_id: string | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
       vw_rdms_sem_projeto: {
         Row: {
           codigo: string | null
@@ -3711,6 +3786,15 @@ export type Database = {
       _assert_team_access: {
         Args: { p_team_ids: string[] }
         Returns: undefined
+      }
+      calc_horas_uteis: {
+        Args: {
+          p_fim: string
+          p_inicio: string
+          p_regime?: string
+          p_uf?: string
+        }
+        Returns: number
       }
       calc_imr_periodo: {
         Args: {
@@ -3776,6 +3860,17 @@ export type Database = {
       fn_get_project_sla_matrix: {
         Args: { p_project_id: string }
         Returns: Json
+      }
+      fn_get_user_contracts: {
+        Args: { p_user_id?: string }
+        Returns: {
+          contract_id: string
+          contract_name: string
+          role: string
+          room_mode: string
+          status: string
+          total_teams: number
+        }[]
       }
       fn_rdm_criar_com_checklist: {
         Args: {
@@ -3880,11 +3975,6 @@ export type Database = {
         Args: { p_cutoff?: string; p_team_id?: string; p_team_ids: string[] }
         Returns: Json
       }
-      get_user_contract_id: { Args: never; Returns: string }
-      has_contract_access: {
-        Args: { _contract_id: string; _user_id?: string }
-        Returns: boolean
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -3893,13 +3983,16 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
-      is_admin_master: { Args: { _user_id?: string }; Returns: boolean }
-      is_admin_of_contract: {
-        Args: { _contract_id: string; _user_id?: string }
+      is_contract_member: {
+        Args: { _contract_id: string; _user_id: string }
         Returns: boolean
       }
-      is_feriado: {
-        Args: { p_data: string; p_team_id?: string }
+      is_dia_util: { Args: { p_data: string; p_uf?: string }; Returns: boolean }
+      is_feriado:
+        | { Args: { p_data: string; p_team_id?: string }; Returns: boolean }
+        | { Args: { p_data: string; p_uf?: string }; Returns: boolean }
+      is_team_in_user_contracts: {
+        Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
       is_team_member: {

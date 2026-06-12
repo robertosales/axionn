@@ -1,48 +1,17 @@
-## Objetivo
+## Causa do erro
 
-Tornar os relatórios da Sala Ágil acessíveis diretamente pelo menu lateral, mover o "Relatório de Evidências" para dentro do catálogo de relatórios e ajustar o relatório de Produtividade para respeitar o perfil do usuário logado.
+A tabela `sprints` não possui coluna `status` — sprints encerradas são identificadas por `is_active = false` (mesma correção já aplicada em `src/hooks/useSprintHistory.ts`). O hook do admin `src/features/admin/hooks/useSprintHistory.ts` ainda usa `.eq('status', 'completed')`, retornando HTTP 400 (`column sprints.status does not exist`) na tela `/dashboard-admin`.
 
-## Mudanças
+## Mudança (branch `fix/sprints-historico-400`)
 
-### 1. Novo item de menu lateral — Sala Ágil
+Arquivo: `src/features/admin/hooks/useSprintHistory.ts`
 
-`src/components/layout/AppShell.tsx` (NAV_SALA_AGIL):
-- Adicionar item `relatorios` apontando para `/sala-agil/relatorios`, grupo `org`, ícone `FileText`.
-- **Remover** o item `gerador-apf` ("Relatório de Evidências") do menu lateral.
+- Substituir `.eq('status', 'completed')` por `.eq('is_active', false)` na query de `sprints`.
+- Manter o restante (select, joins com `teams`, filtros de período e time) inalterado.
 
-`src/pages/Index.tsx`:
-- Adicionar `"relatorios"` em `VALID_SECTIONS`.
-- Adicionar bloco `{active === "relatorios" && ...}` renderizando `SalaAgilRelatorios` (com `LazySection` + `SectionGuard permission="view_dashboard"`), reutilizando o mesmo wrapper hoje usado dentro de `MetricsDashboard` para alimentar `sprints`, `developers`, `rawData`, `teamName` e `currentUserName`. A aba "Relatórios" dentro de `/sala-agil/metricas` continua existindo (não é o foco da remoção); apenas ganha um atalho direto pela sidebar.
-- A rota `gerador-apf` continua existindo internamente como fallback (o link some, mas o componente segue renderizável para não quebrar URLs antigas).
+Nenhuma outra ocorrência de `sprints.status` foi encontrada no código do admin. Sem alterações de schema, RLS, UI ou tipos.
 
-### 2. Catálogo de Relatórios — adicionar "Relatório de Evidências"
+## Validação
 
-`src/components/sala-agil/reports/SalaAgilRelatorios.tsx`:
-- Adicionar item no `CATALOG`: `id: "evidencias"`, título "Relatório de Evidências", descrição curta, ícone `FileText`, badge "Ágil".
-- Quando `active === "evidencias"`, renderizar `ApfGeneratorPage` (o componente atual do `gerador-apf`) com um botão "Voltar" no topo equivalente aos demais (`onBack={() => setActive(null)}`), envolto em um wrapper simples para manter a UX consistente.
-
-### 3. Relatório de Produtividade — bloqueio por perfil
-
-`src/components/sala-agil/reports/RelatorioAtividades.tsx`:
-- Receber o usuário logado via `useAuth()` (`user`, `isAdmin`).
-- No `useState(filters)` inicial, definir `memberId`:
-  - Admin → `"all"` (comportamento atual).
-  - Não-admin → o próprio `developer.id` correspondente ao `user.id` (match por `user_id`/`profile_id` no array `developers`); fallback `"all"` caso não haja correspondência.
-- No `ReportFilterBar`, marcar o campo "Analista" como `disabled` quando `!isAdmin`, garantindo que ele veja apenas seus próprios dados e não consiga trocar.
-- Se o `ReportFilterBar` ainda não suportar `disabled` por campo, adicionar a flag opcional ao tipo `FilterField` e propagar para o `<Select>`/`<Input>` correspondente.
-
-### 4. Sustentação — mesmo ajuste de Produtividade (consistência)
-
-`src/features/sustentacao/components/reports/RelatorioProdutividade.tsx`:
-- O `useState(analista)` já inicializa com `user?.id` para não-admin (linha 311). Adicionar `disabled={!isAdmin}` no campo "Analista" do filtro para impedir troca.
-
-## Detalhes técnicos
-
-- O `ApfGeneratorPage` é importado por `Index.tsx` via lazy; reaproveitar o mesmo import dentro de `SalaAgilRelatorios.tsx` via `lazy(() => import(...))` + `Suspense` para não engordar o bundle do catálogo.
-- Match `user → developer`: usar `developers.find(d => d.user_id === user?.id || d.id === user?.id)`; se a estrutura de `developers` não expuser `user_id`, fazer match por nome como fallback (`d.name === user?.name`).
-- Nenhuma mudança de schema/RLS é necessária — apenas UI/lógica de filtro.
-
-## Fora de escopo
-
-- Não remover a aba "Relatórios" do `MetricsDashboard` (o usuário não pediu).
-- Não alterar permissões RBAC nem rotas além das listadas.
+- Recarregar `/dashboard-admin` → painel "Histórico de Sprints" deve listar sprints encerradas sem erro 400 no console.
+- Filtros por time e período (3m/6m/12m/all) devem continuar funcionando.

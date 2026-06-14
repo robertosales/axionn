@@ -179,6 +179,85 @@ const TERMINAL_WORKFLOW = ["ag_aceite_final", "rejeitada", "cancelada"];
 // Status que ativam modal de suspensão/bloqueio
 const SUSPENSAO_STATUSES = ["bloqueada"];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HoursTable — extraída para permitir hooks (paginação) sob filtros dinâmicos
+// ─────────────────────────────────────────────────────────────────────────────
+function HoursTable({
+  rows,
+  profilesMap,
+  fasesMap,
+  isAdmin,
+  minutesToDisplay,
+  onEdit,
+  onDelete,
+}: {
+  rows: DemandaHour[];
+  profilesMap: Map<string, string>;
+  fasesMap: Record<string, string>;
+  isAdmin: boolean;
+  minutesToDisplay: (m: number) => string;
+  onEdit: (h: DemandaHour) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { currentPage, setCurrentPage, totalItems, pageSize, paginatedItems } =
+    usePagination(rows, { pageSize: 10 });
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border bg-muted/20 px-4 py-8 text-center text-xs text-muted-foreground">
+        Nenhum lançamento no período/analista selecionado.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border overflow-x-auto" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              {["Data", "Fase", "Descrição", "Lançado por"].map((h) => (
+                <th key={h} className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+              ))}
+              <th className="text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tempo</th>
+              {isAdmin && <th className="px-3 py-2.5" />}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {paginatedItems.map((h) => (
+              <tr key={h.id} className="hover:bg-muted/30 transition-colors">
+                <td className="px-3 py-2.5 text-xs">{new Date(h.created_at).toLocaleDateString("pt-BR")}</td>
+                <td className="px-3 py-2.5 text-xs">{fasesMap[h.fase] || h.fase}</td>
+                <td className="px-3 py-2.5 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
+                <td className="px-3 py-2.5 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
+                <td className="px-3 py-2.5 text-xs text-right font-mono font-medium">{minutesToDisplay(Number(h.horas))}</td>
+                {isAdmin && (
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => onEdit(h)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => onDelete(h.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <PaginationControls
+        currentPage={currentPage}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+      />
+    </div>
+  );
+}
+
 // Status que exigem justificativa obrigatória
 const REQUIRES_JUSTIFICATIVA_WORKFLOW = ["rejeitada", "cancelada", "planejamento_ag_aprovacao"];
 

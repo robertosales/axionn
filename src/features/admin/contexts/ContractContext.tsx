@@ -25,27 +25,36 @@ export function ContractProvider({ children }: { children: ReactNode }) {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { setResolved(true); return; }
 
-      // Verifica se tem contrato vinculado
-      const { data: uc } = await supabase
-        .from("user_contracts")
-        .select("contract_id, contracts(id,name)")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (uc?.contract_id) {
-        // Admin de contrato: fixa o contrato, não é gestor
-        setSelectedContractId(uc.contract_id);
-        setIsGestor(false);
-      } else {
-        // Sem contrato vinculado → verifica se é admin master
-        const { data: role } = await supabase
+      // Busca em paralelo: vínculo em user_contracts + role admin
+      const [{ data: uc }, { data: role }] = await Promise.all([
+        supabase
+          .from("user_contracts")
+          .select("contract_id")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id)
           .eq("role", "admin")
-          .maybeSingle();
-        setIsGestor(!!role);
-        // Gestor começa sem contrato selecionado ("todos")
+          .maybeSingle(),
+      ]);
+
+      const isAdmin = !!role;
+
+      if (isAdmin) {
+        // Admin/Gestor: pode trocar entre todos os contratos.
+        // Se houver vínculo em user_contracts, usa como pré-seleção;
+        // caso contrário, o effect abaixo seleciona o primeiro automaticamente.
+        setIsGestor(true);
+        setSelectedContractId(uc?.contract_id ?? null);
+      } else if (uc?.contract_id) {
+        // Usuário comum vinculado a um contrato: fixo (locked).
+        setIsGestor(false);
+        setSelectedContractId(uc.contract_id);
+      } else {
+        // Usuário comum sem vínculo: sem contrato.
+        setIsGestor(false);
         setSelectedContractId(null);
       }
       setResolved(true);

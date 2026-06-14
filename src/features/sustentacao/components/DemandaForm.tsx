@@ -1,16 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -22,26 +23,29 @@ import { toast } from "sonner";
 import { useProjetos } from "../hooks/useProjetos";
 import type { Demanda } from "../types/demanda";
 import {
-  TIPOS_DEMANDA_IMR, getPrazoRegra, calcPrazoInicio,
-  calcPrazoSolucao, isSolucaoDefinidaNaOS,
+  TIPOS_DEMANDA_IMR,
+  getPrazoRegra,
+  calcPrazoInicio,
+  calcPrazoSolucao,
+  isSolucaoDefinidaNaOS,
 } from "../types/imr";
 import { searchProfilesByName } from "../services/profiles.service";
 import { checkDemandaDuplicada } from "../services/demandas.service";
 import { useAuth } from "@/contexts/AuthContext";
 
 const SITUACAO_LABELS: Record<string, string> = {
-  fila_atendimento:         "Fila Atendimento",
-  planejamento_elaboracao:  "Em Elaboração",
-  planejamento_ag_aprovacao:"Ag. Aprovação",
-  planejamento_aprovada:    "Aprovada p/ Exec",
-  em_execucao:              "Em Execução",
-  bloqueada:                "Bloqueada",
-  hom_ag_homologacao:       "Ag. Homologação",
-  hom_homologada:           "Homologada",
-  rejeitada:                "Rejeitada",
-  fila_producao:            "Fila Produção",
-  ag_aceite_final:          "Ag. Aceite Final",
-  cancelada:                "Cancelada",
+  fila_atendimento: "Fila Atendimento",
+  planejamento_elaboracao: "Em Elaboração",
+  planejamento_ag_aprovacao: "Ag. Aprovação",
+  planejamento_aprovada: "Aprovada p/ Exec",
+  em_execucao: "Em Execução",
+  bloqueada: "Bloqueada",
+  hom_ag_homologacao: "Ag. Homologação",
+  hom_homologada: "Homologada",
+  rejeitada: "Rejeitada",
+  fila_producao: "Fila Produção",
+  ag_aceite_final: "Ag. Aceite Final",
+  cancelada: "Cancelada",
 };
 
 interface Props {
@@ -81,9 +85,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
   const [demandanteResults, setDemandanteResults] = useState<
     Array<{ id: string; user_id: string; display_name: string }>
   >([]);
-  const [selectedDemandante, setSelectedDemandante] = useState<
-    { id: string; display_name: string } | null
-  >(null);
+  const [selectedDemandante, setSelectedDemandante] = useState<{ id: string; display_name: string } | null>(null);
 
   // Projeto selecionado (objeto completo para exibir badge de contrato)
   const selectedProjeto = useMemo(
@@ -103,9 +105,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     if (!open) return;
     if (demanda) {
       // Tenta resolver project_id pelo campo texto legado
-      const matchedProjeto = projetos.find(
-        (p) => p.nome === demanda.projeto || p.id === (demanda as any).project_id,
-      );
+      const matchedProjeto = projetos.find((p) => p.nome === demanda.projeto || p.id === (demanda as any).project_id);
       setForm({
         rhm: demanda.rhm ?? "",
         project_id: (demanda as any).project_id ?? matchedProjeto?.id ?? "",
@@ -129,9 +129,14 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
       }
     } else {
       setForm({
-        rhm: "", project_id: "", tipo: "manutencao_corretiva",
-        descricao: "", sla: "padrao", demandante: "",
-        tipo_defeito: "nao_impeditivo", originada_diagnostico: false,
+        rhm: "",
+        project_id: "",
+        tipo: "manutencao_corretiva",
+        descricao: "",
+        sla: "padrao",
+        demandante: "",
+        tipo_defeito: "nao_impeditivo",
+        originada_diagnostico: false,
         data_previsao_encerramento: null,
       });
       setSelectedDemandante(null);
@@ -142,8 +147,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     setDemandanteResults([]);
   }, [open, demanda, projetos]);
 
-  const markTouched = (field: string) =>
-    setTouched((p) => ({ ...p, [field]: true }));
+  const markTouched = (field: string) => setTouched((p) => ({ ...p, [field]: true }));
 
   const isCorretiva = form.tipo === "manutencao_corretiva";
 
@@ -166,7 +170,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     const defeito = isCorretiva ? form.tipo_defeito : undefined;
     const regra = getPrazoRegra(form.tipo, regime, defeito);
     if (!regra) return null;
-    const prazoInicio  = calcPrazoInicio(dataInicio, form.tipo, regime, defeito);
+    const prazoInicio = calcPrazoInicio(dataInicio, form.tipo, regime, defeito);
     const prazoSolucao = calcPrazoSolucao(dataInicio, form.tipo, regime, defeito);
     const isOS = isSolucaoDefinidaNaOS(form.tipo, regime, defeito);
     return { regra, prazoInicio, prazoSolucao, isOS };
@@ -178,41 +182,37 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     }
   }, [prazoInfo?.prazoSolucao, isEdit]);
 
-  // ── FIX (CA-01 / CA-02): em edição, usar o team_id da demanda;
-  // em criação, manter currentTeamId (selecionado pelo usuário no form).
+  // ── FIX (CA-01 / CA-02): guard para currentTeamId nulo ────────────────────
   const searchDemandante = async (q: string) => {
     setDemandanteSearch(q);
-    if (q.length < 2) { setDemandanteResults([]); return; }
-    // Escopo CONTRATO: edição usa demanda.contract_id; criação usa o
-    // contrato do projeto selecionado. Fallback por team_id para legados.
-    const contractId =
-      (demanda as any)?.contract_id ??
-      (selectedProjeto as any)?.contract_id ??
-      null;
-    const teamId = (demanda as any)?.team_id ?? currentTeamId;
-    if (!contractId && !teamId) {
-      console.warn("[DemandaForm] searchDemandante bloqueado: sem contractId/teamId.");
+    if (q.length < 2) {
+      setDemandanteResults([]);
       return;
     }
-    const results = await searchProfilesByName(q, 5, { contractId, teamId });
+    if (!currentTeamId) {
+      // Sem time ativo não é possível filtrar membros — evita retorno vazio silencioso
+      console.warn("[DemandaForm] searchDemandante bloqueado: currentTeamId é null.");
+      return;
+    }
+    const results = await searchProfilesByName(q, 5, currentTeamId);
     setDemandanteResults(results as any[]);
   };
 
   // Validações
-  const rhmTouched  = touched.rhm || forceValidate;
-  const rhmInvalid  = !form.rhm.trim() || !/^\d+$/.test(form.rhm.trim());
-  const rhmError    = rhmTouched && rhmInvalid;
+  const rhmTouched = touched.rhm || forceValidate;
+  const rhmInvalid = !form.rhm.trim() || !/^\d+$/.test(form.rhm.trim());
+  const rhmError = rhmTouched && rhmInvalid;
 
-  const projetoError    = (touched.project_id || forceValidate) && !form.project_id;
-  const demandanteError = (touched.demandante  || forceValidate) && !selectedDemandante && !isEdit;
-  const previsaoError   = (touched.data_previsao_encerramento || forceValidate) && !form.data_previsao_encerramento;
+  const projetoError = (touched.project_id || forceValidate) && !form.project_id;
+  const demandanteError = (touched.demandante || forceValidate) && !selectedDemandante && !isEdit;
+  const previsaoError = (touched.data_previsao_encerramento || forceValidate) && !form.data_previsao_encerramento;
 
   const handle = async () => {
     setForceValidate(true);
-    const rhmOk       = form.rhm.trim() && /^\d+$/.test(form.rhm.trim());
-    const projetoOk   = !!form.project_id;
+    const rhmOk = form.rhm.trim() && /^\d+$/.test(form.rhm.trim());
+    const projetoOk = !!form.project_id;
     const demandanteOk = isEdit || !!selectedDemandante;
-    const previsaoOk  = !!form.data_previsao_encerramento;
+    const previsaoOk = !!form.data_previsao_encerramento;
 
     if (!rhmOk || !projetoOk || !demandanteOk || !previsaoOk) {
       toast.error("Preencha os campos obrigatórios: #, Projeto, Autor e Data de Previsão.");
@@ -220,7 +220,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     }
 
     setLoading(true);
-    const regime  = isCorretiva ? form.sla : "padrao";
+    const regime = isCorretiva ? form.sla : "padrao";
     const defeito = isCorretiva ? form.tipo_defeito : undefined;
     const situacao = situacaoInicial || demanda?.situacao || "fila_atendimento";
 
@@ -240,9 +240,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
           demanda?.id,
         );
         if (dup) {
-          toast.error(
-            `Já existe uma demanda com o número #${form.rhm} no projeto "${nomeProjetoTexto}".`,
-          );
+          toast.error(`Já existe uma demanda com o número #${form.rhm} no projeto "${nomeProjetoTexto}".`);
           setLoading(false);
           return;
         }
@@ -253,14 +251,14 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
 
     const payload: Record<string, any> = {
       situacao,
-      rhm:        form.rhm,
+      rhm: form.rhm,
       project_id: form.project_id || null,
-      projeto:    nomeProjetoTexto,           // campo legado — removido na Fase 5
-      tipo:       form.tipo,
-      descricao:  form.descricao,
-      titulo:     form.descricao,
-      sla:        regime,
-      tipo_defeito:          isCorretiva ? form.tipo_defeito : null,
+      projeto: nomeProjetoTexto, // campo legado — removido na Fase 5
+      tipo: form.tipo,
+      descricao: form.descricao,
+      titulo: form.descricao,
+      sla: regime,
+      tipo_defeito: isCorretiva ? form.tipo_defeito : null,
       originada_diagnostico: isCorretiva ? form.originada_diagnostico : false,
       data_previsao_encerramento: form.data_previsao_encerramento
         ? format(form.data_previsao_encerramento, "yyyy-MM-dd")
@@ -271,16 +269,21 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
 
     if (!isEdit) {
       payload.prazo_inicio_atendimento = calcPrazoInicio(dataInicio, form.tipo, regime, defeito)?.toISOString() ?? null;
-      payload.prazo_solucao            = calcPrazoSolucao(dataInicio, form.tipo, regime, defeito)?.toISOString() ?? null;
+      payload.prazo_solucao = calcPrazoSolucao(dataInicio, form.tipo, regime, defeito)?.toISOString() ?? null;
     }
 
     await onSubmit(payload);
 
     if (!isEdit) {
       setForm({
-        rhm: "", project_id: "", tipo: "manutencao_corretiva",
-        descricao: "", sla: "padrao", demandante: "",
-        tipo_defeito: "nao_impeditivo", originada_diagnostico: false,
+        rhm: "",
+        project_id: "",
+        tipo: "manutencao_corretiva",
+        descricao: "",
+        sla: "padrao",
+        demandante: "",
+        tipo_defeito: "nao_impeditivo",
+        originada_diagnostico: false,
         data_previsao_encerramento: null,
       });
       setSelectedDemandante(null);
@@ -297,9 +300,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-base">
-            {isEdit ? `Editar Demanda #${demanda?.rhm}` : "Nova Demanda"}
-          </DialogTitle>
+          <DialogTitle className="text-base">{isEdit ? `Editar Demanda #${demanda?.rhm}` : "Nova Demanda"}</DialogTitle>
           <DialogDescription>
             {isEdit ? (
               <span>
@@ -309,8 +310,10 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                 </span>
               </span>
             ) : situacaoLabel ? (
-              <>Preencha os dados para cadastrar uma nova demanda.{" "}
-                <span className="font-medium text-foreground">Situação inicial: {situacaoLabel}</span></>
+              <>
+                Preencha os dados para cadastrar uma nova demanda.{" "}
+                <span className="font-medium text-foreground">Situação inicial: {situacaoLabel}</span>
+              </>
             ) : (
               "Preencha os dados para cadastrar uma nova demanda de sustentação."
             )}
@@ -321,7 +324,9 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
           {/* LINHA 1: # + Projeto */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs"># <span className="text-destructive">*</span></Label>
+              <Label className="text-xs">
+                # <span className="text-destructive">*</span>
+              </Label>
               <Input
                 value={form.rhm}
                 onChange={(e) => {
@@ -329,7 +334,9 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                   setForm((p) => ({ ...p, rhm: val }));
                   if (val.length > 0) markTouched("rhm");
                 }}
-                onBlur={() => { if (form.rhm.trim().length > 0) markTouched("rhm"); }}
+                onBlur={() => {
+                  if (form.rhm.trim().length > 0) markTouched("rhm");
+                }}
                 placeholder="81"
                 inputMode="numeric"
                 className={cn("h-8 text-sm", rhmError && "border-destructive focus-visible:ring-destructive")}
@@ -342,7 +349,9 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
             </div>
 
             <div>
-              <Label className="text-xs">Projeto <span className="text-destructive">*</span></Label>
+              <Label className="text-xs">
+                Projeto <span className="text-destructive">*</span>
+              </Label>
               <Select
                 value={form.project_id || "_none"}
                 onValueChange={(v) => {
@@ -354,7 +363,9 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                   <SelectValue placeholder={loadingProjetos ? "Carregando..." : "Selecione..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none" disabled>Selecione...</SelectItem>
+                  <SelectItem value="_none" disabled>
+                    Selecione...
+                  </SelectItem>
                   {projetos.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.nome}
@@ -386,10 +397,14 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
             <div>
               <Label className="text-xs">Tipo</Label>
               <Select value={form.tipo} onValueChange={(v) => setForm((p) => ({ ...p, tipo: v }))}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {TIPOS_DEMANDA_IMR.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -400,9 +415,14 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                 <div className="flex items-center gap-1 h-8 px-2 border rounded-md bg-muted/30">
                   <span className="text-sm flex-1 truncate">{selectedDemandante.display_name}</span>
                   <button
-                    onClick={() => { setSelectedDemandante(null); setForm((p) => ({ ...p, demandante: "" })); }}
+                    onClick={() => {
+                      setSelectedDemandante(null);
+                      setForm((p) => ({ ...p, demandante: "" }));
+                    }}
                     className="text-muted-foreground hover:text-foreground text-xs ml-1"
-                  >✕</button>
+                  >
+                    ✕
+                  </button>
                 </div>
               ) : (
                 <div className="relative">
@@ -413,7 +433,10 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                     onBlur={() => markTouched("demandante")}
                     placeholder={currentTeamId ? "Buscar..." : "Sem time ativo"}
                     disabled={!currentTeamId}
-                    className={cn("pl-7 h-8 text-sm", demandanteError && "border-destructive focus-visible:ring-destructive")}
+                    className={cn(
+                      "pl-7 h-8 text-sm",
+                      demandanteError && "border-destructive focus-visible:ring-destructive",
+                    )}
                   />
                   {/* Aviso inline quando não há time ativo (CA-01) */}
                   {!currentTeamId && (
@@ -433,7 +456,9 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                             setDemandanteSearch("");
                             setDemandanteResults([]);
                           }}
-                        >{r.display_name}</button>
+                        >
+                          {r.display_name}
+                        </button>
                       ))}
                     </div>
                   )}
@@ -445,40 +470,77 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
 
           {/* BLOCO CONDICIONAL — Manutenção Corretiva */}
           {isCorretiva && (
-            <div className="rounded-md border p-2.5 space-y-2" style={{ backgroundColor: "#e8f2fa", borderColor: "#b3d4ed" }}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#1a6fa8" }}>Campos exclusivos — Manutenção Corretiva</p>
+            <div
+              className="rounded-md border p-2.5 space-y-2"
+              style={{ backgroundColor: "#e8f2fa", borderColor: "#b3d4ed" }}
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#1a6fa8" }}>
+                Campos exclusivos — Manutenção Corretiva
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Regime de Atendimento</Label>
                   <Select
                     value={form.sla}
-                    onValueChange={(v) => setForm((p) => ({ ...p, sla: v, data_previsao_encerramento: isEdit ? p.data_previsao_encerramento : null }))}
+                    onValueChange={(v) =>
+                      setForm((p) => ({
+                        ...p,
+                        sla: v,
+                        data_previsao_encerramento: isEdit ? p.data_previsao_encerramento : null,
+                      }))
+                    }
                   >
-                    <SelectTrigger className="h-8 text-sm bg-white"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-8 text-sm bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="padrao">Padrão</SelectItem>
                       <SelectItem value="continuo">Contínuo</SelectItem>
                     </SelectContent>
                   </Select>
                   {selectedProjeto?.contract_id && (
-                    <p className="text-[10px] text-sky-600 mt-0.5">
-                      ↑ Pré-preenchido pelo contrato
-                    </p>
+                    <p className="text-[10px] text-sky-600 mt-0.5">↑ Pré-preenchido pelo contrato</p>
                   )}
                 </div>
                 <div>
                   <Label className="text-xs">Defeito Impeditivo</Label>
                   <div className="flex gap-1 mt-1.5">
-                    <Button type="button"
-                      variant={form.tipo_defeito === "impeditivo" ? "default" : "outline"} size="sm"
-                      className={cn("h-7 text-xs flex-1", form.tipo_defeito === "impeditivo" && "bg-info hover:bg-info/90 text-info-foreground")}
-                      onClick={() => setForm((p) => ({ ...p, tipo_defeito: "impeditivo", data_previsao_encerramento: isEdit ? p.data_previsao_encerramento : null }))}
-                    >Sim</Button>
-                    <Button type="button"
-                      variant={form.tipo_defeito === "nao_impeditivo" ? "default" : "outline"} size="sm"
-                      className={cn("h-7 text-xs flex-1", form.tipo_defeito === "nao_impeditivo" && "bg-info hover:bg-info/90 text-info-foreground")}
-                      onClick={() => setForm((p) => ({ ...p, tipo_defeito: "nao_impeditivo", data_previsao_encerramento: isEdit ? p.data_previsao_encerramento : null }))}
-                    >Não</Button>
+                    <Button
+                      type="button"
+                      variant={form.tipo_defeito === "impeditivo" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-7 text-xs flex-1",
+                        form.tipo_defeito === "impeditivo" && "bg-info hover:bg-info/90 text-info-foreground",
+                      )}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          tipo_defeito: "impeditivo",
+                          data_previsao_encerramento: isEdit ? p.data_previsao_encerramento : null,
+                        }))
+                      }
+                    >
+                      Sim
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={form.tipo_defeito === "nao_impeditivo" ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-7 text-xs flex-1",
+                        form.tipo_defeito === "nao_impeditivo" && "bg-info hover:bg-info/90 text-info-foreground",
+                      )}
+                      onClick={() =>
+                        setForm((p) => ({
+                          ...p,
+                          tipo_defeito: "nao_impeditivo",
+                          data_previsao_encerramento: isEdit ? p.data_previsao_encerramento : null,
+                        }))
+                      }
+                    >
+                      Não
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -486,11 +548,16 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                 <Checkbox
                   checked={form.originada_diagnostico}
                   onCheckedChange={(v) => setForm((p) => ({ ...p, originada_diagnostico: !!v }))}
-                  id="diag" className="h-3.5 w-3.5"
+                  id="diag"
+                  className="h-3.5 w-3.5"
                 />
-                <Label htmlFor="diag" className="font-normal text-xs">Originada de diagnóstico de incidente?</Label>
+                <Label htmlFor="diag" className="font-normal text-xs">
+                  Originada de diagnóstico de incidente?
+                </Label>
                 {form.originada_diagnostico && (
-                  <span className="text-[10px] font-medium ml-1" style={{ color: "#1a6fa8" }}>→ Prazo de início: IMEDIATO</span>
+                  <span className="text-[10px] font-medium ml-1" style={{ color: "#1a6fa8" }}>
+                    → Prazo de início: IMEDIATO
+                  </span>
                 )}
               </div>
             </div>
@@ -500,34 +567,46 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
           <div className="grid grid-cols-2 gap-2">
             {prazoInfo && !isEdit && (
               <div className="rounded-md border p-2" style={{ backgroundColor: "#e8f2fa", borderColor: "#b3d4ed" }}>
-                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "#1a6fa8" }}>Prazos Calculados</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "#1a6fa8" }}>
+                  Prazos Calculados
+                </p>
                 <div className="space-y-0.5 text-xs">
                   <div>
                     <span style={{ color: "#4a6278" }}>Início: </span>
                     <span className="font-medium" style={{ color: "#0f1e2d" }}>
                       {form.originada_diagnostico && isCorretiva
                         ? "IMEDIATO"
-                        : prazoInfo.prazoInicio ? format(prazoInfo.prazoInicio, "dd/MM/yyyy HH:mm") : "—"}
+                        : prazoInfo.prazoInicio
+                          ? format(prazoInfo.prazoInicio, "dd/MM/yyyy HH:mm")
+                          : "—"}
                     </span>
                   </div>
                   <div>
                     <span style={{ color: "#4a6278" }}>Solução: </span>
                     <span className="font-medium" style={{ color: "#0f1e2d" }}>
-                      {prazoInfo.isOS ? "Definido na OS" : prazoInfo.prazoSolucao ? format(prazoInfo.prazoSolucao, "dd/MM/yyyy HH:mm") : "—"}
+                      {prazoInfo.isOS
+                        ? "Definido na OS"
+                        : prazoInfo.prazoSolucao
+                          ? format(prazoInfo.prazoSolucao, "dd/MM/yyyy HH:mm")
+                          : "—"}
                     </span>
                   </div>
                 </div>
               </div>
             )}
             <div className={prazoInfo && !isEdit ? "" : "col-span-2"}>
-              <Label className="text-xs">Data de Previsão de Encerramento <span className="text-destructive">*</span></Label>
+              <Label className="text-xs">
+                Data de Previsão de Encerramento <span className="text-destructive">*</span>
+              </Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={cn("w-full justify-start text-left font-normal h-8 text-sm",
+                    className={cn(
+                      "w-full justify-start text-left font-normal h-8 text-sm",
                       !form.data_previsao_encerramento && "text-muted-foreground",
-                      previsaoError && "border-destructive")}
+                      previsaoError && "border-destructive",
+                    )}
                   >
                     <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
                     {form.data_previsao_encerramento
@@ -539,7 +618,10 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                   <Calendar
                     mode="single"
                     selected={form.data_previsao_encerramento || undefined}
-                    onSelect={(d) => { setForm((p) => ({ ...p, data_previsao_encerramento: d || null })); markTouched("data_previsao_encerramento"); }}
+                    onSelect={(d) => {
+                      setForm((p) => ({ ...p, data_previsao_encerramento: d || null }));
+                      markTouched("data_previsao_encerramento");
+                    }}
                     className="p-3 pointer-events-auto"
                     locale={ptBR}
                   />
@@ -549,9 +631,9 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
             </div>
           </div>
 
-          {/* Título */}
+          {/* Descrição */}
           <div>
-            <Label className="text-xs">Título</Label>
+            <Label className="text-xs">Descrição</Label>
             <Textarea
               value={form.descricao}
               onChange={(e) => setForm((p) => ({ ...p, descricao: e.target.value }))}
@@ -562,16 +644,16 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
           <Button
             style={{ backgroundColor: "#1a6fa8" }}
             className="hover:opacity-90 text-white"
             onClick={handle}
             disabled={loading}
           >
-            {loading
-              ? (isEdit ? "Salvando..." : "Criando...")
-              : (isEdit ? "Salvar Alterações" : "Criar Demanda")}
+            {loading ? (isEdit ? "Salvando..." : "Criando...") : isEdit ? "Salvar Alterações" : "Criar Demanda"}
           </Button>
         </DialogFooter>
       </DialogContent>

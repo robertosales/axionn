@@ -1,72 +1,42 @@
 ## Objetivo
 
-Na aba **Atividades** do detalhe da demanda (`DemandaDetail.tsx`, tab `horas`), adicionar a mesma barra de filtros usada no relatório **Produtividade da Equipe** e paginar a tabela de lançamentos.
+Na aba **Atividades** do detalhe da demanda, aplicar a mesma regra de visibilidade do filtro **Analista** já usada no relatório **Produtividade da Equipe** (`RelatorioProdutividade.tsx`):
 
-## Escopo (apenas frontend / apresentação)
+- **Usuário comum** → combo já vem preenchida com o **próprio usuário logado** e fica **desabilitada** (vê apenas seus lançamentos).
+- **Admin / Gestor** → combo inicia em **"Todos"** e fica **liberada**, podendo escolher qualquer analista para ver lançamentos de terceiros.
 
-Arquivo único: `src/features/sustentacao/components/DemandaDetail.tsx` — bloco `<TabsContent value="horas">` (linhas ~1146-1239).
+## Escopo
 
-Nada de mudança em serviços, RLS, schema ou na regra de cálculo do `total` (que continua somando TODOS os lançamentos da demanda, independente do filtro — o filtro afeta só a tabela exibida).
+Arquivo único: `src/features/sustentacao/components/DemandaDetail.tsx` (aba `horas`). Sem mexer em serviços, RLS ou cálculo do "Total Acumulado".
 
 ## Mudanças
 
-### 1. Barra de filtros (reuso de `ReportFilterBar`)
-Inserir acima da tabela, abaixo do card "Lançar Horas":
+1. Usar `useAuth()` (já importado) para obter `user` e `isAdmin`. Considerar também gestor: reaproveitar a mesma flag de permissão usada em outros pontos do arquivo para "lançar por outro" (ex.: `canManageHours`/`isAdmin`). Se só houver `isAdmin`, manter `isAdmin` como condição de liberação (igual ao Produtividade).
 
-- **Período**: 7/15/30/60/90 dias + Personalizado (default: 30 dias)
-- **Data Início** / **Data Fim** (`date`)
-- **Analista**: dropdown com os usuários que possuem lançamentos nesta demanda (deduplicados via `buildAnalistasDedup` a partir de `hours[].user_id` + `profilesMap`)
-- **Limpar** + contador "X registros"
-
-Componente: `ReportFilterBar` (`src/shared/components/reports/ReportFilterBar.tsx`) — já suporta exatamente este layout (modo "relatório", igual ao screenshot).
-
-Estado local novo no componente:
+2. Estado inicial do filtro:
 ```ts
-const [periodo, setPeriodo]       = useState("30");
-const [dataInicio, setDataInicio] = useState(daysAgo(30));
-const [dataFim, setDataFim]       = useState(today());
-const [analista, setAnalista]     = useState("all");
-const [horasPage, setHorasPage]   = useState(1);
+const [hoursAnalista, setHoursAnalista] = useState(
+  () => isAdmin ? "all" : (user?.id ?? "all")
+);
+useEffect(() => {
+  if (!isAdmin && user?.id && hoursAnalista === "all") setHoursAnalista(user.id);
+}, [user?.id, isAdmin]);
 ```
 
-### 2. Lista filtrada (memo)
-```ts
-const filteredHours = useMemo(() => {
-  const ini = dataInicio ? new Date(dataInicio + "T00:00:00") : null;
-  const fim = dataFim    ? new Date(dataFim    + "T23:59:59") : null;
-  return hours.filter(h => {
-    const d = new Date(h.created_at);
-    if (ini && d < ini) return false;
-    if (fim && d > fim) return false;
-    if (!analistaMatches(analista, h.user_id)) return false;
-    return true;
-  });
-}, [hours, dataInicio, dataFim, analista]);
-```
+3. Passar `analistaDisabled={!isAdmin}` para o `ReportFilterBar` (prop já suportada, conforme uso em `RelatorioProdutividade`).
 
-Opções de analista deduplicadas com `buildAnalistasDedup` (`src/features/sustentacao/utils/analistasDedup.ts`) — mesmo util usado nos relatórios.
+4. Botão **Limpar** respeita a regra: reseta para `"all"` se admin, ou para `user.id` se comum.
 
-Resetar `horasPage` para 1 sempre que filtros mudarem (`useEffect`).
-
-### 3. Paginação (reuso de `usePagination` + `PaginationControls`)
-- `usePagination(filteredHours, { pageSize: 10 })` — 10 por página, padrão do projeto.
-- Renderizar `paginatedItems` em vez de `hours.map(...)` na `<tbody>`.
-- `<PaginationControls />` (`src/shared/components/common/Pagination.tsx`) abaixo da tabela.
-
-### 4. Vazio / total
-- Se `filteredHours.length === 0` mas `hours.length > 0`: mostrar mensagem leve "Nenhum lançamento no período/analista selecionado" no lugar da tabela.
-- Card "Total Acumulado" no topo continua somando `total` (não muda) — é o acumulado real da demanda. A barra mostra "X registros" do filtro atual, evitando confusão.
+5. A lista deduplicada de analistas continua a partir dos `hours[]` da demanda — usuário comum verá só seu próprio nome na combo (travada).
 
 ## Fora de escopo
 
-- Não alterar `useDemandaHoras` / serviço — paginação é client-side sobre o array já carregado, igual ao padrão dos relatórios.
-- Não mexer em RLS nem na busca de responsáveis (já corrigida nas iterações anteriores).
-- Não tocar nas outras abas (detalhes / histórico / responsáveis / evidências).
+- Não alterar paginação, total acumulado, ou outras abas.
+- Não mexer em RLS — usuário comum já só consegue lançar/editar seus próprios registros; o filtro aqui é apenas de visualização sobre o array já carregado.
 
 ## Validação
 
-1. Abrir demanda com >10 lançamentos: paginação aparece, navega corretamente.
-2. Selecionar período "7 dias": tabela filtra; contador atualiza; "Total Acumulado" permanece inalterado.
-3. Trocar analista: tabela filtra; ao escolher "Todos", volta ao conjunto completo.
-4. "Limpar" reseta período=30, datas, analista=all, página=1.
-5. Demanda sem lançamentos: filtros ficam disabled ou ocultos (manter comportamento atual — só renderizar a barra se `hours.length > 0`).
+1. Login como usuário comum (ex.: Tiago): aba Atividades abre com a combo travada no próprio nome, listando só seus lançamentos.
+2. Login como admin: combo inicia em "Todos", liberada, pode escolher qualquer analista da demanda.
+3. Botão Limpar respeita o perfil.
+4. Total Acumulado permanece inalterado.

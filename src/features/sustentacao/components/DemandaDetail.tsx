@@ -1214,44 +1214,57 @@ export function DemandaDetail({
                   </div>
                 </div>
 
-                {hours.length > 0 && (
-                  <div className="rounded-xl border overflow-x-auto" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          {["Data", "Fase", "Descrição", "Lançado por"].map((h) => (
-                            <th key={h} className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
-                          ))}
-                          <th className="text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tempo</th>
-                          {isAdmin && <th className="px-3 py-2.5" />}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {hours.map((h) => (
-                          <tr key={h.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-3 py-2.5 text-xs">{new Date(h.created_at).toLocaleDateString("pt-BR")}</td>
-                            <td className="px-3 py-2.5 text-xs">{fasesMap[h.fase] || h.fase}</td>
-                            <td className="px-3 py-2.5 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
-                            <td className="px-3 py-2.5 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
-                            <td className="px-3 py-2.5 text-xs text-right font-mono font-medium">{minutesToDisplay(Number(h.horas))}</td>
-                            {isAdmin && (
-                              <td className="px-3 py-2.5">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setEditHour(h); setShowEditHourDialog(true); }}>
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteHourId(h.id)}>
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {hours.length > 0 && (() => {
+                  const analistasOptions = buildAnalistasDedup(
+                    Array.from(new Set(hours.map((h) => h.user_id))),
+                    Array.from(profilesMap.entries()).map(([user_id, display_name]) => ({ user_id, display_name })),
+                  );
+                  const filteredHours = hours.filter((h) => {
+                    const d = new Date(h.created_at);
+                    if (hoursDataInicio) {
+                      const ini = new Date(hoursDataInicio + "T00:00:00");
+                      if (d < ini) return false;
+                    }
+                    if (hoursDataFim) {
+                      const fim = new Date(hoursDataFim + "T23:59:59");
+                      if (d > fim) return false;
+                    }
+                    if (!analistaMatches(hoursAnalista, h.user_id)) return false;
+                    return true;
+                  });
+                  return (
+                    <>
+                      <ReportFilterBar
+                        periodo={hoursPeriodo}
+                        setPeriodo={setHoursPeriodo}
+                        dataInicio={hoursDataInicio}
+                        setDataInicio={setHoursDataInicio}
+                        dataFim={hoursDataFim}
+                        setDataFim={setHoursDataFim}
+                        analista={hoursAnalista}
+                        setAnalista={setHoursAnalista}
+                        analistas={analistasOptions}
+                        showAnalista={true}
+                        totalFiltrado={filteredHours.length}
+                        onClear={() => {
+                          setHoursPeriodo("30");
+                          setHoursDataInicio(hoursDaysAgo(30));
+                          setHoursDataFim(hoursToday());
+                          setHoursAnalista("all");
+                        }}
+                      />
+                      <HoursTable
+                        rows={filteredHours}
+                        profilesMap={profilesMap}
+                        fasesMap={fasesMap}
+                        isAdmin={!!isAdmin}
+                        minutesToDisplay={minutesToDisplay}
+                        onEdit={(h) => { setEditHour(h); setShowEditHourDialog(true); }}
+                        onDelete={(id) => setDeleteHourId(id)}
+                      />
+                    </>
+                  );
+                })()}
               </TabsContent>
 
               {/* ─── ABA RESPONSÁVEIS ─── */}

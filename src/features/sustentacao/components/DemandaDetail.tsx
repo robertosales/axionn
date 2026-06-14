@@ -412,7 +412,15 @@ export function DemandaDetail({
   const [hoursPeriodo, setHoursPeriodo]   = useState("30");
   const [hoursDataInicio, setHoursDataInicio] = useState(hoursDaysAgo(30));
   const [hoursDataFim, setHoursDataFim]   = useState(hoursToday());
-  const [hoursAnalista, setHoursAnalista] = useState<string>("all");
+  const [hoursAnalista, setHoursAnalista] = useState<string>(
+    () => (isAdmin ? "all" : (user?.id ?? "all")),
+  );
+  useEffect(() => {
+    if (!isAdmin && user?.id && hoursAnalista === "all") {
+      setHoursAnalista(user.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, isAdmin]);
 
   const [responsaveis, setResponsaveis] = useState<DemandaResponsavel[]>([]);
   const [respLoading, setRespLoading] = useState(false);
@@ -1324,12 +1332,13 @@ export function DemandaDetail({
                         setAnalista={setHoursAnalista}
                         analistas={analistasOptions}
                         showAnalista={true}
+                        analistaDisabled={!isAdmin}
                         totalFiltrado={filteredHours.length}
                         onClear={() => {
                           setHoursPeriodo("30");
                           setHoursDataInicio(hoursDaysAgo(30));
                           setHoursDataFim(hoursToday());
-                          setHoursAnalista("all");
+                          setHoursAnalista(isAdmin ? "all" : (user?.id ?? "all"));
                         }}
                       />
                       <HoursTable

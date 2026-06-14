@@ -4013,6 +4013,10 @@ export type Database = {
         Args: { p_rows: Json; p_team_id: string }
         Returns: Json
       }
+      users_share_contract: {
+        Args: { _a: string; _b: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role:

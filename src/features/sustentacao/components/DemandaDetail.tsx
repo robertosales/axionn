@@ -412,7 +412,7 @@ export function DemandaDetail({
   const [hoursPeriodo, setHoursPeriodo]   = useState("30");
   const [hoursDataInicio, setHoursDataInicio] = useState(hoursDaysAgo(30));
   const [hoursDataFim, setHoursDataFim]   = useState(hoursToday());
-  const [hoursAnalista, setHoursAnalista] = useState("all");
+  const [hoursAnalista, setHoursAnalista] = useState<string>("all");
 
   const [responsaveis, setResponsaveis] = useState<DemandaResponsavel[]>([]);
   const [respLoading, setRespLoading] = useState(false);

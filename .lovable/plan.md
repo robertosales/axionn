@@ -1,51 +1,68 @@
-# Correção: busca de responsáveis + carregamento de times/analistas em relatórios
-
 ## Branch
-`develop`
+`fix/responsaveis-search-by-contract`
 
 ## Diagnóstico
 
-### 1. Busca de responsáveis na aba "Responsáveis" da demanda
-`DemandaDetail.tsx:621` e `DemandaForm.tsx:190` chamam `searchProfiles(q, currentTeamId)` usando o `currentTeamId` global do `AuthContext`. Para admin / admin_contrato (gestor) — que transitam entre times — esse valor frequentemente NÃO corresponde ao `team_id` da demanda aberta. Resultado: a busca retorna `[]` mesmo digitando nomes que existem (validado no banco: `tiago.vieira2@globalweb.com.br` é membro ativo de TIME 2 `ef0ee6b0-...`). Usuários comuns (1 time só) funcionam por coincidência.
+A busca de responsáveis está escopada por **time** (`team_members` filtrado pelo `team_id` da demanda). Quando o contrato tem múltiplos times (ex.: TIME 1, TIME 2, TIME 3 do mesmo contrato), só aparecem usuários do mesmo time da demanda — usuários de times "irmãos" no contrato ficam invisíveis. O escopo correto é **contrato**: qualquer pessoa que faça parte do contrato deve ser localizável como responsável, independentemente do time.
 
-### 2. Carregamento de times nos Relatórios
-`AuthContext.refreshTeams` lê apenas `team_members` do usuário logado. Admin que não foi explicitamente adicionado a um time não enxerga aquele time no filtro de Relatórios. RLS de `teams` já permite `is_admin()` ler todos → falta apenas adaptar o fetch para admins.
-
-### 3. Carregamento de analistas nos Relatórios
-A lista de "Analista" em `RelatorioProdutividade` é derivada das demandas/horas filtradas. Como `useDemandas`, `useAllTransitions` e `useAllHours` filtram por `currentTeamId` e o select de "Time" no `ReportFilters` só atualiza estado LOCAL (não muda `currentTeamId`), trocar de time no filtro não recarrega dados → analistas ficam vazios para qualquer time diferente do ativo.
+Arquivos envolvidos:
+- `src/features/sustentacao/services/responsaveis.service.ts` — `searchProfiles(query, teamId)`
+- `src/features/sustentacao/services/profiles.service.ts` — `searchProfilesByName(query, limit, teamId)`
+- `src/features/sustentacao/components/DemandaDetail.tsx` (linha 621-625) — passa `demanda.team_id`
+- `src/features/sustentacao/components/DemandaForm.tsx` — idem
+- Tabelas: `demandas.contract_id`, `contract_room_teams (contract_id, team_id)`, `contract_members (contract_id, user_id)`, `team_members`, `profiles`
 
 ## Solução
 
-Mantém a estrutura nova (RBAC com `user_module_roles`, `team_members`, hooks atuais). Sem migração SQL.
+Mudar o escopo de busca de **time** para **contrato**, preservando fallback por time quando a demanda não tem `contract_id`.
 
-### Arquivos a alterar
+### 1. `responsaveis.service.ts` — nova assinatura
 
-**1. `src/features/sustentacao/components/DemandaDetail.tsx`**
-- `handleSearch`: trocar `currentTeamId` por `demanda?.team_id ?? currentTeamId`.
+```ts
+searchProfiles(query, opts: { contractId?: string|null; teamId?: string|null })
+```
 
-**2. `src/features/sustentacao/components/DemandaForm.tsx`**
-- `searchDemandante`: em edição, priorizar `demanda?.team_id ?? currentTeamId`. Em criação, manter `currentTeamId`.
+Algoritmo:
+1. Se `contractId`: coletar `user_id`s de DUAS fontes em paralelo
+   - `contract_room_teams.team_id WHERE contract_id = X AND is_active = true` → `team_members.user_id`
+   - `contract_members.user_id WHERE contract_id = X`
+   Unir (Set) os user_ids.
+2. Senão, se `teamId`: manter o fluxo atual (`team_members` do time).
+3. Filtrar `profiles` por `.in(user_id, ids) + is_active + ilike(display_name|email)` limit 10.
 
-**3. `src/contexts/AuthContext.tsx` — `refreshTeams`**
-- Se `isAdmin`, fazer `SELECT id, name, module FROM teams` diretamente (RLS `teams_select_admin` permite). Caso contrário, manter o fluxo atual via `team_members`.
-- Dedup mantida.
+Manter compatibilidade: aceitar a chamada antiga `searchProfiles(q, teamId)` (string como 2º arg) com type-guard.
 
-**4. `src/features/sustentacao/components/reports/ReportFilters.tsx`**
-- Quando `setTeamId` for chamado e for diferente de `"all"`, também chamar `setCurrentTeamId(novoTeamId)` do `useAuth`, para que os hooks de dados (`useDemandas`, `useAllTransitions`, `useAllHours`) recarreguem com o time correto.
-- Quando `"all"`: manter o currentTeamId atual (não bagunçar o contexto global se o usuário voltar para a tela do board).
+### 2. `profiles.service.ts` — `searchProfilesByName`
 
-**5. `src/features/sustentacao/components/reports/RelatorioProdutividade.tsx` (ajuste leve)**
-- Inicializar `teamId` com `currentTeamId ?? "all"` para refletir o time ativo ao abrir o relatório.
+Mesma extensão: aceitar `{ contractId, teamId }`. Mesma lógica de união (room_teams + contract_members).
 
-## Validação manual após o fix
+### 3. Call sites
 
-1. Logar como admin → abrir demanda do TIME 2 → aba Responsáveis → buscar "Tiago" → deve listar `tiago.vieira2@globalweb.com.br`.
-2. Admin em Relatórios → dropdown "Time" mostra TODOS os times de sustentação; mudar de time recarrega dados e popula "Analista".
-3. Usuário comum (Tiago) → busca e relatórios seguem funcionando com seu time.
-4. Admin_contrato com múltiplos times → mesmo comportamento do admin.
+**`DemandaDetail.tsx` (`handleSearch`)**
+```ts
+const contractId = (demanda as any)?.contract_id ?? null;
+const teamId     = (demanda as any)?.team_id ?? currentTeamId;
+const results    = await respSvc.searchProfiles(q, { contractId, teamId });
+```
+
+**`DemandaForm.tsx` (`searchDemandante`)**
+- Em edição: passar `contractId = demanda.contract_id`, `teamId = demanda.team_id ?? currentTeamId`.
+- Em criação: usar o `contractId`/`teamId` já selecionados no form (mesma fonte que popula o select de time).
+
+### 4. Sem mudanças
+
+- Sem migração SQL. RLS de `contract_room_teams`, `contract_members`, `team_members` e `profiles` já permite leitura aos membros autenticados/admins.
+- Sem alteração nos hooks de relatórios (correções anteriores permanecem).
+
+## Validação
+
+1. Admin / gestor abre demanda do CONTRATO X (time A) → busca "tiago" → retorna usuários do time A, B e C do mesmo contrato.
+2. Usuário comum em time B do contrato X → busca de responsáveis de demanda do time A do mesmo contrato funciona.
+3. Demanda sem `contract_id` (legado) → fallback por `team_id` continua funcionando.
+4. Busca não vaza usuários de OUTROS contratos.
 
 ## Notas técnicas
 
-- Sem alteração de RLS — policies de `team_members`, `profiles`, `teams` já cobrem os cenários.
-- Sem mudança em `services/profiles.service.ts` nem `services/responsaveis.service.ts`.
-- Mudança em `refreshTeams` é aditiva: usuários não-admin seguem o caminho atual via `team_members`.
+- Dedup por `user_id` via `Set` antes do `.in()`.
+- Limite de 10 mantido após o filtro `ilike` no `profiles`.
+- Sanitização do termo (`replace /[,()]/g`) preservada.

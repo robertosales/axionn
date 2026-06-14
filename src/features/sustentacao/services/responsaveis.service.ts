@@ -51,17 +51,80 @@ export async function removeResponsavel(id: string) {
   if (error) throw error;
 }
 
-export async function searchProfiles(query: string, teamId?: string | null) {
-  if (!query || !teamId) return [] as Array<{ user_id: string; display_name: string; email: string }>;
-  // 1) IDs do time
-  const { data: tm, error: tmErr } = await supabase
+/**
+ * Busca de candidatos a responsável.
+ *
+ * Escopo correto = CONTRATO. Quando `contractId` é fornecido, agrega usuários
+ * de TODOS os times do contrato (via contract_room_teams → team_members) +
+ * usuários diretamente vinculados ao contrato (contract_members). Fallback
+ * por `teamId` apenas quando a demanda não tem contrato (legado).
+ *
+ * Mantém retrocompatibilidade com a chamada antiga `searchProfiles(q, teamId)`.
+ */
+export type SearchProfilesScope = { contractId?: string | null; teamId?: string | null };
+
+async function collectContractUserIds(contractId: string): Promise<string[]> {
+  const [roomTeamsRes, membersRes] = await Promise.all([
+    supabase
+      .from("contract_room_teams")
+      .select("team_id")
+      .eq("contract_id", contractId)
+      .eq("is_active", true),
+    supabase
+      .from("contract_members")
+      .select("user_id")
+      .eq("contract_id", contractId),
+  ]);
+
+  const teamIds = (roomTeamsRes.data ?? [])
+    .map((r: any) => r.team_id)
+    .filter(Boolean);
+
+  const set = new Set<string>();
+  (membersRes.data ?? []).forEach((m: any) => m.user_id && set.add(m.user_id));
+
+  if (teamIds.length > 0) {
+    const { data: tm } = await supabase
+      .from("team_members")
+      .select("user_id")
+      .in("team_id", teamIds);
+    (tm ?? []).forEach((r: any) => r.user_id && set.add(r.user_id));
+  }
+  return [...set];
+}
+
+async function collectTeamUserIds(teamId: string): Promise<string[]> {
+  const { data, error } = await supabase
     .from("team_members")
     .select("user_id")
     .eq("team_id", teamId);
-  if (tmErr) throw tmErr;
-  const ids = (tm ?? []).map((r: any) => r.user_id);
-  if (ids.length === 0) return [];
-  // 2) Filtra profiles ativos pelo termo
+  if (error) throw error;
+  return (data ?? []).map((r: any) => r.user_id).filter(Boolean);
+}
+
+export async function searchProfiles(
+  query: string,
+  scopeOrTeamId?: SearchProfilesScope | string | null,
+) {
+  type R = { user_id: string; display_name: string; email: string };
+  if (!query) return [] as R[];
+
+  // Normaliza assinatura (compat: string = teamId)
+  const scope: SearchProfilesScope =
+    typeof scopeOrTeamId === "string" || scopeOrTeamId === null || scopeOrTeamId === undefined
+      ? { teamId: (scopeOrTeamId as string | null) ?? null }
+      : scopeOrTeamId;
+
+  let ids: string[] = [];
+  if (scope.contractId) {
+    ids = await collectContractUserIds(scope.contractId);
+  } else if (scope.teamId) {
+    ids = await collectTeamUserIds(scope.teamId);
+  } else {
+    return [] as R[];
+  }
+  if (ids.length === 0) return [] as R[];
+
   const q = query.replace(/[,()]/g, "");
   const { data, error } = await supabase
     .from("profiles")
@@ -71,7 +134,11 @@ export async function searchProfiles(query: string, teamId?: string | null) {
     .or(`display_name.ilike.%${q}%,email.ilike.%${q}%`)
     .limit(10);
   if (error) throw error;
-  return (data ?? []).map((p: any) => ({ user_id: p.user_id, display_name: p.display_name, email: p.email }));
+  return (data ?? []).map((p: any) => ({
+    user_id: p.user_id,
+    display_name: p.display_name,
+    email: p.email,
+  })) as R[];
 }
 
 // Prioridade: papel mais específico primeiro, depois genéricos.

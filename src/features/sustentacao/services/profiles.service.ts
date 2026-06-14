@@ -91,26 +91,62 @@ export async function fetchResponsaveisByDemandaIds(
  *  1. Busca os user_ids dos membros do time (team_members).
  *  2. Filtra profiles diretamente com .in + .ilike + .eq na tabela raiz.
  */
+export type SearchProfilesScope = { contractId?: string | null; teamId?: string | null };
+
 export async function searchProfilesByName(
   query: string,
   limit = 5,
-  teamId?: string | null,
+  scopeOrTeamId?: SearchProfilesScope | string | null,
 ): Promise<Array<{ id: string; user_id: string; display_name: string }>> {
   if (!query || query.length < 2) return [];
-  if (!teamId) return [];
 
-  // Etapa 1 — user_ids dos membros do time
-  const { data: members, error: membersError } = await supabase
-    .from("team_members")
-    .select("user_id")
-    .eq("team_id", teamId);
+  // Compat: string = teamId
+  const scope: SearchProfilesScope =
+    typeof scopeOrTeamId === "string" || scopeOrTeamId === null || scopeOrTeamId === undefined
+      ? { teamId: (scopeOrTeamId as string | null) ?? null }
+      : scopeOrTeamId;
 
-  if (membersError || !members || members.length === 0) return [];
-
-  const userIds = (members as any[]).map((m) => m.user_id).filter(Boolean);
+  // Escopo CONTRATO: contract_room_teams (→ team_members) + contract_members.
+  // Fallback TIME para demandas legadas sem contract_id.
+  let userIds: string[] = [];
+  if (scope.contractId) {
+    const [roomTeamsRes, membersRes] = await Promise.all([
+      supabase
+        .from("contract_room_teams")
+        .select("team_id")
+        .eq("contract_id", scope.contractId)
+        .eq("is_active", true),
+      supabase
+        .from("contract_members")
+        .select("user_id")
+        .eq("contract_id", scope.contractId),
+    ]);
+    const teamIds = (roomTeamsRes.data ?? [])
+      .map((r: any) => r.team_id)
+      .filter(Boolean);
+    const set = new Set<string>();
+    (membersRes.data ?? []).forEach((m: any) => m.user_id && set.add(m.user_id));
+    if (teamIds.length > 0) {
+      const { data: tm } = await supabase
+        .from("team_members")
+        .select("user_id")
+        .in("team_id", teamIds);
+      (tm ?? []).forEach((r: any) => r.user_id && set.add(r.user_id));
+    }
+    userIds = [...set];
+  } else if (scope.teamId) {
+    const { data: members, error: membersError } = await supabase
+      .from("team_members")
+      .select("user_id")
+      .eq("team_id", scope.teamId);
+    if (membersError || !members || members.length === 0) return [];
+    userIds = (members as any[]).map((m) => m.user_id).filter(Boolean);
+  } else {
+    return [];
+  }
   if (userIds.length === 0) return [];
 
-  // Etapa 2 — filtra profiles diretamente (filtros na tabela raiz, sem JOIN)
+  // Filtra profiles diretamente (filtros na tabela raiz, sem JOIN)
   const { data, error } = await supabase
     .from("profiles")
     .select("id, user_id, display_name")

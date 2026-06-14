@@ -618,11 +618,13 @@ export function DemandaDetail({
     setSearchQuery(q);
     if (q.length < 2) { setSearchResults([]); return; }
     try {
-      // FIX: usar o team_id da demanda (escopo correto). currentTeamId vinha
-      // do AuthContext e quebrava para admin/gestor ao abrir demanda fora do
-      // time global ativo, retornando [] silenciosamente.
-      const teamId = (demanda as any)?.team_id ?? currentTeamId;
-      const results = await respSvc.searchProfiles(q, teamId);
+      // FIX: escopo CORRETO da busca = CONTRATO. Quando a demanda tem
+      // contract_id, agrega usuários de TODOS os times do contrato +
+      // membros diretos do contrato. Fallback por team_id apenas para
+      // demandas legadas sem contrato.
+      const contractId = (demanda as any)?.contract_id ?? null;
+      const teamId     = (demanda as any)?.team_id ?? currentTeamId;
+      const results    = await respSvc.searchProfiles(q, { contractId, teamId });
       const existing = new Set(responsaveis.map((r) => r.user_id));
       setSearchResults(results.filter((r) => !existing.has(r.user_id)));
     } catch {}

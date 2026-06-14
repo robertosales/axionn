@@ -183,12 +183,18 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
   const searchDemandante = async (q: string) => {
     setDemandanteSearch(q);
     if (q.length < 2) { setDemandanteResults([]); return; }
+    // Escopo CONTRATO: edição usa demanda.contract_id; criação usa o
+    // contrato do projeto selecionado. Fallback por team_id para legados.
+    const contractId =
+      (demanda as any)?.contract_id ??
+      (selectedProjeto as any)?.contract_id ??
+      null;
     const teamId = (demanda as any)?.team_id ?? currentTeamId;
-    if (!teamId) {
-      console.warn("[DemandaForm] searchDemandante bloqueado: teamId é null.");
+    if (!contractId && !teamId) {
+      console.warn("[DemandaForm] searchDemandante bloqueado: sem contractId/teamId.");
       return;
     }
-    const results = await searchProfilesByName(q, 5, teamId);
+    const results = await searchProfilesByName(q, 5, { contractId, teamId });
     setDemandanteResults(results as any[]);
   };
 

@@ -618,7 +618,11 @@ export function DemandaDetail({
     setSearchQuery(q);
     if (q.length < 2) { setSearchResults([]); return; }
     try {
-      const results = await respSvc.searchProfiles(q, currentTeamId);
+      // FIX: usar o team_id da demanda (escopo correto). currentTeamId vinha
+      // do AuthContext e quebrava para admin/gestor ao abrir demanda fora do
+      // time global ativo, retornando [] silenciosamente.
+      const teamId = (demanda as any)?.team_id ?? currentTeamId;
+      const results = await respSvc.searchProfiles(q, teamId);
       const existing = new Set(responsaveis.map((r) => r.user_id));
       setSearchResults(results.filter((r) => !existing.has(r.user_id)));
     } catch {}

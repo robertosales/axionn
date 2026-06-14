@@ -45,8 +45,17 @@ export function ReportFilters({
   dataFim,
   setDataFim,
 }: ReportFiltersProps) {
-  const { teams } = useAuth();
+  const { teams, setCurrentTeamId } = useAuth();
   const sustTeams = teams.filter((t) => t.module === "sustentacao");
+
+  // FIX: ao trocar o time no filtro, atualizamos também o currentTeamId
+  // global — os hooks de dados (useDemandas / useAllTransitions / useAllHours)
+  // são scopeados por currentTeamId, então sem isso a troca só filtraria
+  // localmente dados que nem foram carregados.
+  const handleTeamChange = (v: string) => {
+    setTeamId?.(v);
+    if (v && v !== "all") setCurrentTeamId(v);
+  };
 
   // Layout novo (estilo Produtividade) quando datas são controladas externamente
   const useDateRange = !!setDataInicio && !!setDataFim;
@@ -59,7 +68,7 @@ export function ReportFilters({
             {setTeamId && (
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Time</Label>
-                <Select value={teamId || "all"} onValueChange={setTeamId}>
+                <Select value={teamId || "all"} onValueChange={handleTeamChange}>
                   <SelectTrigger className="w-[180px] h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -145,7 +154,7 @@ export function ReportFilters({
   return (
     <div className="flex flex-wrap gap-2">
       {setTeamId && (
-        <Select value={teamId || "all"} onValueChange={setTeamId}>
+        <Select value={teamId || "all"} onValueChange={handleTeamChange}>
           <SelectTrigger className="w-[150px] h-8 text-xs">
             <SelectValue placeholder="Time" />
           </SelectTrigger>

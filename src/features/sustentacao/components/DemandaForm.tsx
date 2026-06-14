@@ -178,16 +178,17 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     }
   }, [prazoInfo?.prazoSolucao, isEdit]);
 
-  // ── FIX (CA-01 / CA-02): guard para currentTeamId nulo ────────────────────
+  // ── FIX (CA-01 / CA-02): em edição, usar o team_id da demanda;
+  // em criação, manter currentTeamId (selecionado pelo usuário no form).
   const searchDemandante = async (q: string) => {
     setDemandanteSearch(q);
     if (q.length < 2) { setDemandanteResults([]); return; }
-    if (!currentTeamId) {
-      // Sem time ativo não é possível filtrar membros — evita retorno vazio silencioso
-      console.warn("[DemandaForm] searchDemandante bloqueado: currentTeamId é null.");
+    const teamId = (demanda as any)?.team_id ?? currentTeamId;
+    if (!teamId) {
+      console.warn("[DemandaForm] searchDemandante bloqueado: teamId é null.");
       return;
     }
-    const results = await searchProfilesByName(q, 5, currentTeamId);
+    const results = await searchProfilesByName(q, 5, teamId);
     setDemandanteResults(results as any[]);
   };
 

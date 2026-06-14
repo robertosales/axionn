@@ -160,19 +160,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshTeams = async () => {
-    // fix(auth): team_members filtrado por RLS (tm_select_own: user_id = auth.uid())
-    // Join direto em teams para obter name e module.
-    // Não usa team_modules — policy is_contract_member() bloqueia membros comuns.
-    const { data, error } = await supabase
-      .from("team_members")
-      .select("team:team_id(id, name, module)");
+    // fix(auth): admins enxergam TODOS os times (RLS teams_select_admin).
+    // Usuários comuns continuam via team_members (RLS tm_select_own).
+    let rawList: AuthTeam[] = [];
 
-    if (error) { console.error("[Auth] refreshTeams:", error); return; }
+    // Verifica se o usuário atual é admin via user_roles
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    let isAdminUser = false;
+    if (authUser) {
+      const { data: rolesData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", authUser.id);
+      isAdminUser = (rolesData ?? []).some((r: any) => r.role === "admin");
+    }
 
-    const rawList: AuthTeam[] = (data ?? []).flatMap((row: any) => {
-      if (!row.team) return [];
-      return [{ id: row.team.id, name: row.team.name, module: row.team.module ?? "" }];
-    });
+    if (isAdminUser) {
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id, name, module");
+      if (error) { console.error("[Auth] refreshTeams(admin):", error); return; }
+      rawList = (data ?? []).map((t: any) => ({
+        id: t.id, name: t.name, module: t.module ?? "",
+      }));
+    } else {
+      const { data, error } = await supabase
+        .from("team_members")
+        .select("team:team_id(id, name, module)");
+      if (error) { console.error("[Auth] refreshTeams:", error); return; }
+      rawList = (data ?? []).flatMap((row: any) => {
+        if (!row.team) return [];
+        return [{ id: row.team.id, name: row.team.name, module: row.team.module ?? "" }];
+      });
+    }
 
     // dedup por (id × module)
     const seen = new Set<string>();

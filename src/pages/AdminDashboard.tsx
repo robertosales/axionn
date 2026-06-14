@@ -27,7 +27,7 @@ import { AxionLogo } from "@/components/AxionLogo";
 import {
   LogOut, Users, UsersRound,
   BarChart3, History, Gauge, AlertTriangle, Sparkles, Menu, X, FileText,
-  FolderKanban,
+  FolderKanban, ChevronDown,
 } from "lucide-react";
 
 const TEAL = "#0bbcaf";
@@ -209,10 +209,34 @@ function AdminDashboardInner() {
 
   // ── Cabeçalho da página de conteúdo ─────────────────────────────────────────
   const pageTitle = NAV_ITEMS.find(n => n.key === activePage)?.label ?? "Dashboard Admin";
-  const contractBadge = selectedContract ? (
+  const contractBadgeContent = (
+    <>
+      <FileText className="h-2.5 w-2.5" />
+      <span className="truncate max-w-[200px]">
+        {selectedContract?.name ?? "Todos os contratos"}
+      </span>
+      {isGestor && <ChevronDown className="h-2.5 w-2.5 opacity-70" />}
+    </>
+  );
+  const contractBadgeStyle = {
+    color: "#f59e0b",
+    borderColor: "rgba(245,158,11,0.4)",
+    background: "rgba(245,158,11,0.06)",
+  } as const;
+  const contractBadge = isGestor ? (
+    <button
+      type="button"
+      onClick={() => setSidebarOpen(true)}
+      title="Trocar contrato"
+      className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors hover:bg-amber-500/10"
+      style={contractBadgeStyle}
+    >
+      {contractBadgeContent}
+    </button>
+  ) : selectedContract ? (
     <span
       className="hidden sm:inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border"
-      style={{ color: "#f59e0b", borderColor: "rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.06)" }}
+      style={contractBadgeStyle}
     >
       <FileText className="h-2.5 w-2.5" />
       {selectedContract.name}

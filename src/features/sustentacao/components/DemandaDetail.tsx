@@ -39,6 +39,10 @@ import { SuspensaoDialog } from "./SuspensaoDialog";
 import { NovaAtividadeDialog } from "./NovaAtividadeDialog";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { HorasInput, hhmmToDecimal } from "@/shared/components/common/HorasInput";
+import { ReportFilterBar } from "@/shared/components/reports/ReportFilterBar";
+import { PaginationControls } from "@/shared/components/common/Pagination";
+import { usePagination } from "@/shared/hooks/usePagination";
+import { buildAnalistasDedup, analistaMatches } from "../utils/analistasDedup";
 import {
   Dialog,
   DialogContent,
@@ -318,6 +322,18 @@ export function DemandaDetail({
   const [deleteHourId, setDeleteHourId] = useState<string | null>(null);
   const [editHour, setEditHour] = useState<DemandaHour | null>(null);
   const [showEditHourDialog, setShowEditHourDialog] = useState(false);
+
+  // ── Filtros + paginação da aba Atividades (lançamentos de horas)
+  const hoursToday = () => new Date().toISOString().split("T")[0];
+  const hoursDaysAgo = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().split("T")[0];
+  };
+  const [hoursPeriodo, setHoursPeriodo]   = useState("30");
+  const [hoursDataInicio, setHoursDataInicio] = useState(hoursDaysAgo(30));
+  const [hoursDataFim, setHoursDataFim]   = useState(hoursToday());
+  const [hoursAnalista, setHoursAnalista] = useState("all");
 
   const [responsaveis, setResponsaveis] = useState<DemandaResponsavel[]>([]);
   const [respLoading, setRespLoading] = useState(false);

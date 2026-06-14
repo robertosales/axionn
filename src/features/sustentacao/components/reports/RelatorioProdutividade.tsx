@@ -301,12 +301,12 @@ export function RelatorioProdutividade({ onBack }: Props) {
   const { hours }       = useAllHours();
   const profiles        = useProfiles();
   const { responsaveis } = useDemandaResponsaveis();
-  const { teams, user, isAdmin } = useAuth();
+  const { teams, user, isAdmin, currentTeamId } = useAuth();
   const { fases }       = useFases();
 
   const fasesMap = useMemo(() => { const m: Record<string,string>={}; fases.forEach(f => { m[f.key]=f.label; }); return m; }, [fases]);
 
-  const [teamId,        setTeamId]        = useState("all");
+  const [teamId,        setTeamId]        = useState<string>(() => currentTeamId ?? "all");
   // Seleção automática: admin inicia com "all", usuário comum inicia com seu próprio userId
   const [analista,      setAnalista]      = useState(() => isAdmin ? "all" : (user?.id ?? "all"));
   const [dataInicio,    setDataInicio]    = useState(daysAgo(30));

@@ -39,6 +39,10 @@ import { SuspensaoDialog } from "./SuspensaoDialog";
 import { NovaAtividadeDialog } from "./NovaAtividadeDialog";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { HorasInput, hhmmToDecimal } from "@/shared/components/common/HorasInput";
+import { ReportFilterBar } from "@/shared/components/reports/ReportFilterBar";
+import { PaginationControls } from "@/shared/components/common/Pagination";
+import { usePagination } from "@/shared/hooks/usePagination";
+import { buildAnalistasDedup, analistaMatches } from "../utils/analistasDedup";
 import {
   Dialog,
   DialogContent,
@@ -174,6 +178,85 @@ const TERMINAL_WORKFLOW = ["ag_aceite_final", "rejeitada", "cancelada"];
 
 // Status que ativam modal de suspensão/bloqueio
 const SUSPENSAO_STATUSES = ["bloqueada"];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HoursTable — extraída para permitir hooks (paginação) sob filtros dinâmicos
+// ─────────────────────────────────────────────────────────────────────────────
+function HoursTable({
+  rows,
+  profilesMap,
+  fasesMap,
+  isAdmin,
+  minutesToDisplay,
+  onEdit,
+  onDelete,
+}: {
+  rows: DemandaHour[];
+  profilesMap: Map<string, string>;
+  fasesMap: Record<string, string>;
+  isAdmin: boolean;
+  minutesToDisplay: (m: number) => string;
+  onEdit: (h: DemandaHour) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { currentPage, setCurrentPage, totalItems, pageSize, paginatedItems } =
+    usePagination(rows, { pageSize: 10 });
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border bg-muted/20 px-4 py-8 text-center text-xs text-muted-foreground">
+        Nenhum lançamento no período/analista selecionado.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border overflow-x-auto" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              {["Data", "Fase", "Descrição", "Lançado por"].map((h) => (
+                <th key={h} className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+              ))}
+              <th className="text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tempo</th>
+              {isAdmin && <th className="px-3 py-2.5" />}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {paginatedItems.map((h) => (
+              <tr key={h.id} className="hover:bg-muted/30 transition-colors">
+                <td className="px-3 py-2.5 text-xs">{new Date(h.created_at).toLocaleDateString("pt-BR")}</td>
+                <td className="px-3 py-2.5 text-xs">{fasesMap[h.fase] || h.fase}</td>
+                <td className="px-3 py-2.5 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
+                <td className="px-3 py-2.5 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
+                <td className="px-3 py-2.5 text-xs text-right font-mono font-medium">{minutesToDisplay(Number(h.horas))}</td>
+                {isAdmin && (
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => onEdit(h)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => onDelete(h.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <PaginationControls
+        currentPage={currentPage}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+      />
+    </div>
+  );
+}
 
 // Status que exigem justificativa obrigatória
 const REQUIRES_JUSTIFICATIVA_WORKFLOW = ["rejeitada", "cancelada", "planejamento_ag_aprovacao"];
@@ -318,6 +401,18 @@ export function DemandaDetail({
   const [deleteHourId, setDeleteHourId] = useState<string | null>(null);
   const [editHour, setEditHour] = useState<DemandaHour | null>(null);
   const [showEditHourDialog, setShowEditHourDialog] = useState(false);
+
+  // ── Filtros + paginação da aba Atividades (lançamentos de horas)
+  const hoursToday = () => new Date().toISOString().split("T")[0];
+  const hoursDaysAgo = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().split("T")[0];
+  };
+  const [hoursPeriodo, setHoursPeriodo]   = useState("30");
+  const [hoursDataInicio, setHoursDataInicio] = useState(hoursDaysAgo(30));
+  const [hoursDataFim, setHoursDataFim]   = useState(hoursToday());
+  const [hoursAnalista, setHoursAnalista] = useState("all");
 
   const [responsaveis, setResponsaveis] = useState<DemandaResponsavel[]>([]);
   const [respLoading, setRespLoading] = useState(false);
@@ -1198,44 +1293,57 @@ export function DemandaDetail({
                   </div>
                 </div>
 
-                {hours.length > 0 && (
-                  <div className="rounded-xl border overflow-x-auto" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          {["Data", "Fase", "Descrição", "Lançado por"].map((h) => (
-                            <th key={h} className="text-left px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
-                          ))}
-                          <th className="text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tempo</th>
-                          {isAdmin && <th className="px-3 py-2.5" />}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {hours.map((h) => (
-                          <tr key={h.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-3 py-2.5 text-xs">{new Date(h.created_at).toLocaleDateString("pt-BR")}</td>
-                            <td className="px-3 py-2.5 text-xs">{fasesMap[h.fase] || h.fase}</td>
-                            <td className="px-3 py-2.5 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
-                            <td className="px-3 py-2.5 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
-                            <td className="px-3 py-2.5 text-xs text-right font-mono font-medium">{minutesToDisplay(Number(h.horas))}</td>
-                            {isAdmin && (
-                              <td className="px-3 py-2.5">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground" onClick={() => { setEditHour(h); setShowEditHourDialog(true); }}>
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteHourId(h.id)}>
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {hours.length > 0 && (() => {
+                  const analistasOptions = buildAnalistasDedup(
+                    Array.from(new Set(hours.map((h) => h.user_id))),
+                    Array.from(profilesMap.entries()).map(([user_id, display_name]) => ({ user_id, display_name })),
+                  );
+                  const filteredHours = hours.filter((h) => {
+                    const d = new Date(h.created_at);
+                    if (hoursDataInicio) {
+                      const ini = new Date(hoursDataInicio + "T00:00:00");
+                      if (d < ini) return false;
+                    }
+                    if (hoursDataFim) {
+                      const fim = new Date(hoursDataFim + "T23:59:59");
+                      if (d > fim) return false;
+                    }
+                    if (!analistaMatches(hoursAnalista, h.user_id)) return false;
+                    return true;
+                  });
+                  return (
+                    <>
+                      <ReportFilterBar
+                        periodo={hoursPeriodo}
+                        setPeriodo={setHoursPeriodo}
+                        dataInicio={hoursDataInicio}
+                        setDataInicio={setHoursDataInicio}
+                        dataFim={hoursDataFim}
+                        setDataFim={setHoursDataFim}
+                        analista={hoursAnalista}
+                        setAnalista={setHoursAnalista}
+                        analistas={analistasOptions}
+                        showAnalista={true}
+                        totalFiltrado={filteredHours.length}
+                        onClear={() => {
+                          setHoursPeriodo("30");
+                          setHoursDataInicio(hoursDaysAgo(30));
+                          setHoursDataFim(hoursToday());
+                          setHoursAnalista("all");
+                        }}
+                      />
+                      <HoursTable
+                        rows={filteredHours}
+                        profilesMap={profilesMap}
+                        fasesMap={fasesMap}
+                        isAdmin={!!isAdmin}
+                        minutesToDisplay={minutesToDisplay}
+                        onEdit={(h) => { setEditHour(h); setShowEditHourDialog(true); }}
+                        onDelete={(id) => setDeleteHourId(id)}
+                      />
+                    </>
+                  );
+                })()}
               </TabsContent>
 
               {/* ─── ABA RESPONSÁVEIS ─── */}

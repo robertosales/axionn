@@ -1654,7 +1654,7 @@ export function DemandaDetail({
                       </div>
                     </div>
                     <div>
-                      <Label className="text-xs">Descrição</Label>
+                      <Label className="text-xs">Título</Label>
                       <Input
                         value={evidForm.titulo}
                         onChange={(e) => setEvidForm((p) => ({ ...p, titulo: e.target.value }))}

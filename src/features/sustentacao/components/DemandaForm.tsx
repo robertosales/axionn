@@ -48,6 +48,50 @@ const SITUACAO_LABELS: Record<string, string> = {
   cancelada: "Cancelada",
 };
 
+/**
+ * parseDemandaError — converte erros do Supabase/Postgres em mensagens amigáveis.
+ *
+ * Erros mapeados:
+ *  23503 demandas_project_id_fkey → projeto não encontrado na tabela projects
+ *  23503 demandas_team_id_fkey    → time inválido ou sem permissão
+ *  23505                          → violação de unique constraint (demanda duplicada)
+ *  PGRST*                         → erro genérico da API PostgREST
+ */
+function parseDemandaError(err: unknown): string {
+  if (!err || typeof err !== "object") return "Erro desconhecido ao salvar a demanda.";
+
+  const e = err as Record<string, any>;
+  const code    = e.code    as string | undefined;
+  const details = e.details as string | undefined;
+  const message = e.message as string | undefined;
+
+  // Violação de chave estrangeira (FK)
+  if (code === "23503") {
+    if (details?.includes("demandas_project_id_fkey") || message?.includes("demandas_project_id_fkey")) {
+      return (
+        "O projeto selecionado não está cadastrado ou foi removido. " +
+        "Verifique em Configurações → Projetos e tente novamente."
+      );
+    }
+    if (details?.includes("demandas_team_id_fkey") || message?.includes("demandas_team_id_fkey")) {
+      return "Seu time de trabalho não foi reconhecido pelo sistema. Recarregue a página e tente novamente.";
+    }
+    return "Referência inválida: um dos campos selecionados não existe mais no banco de dados.";
+  }
+
+  // Violação de unique constraint (demanda duplicada que passou pelo check client-side)
+  if (code === "23505") {
+    return "Já existe uma demanda com esse número (#) neste projeto. Verifique e tente outro número.";
+  }
+
+  // Erros PostgREST genéricos
+  if (code?.startsWith("PGRST")) {
+    return `Erro de comunicação com o servidor (${code}). Tente novamente em instantes.`;
+  }
+
+  return message ?? "Erro inesperado ao salvar a demanda. Tente novamente.";
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -220,78 +264,84 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
     }
 
     setLoading(true);
-    const regime = isCorretiva ? form.sla : "padrao";
-    const defeito = isCorretiva ? form.tipo_defeito : undefined;
-    const situacao = situacaoInicial || demanda?.situacao || "fila_atendimento";
 
-    // Retrocompatibilidade: envia project_id (FK) E projeto (nome texto) juntos
-    const nomeProjetoTexto = selectedProjeto?.nome ?? demanda?.projeto ?? "";
+    try {
+      const regime = isCorretiva ? form.sla : "padrao";
+      const defeito = isCorretiva ? form.tipo_defeito : undefined;
+      const situacao = situacaoInicial || demanda?.situacao || "fila_atendimento";
 
-    // Bloqueio de duplicidade: mesmo time + RHM + projeto.
-    // Mesmo RHM pode existir em projetos diferentes; só bloqueia repetição
-    // dentro do mesmo projeto.
-    if (currentTeamId && form.rhm.trim()) {
-      try {
-        const dup = await checkDemandaDuplicada(
-          currentTeamId,
-          form.rhm,
-          nomeProjetoTexto,
-          form.project_id || null,
-          demanda?.id,
-        );
-        if (dup) {
-          toast.error(`Já existe uma demanda com o número #${form.rhm} no projeto "${nomeProjetoTexto}".`);
-          setLoading(false);
-          return;
+      // Retrocompatibilidade: envia project_id (FK) E projeto (nome texto) juntos
+      const nomeProjetoTexto = selectedProjeto?.nome ?? demanda?.projeto ?? "";
+
+      // Bloqueio de duplicidade: mesmo time + RHM + projeto.
+      if (currentTeamId && form.rhm.trim()) {
+        try {
+          const dup = await checkDemandaDuplicada(
+            currentTeamId,
+            form.rhm,
+            nomeProjetoTexto,
+            form.project_id || null,
+            demanda?.id,
+          );
+          if (dup) {
+            toast.error(`Já existe uma demanda com o número #${form.rhm} no projeto "${nomeProjetoTexto}".`);
+            return;
+          }
+        } catch {
+          // Se a checagem falhar, segue — o índice único no banco garante a regra
         }
-      } catch {
-        // Se a checagem falhar, segue — o índice único no banco garante a regra
       }
+
+      const payload: Record<string, any> = {
+        situacao,
+        rhm: form.rhm,
+        project_id: form.project_id || null,
+        projeto: nomeProjetoTexto, // campo legado — removido na Fase 5
+        tipo: form.tipo,
+        descricao: form.descricao,
+        titulo: form.descricao,
+        sla: regime,
+        tipo_defeito: isCorretiva ? form.tipo_defeito : null,
+        originada_diagnostico: isCorretiva ? form.originada_diagnostico : false,
+        data_previsao_encerramento: form.data_previsao_encerramento
+          ? format(form.data_previsao_encerramento, "yyyy-MM-dd")
+          : null,
+      };
+
+      if (selectedDemandante) payload.demandante = selectedDemandante.id;
+
+      if (!isEdit) {
+        payload.prazo_inicio_atendimento = calcPrazoInicio(dataInicio, form.tipo, regime, defeito)?.toISOString() ?? null;
+        payload.prazo_solucao = calcPrazoSolucao(dataInicio, form.tipo, regime, defeito)?.toISOString() ?? null;
+      }
+
+      await onSubmit(payload);
+
+      if (!isEdit) {
+        setForm({
+          rhm: "",
+          project_id: "",
+          tipo: "manutencao_corretiva",
+          descricao: "",
+          sla: "padrao",
+          demandante: "",
+          tipo_defeito: "nao_impeditivo",
+          originada_diagnostico: false,
+          data_previsao_encerramento: null,
+        });
+        setSelectedDemandante(null);
+      }
+      setTouched({});
+      setForceValidate(false);
+      onClose();
+    } catch (err: unknown) {
+      // ── Tratamento amigável de erros do Supabase/Postgres ──────────────────
+      const friendlyMessage = parseDemandaError(err);
+      toast.error(friendlyMessage, { duration: 6000 });
+      // Mantém o modal aberto para o usuário corrigir sem perder os dados preenchidos
+    } finally {
+      setLoading(false);
     }
-
-    const payload: Record<string, any> = {
-      situacao,
-      rhm: form.rhm,
-      project_id: form.project_id || null,
-      projeto: nomeProjetoTexto, // campo legado — removido na Fase 5
-      tipo: form.tipo,
-      descricao: form.descricao,
-      titulo: form.descricao,
-      sla: regime,
-      tipo_defeito: isCorretiva ? form.tipo_defeito : null,
-      originada_diagnostico: isCorretiva ? form.originada_diagnostico : false,
-      data_previsao_encerramento: form.data_previsao_encerramento
-        ? format(form.data_previsao_encerramento, "yyyy-MM-dd")
-        : null,
-    };
-
-    if (selectedDemandante) payload.demandante = selectedDemandante.id;
-
-    if (!isEdit) {
-      payload.prazo_inicio_atendimento = calcPrazoInicio(dataInicio, form.tipo, regime, defeito)?.toISOString() ?? null;
-      payload.prazo_solucao = calcPrazoSolucao(dataInicio, form.tipo, regime, defeito)?.toISOString() ?? null;
-    }
-
-    await onSubmit(payload);
-
-    if (!isEdit) {
-      setForm({
-        rhm: "",
-        project_id: "",
-        tipo: "manutencao_corretiva",
-        descricao: "",
-        sla: "padrao",
-        demandante: "",
-        tipo_defeito: "nao_impeditivo",
-        originada_diagnostico: false,
-        data_previsao_encerramento: null,
-      });
-      setSelectedDemandante(null);
-    }
-    setTouched({});
-    setForceValidate(false);
-    setLoading(false);
-    onClose();
   };
 
   const situacaoLabel = situacaoInicial ? SITUACAO_LABELS[situacaoInicial] : null;

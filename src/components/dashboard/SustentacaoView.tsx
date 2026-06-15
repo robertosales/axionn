@@ -1,8 +1,6 @@
 // src/components/dashboard/SustentacaoView.tsx
 // Cenário C — visão exclusiva de Sustentação.
-// Segue o mesmo padrão visual do DashboardHome (KpiCard, grid, border-t accent).
-// Os dados vêm de DemandasPorTimeSection enquanto o hook useContratos
-// ainda não está centralizado; substituir quando disponível.
+// KPIs alimentados por useSLADashboard; tabela por DemandasPorTimeSection.
 
 import { cn } from "@/lib/utils";
 import {
@@ -12,11 +10,13 @@ import {
   Ban,
   Wrench,
   TrendingDown,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { DemandasPorTimeSection } from "@/features/contracts/DemandasPorTimeSection";
+import { useSLADashboard } from "@/features/contracts/hooks/useSLADashboard";
 
-// ── Tipos de cor por card ─────────────────────────────────────────────────────
+// ── Tipos de acento ──────────────────────────────────────────────────────
 type CardAccent = "green" | "blue" | "red" | "amber" | "violet";
 
 const ACCENT_TOP: Record<CardAccent, string> = {
@@ -35,7 +35,21 @@ const ICON_CLASS: Record<CardAccent, string> = {
   violet: "bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400",
 };
 
-// ── KPI Card (inline — mantém consistência sem criar dep circular) ────────────
+// ── Skeleton shimmer ───────────────────────────────────────────────────
+function KpiSkeleton() {
+  return (
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="h-[3px] w-full bg-muted" />
+      <div className="px-5 pt-4 pb-4 flex flex-col gap-3">
+        <div className="h-3 w-2/3 rounded bg-muted animate-pulse" />
+        <div className="h-7 w-1/3 rounded bg-muted animate-pulse" />
+        <div className="h-3 w-1/2 rounded bg-muted animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
+// ── KPI Card ─────────────────────────────────────────────────────────────
 interface KpiCardProps {
   label: string;
   value: string | number;
@@ -71,25 +85,29 @@ function KpiCard({ label, value, sub, icon: Icon, accent, statusBadge }: KpiCard
   );
 }
 
-function GreenBadge({ text }: { text: string }) {
+function OkBadge() {
   return (
     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-600 dark:text-green-400">
-      <CheckCircle2 className="h-3 w-3" />{text}
+      <CheckCircle2 className="h-3 w-3" />ok
     </span>
   );
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
+// ── Componente principal ───────────────────────────────────────────────────────
 export function SustentacaoView() {
   const { currentTeamId } = useAuth();
 
-  // TODO: substituir pelos valores reais do hook useContratos quando disponível.
-  // Por enquanto os KPIs são placeholders estruturais que seguem o contrato
-  // visual do DashboardHome — serão alimentados na próxima iteração.
-  const abertas    = 0;
-  const concluidas = 0;
-  const slaRisco   = 0;
-  const bloqueadas = 0;
+  // Dados reais via fn_sla_dashboard_batch
+  const { summary, loading, error, refetch } = useSLADashboard({
+    teamId:  currentTeamId ?? null,
+    enabled: !!currentTeamId,
+  });
+
+  // Deriva contadores a partir do SLASummary
+  const abertas    = summary.total - summary.concluido;
+  const concluidas = summary.concluido;
+  const slaRisco   = summary.em_risco + summary.violado;
+  const bloqueadas = summary.violado; // violado = passou do prazo = bloqueado operacionalmente
 
   return (
     <div className="flex flex-col gap-5 px-4 sm:px-6 py-6 w-full overflow-x-hidden">
@@ -105,44 +123,70 @@ export function SustentacaoView() {
             Métricas e demandas do módulo de sustentação
           </p>
         </div>
+
+        {/* Botao de refresh */}
+        <button
+          onClick={() => refetch()}
+          disabled={loading}
+          aria-label="Atualizar métricas de sustentação"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+          Atualizar
+        </button>
       </div>
+
+      {/* Erro de carregamento */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard
-          label="Demandas Abertas"
-          value={abertas}
-          sub="em atendimento"
-          icon={InboxIcon}
-          accent="blue"
-        />
-        <KpiCard
-          label="Concluídas"
-          value={concluidas}
-          sub="no período"
-          icon={CheckCircle2}
-          accent="green"
-          statusBadge={concluidas === 0 ? undefined : <GreenBadge text="no prazo" />}
-        />
-        <KpiCard
-          label="SLA em Risco"
-          value={slaRisco}
-          sub={slaRisco > 0 ? "requer ação imediata" : "todos no prazo"}
-          icon={TrendingDown}
-          accent="red"
-          statusBadge={slaRisco === 0 ? <GreenBadge text="ok" /> : undefined}
-        />
-        <KpiCard
-          label="Bloqueadas"
-          value={bloqueadas}
-          sub={bloqueadas > 0 ? "aguardando desbloqueio" : "sem bloqueios"}
-          icon={bloqueadas > 0 ? Ban : AlertTriangle}
-          accent="amber"
-          statusBadge={bloqueadas === 0 ? <GreenBadge text="livre" /> : undefined}
-        />
+        {loading ? (
+          <>
+            <KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton />
+          </>
+        ) : (
+          <>
+            <KpiCard
+              label="Demandas Abertas"
+              value={abertas}
+              sub="em atendimento"
+              icon={InboxIcon}
+              accent="blue"
+            />
+            <KpiCard
+              label="Concluídas"
+              value={concluidas}
+              sub={`${summary.compliance_pct.toFixed(0)}% compliance`}
+              icon={CheckCircle2}
+              accent="green"
+              statusBadge={concluidas > 0 ? <OkBadge /> : undefined}
+            />
+            <KpiCard
+              label="SLA em Risco"
+              value={slaRisco}
+              sub={slaRisco > 0 ? `${summary.em_risco} em risco · ${summary.violado} violados` : "todos no prazo"}
+              icon={TrendingDown}
+              accent="red"
+              statusBadge={slaRisco === 0 ? <OkBadge /> : undefined}
+            />
+            <KpiCard
+              label="SLAs Violados"
+              value={bloqueadas}
+              sub={bloqueadas > 0 ? "passou do prazo" : "sem violações"}
+              icon={bloqueadas > 0 ? Ban : AlertTriangle}
+              accent="amber"
+              statusBadge={bloqueadas === 0 ? <OkBadge /> : undefined}
+            />
+          </>
+        )}
       </div>
 
-      {/* Tabela de demandas por time — filtra apenas times de sustentação */}
+      {/* Tabela de demandas por time */}
       {currentTeamId ? (
         <DemandasPorTimeSection teamId={currentTeamId} />
       ) : (

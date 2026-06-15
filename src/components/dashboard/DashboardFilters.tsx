@@ -1,4 +1,4 @@
-// src/components/dashboard/DashboardFilters.tsx
+// src/components/dashboard/DashboardFilters.tsx Refatorado
 import { useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

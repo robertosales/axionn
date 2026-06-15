@@ -12,6 +12,11 @@
  *   vê apenas seus próprios times, sem precisar passar userId como parâmetro.
  *
  * fix(teams-dedup-v2): dedup usa `${id}::${module}` como chave.
+ *
+ * fix(auth-team-module-validation): savedIsValid agora valida módulo além do ID.
+ *   Impedia que usuários em múltiplos módulos carregassem o time errado ao
+ *   restaurar selectedTeamId do localStorage, causando colunas do Kanban
+ *   incorretas (ex: "Em Code Review" sumindo para membros do GESP3-TIME A).
  */
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -159,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setModuleRoles(data.map((r: any) => ({ module: r.module, role_name: r.role_name })));
   };
 
-  const refreshTeams = async () => {
+  const refreshTeams = async (profileData?: Profile) => {
     // fix(auth): admins enxergam TODOS os times (RLS teams_select_admin).
     // Usuários comuns continuam via team_members (RLS tm_select_own).
     let rawList: AuthTeam[] = [];
@@ -206,23 +211,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!mountedRef.current) return;
     setTeams(teamList);
 
-    const saved          = localStorage.getItem("selectedTeamId");
-    const savedIsValid   = saved && teamList.some(t => t.id === saved);
+    const saved        = localStorage.getItem("selectedTeamId");
     const alreadyHasTeam = !!currentTeamIdRef.current &&
                            teamList.some(t => t.id === currentTeamIdRef.current);
 
     if (alreadyHasTeam) return;
+
+    // fix(auth-team-module-validation):
+    // Valida o ID salvo contra o módulo correto do usuário.
+    // Sem essa validação, um usuário em múltiplos módulos poderia ter o
+    // selectedTeamId apontando para um time de outro módulo (ex: sustentacao),
+    // fazendo o Kanban carregar as colunas erradas — sem "Em Code Review".
+    const activeModule = isAdminUser
+      ? null  // admin pode usar qualquer time, não restringe por módulo
+      : (profileData?.module_access ?? "sala_agil");
+
+    const savedIsValid = saved && teamList.some(t =>
+      t.id === saved &&
+      (activeModule === null || t.module === activeModule)
+    );
 
     if (savedIsValid) {
       setCurrentTeamId(saved!);
     } else {
       if (saved) {
         localStorage.removeItem("selectedTeamId");
-        console.warn("[Auth] selectedTeamId inválido removido do localStorage:", saved);
+        console.warn(
+          "[Auth] selectedTeamId inválido ou módulo incorreto — removido do localStorage:",
+          saved,
+          "| módulo esperado:", activeModule,
+        );
       }
-      // Auto-seleciona o primeiro time disponível
-      if (teamList.length > 0) {
-        setCurrentTeamId(teamList[0].id);
+      // Seleciona o primeiro time do módulo correto (não o primeiro da lista global)
+      const firstValidTeam = activeModule
+        ? teamList.find(t => t.module === activeModule)
+        : teamList[0];
+      if (firstValidTeam) {
+        setCurrentTeamId(firstValidTeam.id);
       }
     }
   };
@@ -250,7 +275,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await Promise.all([
         fetchRoles(userId),
-        refreshTeams(),
+        // Passa profileData para refreshTeams validar módulo corretamente
+        refreshTeams(profileData as Profile),
         fetchModuleRoles(userId, profileData as Profile),
       ]);
     } catch (err) {

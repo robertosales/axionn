@@ -35,11 +35,11 @@ import {
 const TEAL = "#0bbcaf";
 
 const NAV_ITEMS = [
-  { key: "visao-geral", label: "Vis\u00e3o Geral", icon: BarChart3    },
-  { key: "historico",   label: "Hist\u00f3rico",   icon: History      },
+  { key: "visao-geral", label: "Visão Geral", icon: BarChart3    },
+  { key: "historico",   label: "Histórico",   icon: History      },
   { key: "capacidade",  label: "Capacidade",  icon: Gauge        },
   { key: "times",       label: "Times",       icon: UsersRound   },
-  { key: "usuarios",    label: "Usu\u00e1rios",    icon: Users        },
+  { key: "usuarios",    label: "Usuários",    icon: Users        },
   { key: "projetos",    label: "Projetos",    icon: FolderKanban },
   { key: "ias",         label: "IA",          icon: Sparkles     },
   { key: "contratos",   label: "Contratos",   icon: FileText     },
@@ -64,7 +64,7 @@ function useTopBarBg() {
         .getPropertyValue("--background")
         .trim();
       // Se a var estiver definida (shadcn/ui usa formato "hsl(... ... ...)"),
-      // montamos o hsl. Sen\u00e3o usamos fallback s\u00f3lido.
+      // montamos o hsl. Senão usamos fallback sólido.
       if (rawBg) {
         setBg(`hsl(${rawBg})`);
       } else {
@@ -91,7 +91,7 @@ function useTopBarBg() {
 }
 
 // ---------------------------------------------------------------------------
-// VisaoGeralPage \u2014 corpo da p\u00e1gina (sem header pr\u00f3prio)
+// VisaoGeralPage — corpo da página (sem header próprio)
 // ---------------------------------------------------------------------------
 interface VisaoGeralPageProps {
   byTeam:       TeamKpis[];
@@ -184,14 +184,14 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
           husConcluidasPct={execKpis.husConcluidasPct}
           demandasAbertas={execKpis.demandasAbertas}
           slaEmRisco={execKpis.slaEmRisco}
-          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclus\u00e3o" : undefined}
+          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclusão" : undefined}
           loading={loading}
         />
       </section>
 
-      {/* 3. ACESSO R\u00c1PIDO */}
-      <section aria-label="Acesso r\u00e1pido">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso R\u00e1pido</h2>
+      {/* 3. ACESSO RÁPIDO */}
+      <section aria-label="Acesso rápido">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso Rápido</h2>
         <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
@@ -225,10 +225,10 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
         </div>
       </section>
 
-      {/* 5. INDICADORES POR M\u00d3DULO */}
+      {/* 5. INDICADORES POR MÓDULO */}
       {(appliedModule === "todos" || appliedModule === "sala-agil") && (
-        <section aria-label="Indicadores Sala \u00c1gil">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por M\u00f3dulo</h2>
+        <section aria-label="Indicadores Sala Ágil">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por Módulo</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border bg-card shadow-sm p-4">
               <SalaAgilKpis kpis={globalKpis} sprintAtivo={execKpis.sprintLabel} />
@@ -243,8 +243,8 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
       )}
 
       {appliedModule === "sustentacao" && (
-        <section aria-label="Indicadores Sustenta\u00e7\u00e3o">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por M\u00f3dulo</h2>
+        <section aria-label="Indicadores Sustentação">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Indicadores por Módulo</h2>
           <div className="rounded-xl border bg-card shadow-sm p-4">
             <SustentacaoKpis kpis={globalKpis} />
           </div>
@@ -280,7 +280,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
 }
 
 // ---------------------------------------------------------------------------
-// AdminDashboard \u2014 shell (sidebar + main)
+// AdminDashboard — shell (sidebar + main)
 // ---------------------------------------------------------------------------
 function AdminDashboardInner() {
   const { profile, signOut } = useAuth();
@@ -292,11 +292,11 @@ function AdminDashboardInner() {
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam ?? []);
 
-  // Fundo opaco do top bar \u2014 resolve a CSS var --background em runtime
-  // para garantir que n\u00e3o seja transparente durante o scroll
+  // Fundo opaco do top bar — resolve a CSS var --background em runtime
+  // para garantir que não seja transparente durante o scroll
   const topBarBg = useTopBarBg();
 
-  // Rel\u00f3gio \u2014 \u00fanico setInterval para todo o shell
+  // Relógio — único setInterval para todo o shell
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -305,14 +305,14 @@ function AdminDashboardInner() {
   const horaLabel = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const dataLabel = now.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
-  // \u00daltima atualiza\u00e7\u00e3o
+  // Última atualização
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   useEffect(() => { if (!loading) setLastUpdated(new Date()); }, [loading]);
   const lastUpdatedLabel = useMemo(() => {
     const diffMin = Math.floor((Date.now() - lastUpdated.getTime()) / 60_000);
     if (diffMin < 1)   return "agora mesmo";
-    if (diffMin === 1) return "h\u00e1 1 minuto";
-    return `h\u00e1 ${diffMin} minutos`;
+    if (diffMin === 1) return "há 1 minuto";
+    return `há ${diffMin} minutos`;
   }, [lastUpdated]);
 
   const handleSignOut = async () => { await signOut(); navigate("/auth"); };
@@ -356,7 +356,7 @@ function AdminDashboardInner() {
 
       <nav
         className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-none"
-        aria-label="Navega\u00e7\u00e3o admin"
+        aria-label="Navegação admin"
         style={{ scrollbarWidth: "none" }}
       >
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
@@ -394,7 +394,7 @@ function AdminDashboardInner() {
           </div>
           <div className="min-w-0">
             <p className="text-[12px] font-medium leading-tight truncate" style={{ color: "rgba(192,212,208,0.9)" }}>
-              {profile?.full_name || "Usu\u00e1rio"}
+              {profile?.full_name || "Usuário"}
             </p>
             <p className="text-[10px] leading-tight" style={{ color: "rgba(192,212,208,0.45)" }}>
               {profile?.role === "gestor" ? "Gestor" : "Admin"}
@@ -450,14 +450,14 @@ function AdminDashboardInner() {
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
 
         {/*
-          TOP BAR sticky \u2014 fundo 100% opaco, resolvido em runtime.
+          TOP BAR sticky — fundo 100% opaco, resolvido em runtime.
 
-          Por que useTopBarBg() e n\u00e3o s\u00f3 className="bg-background"?
-          \u2192 A classe Tailwind bg-background aplica hsl(var(--background))
-             via CSS, mas n\u00e3o garante que --background tenha alpha=1.
-             shadcn/ui define --background como "0 0% 100%" (s\u00f3 os canais HSL)
-             sem alpha expl\u00edcito, o que funciona na maioria dos casos.
-             O hook l\u00ea o valor real em runtime e monta hsl() s\u00f3lido,
+          Por que useTopBarBg() e não só className="bg-background"?
+          → A classe Tailwind bg-background aplica hsl(var(--background))
+             via CSS, mas não garante que --background tenha alpha=1.
+             shadcn/ui define --background como "0 0% 100%" (só os canais HSL)
+             sem alpha explícito, o que funciona na maioria dos casos.
+             O hook lê o valor real em runtime e monta hsl() sólido,
              garantindo opacidade total independente do tema.
 
           isolation: isolate + position: sticky + z-index: 20
@@ -471,7 +471,7 @@ function AdminDashboardInner() {
             isolation: "isolate",
           }}
         >
-          {/* Bot\u00e3o menu mobile */}
+          {/* Botão menu mobile */}
           <button
             className="lg:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors shrink-0"
             onClick={() => setSidebarOpen(true)}
@@ -480,7 +480,7 @@ function AdminDashboardInner() {
             <Menu className="h-4 w-4" />
           </button>
 
-          {/* T\u00edtulo da p\u00e1gina ativa + subt\u00edtulo (visao-geral only) */}
+          {/* Título da página ativa + subtítulo (visao-geral only) */}
           <div className="flex flex-col justify-center min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">
@@ -493,22 +493,22 @@ function AdminDashboardInner() {
             {isVisaoGeral && (
               <div className="flex items-center gap-1.5 mt-[3px]">
                 <span className="text-xs font-semibold text-foreground truncate">
-                  {selectedContract?.name ?? "\u2014"}
+                  {selectedContract?.name ?? "—"}
                 </span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
-                  \u00b7 \u00daltima atualiza\u00e7\u00e3o: {lastUpdatedLabel}
+                  · Última atualização: {lastUpdatedLabel}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Data + hora \u2014 vis\u00edvel apenas em lg+ */}
+          {/* Data + hora — visível apenas em lg+ */}
           <div className="hidden lg:flex flex-col items-end shrink-0">
             <span className="text-[11px] text-muted-foreground capitalize leading-none">{dataLabel}</span>
             <span className="text-[13px] font-semibold tabular-nums leading-tight mt-0.5">{horaLabel}</span>
           </div>
 
-          {/* A\u00e7\u00f5es */}
+          {/* Ações */}
           <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle />
             <NotificationBell
@@ -524,7 +524,7 @@ function AdminDashboardInner() {
         </main>
 
         <footer className="text-center text-[11px] text-muted-foreground py-3 border-t px-4">
-          Axion Admin \u00a9 2026 \u00b7 Todos os direitos reservados.
+          Axion Admin © 2026 · Todos os direitos reservados.
         </footer>
       </div>
     </div>

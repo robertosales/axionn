@@ -61,7 +61,6 @@ type PageKey = (typeof NAV_ITEMS)[number]["key"];
 
 // ---------------------------------------------------------------------------
 // Hook para detectar dark mode e retornar cor de fundo opaca para o top bar
-// Usa o atributo data-theme ou prefers-color-scheme como fallback
 // ---------------------------------------------------------------------------
 function useTopBarBg() {
   const [bg, setBg] = useState<string>("#ffffff");
@@ -71,10 +70,7 @@ function useTopBarBg() {
       const theme = document.documentElement.getAttribute("data-theme");
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       const isDark = theme === "dark" || (!theme && prefersDark);
-      // Lemos a CSS var --background resolvida do elemento root
       const rawBg = getComputedStyle(document.documentElement).getPropertyValue("--background").trim();
-      // Se a var estiver definida (shadcn/ui usa formato "hsl(... ... ...)"),
-      // montamos o hsl. Senão usamos fallback sólido.
       if (rawBg) {
         setBg(`hsl(${rawBg})`);
       } else {
@@ -84,7 +80,6 @@ function useTopBarBg() {
 
     update();
 
-    // Observa troca de data-theme no <html>
     const obs = new MutationObserver(update);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
@@ -181,7 +176,13 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
         loading={loading}
       />
 
-      {/* 2. CARDS EXECUTIVOS */}
+      {/* 2. ACESSO RÁPIDO — primeiro item de conteúdo após os filtros */}
+      <section aria-label="Acesso rápido">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso Rápido</h2>
+        <ModuleQuickAccess kpis={globalKpis} />
+      </section>
+
+      {/* 3. CARDS EXECUTIVOS */}
       <section aria-label="Indicadores executivos">
         <ExecutiveKpis
           timesAtivos={execKpis.timesAtivos}
@@ -193,12 +194,6 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
           slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclusão" : undefined}
           loading={loading}
         />
-      </section>
-
-      {/* 3. ACESSO RÁPIDO */}
-      <section aria-label="Acesso rápido">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Acesso Rápido 1</h2>
-        <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
       {/* 4. RESUMO POR TIME */}
@@ -293,11 +288,8 @@ function AdminDashboardInner() {
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
   const { notifications, criticalCount, warningCount } = useNotifications(byTeam ?? []);
 
-  // Fundo opaco do top bar — resolve a CSS var --background em runtime
-  // para garantir que não seja transparente durante o scroll
   const topBarBg = useTopBarBg();
 
-  // Relógio — único setInterval para todo o shell
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
@@ -311,7 +303,6 @@ function AdminDashboardInner() {
     year: "numeric",
   });
 
-  // Última atualização
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   useEffect(() => {
     if (!loading) setLastUpdated(new Date());
@@ -489,20 +480,6 @@ function AdminDashboardInner() {
       )}
 
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
-        {/*
-          TOP BAR sticky — fundo 100% opaco, resolvido em runtime.
-
-          Por que useTopBarBg() e não só className="bg-background"?
-          → A classe Tailwind bg-background aplica hsl(var(--background))
-             via CSS, mas não garante que --background tenha alpha=1.
-             shadcn/ui define --background como "0 0% 100%" (só os canais HSL)
-             sem alpha explícito, o que funciona na maioria dos casos.
-             O hook lê o valor real em runtime e monta hsl() sólido,
-             garantindo opacidade total independente do tema.
-
-          isolation: isolate + position: sticky + z-index: 20
-          garantem que nenhum filho com transform/opacity vaze acima.
-        */}
         <header
           className="sticky top-0 z-20 flex items-center gap-3 h-14 px-4 lg:px-6 shrink-0"
           style={{
@@ -511,7 +488,6 @@ function AdminDashboardInner() {
             isolation: "isolate",
           }}
         >
-          {/* Botão menu mobile */}
           <button
             className="lg:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors shrink-0"
             onClick={() => setSidebarOpen(true)}
@@ -520,7 +496,6 @@ function AdminDashboardInner() {
             <Menu className="h-4 w-4" />
           </button>
 
-          {/* Título da página ativa + subtítulo (visao-geral only) */}
           <div className="flex flex-col justify-center min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">{activeLabel}</h1>
@@ -538,13 +513,11 @@ function AdminDashboardInner() {
             )}
           </div>
 
-          {/* Data + hora — visível apenas em lg+ */}
           <div className="hidden lg:flex flex-col items-end shrink-0">
             <span className="text-[11px] text-muted-foreground capitalize leading-none">{dataLabel}</span>
             <span className="text-[13px] font-semibold tabular-nums leading-tight mt-0.5">{horaLabel}</span>
           </div>
 
-          {/* Ações */}
           <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle />
             <NotificationBell notifications={notifications} criticalCount={criticalCount} warningCount={warningCount} />

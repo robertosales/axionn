@@ -61,15 +61,19 @@ function TeamCard({ rt }: { rt: ContractRoomTeam }) {
 
 // ── Hook RBAC local ────────────────────────────────────────────────────────────
 function useDashboardAccess() {
-  const { moduleRoles, isAdmin } = useAuth();
+  const { moduleRoles, isAdmin, roles } = useAuth();
   return useMemo(() => {
     const modules      = moduleRoles.map((r) => r.module);
     const adminModules = moduleRoles.filter((r) => r.role_name === 'admin').map((r) => r.module);
-    const isAdminContrato = isAdmin || adminModules.length > 0;
+    // FIX: inclui role 'admin_contrato' no array roles[] além do moduleRoles
+    const isAdminContrato =
+      isAdmin ||
+      adminModules.length > 0 ||
+      roles.includes('admin_contrato');
     const hasSalaAgil    = modules.includes('sala_agil');
     const hasSustentacao = modules.includes('sustentacao');
     return { isAdminContrato, hasSalaAgil, hasSustentacao };
-  }, [moduleRoles, isAdmin]);
+  }, [moduleRoles, isAdmin, roles]);
 }
 
 export function MeuContratoDashboard() {
@@ -271,7 +275,7 @@ export function MeuContratoDashboard() {
     return (
       <div className="space-y-6">
 
-        {/* Barra de abas — só para admins de contrato */}
+        {/* Barra de abas — visível para admin_contrato e admins de módulo */}
         {isAdminContrato && (
           <DashboardTabs active={activeTab} onChange={setActiveTab} />
         )}

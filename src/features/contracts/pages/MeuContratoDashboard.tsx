@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate }      from 'react-router-dom';
 import { useAuth }          from '@/contexts/AuthContext';
 import { useMyContract }    from '../hooks/useMyContract';
@@ -11,6 +11,10 @@ import { AxionLogo }       from '@/components/AxionLogo';
 import { Button }          from '@/components/ui/button';
 import { Badge }           from '@/components/ui/badge';
 import { Skeleton }        from '@/components/ui/skeleton';
+import { DashboardTabs, type DashboardTab } from '@/components/dashboard/DashboardTabs';
+import { GlobalView }      from '@/components/dashboard/GlobalView';
+import { AgilView }        from '@/components/dashboard/AgilView';
+import { SustentacaoView } from '@/components/dashboard/SustentacaoView';
 import {
   LogOut, FileText, ShieldCheck, Users,
   BarChart3, Menu, X, Zap, Wrench, Shuffle, CalendarDays,
@@ -55,12 +59,36 @@ function TeamCard({ rt }: { rt: ContractRoomTeam }) {
   );
 }
 
+// ── Hook RBAC local ────────────────────────────────────────────────────────────
+function useDashboardAccess() {
+  const { moduleRoles, isAdmin } = useAuth();
+  return useMemo(() => {
+    const modules      = moduleRoles.map((r) => r.module);
+    const adminModules = moduleRoles.filter((r) => r.role_name === 'admin').map((r) => r.module);
+    const isAdminContrato = isAdmin || adminModules.length > 0;
+    const hasSalaAgil    = modules.includes('sala_agil');
+    const hasSustentacao = modules.includes('sustentacao');
+    return { isAdminContrato, hasSalaAgil, hasSustentacao };
+  }, [moduleRoles, isAdmin]);
+}
+
 export function MeuContratoDashboard() {
   const { profile, signOut }    = useAuth();
   const { data, loading, error } = useMyContract();
   const navigate                 = useNavigate();
   const [activePage, setActivePage] = useState<PageKey>('visao-geral');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const { isAdminContrato, hasSalaAgil, hasSustentacao } = useDashboardAccess();
+
+  // Aba inicial conforme perfil
+  const initialTab: DashboardTab = useMemo(() => {
+    if (isAdminContrato) return 'global';
+    if (hasSustentacao && !hasSalaAgil) return 'sustentacao';
+    return 'agil';
+  }, [isAdminContrato, hasSalaAgil, hasSustentacao]);
+
+  const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
 
   const contract    = data?.contract ?? null;
   const slas        = data?.slas ?? [];
@@ -239,89 +267,115 @@ export function MeuContratoDashboard() {
       return <RelatorioSLAContrato contractId={contract.id} contractName={contract.name} />;
     }
 
-    // visao-geral
+    // ── visao-geral: abas RBAC ─────────────────────────────────────────────
     return (
       <div className="space-y-6">
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-lg border bg-card px-4 py-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Modalidade</p>
-            <div className="flex items-center gap-1.5 mt-2">
-              {roomCfg && (
-                <Badge variant="outline" className={`text-[11px] border gap-1 ${roomCfg.className}`}>
-                  {ROOM_ICON[roomMode]}
-                  {roomCfg.label}
+        {/* Barra de abas — só para admins de contrato */}
+        {isAdminContrato && (
+          <DashboardTabs active={activeTab} onChange={setActiveTab} />
+        )}
+
+        {/* Painel da aba ativa */}
+        <div
+          role="tabpanel"
+          id={`tabpanel-${activeTab}`}
+          aria-label={
+            activeTab === 'global' ? 'Visão Global'
+            : activeTab === 'agil' ? 'Sala Ágil'
+            : 'Sustentação'
+          }
+        >
+          {activeTab === 'global'      && <GlobalView />}
+          {activeTab === 'agil'        && <AgilView />}
+          {activeTab === 'sustentacao' && <SustentacaoView />}
+        </div>
+
+        {/* KPIs do contrato — exibidos abaixo das abas, sempre visíveis */}
+        <div className="border-t border-border pt-5 space-y-4">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Detalhes do Contrato
+          </p>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Modalidade</p>
+              <div className="flex items-center gap-1.5 mt-2">
+                {roomCfg && (
+                  <Badge variant="outline" className={`text-[11px] border gap-1 ${roomCfg.className}`}>
+                    {ROOM_ICON[roomMode]}
+                    {roomCfg.label}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</p>
+              {statusCfg && (
+                <Badge className={`mt-2 text-xs border ${statusCfg.className}`}>
+                  {statusCfg.label}
                 </Badge>
               )}
             </div>
-          </div>
 
-          <div className="rounded-lg border bg-card px-4 py-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Status</p>
-            {statusCfg && (
-              <Badge className={`mt-2 text-xs border ${statusCfg.className}`}>
-                {statusCfg.label}
-              </Badge>
-            )}
-          </div>
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Times</p>
+              <p className="text-2xl font-bold mt-1">{roomTeams.length}</p>
+            </div>
 
-          <div className="rounded-lg border bg-card px-4 py-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Times</p>
-            <p className="text-2xl font-bold mt-1">{roomTeams.length}</p>
-          </div>
-
-          <div className="rounded-lg border bg-card px-4 py-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">SLAs</p>
-            <p className={`text-2xl font-bold mt-1 ${hasSLA ? 'text-purple-400' : 'text-muted-foreground'}`}>
-              {hasSLA ? slas.length : '—'}
-            </p>
-          </div>
-        </div>
-
-        {/* Vigência */}
-        {(contract.starts_at || contract.ends_at) && (
-          <div className="rounded-lg border bg-card px-4 py-3 flex items-center gap-3">
-            <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">Vigência</p>
-              <p className="text-sm font-medium">
-                {contract.starts_at
-                  ? new Date(contract.starts_at).toLocaleDateString('pt-BR')
-                  : '—'}
-                {' → '}
-                {contract.ends_at
-                  ? new Date(contract.ends_at).toLocaleDateString('pt-BR')
-                  : 'Indeterminado'}
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">SLAs</p>
+              <p className={`text-2xl font-bold mt-1 ${hasSLA ? 'text-purple-400' : 'text-muted-foreground'}`}>
+                {hasSLA ? slas.length : '—'}
               </p>
             </div>
           </div>
-        )}
 
-        {/* Times vinculados */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold">Times vinculados</h2>
-          {roomTeams.length === 0 ? (
-            <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-              Nenhum time vinculado a este contrato.
+          {/* Vigência */}
+          {(contract.starts_at || contract.ends_at) && (
+            <div className="rounded-lg border bg-card px-4 py-3 flex items-center gap-3">
+              <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-0.5">Vigência</p>
+                <p className="text-sm font-medium">
+                  {contract.starts_at
+                    ? new Date(contract.starts_at).toLocaleDateString('pt-BR')
+                    : '—'}
+                  {' → '}
+                  {contract.ends_at
+                    ? new Date(contract.ends_at).toLocaleDateString('pt-BR')
+                    : 'Indeterminado'}
+                </p>
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {roomTeams.map(rt => <TeamCard key={rt.id} rt={rt} />)}
+          )}
+
+          {/* Times vinculados */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold">Times vinculados</h2>
+            {roomTeams.length === 0 ? (
+              <div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+                Nenhum time vinculado a este contrato.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {roomTeams.map(rt => <TeamCard key={rt.id} rt={rt} />)}
+              </div>
+            )}
+          </div>
+
+          {/* SLA inline */}
+          {hasSLA && (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold">SLA – Visão rápida</h2>
+              <SLACompliancePanel
+                contractId={contract.id}
+                contractName={contract.name}
+              />
             </div>
           )}
         </div>
-
-        {/* SLA inline (somente modalidades com SLA) */}
-        {hasSLA && (
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold">SLA – Visão rápida</h2>
-            <SLACompliancePanel
-              contractId={contract.id}
-              contractName={contract.name}
-            />
-          </div>
-        )}
       </div>
     );
   };

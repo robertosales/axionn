@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth }  from "@/contexts/AuthContext";
 import { exportToCSV, exportToPDF } from "../utils/exportUtils";
+import { fetchActiveMemberIds, tagExMember } from "@/lib/teamMemberFilter";
 
 export interface SprintReportHU {
   id:              string;
@@ -57,10 +58,11 @@ export function useSprintReport() {
       supabase.from("user_stories").select(
         "id, code, title, status, story_points, estimated_hours, assignee_id, priority, epic"
       ).eq("sprint_id", sprintId),
-      supabase.from("developers").select("id, name").eq("team_id", teamId),
+      supabase.from("developers").select("id, name, user_id").eq("team_id", teamId),
     ]);
+    const memberIds = await fetchActiveMemberIds(teamId);
     const devMap: Record<string, string> = {};
-    (devRes.data ?? []).forEach((d: any) => { devMap[d.id] = d.name; });
+    (devRes.data ?? []).forEach((d: any) => { devMap[d.id] = tagExMember(d.name, d.user_id, memberIds); });
 
     const DONE = ["done", "concluido", "concluído", "closed"];
     const hus: SprintReportHU[] = (huRes.data ?? []).map((h: any) => ({

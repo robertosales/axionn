@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import type { Demanda, DemandaHour } from "../types/demanda";
 import {
   SITUACAO_LABELS,

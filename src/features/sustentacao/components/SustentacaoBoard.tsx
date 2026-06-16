@@ -571,9 +571,15 @@ export function SustentacaoBoard({
 
   const visibleCols = useMemo<string[]>(() => {
     if (workflowColumns && workflowColumns.length > 0) {
+      const seen = new Set<string>();
       return [...workflowColumns]
         .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-        .map((c) => c.key);
+        .map((c) => c.key)
+        .filter((k) => {
+          if (!k || seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
     }
     return [...FLOWPRINCIPAL, "bloqueada", "rejeitada"] as string[];
   }, [workflowColumns]);

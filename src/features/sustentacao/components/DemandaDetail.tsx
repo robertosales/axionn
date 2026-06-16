@@ -399,6 +399,49 @@ export function DemandaDetail({
     });
   }, [hours]);
 
+  // ─── Carrega membros do time atual para o combo de Analista ───
+  useEffect(() => {
+    if (!currentTeamId) {
+      setTeamMembers([]);
+      return;
+    }
+    (async () => {
+      const { data: tm } = await supabase
+        .from("team_members")
+        .select("user_id")
+        .eq("team_id", currentTeamId);
+      const ids = (tm ?? []).map((r: any) => r.user_id).filter(Boolean);
+      if (ids.length === 0) {
+        setTeamMembers([]);
+        return;
+      }
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .in("user_id", ids)
+        .eq("is_active", true);
+      const members = ((profs ?? []) as any[])
+        .map((p) => ({ user_id: p.user_id, display_name: p.display_name || p.user_id }))
+        .sort((a, b) => a.display_name.localeCompare(b.display_name, "pt-BR"));
+      setTeamMembers(members);
+      // Garante que o nome do usuário logado fique disponível no profilesMap
+      setProfilesMap((prev) => {
+        const next = new Map(prev);
+        members.forEach((m) => {
+          if (!next.has(m.user_id)) next.set(m.user_id, m.display_name);
+        });
+        return next;
+      });
+    })();
+  }, [currentTeamId]);
+
+  // Usuário comum: combo travado no próprio user
+  useEffect(() => {
+    if (!canFilterAllAnalysts && user?.id) {
+      setAnalystFilter(user.id);
+    }
+  }, [canFilterAllAnalysts, user?.id]);
+
   if (!demanda) return null;
 
   const isCancelada = demanda.situacao === "cancelada";

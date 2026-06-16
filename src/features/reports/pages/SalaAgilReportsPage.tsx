@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { SalaAgilRelatorios } from "@/components/sala-agil/reports/SalaAgilRelatorios";
+import { fetchActiveMemberIds, filterActiveDevelopers } from "@/lib/teamMemberFilter";
 
 /**
  * Página dedicada de Relatórios — Sala Ágil.
@@ -49,11 +50,13 @@ export function SalaAgilReportsPage() {
           supabase.from("impediments").select("*").eq("team_id", team.id),
           supabase.from("developers").select("*").eq("team_id", team.id),
         ]);
+        const memberIds = await fetchActiveMemberIds(team.id);
+        const devsFiltered = filterActiveDevelopers((dR.data || []) as any[], memberIds);
         allSprints.push(...(sR.data || []));
         allHUs.push(...(hR.data || []));
         allActs.push(...(aR.data || []));
         allImps.push(...(iR.data || []));
-        allDevs.push(...(dR.data || []));
+        allDevs.push(...devsFiltered);
       }
       if (cancelled) return;
       setData({

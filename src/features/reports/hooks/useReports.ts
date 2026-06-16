@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth }  from "@/contexts/AuthContext";
 import { toast }    from "sonner";
+import { fetchActiveMemberIds, filterActiveDevelopers, tagExMember } from "@/lib/teamMemberFilter";
 
 // Helper: rejeita strings vazias, null, undefined e valores não-UUID
 // que causam HTTP 400 (22P02) no PostgREST ao usar .in()
@@ -71,10 +72,12 @@ export function useReports() {
     if (!teamId) return;
     const [sp, dv] = await Promise.all([
       supabase.from("sprints").select("id, name").eq("team_id", teamId).order("created_at", { ascending: false }).limit(30),
-      supabase.from("developers").select("id, name").eq("team_id", teamId),
+      supabase.from("developers").select("id, name, user_id, created_at").eq("team_id", teamId),
     ]);
     setSprints((sp.data ?? []) as any[]);
-    setDevs((dv.data ?? []) as any[]);
+    const memberIds = await fetchActiveMemberIds(teamId);
+    const filtered = filterActiveDevelopers((dv.data ?? []) as any[], memberIds);
+    setDevs(filtered.map((d: any) => ({ id: d.id, name: d.name })));
   }, [teamId]);
 
   const generate = useCallback(async (f: ReportFilter) => {
@@ -88,10 +91,11 @@ export function useReports() {
         const { data: hus } = await q.order("code");
         const devIds = [...new Set((hus ?? []).map((h: any) => h.assignee_id).filter(isValidUUID))];
         const { data: devData } = devIds.length > 0
-          ? await supabase.from("developers").select("id, name").in("id", devIds)
+          ? await supabase.from("developers").select("id, name, user_id").in("id", devIds)
           : { data: [] };
+        const memberIdsHist = await fetchActiveMemberIds(teamId);
         const devMap: Record<string, string> = {};
-        (devData ?? []).forEach((d: any) => { devMap[d.id] = d.name; });
+        (devData ?? []).forEach((d: any) => { devMap[d.id] = tagExMember(d.name, d.user_id, memberIdsHist); });
         const result: SprintSummaryRow[] = (hus ?? []).map((h: any) => ({
           code: h.code, title: h.title, assignee: devMap[h.assignee_id] ?? "-",
           status: h.status, storyPoints: h.story_points ?? 0,
@@ -117,9 +121,11 @@ export function useReports() {
         setColumns(["Sprint", "Total pts", "Concluído pts", "Taxa (%)"]);
 
       } else if (f.reportType === "dev_performance") {
-        const { data: dvs } = await supabase.from("developers").select("id, name").eq("team_id", teamId);
+        const { data: dvs } = await supabase.from("developers").select("id, name, user_id, created_at").eq("team_id", teamId);
+        const memberIdsPerf = await fetchActiveMemberIds(teamId);
+        const dvsFiltered = filterActiveDevelopers((dvs ?? []) as any[], memberIdsPerf);
         const { data: hus } = await supabase.from("user_stories").select("assignee_id, status, story_points, added_to_sprint_at, end_date").eq("team_id", teamId);
-        const result: DevPerformanceRow[] = (dvs ?? []).map((d: any) => {
+        const result: DevPerformanceRow[] = dvsFiltered.map((d: any) => {
           const devHUs = (hus ?? []).filter((h: any) => h.assignee_id === d.id);
           const done   = devHUs.filter((h: any) => DONE_STATUSES.some(ds => h.status?.toLowerCase().includes(ds)));
           const totalPts = devHUs.reduce((a: number, h: any) => a + (h.story_points ?? 0), 0);

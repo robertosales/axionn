@@ -165,7 +165,7 @@ export function useSprintHistory(contractId?: string | null) {
       // Comparativo por time
       const byTeam: Record<string, SprintMetrics[]> = {};
       result.forEach(m => { if (!byTeam[m.teamId]) byTeam[m.teamId] = []; byTeam[m.teamId].push(m); });
-      setTeamComparativo(Object.entries(byTeam).map(([teamId, ms]) => {
+      const comparativo = Object.entries(byTeam).map(([teamId, ms]) => {
         const avgCompletion = Math.round(ms.reduce((a, m) => a + m.completionRate, 0) / ms.length);
         return {
           teamId, teamName: ms[0].teamName,
@@ -176,7 +176,9 @@ export function useSprintHistory(contractId?: string | null) {
           totalImpedimentos: 0,
           totalSprints:      ms.length,
         };
-      }));
+      });
+      comparativo.sort((a, b) => compareTeamNames(a.teamName, b.teamName));
+      setTeamComparativo(comparativo);
     } finally {
       setLoading(false);
     }

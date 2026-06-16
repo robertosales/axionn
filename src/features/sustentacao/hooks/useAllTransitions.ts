@@ -76,17 +76,28 @@ export function useAllHours() {
 }
 
 export function useProfiles() {
+  const { currentTeamId } = useAuth();
   const { data } = useQuery({
-    queryKey: KEYS.profiles.active(),
+    queryKey: [...KEYS.profiles.active(), currentTeamId ?? "no-team"],
     queryFn: async () => {
+      if (!currentTeamId) return [];
+      // Restringe à membership atual: apenas usuários listados em team_members do time ativo.
+      const { data: tm, error: tmErr } = await supabase
+        .from("team_members")
+        .select("user_id")
+        .eq("team_id", currentTeamId);
+      if (tmErr) throw tmErr;
+      const ids = (tm ?? []).map((r: any) => r.user_id).filter(Boolean);
+      if (ids.length === 0) return [];
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id, display_name, email")
+        .in("user_id", ids)
         .eq("is_active", true);
-
       if (error) throw error;
       return (data || []) as Array<{ user_id: string; display_name: string; email: string }>;
     },
+    enabled: !!currentTeamId,
     staleTime: STALE.SESSION,
   });
 

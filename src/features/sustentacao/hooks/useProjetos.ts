@@ -91,5 +91,40 @@ export function useProjetos({ allTeams = false }: Options = {}) {
 
   useEffect(() => { load(); }, [load]);
 
-  return { projetos, loading, error, reload: load };
+  async function create(payload: any) {
+    const teamId = currentTeam?.id;
+    const insert: any = {
+      team_id:     teamId,
+      name:        payload.nome,
+      description: payload.descricao ?? null,
+      module_type: payload.module_type ?? null,
+      code:        payload.code ?? null,
+      redmine_id:  payload.redmine_id ?? null,
+      status:      'active',
+    };
+    const { error: err } = await (supabase as any).from('projects').insert(insert);
+    if (err) throw err;
+    await load();
+  }
+
+  async function update(id: string, payload: any) {
+    const updates: any = {
+      name:        payload.nome,
+      description: payload.descricao ?? null,
+      module_type: payload.module_type ?? null,
+      code:        payload.code ?? null,
+      redmine_id:  payload.redmine_id ?? null,
+    };
+    const { error: err } = await (supabase as any).from('projects').update(updates).eq('id', id);
+    if (err) throw err;
+    await load();
+  }
+
+  async function remove(id: string) {
+    const { error: err } = await (supabase as any).from('projects').delete().eq('id', id);
+    if (err) throw err;
+    await load();
+  }
+
+  return { projetos, loading, error, reload: load, create, update, remove };
 }

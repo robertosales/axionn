@@ -86,7 +86,8 @@ export const FASE_LABELS: Record<string, string> = {
   reuniao_interna: "Reunião Interna",
 };
 
-export const REQUIRES_JUSTIFICATIVA = ["rejeitada", "cancelada", "planejamento_ag_aprovacao"] as const;
+// Justificativa não é mais obrigatória em nenhum status (mantido o export para compatibilidade).
+export const REQUIRES_JUSTIFICATIVA = [] as const;
 export const TERMINAL_STATUSES = ["ag_aceite_final", "cancelada"] as const;
 
 export interface Demanda {

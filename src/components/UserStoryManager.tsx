@@ -31,6 +31,7 @@ import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 import { HUEditDrawer } from "@/components/HUEditDrawer";
+import { useTeamAssignees } from "@/hooks/useTeamAssignees";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string; dot: string }> = {
   baixa:   { label: "Baixa",   color: "bg-muted text-muted-foreground",                                      dot: "bg-muted-foreground" },
@@ -67,6 +68,7 @@ export function UserStoryManager() {
   const [submitting, setSubmitting]       = useState(false);
   const [sprintId, setSprintId]           = useState<string>("");
   const [statusField, setStatusField]     = useState<string>("");
+  const assigneeOptions = useTeamAssignees(currentTeamId, developers ?? [], assigneeId || null);
 
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [editHuId, setEditHuId]             = useState<string | null>(null);
@@ -293,7 +295,7 @@ export function UserStoryManager() {
                     <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem responsável" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sem responsável</SelectItem>
-                      {developers.map((dev) => <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>)}
+                      {assigneeOptions.map((dev) => <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useTeamAssignees } from "@/hooks/useTeamAssignees";
 
 interface Props {
   huId: string | null;
@@ -67,6 +68,8 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   const [customFieldValues, setCFV]   = useState<Record<string, string | number>>({});
   const [errors, setErrors]           = useState<Record<string, string>>({});
   const [submitting, setSubmitting]   = useState(false);
+
+  const assigneeOptions = useTeamAssignees(currentTeamId, developers ?? [], assigneeId || null);
 
   // ─── Sincroniza developers com team_members do time atual ─────────────────
   // Garante que o combo "Responsável" reflita TODOS os membros do time,
@@ -451,7 +454,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sem responsável</SelectItem>
-                      {(developers ?? []).map((dev: any) => (
+                      {assigneeOptions.map((dev) => (
                         <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>
                       ))}
                     </SelectContent>

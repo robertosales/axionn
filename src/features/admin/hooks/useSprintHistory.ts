@@ -74,18 +74,10 @@ export function useSprintHistory(contractId?: string | null) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Se contractId, restringe aos times vinculados ao contrato
-      let allowedTeamIds: string[] | null = null;
-      if (contractId) {
-        const { data: projs } = await supabase
-          .from('projects')
-          .select('team_id')
-          .eq('contract_id', contractId)
-          .not('team_id', 'is', null);
-        allowedTeamIds = [...new Set((projs ?? []).map((p: any) => p.team_id as string))];
-        if (allowedTeamIds.length === 0) {
-          setMetrics([]); setTeamComparativo([]); setLoading(false); return;
-        }
+      // Times do contrato: união entre teams.contract_id e projects.contract_id
+      const allowedTeamIds = await resolveContractTeamIds(contractId);
+      if (allowedTeamIds !== null && allowedTeamIds.length === 0) {
+        setMetrics([]); setTeamComparativo([]); setLoading(false); return;
       }
 
       let sprintsQuery = supabase

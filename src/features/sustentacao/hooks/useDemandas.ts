@@ -9,7 +9,7 @@ import { toast }                    from 'sonner';
 import { supabase }                 from '@/integrations/supabase/client';
 import * as svc                     from '../services/demandas.service';
 import type { Demanda, DemandaHour } from '../types/demanda';
-import { REQUIRES_JUSTIFICATIVA, ALL_SITUACOES } from '../types/demanda';
+import { ALL_SITUACOES } from '../types/demanda';
 import { KEYS }                     from '@/lib/queryKeys';
 import { STALE }                    from '@/lib/queryClient';
 
@@ -102,10 +102,6 @@ export function useDemandas() {
   };
 
   const moveTo = async (demanda: Demanda, newStatus: string, justificativa?: string) => {
-    if ((REQUIRES_JUSTIFICATIVA as readonly string[]).includes(newStatus) && !justificativa) {
-      toast.error('Justificativa obrigatória para este status');
-      return false;
-    }
     const extraUpdates: Partial<Demanda> =
       newStatus === 'fila_concluida' ? { aceite_data: new Date().toISOString() } : {};
     try {

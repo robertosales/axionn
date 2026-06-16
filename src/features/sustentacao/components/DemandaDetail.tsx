@@ -57,7 +57,6 @@ import {
   FASES,
   FASE_LABELS,
   ALL_SITUACOES,
-  REQUIRES_JUSTIFICATIVA,
   TERMINAL_STATUSES,
   isDemandaIniciada,
 } from "../types/demanda";
@@ -173,8 +172,8 @@ const TERMINAL_WORKFLOW = ["ag_aceite_final", "rejeitada", "cancelada"];
 // Status que ativam modal de suspensão/bloqueio
 const SUSPENSAO_STATUSES = ["bloqueada"];
 
-// Status que exigem justificativa obrigatória
-const REQUIRES_JUSTIFICATIVA_WORKFLOW = ["rejeitada", "cancelada", "planejamento_ag_aprovacao"];
+// Justificativa não é mais obrigatória em nenhum status.
+const REQUIRES_JUSTIFICATIVA_WORKFLOW: string[] = [];
 
 // ─────────────────────────────────────────────────────────────────────────────
 

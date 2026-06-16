@@ -1,36 +1,16 @@
-## Diagnóstico
+## Causa
 
-O combo **Responsável** do formulário de User Story lê `developers` do `SprintContext`, que devolve **todas as linhas de `developers` do time** sem filtrar membros ativos.
+O combo "Responsável" ficou vazio porque o `SprintContext` mapeia os `developers` sem incluir o campo `user_id` (linha 248 de `src/contexts/SprintContext.tsx`). O hook `useTeamAssignees` filtra por `d.user_id ∈ team_members(team_id)`, então com `user_id` sempre `undefined` nenhuma opção passa pelo filtro.
 
-No time `[nexo]-Time A - B` existem **20 linhas em `developers`** contra **11 membros reais** em `team_members`. Causas:
+Confirmado no banco: o time tem 11 membros em `team_members` e 12 devs com `user_id` preenchido — os dados existem, falta apenas propagá-los ao front.
 
-1. **Stale (ex-membros)** com `user_id NULL`, importados antes do vínculo com `auth.users` (Eduardo Ventura, Lucas Borges, Rejane Nunes, etc.).
-2. **Duplicados**: mesmo profissional aparece 2x — linha legada (sem `user_id`) **+** nova linha criada pelo sync do `HUEditDrawer` quando o usuário virou membro de fato (com `user_id`). Casos: Marcus Cesar, Matheus Meneses, Maylane Natel, Rafael Quintino, Roberto Sales.
+## Correção
 
-O `useEffect` de sync só **insere** developers faltantes — nunca remove obsoletos — então a lista cresce.
+1. **`src/types/sprint.ts`** — adicionar `user_id?: string | null` à interface `Developer`.
+2. **`src/contexts/SprintContext.tsx`** (linha 248) — incluir `user_id: d.user_id` no mapeamento de `developers`. Fazer o mesmo em qualquer outro `setDevelopers` (ex.: handler de realtime), se existir.
 
-## Plano de correção (apenas frontend, sem deletar dados)
-
-### 1. Novo hook `src/hooks/useTeamAssignees.ts`
-Recebe `teamId`, lista `developers` e `currentAssigneeId`. Retorna:
-- Apenas developers com `user_id ∈ team_members(team_id)` ativos.
-- Deduplicado por `user_id`.
-- **Ordenado alfabeticamente** por nome (pt-BR, case-insensitive).
-- Se o `currentAssigneeId` da HU não estiver na lista (ex-membro histórico), é anexado ao final como `Nome (ex-membro)` para o valor renderizar sem quebrar o select.
-
-### 2. `src/components/HUEditDrawer.tsx`
-- Trocar o `(developers ?? []).map(...)` no `<SelectContent>` pelo retorno do hook.
-- Manter o `useEffect` que cria devs faltantes para novos membros (essencial para o combo refletir membros recém-adicionados).
-
-### 3. `src/components/UserStoryManager.tsx`
-- Mesma troca no `<SelectContent>` do campo Responsável (linha ~296), usando o hook.
-
-### 4. Não fazer agora
-- Não excluir linhas de `developers` (HUs antigas referenciam `assignee_id`).
-- Não mexer em RLS/migrations.
+Nenhuma outra mudança: o hook `useTeamAssignees`, `HUEditDrawer` e `UserStoryManager` já estão corretos e voltarão a listar os 11 membros ativos em ordem alfabética assim que `user_id` chegar nos objetos.
 
 ## Validação
 
-- “Editar User Story” no time `[nexo]-Time A - B`: combo exibe exatamente os 11 membros, em ordem alfabética, sem duplicatas.
-- HU antiga com responsável ex-membro: nome aparece com `(ex-membro)` e pode ser trocado.
-- Adicionar/remover membro do time → reabrir o drawer → combo reflete a mudança.
+Reabrir "Editar User Story" em `[nexo]-Time A - B` — devem aparecer os 11 membros ativos, sem duplicatas, em ordem alfabética. HUs antigas com assignee ex-membro mostram "(ex-membro)".

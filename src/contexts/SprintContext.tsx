@@ -245,7 +245,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
       if (controller.signal.aborted) return;
 
-      setDevelopers((devRes.data || []).map((d: any) => ({ id: d.id, name: d.name, email: d.email, role: d.role, avatar: d.avatar })));
+      setDevelopers((devRes.data || []).map((d: any) => ({ id: d.id, name: d.name, email: d.email, user_id: d.user_id, role: d.role, avatar: d.avatar })));
       setSlice({ developers: false });
 
       setSprints((sprintRes.data || []).map((s: any) => ({
@@ -512,7 +512,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
           const d = payload.new as any;
           setDevelopers((prev) => {
             if (prev.some((dev) => dev.id === d.id)) return prev;
-            return [...prev, { id: d.id, name: d.name, email: d.email, role: d.role, avatar: d.avatar }];
+            return [...prev, { id: d.id, name: d.name, email: d.email, user_id: d.user_id, role: d.role, avatar: d.avatar }];
           });
         },
       )
@@ -522,7 +522,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         (payload) => {
           const d = payload.new as any;
           setDevelopers((prev) =>
-            prev.map((dev) => dev.id === d.id ? { id: d.id, name: d.name, email: d.email, role: d.role, avatar: d.avatar } : dev),
+            prev.map((dev) => dev.id === d.id ? { id: d.id, name: d.name, email: d.email, user_id: d.user_id, role: d.role, avatar: d.avatar } : dev),
           );
         },
       )
@@ -588,7 +588,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .single();
     if (error) { toast.error("Erro ao adicionar desenvolvedor"); return; }
     if (data) setDevelopers((prev) =>
-      prev.some((d) => d.id === data.id) ? prev : [...prev, { id: data.id, name: data.name, email: data.email, role: data.role, avatar: data.avatar }]
+      prev.some((d) => d.id === data.id) ? prev : [...prev, { id: data.id, name: data.name, email: data.email, user_id: data.user_id, role: data.role, avatar: data.avatar }]
     );
   }, [teamId]);
 

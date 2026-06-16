@@ -174,6 +174,7 @@ export interface Developer {
   id: string;
   name: string;
   email?: string | null;
+  user_id?: string | null;
   avatar?: string | null;
   avatarUrl?: string | null;
   role?: string | null;

@@ -23,6 +23,7 @@ import { useAuth }                                            from "@/contexts/A
 import { toast }                                              from "sonner";
 import { KEYS }                                               from "@/lib/queryKeys";
 import { STALE }                                              from "@/lib/queryClient";
+import { fetchActiveMemberIds, filterActiveDevelopers }       from "@/lib/teamMemberFilter";
 
 // ── Types ────────────────────────────────────────────────────────────────────────
 export interface KanbanColumn {
@@ -91,8 +92,8 @@ async function fetchDevs(teamId: string) {
     .eq("team_id", teamId);
   if (error) throw error;
   const raw = (data ?? []) as Array<{ id: string; name: string; avatar: string | null; user_id: string | null; created_at: string | null }>;
-  const memberIds = await (await import("@/lib/teamMemberFilter")).fetchActiveMemberIds(teamId);
-  const filtered = (await import("@/lib/teamMemberFilter")).filterActiveDevelopers(raw, memberIds);
+  const memberIds = await fetchActiveMemberIds(teamId);
+  const filtered = filterActiveDevelopers(raw, memberIds);
   return filtered.map((d) => ({ id: d.id, name: d.name, avatar: d.avatar }));
 }
 

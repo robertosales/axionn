@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import type { Demanda, DemandaHour } from "../types/demanda";
 import {
   SITUACAO_LABELS,
@@ -260,7 +261,9 @@ export function DemandaDetail({
   pendingMoveTarget,
 }: Props) {
   const demanda = rawDemanda as DemandaExt | null;
-  const { user, profile, isAdmin, currentTeamId } = useAuth();
+  const { user, profile, isAdmin, currentTeamId, getModuleRole } = useAuth();
+  const isContractAdmin = getModuleRole("sustentacao") === "admin_contrato";
+  const canFilterAllAnalysts = isAdmin || isContractAdmin;
   const { fases, create: createFase, remove: removeFase } = useFases();
   const fasesMap = useMemo(() => {
     const m: Record<string, string> = { ...FASE_LABELS };
@@ -328,6 +331,12 @@ export function DemandaDetail({
   const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
   const [demandanteProfile, setDemandanteProfile] = useState<string | null>(null);
 
+  // ─── Filtro/paginação da aba Atividades ───
+  const HOURS_PAGE_SIZE = 10;
+  const [analystFilter, setAnalystFilter] = useState<string>(user?.id ?? "all");
+  const [hoursPage, setHoursPage] = useState(1);
+  const [teamMembers, setTeamMembers] = useState<{ user_id: string; display_name: string }[]>([]);
+
   const [evidencias, setEvidencias] = useState<DemandaEvidencia[]>([]);
   const [evidLoading, setEvidLoading] = useState(false);
   const [evidForm, setEvidForm] = useState({
@@ -390,6 +399,49 @@ export function DemandaDetail({
     });
   }, [hours]);
 
+  // ─── Carrega membros do time atual para o combo de Analista ───
+  useEffect(() => {
+    if (!currentTeamId) {
+      setTeamMembers([]);
+      return;
+    }
+    (async () => {
+      const { data: tm } = await supabase
+        .from("team_members")
+        .select("user_id")
+        .eq("team_id", currentTeamId);
+      const ids = (tm ?? []).map((r: any) => r.user_id).filter(Boolean);
+      if (ids.length === 0) {
+        setTeamMembers([]);
+        return;
+      }
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .in("user_id", ids)
+        .eq("is_active", true);
+      const members = ((profs ?? []) as any[])
+        .map((p) => ({ user_id: p.user_id, display_name: p.display_name || p.user_id }))
+        .sort((a, b) => a.display_name.localeCompare(b.display_name, "pt-BR"));
+      setTeamMembers(members);
+      // Garante que o nome do usuário logado fique disponível no profilesMap
+      setProfilesMap((prev) => {
+        const next = new Map(prev);
+        members.forEach((m) => {
+          if (!next.has(m.user_id)) next.set(m.user_id, m.display_name);
+        });
+        return next;
+      });
+    })();
+  }, [currentTeamId]);
+
+  // Usuário comum: combo travado no próprio user
+  useEffect(() => {
+    if (!canFilterAllAnalysts && user?.id) {
+      setAnalystFilter(user.id);
+    }
+  }, [canFilterAllAnalysts, user?.id]);
+
   if (!demanda) return null;
 
   const isCancelada = demanda.situacao === "cancelada";
@@ -428,14 +480,30 @@ export function DemandaDetail({
 
   const slaStatus = getSLAStatusDemanda(demanda.created_at, demanda.prazo_solucao || null, demanda.situacao);
 
+  // ─── Filtragem + paginação da aba Atividades ───
+  const effectiveAnalyst = canFilterAllAnalysts ? analystFilter : (user?.id ?? "all");
+  const filteredHours = useMemo(() => {
+    if (effectiveAnalyst === "all") return hours;
+    return hours.filter((h) => h.user_id === effectiveAnalyst);
+  }, [hours, effectiveAnalyst]);
+  const hoursTotalPages = Math.max(1, Math.ceil(filteredHours.length / HOURS_PAGE_SIZE));
+  const currentHoursPage = Math.min(hoursPage, hoursTotalPages);
+  const paginatedHours = filteredHours.slice(
+    (currentHoursPage - 1) * HOURS_PAGE_SIZE,
+    currentHoursPage * HOURS_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setHoursPage(1);
+  }, [effectiveAnalyst, filteredHours.length]);
+
   const currentFaseIdx = EVIDENCIA_FASES.indexOf(demanda.situacao);
   const allowedEvidFases = currentFaseIdx >= 0 ? EVIDENCIA_FASES.slice(0, currentFaseIdx + 1) : EVIDENCIA_FASES;
 
   const getMissingEvidencias = (targetStatus: string): string[] => {
-    if (targetStatus !== "planejamento_ag_aprovacao") return [];
-    const faseEvidencias = evidencias.filter((e) => e.fase === demanda.situacao);
-    if (faseEvidencias.length > 0) return [];
-    return ["É obrigatório anexar ao menos uma evidência antes de avançar para Ag. Aprovação."];
+    // Evidências não são mais obrigatórias em nenhum fluxo.
+    void targetStatus;
+    return [];
   };
 
   const startEdit = () => {
@@ -1348,10 +1416,38 @@ export function DemandaDetail({
 
               {/* ─── ABA ATIVIDADES (HORAS) ─── */}
               <TabsContent value="horas" className="mt-5 space-y-5">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-end justify-between gap-3">
                   <p className="text-sm font-semibold text-foreground">
                     Total Acumulado: <span style={{ color: TEAL }}>{minutesToDisplay(total)}</span>
                   </p>
+                  <div className="min-w-[220px]">
+                    <Label className="text-xs">Analista</Label>
+                    <Select
+                      value={analystFilter}
+                      onValueChange={(v) => setAnalystFilter(v)}
+                      disabled={!canFilterAllAnalysts}
+                    >
+                      <SelectTrigger className="mt-1 w-56">
+                        <SelectValue placeholder="Selecione um analista" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {canFilterAllAnalysts && <SelectItem value="all">Todos</SelectItem>}
+                        {canFilterAllAnalysts ? (
+                          teamMembers.map((m) => (
+                            <SelectItem key={m.user_id} value={m.user_id}>
+                              {formatPersonName(m.display_name)}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          user?.id && (
+                            <SelectItem value={user.id}>
+                              {formatPersonName(profile?.display_name || user.email || "Você")}
+                            </SelectItem>
+                          )
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Card lançar horas */}
@@ -1433,7 +1529,7 @@ export function DemandaDetail({
                   </div>
                 </div>
 
-                {hours.length > 0 && (
+                {filteredHours.length > 0 ? (
                   <div
                     className="rounded-xl border overflow-x-auto"
                     style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
@@ -1456,7 +1552,7 @@ export function DemandaDetail({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {hours.map((h) => {
+                        {paginatedHours.map((h) => {
                           // Permite editar/excluir se for admin OU se for o próprio dono do lançamento
                           const canEditRow = isAdmin || h.user_id === user?.id;
                           return (
@@ -1500,7 +1596,41 @@ export function DemandaDetail({
                         })}
                       </tbody>
                     </table>
+                    <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-2 text-xs">
+                      <span className="text-muted-foreground">
+                        {filteredHours.length} {filteredHours.length === 1 ? "lançamento" : "lançamentos"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={currentHoursPage <= 1}
+                          onClick={() => setHoursPage((p) => Math.max(1, p - 1))}
+                        >
+                          Anterior
+                        </Button>
+                        <span className="text-muted-foreground">
+                          Página {currentHoursPage} de {hoursTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={currentHoursPage >= hoursTotalPages}
+                          onClick={() => setHoursPage((p) => Math.min(hoursTotalPages, p + 1))}
+                        >
+                          Próxima
+                        </Button>
+                      </div>
+                    </div>
                   </div>
+                ) : (
+                  hours.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum lançamento para o analista selecionado.
+                    </p>
+                  )
                 )}
               </TabsContent>
 
@@ -1585,41 +1715,6 @@ export function DemandaDetail({
 
               {/* ─── ABA EVIDÊNCIAS ─── */}
               <TabsContent value="evidencias" className="mt-5 space-y-5">
-                {pendingTarget && (
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
-                    <p className="font-medium text-amber-800 flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4" />
-                      Para avançar para "{resolveLabel(pendingTarget)}", cadastre ao menos uma evidência desta etapa e
-                      tente mover novamente.
-                    </p>
-                    {(() => {
-                      const missing = getMissingEvidencias(pendingTarget);
-                      const hasEvidence = missing.length === 0;
-                      return hasEvidence ? (
-                        <div className="mt-2 flex items-center gap-3">
-                          <p className="text-emerald-700 text-xs">✅ Evidência registrada. Você já pode avançar.</p>
-                          <Button
-                            size="sm"
-                            className="h-7 text-xs text-white"
-                            style={{ background: TEAL }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-                            onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
-                            onClick={async () => {
-                              const ok = await onMoveTo(demanda, pendingTarget);
-                              if (ok) {
-                                setPendingTarget(undefined);
-                                await refreshAllData();
-                              }
-                            }}
-                          >
-                            Avançar agora
-                          </Button>
-                        </div>
-                      ) : null;
-                    })()}
-                  </div>
-                )}
-
                 {/* Card adicionar evidência */}
                 <div className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
                   <div className="px-4 py-2.5 border-b bg-muted/40">

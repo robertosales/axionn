@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveContractTeamIds, compareTeamNames } from '../lib/resolveContractTeamIds';
 
 export type PeriodoFiltro = '3m' | '6m' | '12m' | 'all';
 

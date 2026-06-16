@@ -1452,48 +1452,52 @@ export function DemandaDetail({
                           <th className="text-right px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                             Tempo
                           </th>
-                          {isAdmin && <th className="px-3 py-2.5" />}
+                          <th className="px-3 py-2.5" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {hours.map((h) => (
-                          <tr key={h.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-3 py-2.5 text-xs">
-                              {new Date(h.created_at).toLocaleDateString("pt-BR")}
-                            </td>
-                            <td className="px-3 py-2.5 text-xs">{fasesMap[h.fase] || h.fase}</td>
-                            <td className="px-3 py-2.5 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
-                            <td className="px-3 py-2.5 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
-                            <td className="px-3 py-2.5 text-xs text-right font-mono font-medium">
-                              {minutesToDisplay(Number(h.horas))}
-                            </td>
-                            {isAdmin && (
-                              <td className="px-3 py-2.5">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                                    onClick={() => {
-                                      setEditHour(h);
-                                      setShowEditHourDialog(true);
-                                    }}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                                    onClick={() => setDeleteHourId(h.id)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
+                        {hours.map((h) => {
+                          // Permite editar/excluir se for admin OU se for o próprio dono do lançamento
+                          const canEditRow = isAdmin || h.user_id === user?.id;
+                          return (
+                            <tr key={h.id} className="hover:bg-muted/30 transition-colors">
+                              <td className="px-3 py-2.5 text-xs">
+                                {new Date(h.created_at).toLocaleDateString("pt-BR")}
                               </td>
-                            )}
-                          </tr>
-                        ))}
+                              <td className="px-3 py-2.5 text-xs">{fasesMap[h.fase] || h.fase}</td>
+                              <td className="px-3 py-2.5 text-xs max-w-[200px] truncate">{h.descricao || "-"}</td>
+                              <td className="px-3 py-2.5 text-xs">{profilesMap.get(h.user_id) || "..."}</td>
+                              <td className="px-3 py-2.5 text-xs text-right font-mono font-medium">
+                                {minutesToDisplay(Number(h.horas))}
+                              </td>
+                              <td className="px-3 py-2.5">
+                                {canEditRow && (
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                      onClick={() => {
+                                        setEditHour(h);
+                                        setShowEditHourDialog(true);
+                                      }}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                      onClick={() => setDeleteHourId(h.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1705,235 +1709,240 @@ export function DemandaDetail({
                   </div>
                 </div>
 
-                {EVIDENCIA_FASES.map((fase) => {
-                  const items = evidenciasByFase[fase] || [];
-                  if (items.length === 0) return null;
-                  return (
-                    <div key={fase}>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                {evidLoading && <p className="text-sm text-muted-foreground">Carregando evidências...</p>}
+
+                {!evidLoading && evidencias.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhuma evidência cadastrada.</p>
+                )}
+
+                {EVIDENCIA_FASES.filter((f) => evidenciasByFase[f]?.length > 0).map((fase) => (
+                  <div key={fase} className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                    <div className="px-4 py-2.5 border-b bg-muted/40">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {EVIDENCIA_FASE_LABELS[fase]}
                       </p>
-                      <div
-                        className="rounded-xl border overflow-hidden divide-y"
-                        style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
-                      >
-                        {items.map((e) => (
-                          <div
-                            key={e.id}
-                            className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-muted/30 transition-colors"
-                            style={{ borderLeft: `3px solid ${TEAL_BORDER}` }}
-                          >
-                            {e.tipo === "link" ? (
-                              <Link2 className="h-4 w-4 shrink-0" style={{ color: TEAL }} />
-                            ) : (
-                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{e.titulo}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(e.created_at).toLocaleString("pt-BR")}
-                                {e.descricao ? ` — ${e.descricao}` : ""}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {e.tipo === "link" && e.url_externa && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 hover:text-foreground"
-                                  style={{ color: TEAL }}
-                                  onClick={() => window.open(e.url_externa!, "_blank")}
-                                >
-                                  <Eye className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                              {e.tipo === "arquivo" && e.file_path && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 hover:text-foreground"
-                                  style={{ color: TEAL }}
-                                  onClick={async () => {
-                                    try {
-                                      const url = await evidSvc.getEvidenciaSignedUrl(e.file_path!);
-                                      window.open(url, "_blank");
-                                    } catch {
-                                      toast.error("Erro ao abrir arquivo");
-                                    }
-                                  }}
-                                >
-                                  <Upload className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteEvidId(e.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
                     </div>
-                  );
-                })}
-                {evidencias.length === 0 && !evidLoading && (
-                  <p className="text-sm text-muted-foreground">Nenhuma evidência registrada.</p>
-                )}
+                    <div className="divide-y">
+                      {evidenciasByFase[fase].map((ev) => (
+                        <div key={ev.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{ev.titulo}</p>
+                            {ev.descricao && <p className="text-xs text-muted-foreground truncate">{ev.descricao}</p>}
+                            <p className="text-xs text-muted-foreground">
+                              {ev.tipo === "link" && ev.url_externa ? (
+                                <a href={ev.url_externa} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: TEAL }}>
+                                  {ev.url_externa}
+                                </a>
+                              ) : ev.file_name ? (
+                                ev.file_name
+                              ) : null}
+                            </p>
+                          </div>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                              onClick={() => setDeleteEvidId(ev.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </TabsContent>
             </Tabs>
           </div>
         </div>
       </div>
 
-      {/* ─── MODAIS ─── */}
+      {/* ── Modais ── */}
       <JustificativaDialog
         open={showJustModal}
         onClose={() => setShowJustModal(false)}
         onConfirm={confirmJustificativa}
+        targetStatus={resolveLabel(newStatus)}
       />
       <SuspensaoDialog
         open={showSuspensaoModal}
-        onClose={() => {
-          setShowSuspensaoModal(false);
-          setNewStatus("");
-        }}
+        onClose={() => setShowSuspensaoModal(false)}
         onConfirm={confirmSuspensao}
       />
       <EncerramentoDialog
         open={showEncerramentoModal}
-        onClose={() => {
-          setShowEncerramentoModal(false);
-          setNewStatus("");
-        }}
+        onClose={() => setShowEncerramentoModal(false)}
         onConfirm={confirmEncerramento}
         isCorretiva={isCorretiva}
       />
-      <NovaAtividadeDialog
-        demanda={demanda as Demanda}
-        open={showEditHourDialog}
-        onClose={() => {
-          setShowEditHourDialog(false);
-          setEditHour(null);
-        }}
-        editHour={editHour}
-        onSuccess={reloadHours}
-      />
+
+      {/* Confirm excluir hora */}
       <ConfirmDialog
         open={!!deleteHourId}
-        title="Remover lançamento?"
+        title="Excluir lançamento?"
         description="Esta ação não pode ser desfeita."
         onConfirm={async () => {
           if (deleteHourId) {
             await removeHour(deleteHourId);
             setDeleteHourId(null);
-            await reloadHours();
           }
         }}
-        onOpenChange={() => setDeleteHourId(null)}
+        onCancel={() => setDeleteHourId(null)}
       />
+
+      {/* Dialog editar hora */}
+      {showEditHourDialog && editHour && (
+        <Dialog open={showEditHourDialog} onOpenChange={setShowEditHourDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar Lançamento</DialogTitle>
+              <DialogDescription>Altere os dados do lançamento de horas.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div>
+                <Label className="text-xs">Tempo (HH:MM)</Label>
+                <HorasInput
+                  value={
+                    (() => {
+                      const total = Math.round(Number(editHour.horas) * 60);
+                      const h = Math.floor(total / 60);
+                      const m = total % 60;
+                      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+                    })()
+                  }
+                  onChange={(v) => {
+                    const dec = hhmmToDecimal(v);
+                    setEditHour((prev) => prev ? { ...prev, horas: dec ?? prev.horas } : prev);
+                  }}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Fase</Label>
+                <Select
+                  value={editHour.fase}
+                  onValueChange={(v) => setEditHour((prev) => prev ? { ...prev, fase: v } : prev)}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fases.map((f) => (
+                      <SelectItem key={f.key} value={f.key}>
+                        {f.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Descrição</Label>
+                <Input
+                  value={editHour.descricao || ""}
+                  onChange={(e) => setEditHour((prev) => prev ? { ...prev, descricao: e.target.value } : prev)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEditHourDialog(false)}>
+                Cancelar
+              </Button>
+              <Button
+                className="text-white"
+                style={{ background: TEAL }}
+                onClick={async () => {
+                  if (!editHour) return;
+                  await updateHour(editHour.id, {
+                    horas: Number(editHour.horas),
+                    fase: editHour.fase,
+                    descricao: editHour.descricao,
+                  });
+                  setShowEditHourDialog(false);
+                  setEditHour(null);
+                }}
+              >
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Confirm excluir responsável */}
       <ConfirmDialog
         open={!!deleteRespId}
         title="Remover responsável?"
-        description="O responsável será desvinculado desta demanda."
+        description="Esta ação não pode ser desfeita."
         onConfirm={handleRemoveResp}
-        onOpenChange={() => setDeleteRespId(null)}
+        onCancel={() => setDeleteRespId(null)}
       />
+
+      {/* Confirm excluir evidência */}
       <ConfirmDialog
         open={!!deleteEvidId}
         title="Remover evidência?"
         description="Esta ação não pode ser desfeita."
         onConfirm={handleRemoveEvidencia}
-        onOpenChange={() => setDeleteEvidId(null)}
+        onCancel={() => setDeleteEvidId(null)}
       />
-      <Dialog open={showFasesManager} onOpenChange={setShowFasesManager}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Gerenciar Fases</DialogTitle>
-            <DialogDescription>
-              Cadastre as fases utilizadas no lançamento de horas das demandas. Mudanças aparecem em tempo real para
-              todos os usuários.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <Label className="text-xs">Nova fase</Label>
+
+      {/* Gerenciar Fases */}
+      {showFasesManager && (
+        <Dialog open={showFasesManager} onOpenChange={setShowFasesManager}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Gerenciar Fases</DialogTitle>
+              <DialogDescription>Adicione ou remova fases disponíveis para lançamento de horas.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div className="flex gap-2">
                 <Input
+                  placeholder="Nova fase..."
                   value={newFaseLabel}
                   onChange={(e) => setNewFaseLabel(e.target.value)}
-                  placeholder="Ex.: Reunião de Negócio"
-                  className="mt-1"
                 />
-              </div>
-              <Button
-                size="sm"
-                className="text-white"
-                style={{ background: TEAL }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
-                onClick={async () => {
-                  if (!newFaseLabel.trim()) return;
-                  try {
+                <Button
+                  size="sm"
+                  className="text-white shrink-0"
+                  style={{ background: TEAL }}
+                  onClick={async () => {
+                    if (!newFaseLabel.trim()) return;
                     await createFase(newFaseLabel.trim());
                     setNewFaseLabel("");
-                    toast.success("Fase criada");
-                  } catch (e: any) {
-                    toast.error(e?.message?.includes("duplicate") ? "Fase já existe" : "Erro ao criar fase");
-                  }
-                }}
-              >
-                <Plus className="h-4 w-4" />
-                Adicionar
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="divide-y border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                {fases.map((f) => (
+                  <div key={f.key} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span>{f.label}</span>
+                    {f.custom && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeFase(f.key)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowFasesManager(false)}>
+                Fechar
               </Button>
-            </div>
-            <div className="rounded-xl border overflow-hidden max-h-[300px] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 sticky top-0">
-                  <tr>
-                    <th className="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Fase
-                    </th>
-                    <th className="px-3 py-2" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {fases.map((f) => (
-                    <tr key={f.id} className="hover:bg-muted/30">
-                      <td className="px-3 py-2 text-xs">{f.label}</td>
-                      <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={async () => {
-                            try {
-                              await removeFase(f.id);
-                              toast.success("Fase removida");
-                            } catch {
-                              toast.error("Erro ao remover");
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowFasesManager(false)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }

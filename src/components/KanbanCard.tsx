@@ -1,11 +1,11 @@
-import { memo, useMemo, useCallback } from "react";
+import { memo, useMemo, useCallback, useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import {
   Bug, Clock, AlertTriangle, Tag, Zap, CheckCircle2,
-  Timer, TrendingUp, ArrowRight, ArrowLeft, ExternalLink,
+  Timer, TrendingUp, ArrowRight, ArrowLeft, ExternalLink, Plus,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDisplayName } from "@/lib/nameUtils";
@@ -20,6 +20,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import type { HU, Activity, WorkflowColumn } from "@/types/sprint";
+import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -492,6 +493,8 @@ export const KanbanCard = memo(function KanbanCard({
     [onMoveCard, hu.id],
   );
 
+  const [quickActivityOpen, setQuickActivityOpen] = useState(false);
+
   const cardContent = (
     <div
       ref={setNodeRef}
@@ -604,10 +607,42 @@ export const KanbanCard = memo(function KanbanCard({
     </div>
   );
 
-  // Se não há colunas configuradas ou sem handler de mover, renderiza sem context menu
-  if (workflowColumns.length === 0 || !onMoveCard) return cardContent;
+  const quickActivityDialog = (
+    <QuickActivityDialog
+      huId={hu.id}
+      open={quickActivityOpen}
+      onClose={() => setQuickActivityOpen(false)}
+    />
+  );
+
+  // Se não há colunas configuradas ou sem handler de mover, mantém apenas
+  // o item "Nova Atividade" no menu de contexto.
+  if (workflowColumns.length === 0 || !onMoveCard) {
+    return (
+      <>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
+          <ContextMenuContent className="w-56">
+            <ContextMenuItem onSelect={() => onSelect(hu)} className="gap-2">
+              <ExternalLink className="w-3.5 h-3.5" />
+              Detalhar
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() => setQuickActivityOpen(true)}
+              className="gap-2"
+            >
+              <Plus className="w-3.5 h-3.5 text-primary" />
+              Nova Atividade
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+        {quickActivityDialog}
+      </>
+    );
+  }
 
   return (
+    <>
     <ContextMenu>
       <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
       <ContextMenuContent className="w-56">
@@ -618,6 +653,17 @@ export const KanbanCard = memo(function KanbanCard({
         >
           <ExternalLink className="w-3.5 h-3.5" />
           Detalhar
+        </ContextMenuItem>
+
+        <ContextMenuSeparator />
+
+        {/* Nova Atividade */}
+        <ContextMenuItem
+          onSelect={() => setQuickActivityOpen(true)}
+          className="gap-2"
+        >
+          <Plus className="w-3.5 h-3.5 text-primary" />
+          Nova Atividade
         </ContextMenuItem>
 
         <ContextMenuSeparator />
@@ -673,5 +719,7 @@ export const KanbanCard = memo(function KanbanCard({
         )}
       </ContextMenuContent>
     </ContextMenu>
+    {quickActivityDialog}
+    </>
   );
 }, huPropsAreEqual);

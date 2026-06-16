@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -12,8 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CheckCircle, Clock, AlertTriangle, Bug, Zap, Target,
   TrendingUp, User, Activity as ActivityIcon, ChevronRight,
-  BarChart2, List, ArrowLeft,
+  BarChart2, List, ArrowLeft, ChevronLeft,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/sala-agil/metrics/MetricCard";
 import { AnalyticsSidebar } from "@/components/sala-agil/metrics/AnalyticsSidebar";
 import { TimelineCard } from "@/components/sala-agil/metrics/TimelineCard";
@@ -334,6 +335,20 @@ export function IndividualPerformance({
   members, sprintName, hoursPerMemberData, progressBySprintData, memberNames, loading,
 }: Props) {
   const [selectedMember, setSelectedMember] = useState<MemberMetrics | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  const sortedMembers = useMemo(
+    () => [...members].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })),
+    [members],
+  );
+  const totalPages = Math.max(1, Math.ceil(sortedMembers.length / pageSize));
+  useEffect(() => { setPage(1); }, [members]);
+  const safePage = Math.min(page, totalPages);
+  const paginatedMembers = sortedMembers.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const showPagination = sortedMembers.length > pageSize;
+  const fromIdx = (safePage - 1) * pageSize + 1;
+  const toIdx = Math.min(safePage * pageSize, sortedMembers.length);
 
   if (loading) {
     return (
@@ -414,7 +429,7 @@ export function IndividualPerformance({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30">
-              {members.map((m) => (
+              {paginatedMembers.map((m) => (
                 <MemberRow key={m.id} member={m} onClick={() => setSelectedMember(m)} />
               ))}
               {/* Linha de total */}
@@ -438,6 +453,25 @@ export function IndividualPerformance({
             </tbody>
           </table>
         </div>
+
+        {showPagination && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+            <span>Mostrando {fromIdx}–{toIdx} de {sortedMembers.length} membros</span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-8 px-2"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft className="h-4 w-4" /> Anterior
+              </Button>
+              <span className="tabular-nums">Página {safePage} de {totalPages}</span>
+              <Button variant="outline" size="sm" className="h-8 px-2"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                Próximo <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Gráficos */}
         <div className="grid md:grid-cols-2 gap-4">

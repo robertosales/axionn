@@ -1,16 +1,18 @@
-## Causa
+## Objetivo
+Na tela **Sala Ágil › Métricas › Desempenho Individual**, ordenar membros alfabeticamente e adicionar paginação.
 
-O combo "Responsável" ficou vazio porque o `SprintContext` mapeia os `developers` sem incluir o campo `user_id` (linha 248 de `src/contexts/SprintContext.tsx`). O hook `useTeamAssignees` filtra por `d.user_id ∈ team_members(team_id)`, então com `user_id` sempre `undefined` nenhuma opção passa pelo filtro.
+## Mudanças (apenas `src/components/dashboard/IndividualPerformance.tsx`)
 
-Confirmado no banco: o time tem 11 membros em `team_members` e 12 devs com `user_id` preenchido — os dados existem, falta apenas propagá-los ao front.
+1. **Ordenação alfabética**: criar `sortedMembers = [...members].sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'))`.
+2. **Paginação client-side**:
+   - `pageSize = 10` (padrão do projeto), state `page` (inicia em 1).
+   - `paginatedMembers = sortedMembers.slice((page-1)*pageSize, page*pageSize)`.
+   - Resetar `page` para 1 quando `members` mudar.
+3. **Render**:
+   - Iterar `paginatedMembers` no `tbody` (linha de Total/Média continua somando **todos** os membros, não só a página).
+   - Adicionar rodapé de paginação abaixo da tabela com: texto "Mostrando X–Y de N membros" + botões Anterior/Próximo (estilo `ghost`/`outline` já usado no projeto) e indicador "Página P de TP".
+   - Ocultar paginação se `sortedMembers.length <= pageSize`.
 
-## Correção
-
-1. **`src/types/sprint.ts`** — adicionar `user_id?: string | null` à interface `Developer`.
-2. **`src/contexts/SprintContext.tsx`** (linha 248) — incluir `user_id: d.user_id` no mapeamento de `developers`. Fazer o mesmo em qualquer outro `setDevelopers` (ex.: handler de realtime), se existir.
-
-Nenhuma outra mudança: o hook `useTeamAssignees`, `HUEditDrawer` e `UserStoryManager` já estão corretos e voltarão a listar os 11 membros ativos em ordem alfabética assim que `user_id` chegar nos objetos.
-
-## Validação
-
-Reabrir "Editar User Story" em `[nexo]-Time A - B` — devem aparecer os 11 membros ativos, sem duplicatas, em ordem alfabética. HUs antigas com assignee ex-membro mostram "(ex-membro)".
+## Fora do escopo
+- KPIs do topo, gráficos e modal de detalhe permanecem usando o conjunto completo de membros.
+- Nenhuma mudança em outras telas/componentes.

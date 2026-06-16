@@ -260,7 +260,9 @@ export function DemandaDetail({
   pendingMoveTarget,
 }: Props) {
   const demanda = rawDemanda as DemandaExt | null;
-  const { user, profile, isAdmin, currentTeamId } = useAuth();
+  const { user, profile, isAdmin, currentTeamId, getModuleRole } = useAuth();
+  const isContractAdmin = getModuleRole("sustentacao") === "admin_contrato";
+  const canFilterAllAnalysts = isAdmin || isContractAdmin;
   const { fases, create: createFase, remove: removeFase } = useFases();
   const fasesMap = useMemo(() => {
     const m: Record<string, string> = { ...FASE_LABELS };
@@ -327,6 +329,12 @@ export function DemandaDetail({
 
   const [profilesMap, setProfilesMap] = useState<Map<string, string>>(new Map());
   const [demandanteProfile, setDemandanteProfile] = useState<string | null>(null);
+
+  // ─── Filtro/paginação da aba Atividades ───
+  const HOURS_PAGE_SIZE = 10;
+  const [analystFilter, setAnalystFilter] = useState<string>(user?.id ?? "all");
+  const [hoursPage, setHoursPage] = useState(1);
+  const [teamMembers, setTeamMembers] = useState<{ user_id: string; display_name: string }[]>([]);
 
   const [evidencias, setEvidencias] = useState<DemandaEvidencia[]>([]);
   const [evidLoading, setEvidLoading] = useState(false);

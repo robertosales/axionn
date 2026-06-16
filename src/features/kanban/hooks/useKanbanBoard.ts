@@ -87,10 +87,13 @@ async function fetchColumns(teamId: string): Promise<KanbanColumn[]> {
 async function fetchDevs(teamId: string) {
   const { data, error } = await supabase
     .from("developers")
-    .select("id, name, avatar")
+    .select("id, name, avatar, user_id, created_at")
     .eq("team_id", teamId);
   if (error) throw error;
-  return (data ?? []) as { id: string; name: string; avatar: string | null }[];
+  const raw = (data ?? []) as Array<{ id: string; name: string; avatar: string | null; user_id: string | null; created_at: string | null }>;
+  const memberIds = await (await import("@/lib/teamMemberFilter")).fetchActiveMemberIds(teamId);
+  const filtered = (await import("@/lib/teamMemberFilter")).filterActiveDevelopers(raw, memberIds);
+  return filtered.map((d) => ({ id: d.id, name: d.name, avatar: d.avatar }));
 }
 
 async function fetchEpics(teamId: string) {

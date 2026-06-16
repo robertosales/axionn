@@ -484,10 +484,9 @@ export function DemandaDetail({
   const allowedEvidFases = currentFaseIdx >= 0 ? EVIDENCIA_FASES.slice(0, currentFaseIdx + 1) : EVIDENCIA_FASES;
 
   const getMissingEvidencias = (targetStatus: string): string[] => {
-    if (targetStatus !== "planejamento_ag_aprovacao") return [];
-    const faseEvidencias = evidencias.filter((e) => e.fase === demanda.situacao);
-    if (faseEvidencias.length > 0) return [];
-    return ["É obrigatório anexar ao menos uma evidência antes de avançar para Ag. Aprovação."];
+    // Evidências não são mais obrigatórias em nenhum fluxo.
+    void targetStatus;
+    return [];
   };
 
   const startEdit = () => {

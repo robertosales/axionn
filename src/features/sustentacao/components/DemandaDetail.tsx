@@ -480,6 +480,23 @@ export function DemandaDetail({
 
   const slaStatus = getSLAStatusDemanda(demanda.created_at, demanda.prazo_solucao || null, demanda.situacao);
 
+  // ─── Filtragem + paginação da aba Atividades ───
+  const effectiveAnalyst = canFilterAllAnalysts ? analystFilter : (user?.id ?? "all");
+  const filteredHours = useMemo(() => {
+    if (effectiveAnalyst === "all") return hours;
+    return hours.filter((h) => h.user_id === effectiveAnalyst);
+  }, [hours, effectiveAnalyst]);
+  const hoursTotalPages = Math.max(1, Math.ceil(filteredHours.length / HOURS_PAGE_SIZE));
+  const currentHoursPage = Math.min(hoursPage, hoursTotalPages);
+  const paginatedHours = filteredHours.slice(
+    (currentHoursPage - 1) * HOURS_PAGE_SIZE,
+    currentHoursPage * HOURS_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setHoursPage(1);
+  }, [effectiveAnalyst, filteredHours.length]);
+
   const currentFaseIdx = EVIDENCIA_FASES.indexOf(demanda.situacao);
   const allowedEvidFases = currentFaseIdx >= 0 ? EVIDENCIA_FASES.slice(0, currentFaseIdx + 1) : EVIDENCIA_FASES;
 

@@ -84,11 +84,13 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
         const userIds = members.map((m: any) => m.user_id).filter(Boolean);
         if (userIds.length === 0) return;
 
-        const existingUserIds = new Set(
-          (developers ?? [])
-            .filter((d: any) => d.team_id === currentTeamId && d.userId)
-            .map((d: any) => d.userId as string),
-        );
+        const { data: existingDevs } = await supabase
+          .from("developers")
+          .select("user_id")
+          .eq("team_id", currentTeamId)
+          .not("user_id", "is", null);
+        if (cancelled) return;
+        const existingUserIds = new Set((existingDevs ?? []).map((d: any) => d.user_id));
         const missing = userIds.filter((id: string) => !existingUserIds.has(id));
         if (missing.length === 0) return;
 
@@ -109,7 +111,8 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
           }));
         if (rows.length === 0) return;
 
-        await supabase.from("developers").insert(rows);
+        const { error } = await supabase.from("developers").insert(rows);
+        if (error) console.warn("[HUEditDrawer] insert developers:", error);
         // Realtime do SprintContext propaga automaticamente os novos devs.
       } catch (err) {
         console.warn("[HUEditDrawer] sync developers falhou:", err);

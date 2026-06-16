@@ -75,11 +75,20 @@ export function useWorkflowSteps(): WorkflowStep[] {
 
   if (!data || data.length === 0) return buildDefaultSteps();
 
+  // Garante unicidade de `key` para que nenhuma etapa seja descartada por
+  // colisão de chave (React `key` collision oculta o item silenciosamente).
+  const usedKeys = new Set<string>();
   return [...data]
     .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
     .map((row, idx) => {
       const label = (row.nome ?? "").trim();
-      const key = LABEL_TO_KEY[label.toLowerCase()] ?? slugify(label);
+      const baseKey = LABEL_TO_KEY[label.toLowerCase()] ?? slugify(label) ?? `step_${idx}`;
+      let key = baseKey || `step_${idx}`;
+      let suffix = 2;
+      while (usedKeys.has(key)) {
+        key = `${baseKey}_${suffix++}`;
+      }
+      usedKeys.add(key);
       return {
         key,
         label,

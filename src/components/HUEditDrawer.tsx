@@ -119,7 +119,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
       }
     })();
     return () => { cancelled = true; };
-  }, [open, currentTeamId, developers]);
+  }, [open, currentTeamId]);
 
   useEffect(() => {
     if (!open || !huId) return;

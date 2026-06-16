@@ -68,11 +68,22 @@ function loadExpandedCols(allKeys: string[]): Set<string> {
     const raw = sessionStorage.getItem(SS_EXPANDED_KEY);
     if (!raw) return new Set(allKeys);
     const parsed = JSON.parse(raw) as string[];
-    const saved = new Set(parsed);
-    allKeys.forEach((k) => { if (!parsed.includes(k) && !parsed.includes(`__hidden__${k}`)) saved.add(k); });
-    const hiddenKeys = parsed.filter((k) => k.startsWith("__hidden__")).map((k) => k.replace("__hidden__", ""));
-    hiddenKeys.forEach((k) => saved.delete(k));
-    return saved;
+    // Apenas considera o estado salvo de colunas que AINDA existem.
+    // Qualquer coluna válida do fluxo atual entra sempre no Set retornado,
+    // garantindo que nenhuma etapa válida desapareça do board.
+    const allSet = new Set(allKeys);
+    const result = new Set<string>(allKeys);
+    const collapsedHistoric = new Set(
+      parsed
+        .filter((k) => k.startsWith("__hidden__"))
+        .map((k) => k.replace("__hidden__", "")),
+    );
+    // Mantém colapsadas (faixa vertical) apenas as colunas explicitamente
+    // colapsadas pelo usuário — nunca remove a coluna do board.
+    collapsedHistoric.forEach((k) => {
+      if (allSet.has(k)) result.delete(k);
+    });
+    return result;
   } catch { return new Set(allKeys); }
 }
 

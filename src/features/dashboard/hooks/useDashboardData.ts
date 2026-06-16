@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth }  from "@/contexts/AuthContext";
+import { fetchActiveMemberIds, filterActiveDevelopers } from "@/lib/teamMemberFilter";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 export interface SprintMetrics {
@@ -91,14 +92,16 @@ export function useDashboardData() {
         supabase.from("user_stories").select(
           "id, status, story_points, estimated_hours, assignee_id, sprint_id, start_date, end_date, added_to_sprint_at"
         ).eq("team_id", teamId).limit(1000),
-        supabase.from("developers").select("id, name, avatar, user_id").eq("team_id", teamId),
+        supabase.from("developers").select("id, name, avatar, user_id, created_at").eq("team_id", teamId),
         supabase.from("workflow_columns").select("key, label, hex, dot_color").eq("team_id", teamId),
         supabase.from("impediments").select("id").eq("team_id", teamId).is("resolved_at", null),
       ]);
 
       const sprints  = (spRes.data  ?? []) as any[];
       const hus      = (huRes.data  ?? []) as any[];
-      const devs     = (devRes.data ?? []) as any[];
+      const devsRaw  = (devRes.data ?? []) as any[];
+      const memberIds = await fetchActiveMemberIds(teamId);
+      const devs     = filterActiveDevelopers(devsRaw, memberIds);
       const cols     = (colRes.data ?? []) as any[];
       const openImps = (impRes.data ?? []).length;
 

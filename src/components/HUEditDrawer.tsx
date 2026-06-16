@@ -52,7 +52,6 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     developers,
   } = useSprint() as any;
   const { currentTeamId } = useAuth();
-  const assigneeOptions = useTeamAssignees(currentTeamId, developers ?? [], assigneeId || null);
 
   const [title, setTitle]             = useState("");
   const [description, setDescription] = useState("");
@@ -69,6 +68,8 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   const [customFieldValues, setCFV]   = useState<Record<string, string | number>>({});
   const [errors, setErrors]           = useState<Record<string, string>>({});
   const [submitting, setSubmitting]   = useState(false);
+
+  const assigneeOptions = useTeamAssignees(currentTeamId, developers ?? [], assigneeId || null);
 
   // ─── Sincroniza developers com team_members do time atual ─────────────────
   // Garante que o combo "Responsável" reflita TODOS os membros do time,

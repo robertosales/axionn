@@ -23,6 +23,8 @@ import { useSprint } from "@/contexts/SprintContext";
 import { UserStory } from "@/types/sprint";
 import { toast } from "sonner";
 import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
   huId: string | null;
@@ -48,6 +50,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     customFields,
     developers,
   } = useSprint() as any;
+  const { currentTeamId } = useAuth();
 
   const [title, setTitle]             = useState("");
   const [description, setDescription] = useState("");
@@ -64,6 +67,59 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   const [customFieldValues, setCFV]   = useState<Record<string, string | number>>({});
   const [errors, setErrors]           = useState<Record<string, string>>({});
   const [submitting, setSubmitting]   = useState(false);
+
+  // ─── Sincroniza developers com team_members do time atual ─────────────────
+  // Garante que o combo "Responsável" reflita TODOS os membros do time,
+  // criando registros faltantes em `developers` (vinculados via user_id).
+  useEffect(() => {
+    if (!open || !currentTeamId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: members } = await supabase
+          .from("team_members")
+          .select("user_id")
+          .eq("team_id", currentTeamId);
+        if (cancelled || !members || members.length === 0) return;
+        const userIds = members.map((m: any) => m.user_id).filter(Boolean);
+        if (userIds.length === 0) return;
+
+        const { data: existingDevs } = await supabase
+          .from("developers")
+          .select("user_id")
+          .eq("team_id", currentTeamId)
+          .not("user_id", "is", null);
+        if (cancelled) return;
+        const existingUserIds = new Set((existingDevs ?? []).map((d: any) => d.user_id));
+        const missing = userIds.filter((id: string) => !existingUserIds.has(id));
+        if (missing.length === 0) return;
+
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, display_name, email")
+          .in("user_id", missing);
+        if (cancelled || !profiles) return;
+
+        const rows = profiles
+          .filter((p: any) => p.user_id && (p.display_name || p.email))
+          .map((p: any) => ({
+            team_id: currentTeamId,
+            user_id: p.user_id,
+            name: p.display_name || p.email,
+            email: p.email || "",
+            role: "developer",
+          }));
+        if (rows.length === 0) return;
+
+        const { error } = await supabase.from("developers").insert(rows);
+        if (error) console.warn("[HUEditDrawer] insert developers:", error);
+        // Realtime do SprintContext propaga automaticamente os novos devs.
+      } catch (err) {
+        console.warn("[HUEditDrawer] sync developers falhou:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, currentTeamId]);
 
   useEffect(() => {
     if (!open || !huId) return;

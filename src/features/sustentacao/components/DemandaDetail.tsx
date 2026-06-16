@@ -1715,41 +1715,6 @@ export function DemandaDetail({
 
               {/* ─── ABA EVIDÊNCIAS ─── */}
               <TabsContent value="evidencias" className="mt-5 space-y-5">
-                {pendingTarget && (
-                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm">
-                    <p className="font-medium text-amber-800 flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4" />
-                      Para avançar para "{resolveLabel(pendingTarget)}", cadastre ao menos uma evidência desta etapa e
-                      tente mover novamente.
-                    </p>
-                    {(() => {
-                      const missing = getMissingEvidencias(pendingTarget);
-                      const hasEvidence = missing.length === 0;
-                      return hasEvidence ? (
-                        <div className="mt-2 flex items-center gap-3">
-                          <p className="text-emerald-700 text-xs">✅ Evidência registrada. Você já pode avançar.</p>
-                          <Button
-                            size="sm"
-                            className="h-7 text-xs text-white"
-                            style={{ background: TEAL }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-                            onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
-                            onClick={async () => {
-                              const ok = await onMoveTo(demanda, pendingTarget);
-                              if (ok) {
-                                setPendingTarget(undefined);
-                                await refreshAllData();
-                              }
-                            }}
-                          >
-                            Avançar agora
-                          </Button>
-                        </div>
-                      ) : null;
-                    })()}
-                  </div>
-                )}
-
                 {/* Card adicionar evidência */}
                 <div className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
                   <div className="px-4 py-2.5 border-b bg-muted/40">

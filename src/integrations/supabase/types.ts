@@ -3818,6 +3818,10 @@ export type Database = {
         Args: { p_demanda_id: string; p_regime?: string; p_uf?: string }
         Returns: Json
       }
+      can_view_team: {
+        Args: { _team_id: string; _user_id: string }
+        Returns: boolean
+      }
       claim_next_apf_job: {
         Args: never
         Returns: {
@@ -3983,15 +3987,31 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_contract_admin: {
+        Args: { _contract_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_contract_member: {
         Args: { _contract_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_demanda_responsible: {
+        Args: { _demanda_id: string; _user_id: string }
         Returns: boolean
       }
       is_dia_util: { Args: { p_data: string; p_uf?: string }; Returns: boolean }
       is_feriado:
         | { Args: { p_data: string; p_team_id?: string }; Returns: boolean }
         | { Args: { p_data: string; p_uf?: string }; Returns: boolean }
+      is_team_admin: {
+        Args: { _team_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_team_in_user_contracts: {
+        Args: { _team_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_team_manager: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }

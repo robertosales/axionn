@@ -1416,10 +1416,38 @@ export function DemandaDetail({
 
               {/* ─── ABA ATIVIDADES (HORAS) ─── */}
               <TabsContent value="horas" className="mt-5 space-y-5">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-end justify-between gap-3">
                   <p className="text-sm font-semibold text-foreground">
                     Total Acumulado: <span style={{ color: TEAL }}>{minutesToDisplay(total)}</span>
                   </p>
+                  <div className="min-w-[220px]">
+                    <Label className="text-xs">Analista</Label>
+                    <Select
+                      value={analystFilter}
+                      onValueChange={(v) => setAnalystFilter(v)}
+                      disabled={!canFilterAllAnalysts}
+                    >
+                      <SelectTrigger className="mt-1 w-56">
+                        <SelectValue placeholder="Selecione um analista" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {canFilterAllAnalysts && <SelectItem value="all">Todos</SelectItem>}
+                        {canFilterAllAnalysts ? (
+                          teamMembers.map((m) => (
+                            <SelectItem key={m.user_id} value={m.user_id}>
+                              {formatPersonName(m.display_name)}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          user?.id && (
+                            <SelectItem value={user.id}>
+                              {formatPersonName(profile?.display_name || user.email || "Você")}
+                            </SelectItem>
+                          )
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Card lançar horas */}

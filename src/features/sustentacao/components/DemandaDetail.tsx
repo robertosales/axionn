@@ -57,7 +57,6 @@ import {
   FASES,
   FASE_LABELS,
   ALL_SITUACOES,
-  REQUIRES_JUSTIFICATIVA,
   TERMINAL_STATUSES,
   isDemandaIniciada,
 } from "../types/demanda";

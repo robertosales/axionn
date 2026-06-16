@@ -1764,7 +1764,6 @@ export function DemandaDetail({
         open={showJustModal}
         onClose={() => setShowJustModal(false)}
         onConfirm={confirmJustificativa}
-        targetStatus={resolveLabel(newStatus)}
       />
       <SuspensaoDialog
         open={showSuspensaoModal}
@@ -1789,7 +1788,7 @@ export function DemandaDetail({
             setDeleteHourId(null);
           }
         }}
-        onCancel={() => setDeleteHourId(null)}
+        onOpenChange={(o) => { if (!o) setDeleteHourId(null); }}
       />
 
       {/* Dialog editar hora */}
@@ -1877,7 +1876,7 @@ export function DemandaDetail({
         title="Remover responsável?"
         description="Esta ação não pode ser desfeita."
         onConfirm={handleRemoveResp}
-        onCancel={() => setDeleteRespId(null)}
+        onOpenChange={(o) => { if (!o) setDeleteRespId(null); }}
       />
 
       {/* Confirm excluir evidência */}
@@ -1886,7 +1885,7 @@ export function DemandaDetail({
         title="Remover evidência?"
         description="Esta ação não pode ser desfeita."
         onConfirm={handleRemoveEvidencia}
-        onCancel={() => setDeleteEvidId(null)}
+        onOpenChange={(o) => { if (!o) setDeleteEvidId(null); }}
       />
 
       {/* Gerenciar Fases */}
@@ -1921,7 +1920,7 @@ export function DemandaDetail({
                 {fases.map((f) => (
                   <div key={f.key} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span>{f.label}</span>
-                    {f.custom && (
+                    {(f as any).custom && (
                       <Button
                         variant="ghost"
                         size="sm"

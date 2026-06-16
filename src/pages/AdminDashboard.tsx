@@ -129,9 +129,12 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
     const sprintSet = new Set(filteredByModule.map((t) => t.sprintAtivo).filter(Boolean));
     const sprintLabel =
       sprintSet.size === 1 ? [...sprintSet][0]! : sprintSet.size > 1 ? `${sprintSet.size} sprints ativas` : null;
-    const husAtivas = filteredByModule.reduce((s, t) => s + (t.husAtivas ?? 0), 0);
-    const husTotais = filteredByModule.reduce((s, t) => s + (t.husAtivas ?? 0) + (t.husConcluidas ?? 0), 0);
-    const husConcluidas = filteredByModule.reduce((s, t) => s + (t.husConcluidas ?? 0), 0);
+    const husAtivas = filteredByModule.reduce(
+      (s, t) => s + Math.max(0, (t.totalHUs ?? 0) - (t.husConcluidasNoSprint ?? 0)),
+      0,
+    );
+    const husTotais = filteredByModule.reduce((s, t) => s + (t.totalHUs ?? 0), 0);
+    const husConcluidas = filteredByModule.reduce((s, t) => s + (t.husConcluidasNoSprint ?? 0), 0);
     const husConcluidasPct = husTotais > 0 ? Math.round((husConcluidas / husTotais) * 100) : 0;
     const demandasAbertas = filteredByModule.reduce((s, t) => s + (t.demandasAbertas ?? 0), 0);
     const slaEmRisco = filteredByModule.reduce((s, t) => s + (t.slaEmRisco ?? 0), 0);
@@ -144,12 +147,12 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
         teamId: t.teamId,
         teamName: t.teamName,
         module: (t.module ?? "").toLowerCase().includes("agil") ? "sala-agil" : "sustentacao",
-        husAtivas: t.husAtivas,
-        impedimentos: t.impedimentos,
-        backlog: t.backlog,
+        husAtivas: Math.max(0, (t.totalHUs ?? 0) - (t.husConcluidasNoSprint ?? 0)),
+        impedimentos: t.impedimentosAbertos,
+        backlog: t.backlogTotal,
         demandasAbertas: t.demandasAbertas,
         slaEmRisco: t.slaEmRisco,
-        bloqueadas: t.bloqueadas,
+        bloqueadas: t.demandasBloqueadas,
         sprintAtivo: t.sprintAtivo,
       })),
     [filteredByModule],
@@ -232,7 +235,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
             <div className="rounded-xl border bg-card shadow-sm p-4">
               <SalaAgilKpis kpis={globalKpis} sprintAtivo={execKpis.sprintLabel} />
             </div>
-            {(appliedModule === "todos" || appliedModule === "sustentacao") && (
+            {appliedModule === "todos" && (
               <div className="rounded-xl border bg-card shadow-sm p-4">
                 <SustentacaoKpis kpis={globalKpis} />
               </div>
@@ -266,7 +269,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis }: VisaoGera
               <h2 className="text-sm font-semibold">Desempenho por Time</h2>
             </div>
             <div className="px-2 pb-4">
-              <ComparativeChart byTeam={filteredByModule} loading={loading} />
+              <ComparativeChart byTeam={filteredByModule} selectedTeam={scrollTeam} />
             </div>
           </div>
         </div>

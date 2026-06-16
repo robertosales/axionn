@@ -1,85 +1,105 @@
-## Diagnóstico
+## Plano: remover obrigatoriedade de justificativa + revisão de perfis de acesso
 
-Investiguei o banco e o código e localizei **duas causas-raiz distintas**, não relacionadas a UI:
+### Parte 1 — Remover obrigatoriedade de justificativa (todas as fases)
 
-### 1) Colunas do Kanban "sumindo" para não-admin (Sala Ágil e Sustentação)
+Sistema hoje exige justificativa para: `rejeitada`, `cancelada`, `planejamento_ag_aprovacao` — em três camadas:
 
-As tabelas que definem as colunas do fluxo têm **apenas uma política de RLS, restrita a admin**:
+**1.1 Banco — trigger de validação**
+Nova migration que substitui as funções dos triggers:
+- `supabase/migrations/20260520060000_trigger_validate_demanda_transition.sql`
+- `supabase/migrations/20260601000000_fix_trigger_rollbacks.sql`
 
-| Tabela | Políticas existentes |
-|---|---|
-| `workflow_columns` (Sala Ágil) | `Admin full access` → `has_role(uid,'admin')` apenas |
-| `sustentacao_workflow_steps` (Sustentação) | `Admin full access` → `has_role(uid,'admin')` apenas |
+Remove o bloco "Regra 3: Justificativa obrigatória" das funções de trigger (passa a aceitar `justificativa` nula em qualquer transição). Mantém demais regras (idempotência, status terminal, adjacência de fluxo, primeira transição). O campo `justificativa` continua existindo (não apagar coluna).
 
-Como o `SELECT` é negado para qualquer perfil que não seja admin, o `useSprint` recebe `workflowColumns = []` e cai no fallback `DEFAULT_KANBAN_COLUMNS` (que **não contém** as colunas customizadas do time, como "Code Review" e "Em Teste"). O mesmo acontece em Sustentação: `useWorkflowSteps` devolve vazio → `SustentacaoBoard` usa `FLOWPRINCIPAL` mínimo. Por isso o Valter (e qualquer Dev/QA/Analista) vê um Kanban "reduzido", enquanto o admin vê todas as colunas.
+**1.2 Frontend — `src/features/sustentacao/hooks/useDemandas.ts`**
+- Remover `REQUIRES_JUSTIFICATIVA` do `moveTo` (deixa de bloquear quando vazia).
 
-Isso também explica por que o problema afeta **todos os usuários não-admin**, em ambos os módulos, mesmo após os fixes anteriores em `loadExpandedCols` e dedup de keys — o bug nunca foi de cliente; é de permissão.
+**1.3 Frontend — `src/features/sustentacao/types/demanda.ts`**
+- Esvaziar `REQUIRES_JUSTIFICATIVA = [] as const` (mantém o export para não quebrar imports).
 
-### 2) Combo "Responsável" do Editar User Story incompleto (time NEXO)
+**1.4 Frontend — `src/features/sustentacao/components/DemandaDetail.tsx`**
+- Deixar `JustificativaDialog` opcional: não abrir automaticamente em transições para `rejeitada`/`cancelada`/`planejamento_ag_aprovacao`; move direto. Mantém o dialog disponível apenas como ação manual (campo de observação opcional ao mover).
 
-O combo usa `developers` (carregado pelo `SprintContext`). No time `[NEXO] - TIME A - B`: 12 membros em `team_members`, mas apenas **8 registros em `developers`**. Os 4 membros faltantes nunca foram cadastrados na tabela `developers`, por isso não aparecem como Responsável.
+**1.5 Importação de demandas**
+- Como o trigger é a fonte da validação, removê-lo já desbloqueia o import. Confirmar em `src/features/sustentacao/hooks/useDemandasImport*` que não há checagem extra de `REQUIRES_JUSTIFICATIVA` antes do insert (ajustar se houver).
 
-Verifiquei também: a política do `developers` é OK para contract members (SELECT permitido), então não é RLS — é dado faltante por desenho (precisa estar cadastrado duas vezes: em `team_members` e em `developers`).
+**Resultado:** demanda avança de qualquer fase para qualquer outra sem exigir justificativa, em UI e import.
 
-## Plano de correção
+---
 
-### Migração 1 — RLS de `workflow_columns`
+### Parte 2 — Revisão completa de perfis de acesso (RBAC)
 
-Adicionar políticas para `authenticated` ler/gerenciar colunas do(s) time(s) ao qual pertence (sem mexer na política de admin existente):
+Regras alvo confirmadas:
 
+| Perfil | Escopo de visualização | Escopo de edição |
+|---|---|---|
+| `admin` (global) | Tudo | Tudo |
+| `admin_contrato` | Todos os contratos onde está como `admin_contrato` em `contract_members` (união, sem filtro pelo seletor) | Tudo dentro desses contratos |
+| `admin_time` (líder do time — `team_members.role = 'leader'` ou similar) | Apenas o(s) time(s) que lidera | Tudo do(s) time(s) que lidera |
+| Usuário comum (`member`) | Tudo do(s) time(s) que participa | Apenas registros onde é responsável/assignee |
+
+**2.1 Funções de apoio (security definer)**
+Nova migration cria/atualiza:
+- `public.is_admin_contrato(_uid uuid, _contract_id uuid)` → existe linha em `contract_members` com `role='admin_contrato'`.
+- `public.user_contract_ids(_uid uuid)` → contratos em que é `admin_contrato`.
+- `public.is_team_leader(_uid uuid, _team_id uuid)` → líder em `team_members`.
+- `public.user_team_ids(_uid uuid)` → todos os times do usuário (via `team_members` + `profiles.team_id`).
+- `public.can_view_demanda(_uid, demanda_id)` e equivalente para HU/sprint/atividade — usa as funções acima.
+- `public.can_edit_demanda(_uid, demanda_id)` — admin/admin_contrato/admin_time veem tudo; member só edita se é responsável (responsavel_dev/req/arq/teste, criado_por ou `demanda_responsaveis`).
+
+Todas `SECURITY DEFINER` para evitar recursão em RLS.
+
+**2.2 Reescrita das policies (mesma migration)**
+Tabelas afetadas (SELECT + INSERT/UPDATE/DELETE reescritos seguindo a matriz):
+
+Sustentação: `demandas`, `demanda_hours`, `demanda_evidencias`, `demanda_fases`, `demanda_responsaveis`, `demanda_transitions`, `demanda_eventos`, `impediments`, `attachments`, `activity_comments`.
+
+Sala Ágil: `user_stories`, `sprints`, `activities`, `epics`, `releases`, `workflow_columns`, `developers`, `planning_*`, `retro_*`, `impediments`.
+
+Comum: `teams`, `team_members`, `projects`, `project_teams`, `contracts`, `contract_members`, `contract_room_teams`, `contract_slas`, `notifications`, `calendar_events`, `okr_*`, `rdms` e tabelas RDM.
+
+Padrão de policy (exemplo `demandas`):
 ```sql
--- SELECT: qualquer membro do time vê as colunas do time
-CREATE POLICY "members can select workflow_columns"
-  ON public.workflow_columns FOR SELECT TO authenticated
-  USING (public.is_team_member(auth.uid(), team_id));
-
--- INSERT/UPDATE/DELETE: apenas admin já coberto pela policy existente
+-- SELECT
+USING (
+  public.has_role(auth.uid(),'admin')
+  OR EXISTS (SELECT 1 FROM contract_members cm
+             WHERE cm.user_id = auth.uid()
+               AND cm.role = 'admin_contrato'
+               AND cm.contract_id = demandas.contract_id)
+  OR demandas.team_id = ANY(public.user_team_ids(auth.uid()))
+);
+-- UPDATE/DELETE: idem + para member, exige ser responsável
 ```
 
-Confirmar GRANTs (já devem existir, mas garantir):
+GRANTs `SELECT/INSERT/UPDATE/DELETE` a `authenticated`, `ALL` a `service_role` mantidos em todas.
 
-```sql
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.workflow_columns TO authenticated;
-GRANT ALL ON public.workflow_columns TO service_role;
-```
+**2.3 Frontend — alinhamento**
+- `src/app/hooks/usePermissions.ts` (ou equivalente): expor `isAdmin`, `isAdminContrato`, `isTeamLeader(teamId)`, `canEdit(record)` — derivados das mesmas regras, para esconder botões.
+- `src/app/contexts/AuthContext.tsx`: carregar `contract_memberships` e `team_memberships` no login, com role.
+- Listagens: deixar de filtrar por team no client quando RLS já filtra (evita lista vazia para admin_contrato). Manter filtros visuais (seletor de time/contrato) como conveniência.
+- Botões de editar/excluir em HU, Demanda, Atividade, Sprint: usar `canEdit(record)`.
+- Dashboard Admin: seletor de contrato passa a ser **apenas filtro visual** (não restringe permissão).
 
-### Migração 2 — RLS de `sustentacao_workflow_steps`
+**2.4 Validação manual após migrar**
+Testar com 4 contas (uma por perfil) em: Kanban Sustentação, Kanban Ágil, Backlog, Detalhe de demanda (botões), Sprint, Métricas, Times. Verificar:
+- admin vê tudo.
+- admin_contrato vê só seus contratos, edita tudo neles.
+- admin_time vê só seu(s) time(s), edita tudo neles.
+- member vê tudo do time, mas só edita o que é dele (botões desabilitados nos demais).
 
-Mesma estratégia. Como o workflow de Sustentação é **global** (não vinculado a time — ver memória `global-workflow-sharing`), basta liberar SELECT a qualquer autenticado:
+### Detalhes técnicos
 
-```sql
-CREATE POLICY "authenticated can select sustentacao_workflow_steps"
-  ON public.sustentacao_workflow_steps FOR SELECT TO authenticated
-  USING (true);
+- Tudo via migrations (DDL + funções + policies). Nenhuma coluna/tabela apagada.
+- Coluna `justificativa` é preservada — só deixa de ser obrigatória.
+- Funções `SECURITY DEFINER` evitam recursão em RLS (padrão `has_role`).
+- Tabela `user_roles` segue como fonte de verdade do role global; `contract_members.role` define admin_contrato; `team_members.role` define líder.
+- Memória `mem://features/sustentacao/evidence-management-logic` será atualizada para refletir que justificativa não é mais obrigatória (já que evidência também não é).
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.sustentacao_workflow_steps TO authenticated;
-GRANT ALL ON public.sustentacao_workflow_steps TO service_role;
-```
+### Ordem de execução
 
-(INSERT/UPDATE/DELETE continuam restritos a admin pela policy "Admin full access" já existente.)
-
-### Ajuste de cliente — combo "Responsável" da HU
-
-Em `src/components/HUEditDrawer.tsx`, trocar a fonte do combo de `developers` para **membros do time atual** (`team_members` + `profiles`), garantindo que todos os 12 membros do NEXO apareçam.
-
-Passos:
-1. Adicionar hook/efeito que carrega `team_members.user_id` do `currentTeamId` e faz join com `profiles(display_name)`.
-2. Renderizar `<SelectItem value={userId}>{display_name}</SelectItem>` para cada membro, ordenado por nome.
-3. Manter compatibilidade: `assigneeId` continua sendo um UUID — apenas a fonte muda.
-4. Se um `assigneeId` antigo apontar para um `developers.id` que não está em `team_members`, mostrá-lo como opção legada para não quebrar HUs já salvas.
-
-> Observação: não vou alterar o schema de `user_stories.assignee_id`. Se preferir manter o vínculo via `developers`, posso em vez disso fazer um botão "Sincronizar membros → developers" no TeamMembersManager. Diga qual abordagem prefere antes de eu implementar.
-
-## Validação após aplicar
-
-1. Logar como Valter (Dev) → abrir Kanban Sala Ágil do NEXO → conferir coluna "Code Review" visível.
-2. Logar como QA → conferir coluna "Em Teste" visível.
-3. Abrir Sustentação → conferir todas as etapas do fluxo global visíveis.
-4. Abrir Backlog → Editar HU → combo "Responsável" lista os 12 membros do NEXO.
-5. Rodar `supabase--linter` para checar se as novas policies não introduzem warnings.
-
-## Arquivos impactados
-
-- Nova migration: políticas SELECT em `workflow_columns` e `sustentacao_workflow_steps`.
-- `src/components/HUEditDrawer.tsx`: fonte do combo Responsável.
-- (Opcional) `src/contexts/SprintContext.tsx`: nenhum ajuste necessário, mas posso remover o fallback silencioso para `DEFAULT_KANBAN_COLUMNS` quando o time tem colunas configuradas, evitando regressões futuras.
+1. Migration A: remover validação de justificativa nos triggers.
+2. Patch frontend (1.2–1.4) para deixar de exigir e não abrir dialog automático.
+3. Migration B: funções helpers de RBAC + reescrita de policies (em uma única migration grande, transacional).
+4. Patch frontend de permissões (2.3).
+5. Validação manual.

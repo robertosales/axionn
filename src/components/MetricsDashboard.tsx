@@ -123,11 +123,23 @@ export function MetricsDashboard() {
           supabase.from("developers").select("*").eq("team_id", team.id),
           supabase.from("workflow_columns").select("*").eq("team_id", team.id).order("sort_order"),
         ]);
+        // Filtra developers para apenas membros ativos do time (team_members) e dedupe por user_id
+        const tmRes = await supabase.from("team_members").select("user_id").eq("team_id", team.id);
+        const memberUserIds = new Set((tmRes.data || []).map((r: any) => r.user_id).filter(Boolean));
+        const devsRaw = (devRes.data || []).filter((d: any) => d.user_id && memberUserIds.has(d.user_id));
+        const byUser = new Map<string, any>();
+        for (const d of devsRaw) {
+          const prev = byUser.get(d.user_id);
+          if (!prev || new Date(d.created_at || 0) > new Date(prev.created_at || 0)) {
+            byUser.set(d.user_id, d);
+          }
+        }
+        const devsFiltered = Array.from(byUser.values());
         allSprints.push(...(sprintRes.data || []));
         allHUs.push(...(huRes.data || []));
         allActs.push(...(actRes.data || []));
         allImps.push(...(impRes.data || []));
-        allDevs.push(...(devRes.data || []));
+        allDevs.push(...devsFiltered);
         allWfCols.push(...(wcRes.data || []));
       }
 
@@ -166,6 +178,7 @@ export function MetricsDashboard() {
       .on("postgres_changes" as any, { event: "*", schema: "public", table: "sprints" }, scheduleReload)
       .on("postgres_changes" as any, { event: "*", schema: "public", table: "impediments" }, scheduleReload)
       .on("postgres_changes" as any, { event: "*", schema: "public", table: "developers" }, scheduleReload)
+      .on("postgres_changes" as any, { event: "*", schema: "public", table: "team_members" }, scheduleReload)
       .subscribe();
     return () => {
       if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current);

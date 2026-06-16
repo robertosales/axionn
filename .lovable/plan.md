@@ -1,18 +1,26 @@
-## Objetivo
-Na tela **Sala Ágil › Métricas › Desempenho Individual**, ordenar membros alfabeticamente e adicionar paginação.
+## Diagnóstico
 
-## Mudanças (apenas `src/components/dashboard/IndividualPerformance.tsx`)
+A tela **Métricas** lista membros direto da tabela `developers` filtrada por `team_id`. No time **[NEXO] - TIME A - B** existem 3 linhas com nome "Roberto":
 
-1. **Ordenação alfabética**: criar `sortedMembers = [...members].sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'))`.
-2. **Paginação client-side**:
-   - `pageSize = 10` (padrão do projeto), state `page` (inicia em 1).
-   - `paginatedMembers = sortedMembers.slice((page-1)*pageSize, page*pageSize)`.
-   - Resetar `page` para 1 quando `members` mudar.
-3. **Render**:
-   - Iterar `paginatedMembers` no `tbody` (linha de Total/Média continua somando **todos** os membros, não só a página).
-   - Adicionar rodapé de paginação abaixo da tabela com: texto "Mostrando X–Y de N membros" + botões Anterior/Próximo (estilo `ghost`/`outline` já usado no projeto) e indicador "Página P de TP".
-   - Ocultar paginação se `sortedMembers.length <= pageSize`.
+| name | role | user_id | observação |
+|---|---|---|---|
+| Roberto De Araujo Sales | Scrum Master | **NULL** | legado, sem vínculo de auth |
+| Roberto Sales | Desenvolvedor Fullstack | NULL | pertence a outro time ([GESP3]) |
+| Roberto Sales | developer | 3c47… | membro real, atual |
+
+Só o terceiro está em `team_members`. Os outros são registros antigos sem `user_id`, criados antes do vínculo com auth. No RBAC/perfis, só o real aparece — mas a Métricas mostra todos porque não filtra pela membership do time.
+
+Mesmo padrão do bug já corrigido em `useTeamAssignees`.
+
+## Mudança
+
+**Arquivo único:** `src/components/MetricsDashboard.tsx`
+
+1. Ao carregar `developers` do time, carregar também os `user_id`s de `team_members` para esse time.
+2. Filtrar `allDevs` mantendo apenas linhas cujo `user_id` esteja no conjunto de `team_members.user_id` (descarta legados sem `user_id` e ex-membros).
+3. Dedupe defensivo por `user_id` (caso existam linhas duplicadas com mesmo `user_id`, manter a mais recente por `created_at`).
+4. Incluir `team_members` no listener realtime já existente para reagir quando entram/saem membros.
 
 ## Fora do escopo
-- KPIs do topo, gráficos e modal de detalhe permanecem usando o conjunto completo de membros.
-- Nenhuma mudança em outras telas/componentes.
+- Não apagar dados em `developers` (regra do projeto: nunca deletar tabelas/linhas legadas via app).
+- Tela RBAC, dropdown de User Story e demais telas não são alteradas.

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { resolveContractTeamIds, compareTeamNames } from "../lib/resolveContractTeamIds";
 
 export interface TeamAdmin {
   id: string;
@@ -24,31 +25,23 @@ export function useTeamsAdmin(contractId?: string | null) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      let teamIds: string[] | null = null;
-
-      // Se um contrato foi selecionado, descobre quais times têm projetos nele
-      if (contractId) {
-        const { data: projs } = await supabase
-          .from("projects")
-          .select("team_id")
-          .eq("contract_id", contractId)
-          .not("team_id", "is", null);
-        teamIds = [...new Set((projs ?? []).map((p: any) => p.team_id as string))];
-        // Sem projetos vinculados → lista vazia
-        if (teamIds.length === 0) {
-          setTeams([]); setLoading(false); return;
-        }
+      // Times do contrato: união entre teams.contract_id e projects.contract_id
+      const teamIds = await resolveContractTeamIds(contractId);
+      if (teamIds !== null && teamIds.length === 0) {
+        setTeams([]); setLoading(false); return;
       }
 
       let query = supabase
         .from("teams")
         .select("id, name, module, created_at")
-        .order("created_at", { ascending: true });
+        .order("name", { ascending: true });
 
       if (teamIds) query = query.in("id", teamIds);
 
       const { data: teamsData } = await query;
-      const teamList = (teamsData || []) as TeamAdmin[];
+      const teamList = ((teamsData || []) as TeamAdmin[])
+        .slice()
+        .sort((a, b) => compareTeamNames(a.name, b.name));
 
       const { data: membersData } = await supabase
         .from("team_members")

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveContractTeamIds, compareTeamNames } from '../lib/resolveContractTeamIds';
 
 export type PeriodoFiltro = '3m' | '6m' | '12m' | 'all';
 
@@ -74,18 +75,10 @@ export function useSprintHistory(contractId?: string | null) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Se contractId, restringe aos times vinculados ao contrato
-      let allowedTeamIds: string[] | null = null;
-      if (contractId) {
-        const { data: projs } = await supabase
-          .from('projects')
-          .select('team_id')
-          .eq('contract_id', contractId)
-          .not('team_id', 'is', null);
-        allowedTeamIds = [...new Set((projs ?? []).map((p: any) => p.team_id as string))];
-        if (allowedTeamIds.length === 0) {
-          setMetrics([]); setTeamComparativo([]); setLoading(false); return;
-        }
+      // Times do contrato: união entre teams.contract_id e projects.contract_id
+      const allowedTeamIds = await resolveContractTeamIds(contractId);
+      if (allowedTeamIds !== null && allowedTeamIds.length === 0) {
+        setMetrics([]); setTeamComparativo([]); setLoading(false); return;
       }
 
       let sprintsQuery = supabase
@@ -172,7 +165,7 @@ export function useSprintHistory(contractId?: string | null) {
       // Comparativo por time
       const byTeam: Record<string, SprintMetrics[]> = {};
       result.forEach(m => { if (!byTeam[m.teamId]) byTeam[m.teamId] = []; byTeam[m.teamId].push(m); });
-      setTeamComparativo(Object.entries(byTeam).map(([teamId, ms]) => {
+      const comparativo = Object.entries(byTeam).map(([teamId, ms]) => {
         const avgCompletion = Math.round(ms.reduce((a, m) => a + m.completionRate, 0) / ms.length);
         return {
           teamId, teamName: ms[0].teamName,
@@ -183,7 +176,9 @@ export function useSprintHistory(contractId?: string | null) {
           totalImpedimentos: 0,
           totalSprints:      ms.length,
         };
-      }));
+      });
+      comparativo.sort((a, b) => compareTeamNames(a.teamName, b.teamName));
+      setTeamComparativo(comparativo);
     } finally {
       setLoading(false);
     }

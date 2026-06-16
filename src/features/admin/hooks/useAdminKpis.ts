@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SprintStatusType } from "@/utils/sprintStatus";
+import { resolveContractTeamIds, compareTeamNames } from "../lib/resolveContractTeamIds";
 
 // ─── Tipos públicos ───────────────────────────────────────────────────────────
 
@@ -79,15 +80,7 @@ export function useAdminKpis(contractId?: string | null): AdminKpis {
   // Resolve quais team_ids pertencem ao contrato selecionado
   useEffect(() => {
     if (!contractId) { setFilteredTeamIds(null); return; }
-    supabase
-      .from("projects")
-      .select("team_id")
-      .eq("contract_id", contractId)
-      .not("team_id", "is", null)
-      .then(({ data }) => {
-        const ids = [...new Set((data ?? []).map((p: any) => p.team_id as string))];
-        setFilteredTeamIds(ids);
-      });
+    resolveContractTeamIds(contractId).then((ids) => setFilteredTeamIds(ids ?? []));
   }, [contractId]);
 
   // teams efetivos: todos ou filtrados pelo contrato
@@ -140,6 +133,7 @@ export function useAdminKpis(contractId?: string | null): AdminKpis {
           slaEmRisco:            Number(row.slaEmRisco)            ?? 0,
         }));
 
+        enriched.sort((a, b) => compareTeamNames(a.teamName, b.teamName));
         setByTeam(enriched);
       } catch (err: any) {
         if (!cancelledRef.current) {

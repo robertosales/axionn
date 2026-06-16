@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveContractTeamIds, compareTeamNames } from '../lib/resolveContractTeamIds';
 
 export type CapacityStatus = 'ok' | 'warning' | 'overloaded' | 'idle' | 'unknown';
 
@@ -46,25 +47,18 @@ export function useCapacityPlanner(contractId?: string | null) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Descobre times permitidos pelo contrato
-      let allowedTeamIds: string[] | null = null;
-      if (contractId) {
-        const { data: projs } = await supabase
-          .from('projects')
-          .select('team_id')
-          .eq('contract_id', contractId)
-          .not('team_id', 'is', null);
-        allowedTeamIds = [...new Set((projs ?? []).map((p: any) => p.team_id as string))];
-        if (allowedTeamIds.length === 0) {
-          setTeamCapacities([]); setOverloadedDevs([]); setUniqueTeams([]);
-          setLoading(false); return;
-        }
+      // Times do contrato: união entre teams.contract_id e projects.contract_id
+      const allowedTeamIds = await resolveContractTeamIds(contractId);
+      if (allowedTeamIds !== null && allowedTeamIds.length === 0) {
+        setTeamCapacities([]); setOverloadedDevs([]); setUniqueTeams([]);
+        setLoading(false); return;
       }
 
-      let teamsQuery = supabase.from('teams').select('id, name');
+      let teamsQuery = supabase.from('teams').select('id, name').order('name', { ascending: true });
       if (allowedTeamIds) teamsQuery = teamsQuery.in('id', allowedTeamIds);
-      const { data: teams } = await teamsQuery;
-      if (!teams?.length) { setTeamCapacities([]); setUniqueTeams([]); setLoading(false); return; }
+      const { data: teamsRaw } = await teamsQuery;
+      const teams = ((teamsRaw ?? []) as any[]).slice().sort((a, b) => compareTeamNames(a.name, b.name));
+      if (!teams.length) { setTeamCapacities([]); setUniqueTeams([]); setLoading(false); return; }
 
       const teamIds = teams.map((t: any) => t.id);
       setUniqueTeams(teams.map((t: any) => ({ id: t.id, name: t.name })));

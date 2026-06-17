@@ -455,20 +455,16 @@ export function DemandaDetail({
   // Sustentação → Fluxo de Trabalho.
   const workflowSteps = useWorkflowSteps();
   const dynamicFlow = useMemo(
-    () => workflowSteps.filter((s) => !s.isTerminal && s.key !== "bloqueada").map((s) => s.key),
+    () => workflowSteps.map((s) => s.key),
     [workflowSteps],
   );
 
   const allowedNextStatuses = useMemo<string[]>(() => {
-    if (isTerminal) return [];
-    if (isBloqueada) return [];
+    if (isCancelada) return [];
     if (isRejeitada) return ["em_execucao"];
-    // Permite mover em qualquer direção (espelha o comportamento do Kanban):
-    // mostra todas as etapas do fluxo configurado exceto a atual, preservando a ordem.
-    const all = dynamicFlow.filter((k) => k !== demanda.situacao);
-    if (demanda.situacao === "hom_homologada") return [...all, "rejeitada"];
-    return all;
-  }, [dynamicFlow, demanda.situacao, isTerminal, isBloqueada, isRejeitada]);
+    // Permite mover para qualquer etapa configurada no fluxo, igual ao Kanban.
+    return dynamicFlow.filter((k) => k !== demanda.situacao);
+  }, [dynamicFlow, demanda.situacao, isCancelada, isRejeitada]);
 
   const canBlock = !isTerminal && !isBloqueada && demanda.situacao !== "ag_aceite_final";
   const canCancel = !isTerminal && demanda.situacao !== "ag_aceite_final";
@@ -1005,11 +1001,10 @@ export function DemandaDetail({
                   <span className="text-sm font-medium text-foreground shrink-0">Mover para:</span>
                   <Select value={newStatus} onValueChange={setNewStatus}>
                     <SelectTrigger className="h-9 text-sm flex-1 max-w-xs bg-card">
-                      <SelectValue placeholder="Selecione a próxima etapa..." />
+                      <SelectValue placeholder="Selecione a etapa..." />
                     </SelectTrigger>
                     <SelectContent>
                       {allowedNextStatuses
-                        .filter((s) => s !== "rejeitada")
                         .map((s) => (
                           <SelectItem key={s} value={s}>
                             {resolveLabel(s)}
@@ -1025,7 +1020,7 @@ export function DemandaDetail({
                     onClick={handleMove}
                     disabled={!newStatus}
                   >
-                    Avançar
+                    Mover
                   </Button>
                   {canBlock && (
                     <Button

@@ -135,10 +135,10 @@ export function useAdminKpis(contractId?: string | null): AdminKpis {
 
         enriched.sort((a, b) => compareTeamNames(a.teamName, b.teamName));
         setByTeam(enriched);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelledRef.current) {
           console.error("[useAdminKpis] Erro na RPC:", err);
-          setError(err?.message ?? "Erro ao carregar KPIs");
+          setError(((err as Error)?.message) ?? "Erro ao carregar KPIs");
         }
       } finally {
         if (!cancelledRef.current) setLoading(false);

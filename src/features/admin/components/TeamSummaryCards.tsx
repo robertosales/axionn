@@ -1,136 +1,75 @@
-import { ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { Shield, Zap, AlertTriangle, ChevronRight, ChevronLeft } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
-type TeamKind = "sala-agil" | "sustentacao" | string;
+const PAGE_SIZE = 6;
 
-interface TeamSummaryItem {
+interface TeamRow {
   teamId: string;
   teamName: string;
-  module: TeamKind;
-  // Sala Ágil
-  husAtivas?: number;
-  impedimentos?: number;
-  backlog?: number;
-  // Sustentação / RDM
-  demandasAbertas?: number;
-  slaEmRisco?: number;
-  bloqueadas?: number;
-  sprintAtivo?: string | null;
+  module: string;
+  husAtivas: number;
+  impedimentos: number;
+  backlog: number;
+  demandasAbertas: number;
+  slaEmRisco: number;
+  bloqueadas: number;
+  sprintAtivo: string | null;
 }
 
 interface TeamSummaryCardsProps {
-  teams: TeamSummaryItem[];
+  teams: TeamRow[];
   loading: boolean;
   onTeamClick?: (teamId: string) => void;
 }
 
-const MODULE_COLORS: Record<string, { badge: string; dot: string }> = {
-  "sala-agil":  { badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",  dot: "bg-blue-500" },
-  sustentacao:  { badge: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",  dot: "bg-teal-500" },
-  rdm:          { badge: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300", dot: "bg-purple-500" },
-};
-
-function getModuleColor(module: string) {
-  return MODULE_COLORS[module] ?? { badge: "bg-muted text-muted-foreground", dot: "bg-gray-400" };
-}
-
-function getModuleLabel(module: string) {
-  if (module === "sala-agil")  return "Sala Ágil";
-  if (module === "sustentacao") return "Sustentação";
-  if (module === "rdm")        return "RDM";
-  return module;
-}
-
-function TeamCard({ t, onClick }: { t: TeamSummaryItem; onClick?: () => void }) {
-  const isSalaAgil = t.module === "sala-agil";
-  const colors = getModuleColor(t.module);
-
-  return (
-    <div
-      className="min-w-[220px] max-w-[260px] rounded-xl border bg-card shadow-sm p-4 flex flex-col gap-3 shrink-0 cursor-pointer hover:shadow-md transition-shadow"
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && onClick?.()}
-      aria-label={`Ver detalhes do time ${t.teamName}`}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold leading-tight">{t.teamName}</p>
-          {t.sprintAtivo && (
-            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{t.sprintAtivo}</p>
-          )}
-        </div>
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${colors.badge}`}>
-          {getModuleLabel(t.module)}
-        </span>
-      </div>
-
-      {/* Metrics */}
-      <div className="space-y-1.5">
-        {isSalaAgil ? (
-          <>
-            <Metric label="HUs Ativas"  value={t.husAtivas  ?? 0} />
-            <Metric label="Impedimentos" value={t.impedimentos ?? 0} danger={(t.impedimentos ?? 0) > 0} />
-            <Metric label="Backlog"     value={t.backlog    ?? 0} />
-          </>
-        ) : (
-          <>
-            <Metric label="Demandas Abertas" value={t.demandasAbertas ?? 0} />
-            <Metric label="SLA em Risco"     value={t.slaEmRisco     ?? 0} danger={(t.slaEmRisco ?? 0) > 0} />
-            <Metric label="Bloqueadas"       value={t.bloqueadas     ?? 0} warn={(t.bloqueadas ?? 0) > 0} />
-          </>
-        )}
-      </div>
-
-      {/* Footer link */}
-      <div className="flex items-center gap-1 text-[11px] font-medium mt-auto pt-1 border-t">
-        <span className="text-primary">Ver detalhes</span>
-        <ChevronRight className="h-3 w-3 text-primary" />
-      </div>
-    </div>
-  );
-}
-
-function Metric({
-  label,
+function MetricPill({
   value,
   danger = false,
-  warn = false,
 }: {
-  label: string;
   value: number;
   danger?: boolean;
-  warn?: boolean;
 }) {
-  const valueClass = danger
-    ? "text-red-600 dark:text-red-400 font-semibold"
-    : warn
-    ? "text-orange-500 dark:text-orange-400 font-semibold"
-    : "font-medium";
-
+  if (danger && value > 0)
+    return (
+      <Badge
+        variant="destructive"
+        className="text-[10px] h-5 px-1.5 font-semibold tabular-nums"
+      >
+        {value}
+      </Badge>
+    );
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className={`text-sm tabular-nums ${valueClass}`}>{value}</span>
-    </div>
+    <span className="text-[11px] tabular-nums text-foreground font-medium">
+      {value}
+    </span>
   );
 }
 
-export function TeamSummaryCards({ teams, loading, onTeamClick }: TeamSummaryCardsProps) {
+export function TeamSummaryCards({
+  teams,
+  loading,
+  onTeamClick,
+}: TeamSummaryCardsProps) {
+  const [page, setPage] = useState(0);
+
+  const totalPages = Math.ceil(teams.length / PAGE_SIZE);
+  const start = page * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, teams.length);
+  const visible = teams.slice(start, end);
+
   if (loading) {
     return (
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="min-w-[220px] max-w-[260px] rounded-xl border bg-card shadow-sm p-4 flex flex-col gap-3 shrink-0">
+      <div className="rounded-xl border border-border/50 bg-card shadow-sm divide-y divide-border/40">
+        {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 px-4 py-3">
+            <Skeleton className="h-7 w-7 rounded-lg shrink-0" />
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-3 w-20" />
-            <div className="space-y-2">
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-full" />
-            </div>
+            <Skeleton className="h-4 w-16 ml-auto" />
+            <Skeleton className="h-4 w-10" />
+            <Skeleton className="h-4 w-10" />
           </div>
         ))}
       </div>
@@ -139,19 +78,149 @@ export function TeamSummaryCards({ teams, loading, onTeamClick }: TeamSummaryCar
 
   if (teams.length === 0) {
     return (
-      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        Nenhum time encontrado para os filtros selecionados.
+      <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2 bg-muted/5 rounded-xl border border-dashed">
+        <AlertTriangle className="h-6 w-6 opacity-20" />
+        <p className="text-xs">
+          Nenhum time encontrado para os filtros selecionados.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin snap-x snap-mandatory">
-      {teams.map((t) => (
-        <div key={t.teamId} className="snap-start">
-          <TeamCard t={t} onClick={() => onTeamClick?.(t.teamId)} />
+    <div className="rounded-xl border border-border/50 bg-card shadow-sm overflow-hidden">
+
+      {/* Cabeçalho da tabela */}
+      <div className="grid grid-cols-[1fr_48px_48px_72px_48px_32px] gap-x-3 px-4 py-2 border-b border-border/40 bg-muted/20">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Time
+        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right">
+          HUs
+        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right">
+          Imped.
+        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right">
+          Demandas
+        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right">
+          SLA
+        </span>
+        {/* Coluna indicadora de drill-down */}
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-right sr-only">
+          Detalhe
+        </span>
+      </div>
+
+      {/* Linhas */}
+      <div className="divide-y divide-border/40">
+        {visible.map((t) => {
+          const isAgil = t.module === "sala-agil";
+          return (
+            <button
+              key={t.teamId}
+              className="w-full grid grid-cols-[1fr_48px_48px_72px_48px_32px] gap-x-3 px-4 py-3 items-center hover:bg-muted/30 active:bg-muted/50 transition-colors text-left group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              onClick={() => onTeamClick?.(t.teamId)}
+              title={`Ver detalhes de ${t.teamName}`}
+            >
+              {/* Nome + módulo */}
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="shrink-0 p-1.5 rounded-md bg-muted/50 text-muted-foreground group-hover:bg-muted transition-colors">
+                  {isAgil ? (
+                    <Zap className="h-3.5 w-3.5" />
+                  ) : (
+                    <Shield className="h-3.5 w-3.5" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold truncate group-hover:text-primary transition-colors">
+                    {t.teamName}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {isAgil ? "Sala Ágil" : "Sustentação"}
+                  </p>
+                </div>
+              </div>
+
+              {/* HUs ativas */}
+              <span className="text-right">
+                {isAgil ? (
+                  <MetricPill value={t.husAtivas} />
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">—</span>
+                )}
+              </span>
+
+              {/* Impedimentos */}
+              <span className="text-right">
+                {isAgil ? (
+                  <MetricPill value={t.impedimentos} danger={t.impedimentos > 0} />
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">—</span>
+                )}
+              </span>
+
+              {/* Demandas abertas */}
+              <span className="text-right">
+                {!isAgil ? (
+                  <MetricPill value={t.demandasAbertas} />
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">—</span>
+                )}
+              </span>
+
+              {/* SLA em risco */}
+              <span className="text-right">
+                {!isAgil ? (
+                  <MetricPill value={t.slaEmRisco} danger={t.slaEmRisco > 0} />
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">—</span>
+                )}
+              </span>
+
+              {/* Seta de drill-down — sinaliza que a linha é clicavel */}
+              <span className="flex justify-end">
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Footer de paginação — exibido apenas quando há mais de uma página */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-muted/10">
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            {start + 1}–{end} de {teams.length} times
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+              aria-label="Página anterior"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-[11px] text-muted-foreground tabular-nums px-1">
+              {page + 1} / {totalPages}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+              aria-label="Próxima página"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

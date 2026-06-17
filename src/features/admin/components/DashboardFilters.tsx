@@ -58,7 +58,7 @@ export function DashboardFilters({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2 py-3 px-4 rounded-lg border bg-card shadow-sm">
+    <div className="flex flex-wrap items-center gap-2">
       {/* Período */}
       <Select
         value={filters.period}
@@ -113,9 +113,10 @@ export function DashboardFilters({
         </SelectContent>
       </Select>
 
-      {/* Aplicar */}
+      {/* Aplicar — variant outline para seguir o padrão do design system */}
       <Button
         size="sm"
+        variant="outline"
         className="h-8 gap-1.5 text-xs"
         onClick={onApply}
         disabled={loading}

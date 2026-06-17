@@ -9,8 +9,6 @@ import { ContractSwitcher } from "@/features/admin/components/ContractSwitcher";
 import { SalaAgilKpis } from "@/features/admin/components/SalaAgilKpis";
 import { SustentacaoKpis } from "@/features/admin/components/SustentacaoKpis";
 import { ModuleQuickAccess } from "@/features/admin/components/ModuleQuickAccess";
-import { ComparativeChart } from "@/features/admin/components/ComparativeChart";
-import { TeamDetailPanel } from "@/features/admin/components/TeamDetailPanel";
 import { AdminTimesPage } from "@/features/admin/pages/AdminTimesPage";
 import { AdminUsuariosPage } from "@/features/admin/pages/AdminUsuariosPage";
 import { AdminHistoricoPage } from "@/features/admin/pages/AdminHistoricoPage";
@@ -182,7 +180,6 @@ function VisaoGeralPage({
     () => byTeam.map((t) => ({ id: t.teamId, name: t.teamName })),
     [byTeam],
   );
-  const [scrollTeam, setScrollTeam] = useState("all");
 
   return (
     <div className="flex flex-col gap-5">
@@ -228,7 +225,7 @@ function VisaoGeralPage({
         />
       </section>
 
-      {/* 4. RESUMO POR TIME — lista vertical, sem scroll horizontal */}
+      {/* 4. RESUMO POR TIME — lista vertical compacta, sem scroll horizontal */}
       <section aria-label="Resumo por time">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
           Resumo por Time
@@ -272,40 +269,6 @@ function VisaoGeralPage({
           </div>
         </section>
       )}
-
-      {/* 6 + 7. DETALHE E DESEMPENHO POR TIME */}
-      <section aria-label="Detalhamento operacional">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <div className="rounded-xl border bg-card shadow-sm overflow-hidden xl:col-span-2 flex flex-col">
-            <div className="px-4 py-3 border-b bg-muted/20">
-              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Detalhe por Time
-              </h2>
-            </div>
-            <div className="p-4 flex-1">
-              <TeamDetailPanel
-                byTeam={filteredByModule}
-                selectedTeam={scrollTeam}
-                onSelect={setScrollTeam}
-                onViewDetails={onViewTeamDetails}
-              />
-            </div>
-          </div>
-          <div className="rounded-xl border bg-card shadow-sm overflow-hidden xl:col-span-1 flex flex-col">
-            <div className="px-4 py-3 border-b bg-muted/20">
-              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                Desempenho por Time
-              </h2>
-            </div>
-            <div className="p-4 flex-1 flex flex-col justify-center">
-              <ComparativeChart
-                byTeam={filteredByModule}
-                selectedTeam={scrollTeam}
-              />
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
@@ -363,7 +326,6 @@ function AdminDashboardInner() {
   const activeLabel =
     NAV_ITEMS.find((n) => n.key === activePage)?.label ?? "";
 
-  // Iniciais do usuário para avatar
   const userInitials =
     profile?.full_name
       ?.split(" ")
@@ -394,10 +356,7 @@ function AdminDashboardInner() {
           >
             Axion
           </p>
-          {/* label Admin usa var(--primary) do design system em vez de #0bbcaf hardcoded */}
-          <p
-            className="text-[9px] uppercase tracking-widest leading-none mt-0.5 text-primary"
-          >
+          <p className="text-[9px] uppercase tracking-widest leading-none mt-0.5 text-primary">
             Admin
           </p>
         </div>
@@ -465,7 +424,6 @@ function AdminDashboardInner() {
         style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}
       >
         <div className="flex items-center gap-2.5 mb-2">
-          {/* Avatar usa bg-primary do design system em vez de #0bbcaf hardcoded */}
           <div className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 bg-primary text-primary-foreground">
             {userInitials}
           </div>
@@ -572,7 +530,7 @@ function AdminDashboardInner() {
             <Menu className="h-4 w-4" />
           </button>
 
-          {/* Título + subtítulo — alinhados à esquerda, padrão Imagem 2 */}
+          {/* Título + subtítulo — alinhados à esquerda */}
           <div className="flex flex-col items-start justify-center min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">

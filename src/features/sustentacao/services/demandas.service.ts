@@ -248,11 +248,15 @@ export async function updateHour(
   data: { horas: number | string; fase: string; descricao: string; user_id?: string },
 ) {
   const payload = { ...data, horas: toDecimalHours(data.horas) };
-  const { error } = await supabase
+  const { data: rows, error } = await supabase
     .from("demanda_hours" as any)
     .update(payload as any)
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (error) throw error;
+  if (!rows || (rows as any[]).length === 0) {
+    throw new Error("Sem permissão para editar este lançamento ou registro não encontrado");
+  }
 }
 
 export async function deleteHour(id: string) {

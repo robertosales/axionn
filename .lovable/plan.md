@@ -1,53 +1,47 @@
-## Problema
+# Edição de lançamento de horas não persiste para usuários comuns
 
-**1. PATCH 400 ao mover a demanda 0003 (e similares)**
+## Diagnóstico
 
-A tabela `public.demandas` tem um CHECK constraint que limita `situacao` a um conjunto fixo de valores:
+Tiago (usuário comum, não admin) clica em "Salvar" no modal de edição de lançamento. O sistema mostra "Registro atualizado com sucesso", mas o registro continua igual.
 
-```
-fila_atendimento, planejamento_elaboracao, planejamento_ag_aprovacao,
-planejamento_aprovada, em_execucao, bloqueada, hom_ag_homologacao,
-hom_homologada, rejeitada, fila_producao, ag_aceite_final,
-cancelada, fila_concluida
-```
+A causa é uma **policy RLS faltante** na tabela `public.demanda_hours`:
 
-Porém o time configurou uma etapa customizada **"TESTE"** em `sustentacao_workflow_steps` (ordem 5). O hook `useWorkflowSteps` gera a chave `teste` por slug. Ao mover qualquer demanda para esse passo, o PATCH envia `situacao = "teste"`, que viola o CHECK e o Postgres retorna **400 Bad Request**. O mesmo acontece com qualquer etapa custom futura.
+- Hoje só existem policies de UPDATE para administradores:
+  - `Admin full access demanda_hours` → `has_role(auth.uid(), 'admin')`
+  - `demanda_hours_update_admin` → `team_members.role = 'admin'`
+- Para DELETE existe `Member delete own demanda_hours` (`user_id = auth.uid()`), mas **não há equivalente para UPDATE**.
 
-**2. Só permite avançar, não retroceder na tela de Detalhe**
+Como o Supabase com RLS ativo retorna sucesso silencioso quando o UPDATE não afeta nenhuma linha (linhas filtradas pelas policies), o `updateHour()` em `demandas.service.ts` não recebe erro, o hook dispara o toast de sucesso e a UI reabre com os dados antigos.
 
-Na `DemandaDetail.tsx`, o seletor "Mover para" usa `allowedNextStatuses`, que faz `dynamicFlow.slice(idx + 1)` — só mostra etapas posteriores. O Kanban (`SustentacaoBoard`/`SustentacaoPage`) já permite mover em qualquer direção (chama `moveTo` direto), por isso a divergência.
+A regra de negócio definida na memória (`mem://features/sustentacao/time-tracking` e commit `324b6be`) já diz que o dono do lançamento pode editar/excluir suas próprias atividades — falta apenas a policy de UPDATE no banco.
 
 ## Mudanças
 
-### A. Migração SQL — remover CHECK rígido do `situacao`
+### 1. Migration — adicionar policy de UPDATE para o dono
+
+Nova migration em `supabase/migrations/` com:
 
 ```sql
-ALTER TABLE public.demandas
-  DROP CONSTRAINT IF EXISTS demandas_situacao_check;
+CREATE POLICY "Member update own demanda_hours"
+ON public.demanda_hours
+FOR UPDATE
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
 ```
 
-Justificativa: o fluxo agora é dinâmico (configurável em Sustentação → Fluxo de Trabalho). A validação correta passa a ser feita pela UI a partir de `sustentacao_workflow_steps`. As situações terminais e bloqueios continuam sendo controlados em código (`TERMINAL_STATUSES`, regras de cancelamento/suspensão).
+Mantém as policies de admin existentes (gestor continua editando qualquer lançamento) e libera o dono a editar apenas os próprios.
 
-### B. `src/features/sustentacao/components/DemandaDetail.tsx`
+### 2. Hardening em `updateHour` (`src/features/sustentacao/services/demandas.service.ts`)
 
-Substituir `allowedNextStatuses` para liberar movimentação em qualquer sentido, espelhando o Kanban:
+Hoje o serviço não detecta UPDATE que afeta 0 linhas. Para evitar o mesmo "falso sucesso" em qualquer cenário futuro de RLS:
 
-- Manter bloqueios atuais: terminal (`isTerminal`) → vazio; `bloqueada` → vazio; `rejeitada` → apenas `em_execucao` (regra de retorno controlada).
-- Para demais casos: retornar **todas** as etapas de `dynamicFlow` exceto a situação atual, mantendo a ordem do fluxo. Continuar acrescentando `rejeitada` quando `situacao === 'hom_homologada'`.
-- Nenhuma mudança em `getNextStatuses` legado (não está sendo consumida pelo seletor; é mantida para compatibilidade).
+- Trocar `.update(payload).eq("id", id)` por `.update(payload).eq("id", id).select("id")`.
+- Se o array retornado vier vazio, lançar um erro (`Sem permissão para editar este lançamento ou registro não encontrado`).
 
-### C. Sem mudanças no service
-
-`updateDemanda` já tem whitelist; após remover o CHECK, o PATCH com `situacao = "teste"` (ou qualquer key custom) passa a retornar 200.
+Assim o hook `useDemandas.update` cai no `catch` e mostra o toast de erro correto em vez de "Registro atualizado com sucesso".
 
 ## Validação
 
-1. Como usuário comum, abrir a demanda **0003** e mover para "TESTE" → PATCH 200, transição registrada.
-2. No detalhe, com situação `hom_homologada`, conferir que o seletor lista tanto etapas anteriores quanto `rejeitada`.
-3. Mover uma demanda para trás (ex.: `em_execucao` → `planejamento_aprovada`) pelo seletor "Mover para".
-4. Kanban continua funcionando para qualquer direção (sem regressão).
-
-## Arquivos
-
-- `supabase/migrations/<novo>.sql` (drop do CHECK)
-- `src/features/sustentacao/components/DemandaDetail.tsx` (`allowedNextStatuses`)
+- Logar como Tiago (usuário comum, membro do time), abrir uma demanda → aba Atividades → editar um lançamento próprio → salvar. Esperado: a linha da tabela reflete a nova hora/fase/descrição.
+- Logar como admin e editar um lançamento de outro usuário. Esperado: continua funcionando.
+- Tentar (via console) editar um lançamento de outro usuário como membro comum. Esperado: toast de erro, não mais "sucesso".

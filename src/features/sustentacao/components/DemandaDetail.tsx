@@ -463,14 +463,11 @@ export function DemandaDetail({
     if (isTerminal) return [];
     if (isBloqueada) return [];
     if (isRejeitada) return ["em_execucao"];
-    const idx = dynamicFlow.indexOf(demanda.situacao);
-    if (idx < 0) {
-      // Situação fora do fluxo configurado → libera todos os destinos não-terminais
-      return dynamicFlow.filter((k) => k !== demanda.situacao);
-    }
-    const next = dynamicFlow.slice(idx + 1);
-    if (demanda.situacao === "hom_homologada") return [...next, "rejeitada"];
-    return next;
+    // Permite mover em qualquer direção (espelha o comportamento do Kanban):
+    // mostra todas as etapas do fluxo configurado exceto a atual, preservando a ordem.
+    const all = dynamicFlow.filter((k) => k !== demanda.situacao);
+    if (demanda.situacao === "hom_homologada") return [...all, "rejeitada"];
+    return all;
   }, [dynamicFlow, demanda.situacao, isTerminal, isBloqueada, isRejeitada]);
 
   const canBlock = !isTerminal && !isBloqueada && demanda.situacao !== "ag_aceite_final";

@@ -1,47 +1,53 @@
-## Diagnóstico
+## Problema
 
-### 1) Card volta à origem no Kanban (Ágil e Sustentação) para usuários comuns
-Verifiquei as políticas de UPDATE no banco:
+**1. PATCH 400 ao mover a demanda 0003 (e similares)**
 
-- `user_stories_update` exige `is_team_manager(...) OR assignee_id = auth.uid()`.
-- `demandas_update_manager_or_responsible` exige `is_team_manager(...) OR is_demanda_responsible(auth.uid(), id)`.
+A tabela `public.demandas` tem um CHECK constraint que limita `situacao` a um conjunto fixo de valores:
 
-Resultado: um usuário comum (membro do time, sem ser gestor nem responsável/assignee do card) consegue arrastar pelo HTML, o update otimista pinta a nova coluna, mas o `UPDATE` é negado silenciosamente pelo RLS e o realtime devolve o card à coluna original. Mesmo padrão nas duas telas.
+```
+fila_atendimento, planejamento_elaboracao, planejamento_ag_aprovacao,
+planejamento_aprovada, em_execucao, bloqueada, hom_ag_homologacao,
+hom_homologada, rejeitada, fila_producao, ag_aceite_final,
+cancelada, fila_concluida
+```
 
-### 2) Responsável da HU some após salvar
-No `HUEditDrawer` o `assigneeId` é enviado corretamente para `updateUserStory` (SprintContext), que faz `update(... assignee_id ...).select()`. Como a política `user_stories_update` aplica `WITH CHECK (is_team_manager OR assignee_id = auth.uid())`, quando o próprio assignee se troca por outra pessoa, o `WITH CHECK` reprova o registro pós-update e o PostgREST devolve `data: []`. O `updateUserStory` exibe "nenhuma linha afetada" e/ou o estado local fica sem responsável. Para gestores também há um caminho: o `useTeamAssignees` filtra por time e, se o assignee atual não pertence ao time atual, o select aparece vazio mas o id continua, mas isso é UI; o sumiço real após salvar vem do `WITH CHECK`.
+Porém o time configurou uma etapa customizada **"TESTE"** em `sustentacao_workflow_steps` (ordem 5). O hook `useWorkflowSteps` gera a chave `teste` por slug. Ao mover qualquer demanda para esse passo, o PATCH envia `situacao = "teste"`, que viola o CHECK e o Postgres retorna **400 Bad Request**. O mesmo acontece com qualquer etapa custom futura.
 
-### 3) `PATCH /demandas?id=eq... 400`
-A tabela `public.demandas` não possui as colunas `sla_priority` nem `data_abertura`, mas o tipo `Demanda` (src/features/sustentacao/types/demanda.ts) as declara. Sempre que o UI passa um objeto `Demanda` (ou um spread dele) para `updateDemanda`, o PostgREST devolve 400 ("column 'sla_priority' of relation 'demandas' does not exist"). `sla_priority` chega via RPC enriquecida e contamina updates subsequentes (inline edit, ações no `DemandaDetail`, etc.).
+**2. Só permite avançar, não retroceder na tela de Detalhe**
+
+Na `DemandaDetail.tsx`, o seletor "Mover para" usa `allowedNextStatuses`, que faz `dynamicFlow.slice(idx + 1)` — só mostra etapas posteriores. O Kanban (`SustentacaoBoard`/`SustentacaoPage`) já permite mover em qualquer direção (chama `moveTo` direto), por isso a divergência.
 
 ## Mudanças
 
-### A. RLS — permitir mover cards a qualquer membro do time
-Migração:
+### A. Migração SQL — remover CHECK rígido do `situacao`
 
-- `user_stories_update`: USING/WITH CHECK `can_view_team(auth.uid(), team_id)`.
-- `demandas_update_manager_or_responsible`: renomear para `demandas_update_team_member` com USING/WITH CHECK `can_view_team(auth.uid(), team_id)`.
+```sql
+ALTER TABLE public.demandas
+  DROP CONSTRAINT IF EXISTS demandas_situacao_check;
+```
 
-Isso libera drag-and-drop e edições básicas para qualquer membro do time, mantendo o isolamento por time (gerencial e exclusão continuam restritos a manager).
+Justificativa: o fluxo agora é dinâmico (configurável em Sustentação → Fluxo de Trabalho). A validação correta passa a ser feita pela UI a partir de `sustentacao_workflow_steps`. As situações terminais e bloqueios continuam sendo controlados em código (`TERMINAL_STATUSES`, regras de cancelamento/suspensão).
 
-### B. HU — preservar responsável após salvar
-- Em `src/contexts/SprintContext.tsx > updateUserStory`: trocar `.select()` por `.select().maybeSingle()` (com fallback) e, em vez de exibir "nenhuma linha afetada", refazer um `select` separado e atualizar o estado a partir dele. Isso evita perder o `assignee_id` quando o retorno do PATCH vier vazio por qualquer motivo residual de RLS/PostgREST.
-- Em `src/components/HUEditDrawer.tsx`: ao montar a lista de assignees, garantir que o assignee atual da HU é incluído mesmo se não pertencer ao time corrente (fallback à lista global de developers), para não "desaparecer" visualmente.
+### B. `src/features/sustentacao/components/DemandaDetail.tsx`
 
-### C. Demandas — eliminar 400 no PATCH
-- Em `src/features/sustentacao/services/demandas.service.ts > updateDemanda`: aplicar um whitelist de colunas reais antes do `.update(...)`. Filtrar qualquer chave que não exista na tabela (incluindo `sla_priority`, `data_abertura`, `contract_id` quando vier do enriquecimento RPC, etc.).
-- Em `src/features/sustentacao/types/demanda.ts`: marcar `sla_priority` e `data_abertura` como apenas leitura e nunca incluí-los em payloads de update.
+Substituir `allowedNextStatuses` para liberar movimentação em qualquer sentido, espelhando o Kanban:
 
-### D. Validação
-- Migração executada e políticas listadas.
-- Testar com usuário comum (não-gestor): arrastar card no Ágil e na Sustentação — deve persistir.
-- Editar HU como usuário comum: salvar e reabrir — `Responsável` deve continuar preenchido.
-- Editar uma demanda no `DemandaDetail` e verificar console: o PATCH deve retornar 200.
+- Manter bloqueios atuais: terminal (`isTerminal`) → vazio; `bloqueada` → vazio; `rejeitada` → apenas `em_execucao` (regra de retorno controlada).
+- Para demais casos: retornar **todas** as etapas de `dynamicFlow` exceto a situação atual, mantendo a ordem do fluxo. Continuar acrescentando `rejeitada` quando `situacao === 'hom_homologada'`.
+- Nenhuma mudança em `getNextStatuses` legado (não está sendo consumida pelo seletor; é mantida para compatibilidade).
+
+### C. Sem mudanças no service
+
+`updateDemanda` já tem whitelist; após remover o CHECK, o PATCH com `situacao = "teste"` (ou qualquer key custom) passa a retornar 200.
+
+## Validação
+
+1. Como usuário comum, abrir a demanda **0003** e mover para "TESTE" → PATCH 200, transição registrada.
+2. No detalhe, com situação `hom_homologada`, conferir que o seletor lista tanto etapas anteriores quanto `rejeitada`.
+3. Mover uma demanda para trás (ex.: `em_execucao` → `planejamento_aprovada`) pelo seletor "Mover para".
+4. Kanban continua funcionando para qualquer direção (sem regressão).
 
 ## Arquivos
 
-- supabase/migrations/<novo>.sql — política de UPDATE em `user_stories` e `demandas`.
-- src/features/sustentacao/services/demandas.service.ts
-- src/features/sustentacao/types/demanda.ts
-- src/contexts/SprintContext.tsx
-- src/components/HUEditDrawer.tsx
+- `supabase/migrations/<novo>.sql` (drop do CHECK)
+- `src/features/sustentacao/components/DemandaDetail.tsx` (`allowedNextStatuses`)

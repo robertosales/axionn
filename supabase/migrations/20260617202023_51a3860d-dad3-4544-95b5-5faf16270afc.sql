@@ -1,0 +1,1 @@
+ALTER TABLE public.demandas DROP CONSTRAINT IF EXISTS demandas_situacao_check;

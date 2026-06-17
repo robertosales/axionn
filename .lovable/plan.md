@@ -1,63 +1,47 @@
 ## Diagnóstico
 
-Os times `[GESP3] - TIME A/B/C` existem e estão vinculados ao contrato **CONTRATO DE FABRICA PF** (`teams.contract_id = d59ab6dc-...`), mas não aparecem em **Visão Geral, Histórico, Capacidade, Times** nem no select **Sala (opcional)** do modal "Editar Projeto".
+### 1) Card volta à origem no Kanban (Ágil e Sustentação) para usuários comuns
+Verifiquei as políticas de UPDATE no banco:
 
-**Causa raiz**: todos os hooks do dashboard admin descobrem os times do contrato lendo **apenas** `projects.contract_id` + `DISTINCT team_id`. Times sem nenhum projeto ainda criado naquele contrato ficam invisíveis — efeito "ovo e galinha" (não consigo selecionar o time no novo projeto porque ele não aparece, e ele não aparece porque não tem projeto).
+- `user_stories_update` exige `is_team_manager(...) OR assignee_id = auth.uid()`.
+- `demandas_update_manager_or_responsible` exige `is_team_manager(...) OR is_demanda_responsible(auth.uid(), id)`.
 
-Hooks afetados:
+Resultado: um usuário comum (membro do time, sem ser gestor nem responsável/assignee do card) consegue arrastar pelo HTML, o update otimista pinta a nova coluna, mas o `UPDATE` é negado silenciosamente pelo RLS e o realtime devolve o card à coluna original. Mesmo padrão nas duas telas.
 
-```text
-useTeamsAdmin(contractId)       → src/features/admin/hooks/useTeamsAdmin.ts
-useAdminKpis(contractId)        → src/features/admin/hooks/useAdminKpis.ts
-useSprintHistory(contractId)    → src/features/admin/hooks/useSprintHistory.ts
-useCapacityPlanner(contractId)  → src/features/admin/hooks/useCapacityPlanner.ts
-```
+### 2) Responsável da HU some após salvar
+No `HUEditDrawer` o `assigneeId` é enviado corretamente para `updateUserStory` (SprintContext), que faz `update(... assignee_id ...).select()`. Como a política `user_stories_update` aplica `WITH CHECK (is_team_manager OR assignee_id = auth.uid())`, quando o próprio assignee se troca por outra pessoa, o `WITH CHECK` reprova o registro pós-update e o PostgREST devolve `data: []`. O `updateUserStory` exibe "nenhuma linha afetada" e/ou o estado local fica sem responsável. Para gestores também há um caminho: o `useTeamAssignees` filtra por time e, se o assignee atual não pertence ao time atual, o select aparece vazio mas o id continua, mas isso é UI; o sumiço real após salvar vem do `WITH CHECK`.
 
-## Plano de correção
+### 3) `PATCH /demandas?id=eq... 400`
+A tabela `public.demandas` não possui as colunas `sla_priority` nem `data_abertura`, mas o tipo `Demanda` (src/features/sustentacao/types/demanda.ts) as declara. Sempre que o UI passa um objeto `Demanda` (ou um spread dele) para `updateDemanda`, o PostgREST devolve 400 ("column 'sla_priority' of relation 'demandas' does not exist"). `sla_priority` chega via RPC enriquecida e contamina updates subsequentes (inline edit, ações no `DemandaDetail`, etc.).
 
-### 1. Novo helper `src/features/admin/lib/resolveContractTeamIds.ts`
+## Mudanças
 
-Resolve os IDs de times do contrato unindo as duas fontes (sem perder dados legados):
+### A. RLS — permitir mover cards a qualquer membro do time
+Migração:
 
-```text
-ids = UNIQUE(
-  SELECT id       FROM teams    WHERE contract_id = :contractId
-  UNION
-  SELECT team_id  FROM projects WHERE contract_id = :contractId AND team_id IS NOT NULL
-)
-```
+- `user_stories_update`: USING/WITH CHECK `can_view_team(auth.uid(), team_id)`.
+- `demandas_update_manager_or_responsible`: renomear para `demandas_update_team_member` com USING/WITH CHECK `can_view_team(auth.uid(), team_id)`.
 
-Retorna `string[] | null` (`null` = sem filtro).
+Isso libera drag-and-drop e edições básicas para qualquer membro do time, mantendo o isolamento por time (gerencial e exclusão continuam restritos a manager).
 
-### 2. Refatorar os 4 hooks para usar o helper
+### B. HU — preservar responsável após salvar
+- Em `src/contexts/SprintContext.tsx > updateUserStory`: trocar `.select()` por `.select().maybeSingle()` (com fallback) e, em vez de exibir "nenhuma linha afetada", refazer um `select` separado e atualizar o estado a partir dele. Isso evita perder o `assignee_id` quando o retorno do PATCH vier vazio por qualquer motivo residual de RLS/PostgREST.
+- Em `src/components/HUEditDrawer.tsx`: ao montar a lista de assignees, garantir que o assignee atual da HU é incluído mesmo se não pertencer ao time corrente (fallback à lista global de developers), para não "desaparecer" visualmente.
 
-Cada hook hoje monta `teamIds` lendo só de `projects`. Trocar pela chamada ao helper, mantendo o restante igual:
+### C. Demandas — eliminar 400 no PATCH
+- Em `src/features/sustentacao/services/demandas.service.ts > updateDemanda`: aplicar um whitelist de colunas reais antes do `.update(...)`. Filtrar qualquer chave que não exista na tabela (incluindo `sla_priority`, `data_abertura`, `contract_id` quando vier do enriquecimento RPC, etc.).
+- Em `src/features/sustentacao/types/demanda.ts`: marcar `sla_priority` e `data_abertura` como apenas leitura e nunca incluí-los em payloads de update.
 
-- `useTeamsAdmin.ts` — substitui o bloco `if (contractId) { ...projects... }`
-- `useAdminKpis.ts` — substitui o `useEffect` que popula `filteredTeamIds`
-- `useSprintHistory.ts` — substitui o bloco `allowedTeamIds` (linhas ~79–89)
-- `useCapacityPlanner.ts` — substitui o bloco `allowedTeamIds` (linhas ~50–62)
+### D. Validação
+- Migração executada e políticas listadas.
+- Testar com usuário comum (não-gestor): arrastar card no Ágil e na Sustentação — deve persistir.
+- Editar HU como usuário comum: salvar e reabrir — `Responsável` deve continuar preenchido.
+- Editar uma demanda no `DemandaDetail` e verificar console: o PATCH deve retornar 200.
 
-### 3. Ordenação alfabética dos times
+## Arquivos
 
-Aplicar `ORDER BY name ASC` (case-insensitive, locale `pt-BR`) em todas as listas de times derivadas:
-
-- `useTeamsAdmin.ts` — trocar `.order('created_at')` por `.order('name', { ascending: true })`
-- `useCapacityPlanner.ts` — ordenar `teams` por `name` antes de gerar `uniqueTeams`
-- `useAdminKpis.ts` — ordenar o `byTeam` final por `teamName`
-- `useSprintHistory.ts` — ordenar `teamComparativo` por `teamName`
-- `ProjetosAdminPanel.tsx` — garantir que o select "Sala (opcional)" itera sobre a lista já ordenada (sem mudança de UI, vem do hook)
-
-Uso de `String.prototype.localeCompare(..., 'pt-BR', { sensitivity: 'base', numeric: true })` para tratar números (TIME 1/2/3) e acentos corretamente.
-
-### 4. Validação
-
-- "Editar Projeto" → "Sala (opcional)" lista os 7 times em ordem: `[GESP3] - TIME A`, `[GESP3] - TIME B`, `[GESP3] - TIME C`, `[NEXO] - TIME A - B`, `TIME 1`, `TIME 2`, `TIME 3`.
-- Visão Geral, Histórico, Capacidade e Times mostram os 7 times do contrato (KPIs zerados quando ainda não há dados — esperado).
-- Trocar o contrato no `ContractSwitcher` continua filtrando corretamente.
-- Sem alteração em RLS, schema, migration ou políticas.
-
-## Fora do escopo
-
-- Sem migration nem mudança em `contract_room_teams` (vazia, não usada por essas telas).
-- Sem mexer em RBAC, TeamMembers, Developers ou nas listas de membros/analistas (rodada anterior).
+- supabase/migrations/<novo>.sql — política de UPDATE em `user_stories` e `demandas`.
+- src/features/sustentacao/services/demandas.service.ts
+- src/features/sustentacao/types/demanda.ts
+- src/contexts/SprintContext.tsx
+- src/components/HUEditDrawer.tsx

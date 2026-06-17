@@ -154,7 +154,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
   const [scrollTeam, setScrollTeam] = useState("all");
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       {dataWarnings && dataWarnings.length > 0 && (
         <Alert variant="destructive" className="py-2">
           <AlertTriangle className="h-3.5 w-3.5" />
@@ -173,7 +173,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
 
       {/* 2. ACESSO RÁPIDO */}
       <section aria-label="Acesso rápido">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">Acesso Rápido</h2>
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Acesso Rápido</h2>
         <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
@@ -193,7 +193,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
 
       {/* 4. RESUMO POR TIME */}
       <section aria-label="Resumo por time">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Resumo por Time</h2>
           <div className="flex gap-1">
             <button
@@ -223,7 +223,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
           <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-4">
             Indicadores por Módulo
           </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="rounded-xl border bg-card shadow-sm p-4">
               <SalaAgilKpis kpis={globalKpis} sprintAtivo={execKpis.sprintLabel} />
             </div>
@@ -249,7 +249,7 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
 
       {/* 6 + 7. DETALHE E DESEMPENHO POR TIME */}
       <section aria-label="Detalhamento operacional">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
           <div className="rounded-xl border bg-card shadow-sm overflow-hidden xl:col-span-2 flex flex-col">
             <div className="px-4 py-3 border-b bg-muted/20">
               <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Detalhe por Time</h2>

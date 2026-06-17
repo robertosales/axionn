@@ -41,11 +41,7 @@ import {
   FileText,
   FolderKanban,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
-
-const TEAL = "#0bbcaf";
 
 const NAV_ITEMS = [
   { key: "visao-geral", label: "Visão Geral", icon: BarChart3 },
@@ -97,8 +93,15 @@ interface VisaoGeralPageProps {
   onViewTeamDetails: (id: string) => void;
 }
 
-function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamDetails }: VisaoGeralPageProps) {
-  const { pendingFilters, appliedTeamId, appliedModule, handleChange, handleApply } = useDashboardFilters();
+function VisaoGeralPage({
+  byTeam,
+  loading,
+  dataWarnings,
+  globalKpis,
+  onViewTeamDetails,
+}: VisaoGeralPageProps) {
+  const { pendingFilters, appliedTeamId, appliedModule, handleChange, handleApply } =
+    useDashboardFilters();
 
   const filteredByTeam = useMemo(() => {
     if (appliedTeamId === "all") return byTeam;
@@ -118,19 +121,39 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
 
   const execKpis = useMemo(() => {
     const timesAtivos = filteredByModule.length;
-    const sprintSet = new Set(filteredByModule.map((t) => t.sprintAtivo).filter(Boolean));
+    const sprintSet = new Set(
+      filteredByModule.map((t) => t.sprintAtivo).filter(Boolean),
+    );
     const sprintLabel =
-      sprintSet.size === 1 ? [...sprintSet][0]! : sprintSet.size > 1 ? `${sprintSet.size} sprints ativas` : null;
+      sprintSet.size === 1
+        ? [...sprintSet][0]!
+        : sprintSet.size > 1
+          ? `${sprintSet.size} sprints ativas`
+          : null;
     const husAtivas = filteredByModule.reduce(
       (s, t) => s + Math.max(0, (t.totalHUs ?? 0) - (t.husConcluidasNoSprint ?? 0)),
       0,
     );
     const husTotais = filteredByModule.reduce((s, t) => s + (t.totalHUs ?? 0), 0);
-    const husConcluidas = filteredByModule.reduce((s, t) => s + (t.husConcluidasNoSprint ?? 0), 0);
-    const husConcluidasPct = husTotais > 0 ? Math.round((husConcluidas / husTotais) * 100) : 0;
-    const demandasAbertas = filteredByModule.reduce((s, t) => s + (t.demandasAbertas ?? 0), 0);
+    const husConcluidas = filteredByModule.reduce(
+      (s, t) => s + (t.husConcluidasNoSprint ?? 0),
+      0,
+    );
+    const husConcluidasPct =
+      husTotais > 0 ? Math.round((husConcluidas / husTotais) * 100) : 0;
+    const demandasAbertas = filteredByModule.reduce(
+      (s, t) => s + (t.demandasAbertas ?? 0),
+      0,
+    );
     const slaEmRisco = filteredByModule.reduce((s, t) => s + (t.slaEmRisco ?? 0), 0);
-    return { timesAtivos, sprintLabel, husAtivas, husConcluidasPct, demandasAbertas, slaEmRisco };
+    return {
+      timesAtivos,
+      sprintLabel,
+      husAtivas,
+      husConcluidasPct,
+      demandasAbertas,
+      slaEmRisco,
+    };
   }, [filteredByModule]);
 
   const teamCards = useMemo(
@@ -138,8 +161,13 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
       filteredByModule.map((t) => ({
         teamId: t.teamId,
         teamName: t.teamName,
-        module: (t.module ?? "").toLowerCase().includes("agil") ? "sala-agil" : "sustentacao",
-        husAtivas: Math.max(0, (t.totalHUs ?? 0) - (t.husConcluidasNoSprint ?? 0)),
+        module: (t.module ?? "").toLowerCase().includes("agil")
+          ? "sala-agil"
+          : "sustentacao",
+        husAtivas: Math.max(
+          0,
+          (t.totalHUs ?? 0) - (t.husConcluidasNoSprint ?? 0),
+        ),
         impedimentos: t.impedimentosAbertos,
         backlog: t.backlogTotal,
         demandasAbertas: t.demandasAbertas,
@@ -150,7 +178,10 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
     [filteredByModule],
   );
 
-  const teamsForFilter = useMemo(() => byTeam.map((t) => ({ id: t.teamId, name: t.teamName })), [byTeam]);
+  const teamsForFilter = useMemo(
+    () => byTeam.map((t) => ({ id: t.teamId, name: t.teamName })),
+    [byTeam],
+  );
   const [scrollTeam, setScrollTeam] = useState("all");
 
   return (
@@ -158,7 +189,9 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
       {dataWarnings && dataWarnings.length > 0 && (
         <Alert variant="destructive" className="py-2">
           <AlertTriangle className="h-3.5 w-3.5" />
-          <AlertDescription className="text-xs">{dataWarnings[0]}</AlertDescription>
+          <AlertDescription className="text-xs">
+            {dataWarnings[0]}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -173,7 +206,9 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
 
       {/* 2. ACESSO RÁPIDO */}
       <section aria-label="Acesso rápido">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Acesso Rápido</h2>
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+          Acesso Rápido
+        </h2>
         <ModuleQuickAccess kpis={globalKpis} />
       </section>
 
@@ -186,35 +221,23 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
           husConcluidasPct={execKpis.husConcluidasPct}
           demandasAbertas={execKpis.demandasAbertas}
           slaEmRisco={execKpis.slaEmRisco}
-          slaDescricao={execKpis.slaEmRisco > 0 ? "+5 dias sem conclusão" : undefined}
+          slaDescricao={
+            execKpis.slaEmRisco > 0 ? "+5 dias sem conclusão" : undefined
+          }
           loading={loading}
         />
       </section>
 
-      {/* 4. RESUMO POR TIME */}
+      {/* 4. RESUMO POR TIME — lista vertical, sem scroll horizontal */}
       <section aria-label="Resumo por time">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Resumo por Time</h2>
-          <div className="flex gap-1">
-            <button
-              className="rounded-md border p-1 hover:bg-muted transition-colors"
-              aria-label="Rolar para esquerda"
-              onClick={() => document.getElementById("team-scroll")?.scrollBy({ left: -260, behavior: "smooth" })}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              className="rounded-md border p-1 hover:bg-muted transition-colors"
-              aria-label="Rolar para direita"
-              onClick={() => document.getElementById("team-scroll")?.scrollBy({ left: 260, behavior: "smooth" })}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <div id="team-scroll" className="overflow-hidden">
-          <TeamSummaryCards teams={teamCards} loading={loading} onTeamClick={onViewTeamDetails} />
-        </div>
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+          Resumo por Time
+        </h2>
+        <TeamSummaryCards
+          teams={teamCards}
+          loading={loading}
+          onTeamClick={onViewTeamDetails}
+        />
       </section>
 
       {/* 5. INDICADORES POR MÓDULO */}
@@ -225,7 +248,10 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
           </h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="rounded-xl border bg-card shadow-sm p-4">
-              <SalaAgilKpis kpis={globalKpis} sprintAtivo={execKpis.sprintLabel} />
+              <SalaAgilKpis
+                kpis={globalKpis}
+                sprintAtivo={execKpis.sprintLabel}
+              />
             </div>
             {appliedModule === "todos" && (
               <div className="rounded-xl border bg-card shadow-sm p-4">
@@ -252,7 +278,9 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
           <div className="rounded-xl border bg-card shadow-sm overflow-hidden xl:col-span-2 flex flex-col">
             <div className="px-4 py-3 border-b bg-muted/20">
-              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Detalhe por Time</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Detalhe por Time
+              </h2>
             </div>
             <div className="p-4 flex-1">
               <TeamDetailPanel
@@ -265,10 +293,15 @@ function VisaoGeralPage({ byTeam, loading, dataWarnings, globalKpis, onViewTeamD
           </div>
           <div className="rounded-xl border bg-card shadow-sm overflow-hidden xl:col-span-1 flex flex-col">
             <div className="px-4 py-3 border-b bg-muted/20">
-              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Desempenho por Time</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Desempenho por Time
+              </h2>
             </div>
             <div className="p-4 flex-1 flex flex-col justify-center">
-              <ComparativeChart byTeam={filteredByModule} selectedTeam={scrollTeam} />
+              <ComparativeChart
+                byTeam={filteredByModule}
+                selectedTeam={scrollTeam}
+              />
             </div>
           </div>
         </div>
@@ -286,7 +319,9 @@ function AdminDashboardInner() {
   const [detailTeamId, setDetailTeamId] = useState<string | null>(null);
 
   const { global: g, byTeam, loading, dataWarnings } = useAdminKpis(selectedContractId);
-  const { notifications, criticalCount, warningCount } = useNotifications(byTeam ?? []);
+  const { notifications, criticalCount, warningCount } = useNotifications(
+    byTeam ?? [],
+  );
 
   const topBarBg = useTopBarBg();
 
@@ -295,7 +330,10 @@ function AdminDashboardInner() {
     const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
-  const horaLabel = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const horaLabel = now.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   const dataLabel = now.toLocaleDateString("pt-BR", {
     weekday: "long",
     day: "numeric",
@@ -308,7 +346,9 @@ function AdminDashboardInner() {
     if (!loading) setLastUpdated(new Date());
   }, [loading]);
   const lastUpdatedLabel = useMemo(() => {
-    const diffMin = Math.floor((Date.now() - lastUpdated.getTime()) / 60_000);
+    const diffMin = Math.floor(
+      (Date.now() - lastUpdated.getTime()) / 60_000,
+    );
     if (diffMin < 1) return "agora mesmo";
     if (diffMin === 1) return "há 1 minuto";
     return `há ${diffMin} minutos`;
@@ -320,7 +360,16 @@ function AdminDashboardInner() {
   };
 
   const isVisaoGeral = activePage === "visao-geral";
-  const activeLabel = NAV_ITEMS.find((n) => n.key === activePage)?.label ?? "";
+  const activeLabel =
+    NAV_ITEMS.find((n) => n.key === activePage)?.label ?? "";
+
+  // Iniciais do usuário para avatar
+  const userInitials =
+    profile?.full_name
+      ?.split(" ")
+      .slice(0, 2)
+      .map((n: string) => n[0])
+      .join("") || "?";
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => (
     <aside
@@ -328,7 +377,10 @@ function AdminDashboardInner() {
         "flex flex-col h-screen transition-colors duration-250 scrollbar-none",
         mobile ? "w-64" : "fixed top-0 left-0 w-60 z-30 hidden lg:flex",
       ].join(" ")}
-      style={{ background: "hsl(var(--sidebar))", color: "hsl(var(--sidebar-foreground))" }}
+      style={{
+        background: "hsl(var(--sidebar))",
+        color: "hsl(var(--sidebar-foreground))",
+      }}
     >
       <div
         className="flex items-center gap-2.5 px-4 h-14 shrink-0"
@@ -336,10 +388,16 @@ function AdminDashboardInner() {
       >
         <AxionLogo size={24} />
         <div className="min-w-0">
-          <p className="text-[15px] font-bold leading-none tracking-tight" style={{ color: "#ffffff" }}>
+          <p
+            className="text-[15px] font-bold leading-none tracking-tight"
+            style={{ color: "#ffffff" }}
+          >
             Axion
           </p>
-          <p className="text-[9px] uppercase tracking-widest leading-none mt-0.5" style={{ color: TEAL }}>
+          {/* label Admin usa var(--primary) do design system em vez de #0bbcaf hardcoded */}
+          <p
+            className="text-[9px] uppercase tracking-widest leading-none mt-0.5 text-primary"
+          >
             Admin
           </p>
         </div>
@@ -373,24 +431,27 @@ function AdminDashboardInner() {
               }}
               className="w-full flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] font-medium transition-colors text-left"
               style={{
-                background: isActive ? "hsl(var(--sidebar-active))" : "transparent",
+                background: isActive
+                  ? "hsl(var(--sidebar-active))"
+                  : "transparent",
                 color: isActive ? "#ffffff" : "rgba(192,212,208,0.7)",
               }}
               onMouseEnter={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(192,212,208,0.06)";
+                if (!isActive)
+                  (e.currentTarget as HTMLElement).style.background =
+                    "rgba(192,212,208,0.06)";
               }}
               onMouseLeave={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent";
+                if (!isActive)
+                  (e.currentTarget as HTMLElement).style.background =
+                    "transparent";
               }}
               aria-current={isActive ? "page" : undefined}
             >
               <Icon className="h-4 w-4 shrink-0" />
               <span className="truncate">{label}</span>
               {key === "contratos" && (
-                <span
-                  className="ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
-                  style={{ background: TEAL, color: "#fff" }}
-                >
+                <span className="ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground">
                   Novo
                 </span>
               )}
@@ -399,23 +460,26 @@ function AdminDashboardInner() {
         })}
       </nav>
 
-      <div className="px-3 py-3 mt-auto shrink-0" style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}>
+      <div
+        className="px-3 py-3 mt-auto shrink-0"
+        style={{ borderTop: "1px solid rgba(192,212,208,0.08)" }}
+      >
         <div className="flex items-center gap-2.5 mb-2">
-          <div
-            className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-            style={{ background: TEAL, color: "#fff" }}
-          >
-            {profile?.full_name
-              ?.split(" ")
-              .slice(0, 2)
-              .map((n: string) => n[0])
-              .join("") || "?"}
+          {/* Avatar usa bg-primary do design system em vez de #0bbcaf hardcoded */}
+          <div className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 bg-primary text-primary-foreground">
+            {userInitials}
           </div>
           <div className="min-w-0">
-            <p className="text-[12px] font-medium leading-tight truncate" style={{ color: "rgba(192,212,208,0.9)" }}>
+            <p
+              className="text-[12px] font-medium leading-tight truncate"
+              style={{ color: "rgba(192,212,208,0.9)" }}
+            >
               {profile?.full_name || "Usuário"}
             </p>
-            <p className="text-[10px] leading-tight" style={{ color: "rgba(192,212,208,0.45)" }}>
+            <p
+              className="text-[10px] leading-tight"
+              style={{ color: "rgba(192,212,208,0.45)" }}
+            >
               {profile?.role === "gestor" ? "Gestor" : "Admin"}
             </p>
           </div>
@@ -425,12 +489,15 @@ function AdminDashboardInner() {
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] transition-colors"
           style={{ color: "rgba(192,212,208,0.5)" }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "rgba(192,212,208,0.06)";
-            (e.currentTarget as HTMLElement).style.color = "rgba(192,212,208,0.9)";
+            (e.currentTarget as HTMLElement).style.background =
+              "rgba(192,212,208,0.06)";
+            (e.currentTarget as HTMLElement).style.color =
+              "rgba(192,212,208,0.9)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.background = "transparent";
-            (e.currentTarget as HTMLElement).style.color = "rgba(192,212,208,0.5)";
+            (e.currentTarget as HTMLElement).style.color =
+              "rgba(192,212,208,0.5)";
           }}
         >
           <LogOut className="h-3.5 w-3.5" />
@@ -476,13 +543,18 @@ function AdminDashboardInner() {
       <Sidebar />
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden flex">
-          <div className="flex-1 bg-black/50" onClick={() => setSidebarOpen(false)} />
+          <div
+            className="flex-1 bg-black/50"
+            onClick={() => setSidebarOpen(false)}
+          />
           <div className="ml-auto">
             <Sidebar mobile />
           </div>
         </div>
       )}
+
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
+        {/* ── TOP BAR ─────────────────────────────────────────────── */}
         <header
           className="sticky top-0 z-20 flex items-center gap-3 h-14 px-4 lg:px-6 shrink-0"
           style={{
@@ -491,6 +563,7 @@ function AdminDashboardInner() {
             isolation: "isolate",
           }}
         >
+          {/* Hamburger mobile */}
           <button
             className="lg:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors shrink-0"
             onClick={() => setSidebarOpen(true)}
@@ -498,15 +571,22 @@ function AdminDashboardInner() {
           >
             <Menu className="h-4 w-4" />
           </button>
-          <div className="flex flex-col items-center justify-center min-w-0 flex-1">
-            <div className="flex items-center justify-center gap-2">
-              <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">{activeLabel}</h1>
+
+          {/* Título + subtítulo — alinhados à esquerda, padrão Imagem 2 */}
+          <div className="flex flex-col items-start justify-center min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">
+                {activeLabel}
+              </h1>
               {loading && isVisaoGeral && (
-                <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin shrink-0" aria-label="Carregando" />
+                <RefreshCw
+                  className="h-3 w-3 text-muted-foreground animate-spin shrink-0"
+                  aria-label="Carregando"
+                />
               )}
             </div>
             {isVisaoGeral && (
-              <div className="flex items-center justify-center gap-1.5 mt-[3px]">
+              <div className="flex items-center gap-1.5 mt-[3px]">
                 <span className="text-xs font-semibold text-foreground truncate">
                   {selectedContract?.name ?? "CONTRATO DE FABRICA PF"}
                 </span>
@@ -516,16 +596,30 @@ function AdminDashboardInner() {
               </div>
             )}
           </div>
+
+          {/* Data/hora — lado direito */}
           <div className="hidden lg:flex flex-col items-end shrink-0">
-            <span className="text-[11px] text-muted-foreground capitalize leading-none">{dataLabel}</span>
-            <span className="text-[13px] font-semibold tabular-nums leading-tight mt-0.5">{horaLabel}</span>
+            <span className="text-[11px] text-muted-foreground capitalize leading-none">
+              {dataLabel}
+            </span>
+            <span className="text-[13px] font-semibold tabular-nums leading-tight mt-0.5">
+              {horaLabel}
+            </span>
           </div>
+
+          {/* Ações */}
           <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle />
-            <NotificationBell notifications={notifications} criticalCount={criticalCount} warningCount={warningCount} />
+            <NotificationBell
+              notifications={notifications}
+              criticalCount={criticalCount}
+              warningCount={warningCount}
+            />
           </div>
         </header>
+
         <main className="flex-1 p-4 lg:p-6 overflow-auto">{renderPage()}</main>
+
         <footer className="text-center text-[11px] text-muted-foreground py-3 border-t px-4">
           Axion Admin © 2026 · Todos os direitos reservados.
         </footer>

@@ -33,12 +33,12 @@ export function useSLADashboard(contractId: string | null) {
     if (!contractId) { setSummary(null); setItems([]); return; }
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .rpc('fn_sla_status_summary', { p_contract_id: contractId });
 
       if (error || !data) throw error;
 
-      const list = (data as any[]);
+      const list = (data as SLADashboardItem[]);
       const withSla  = list.filter(d => d.sla_color !== null);
       const green    = withSla.filter(d => d.sla_color === 'green').length;
       const yellow   = withSla.filter(d => d.sla_color === 'yellow').length;
@@ -57,7 +57,7 @@ export function useSLADashboard(contractId: string | null) {
       setItems(
         list
           .filter(d => d.sla_color === 'orange' || d.sla_color === 'red')
-          .sort((a: any, b: any) => b.resolution_pct - a.resolution_pct)
+          .sort((a: SLADashboardItem, b: SLADashboardItem) => b.resolution_pct - a.resolution_pct)
           .slice(0, 20) as SLADashboardItem[]
       );
     } catch {

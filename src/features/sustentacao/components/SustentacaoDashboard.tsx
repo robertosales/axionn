@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, type ElementType } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDemandasPaginadas } from "../hooks/useDemandasPaginadas";
@@ -101,10 +101,10 @@ export function SustentacaoDashboard() {
     if (filtros.situacao !== "all") items = items.filter((d) => d.situacao === filtros.situacao);
     if (filtros.membro   !== "all") {
       items = items.filter((d) => {
-        const lista = (d as any).responsaveis_list as { nome: string }[] | undefined;
+        const lista = (d as Demanda & { responsaveis_list?: { nome: string }[] }).responsaveis_list as { nome: string }[] | undefined;
         if (lista?.length) return lista.some((r) => r.nome === filtros.membro);
-        return [(d as any).responsavel_dev, (d as any).responsavel_requisitos,
-                (d as any).responsavel_arquiteto, (d as any).responsavel_teste].includes(filtros.membro);
+        return [d.responsavel_dev, d.responsavel_requisitos,
+                d.responsavel_arquiteto, d.responsavel_teste].includes(filtros.membro);
       });
     }
     return items;
@@ -120,8 +120,8 @@ export function SustentacaoDashboard() {
     filtered
       .filter((d) => d.situacao === "bloqueada" || d.situacao === "aguardando_retorno")
       .sort((a, b) => {
-        const oa = SEVERITY_ORDER.indexOf(a.situacao as any);
-        const ob = SEVERITY_ORDER.indexOf(b.situacao as any);
+        const oa = SEVERITY_ORDER.indexOf(a.situacao as "bloqueada" | "aguardando_retorno");
+        const ob = SEVERITY_ORDER.indexOf(b.situacao as "bloqueada" | "aguardando_retorno");
         if (oa !== ob) return oa - ob;
         return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
       })
@@ -265,7 +265,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function AlertRow({ icon: Icon, iconClass, borderClass, title, sub, badge }: {
-  icon: any; iconClass: string; borderClass: string; title: string; sub: string; badge?: string;
+  icon: React.ElementType; iconClass: string; borderClass: string; title: string; sub: string; badge?: string;
 }) {
   return (
     <div className={`flex items-center gap-3 p-2.5 rounded-lg border ${borderClass}`}>
@@ -289,7 +289,7 @@ function EmptyAlerts() {
 }
 
 function KPICard({ icon: Icon, label, value, sub, color }: {
-  icon: any; label: string; value: string | number; sub?: string; color: string;
+  icon: React.ElementType; label: string; value: string | number; sub?: string; color: string;
 }) {
   const colorMap: Record<string, string> = {
     info:        "bg-info/10 text-info",

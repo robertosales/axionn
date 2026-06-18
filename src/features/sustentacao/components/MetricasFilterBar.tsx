@@ -108,13 +108,13 @@ export function MetricasFilterBar({
       situacaoCounts[d.situacao] = (situacaoCounts[d.situacao] || 0) + 1;
       if (d.projeto) projetoCounts[d.projeto] = (projetoCounts[d.projeto] || 0) + 1;
       if (d.contract_id) contractCounts[d.contract_id] = (contractCounts[d.contract_id] || 0) + 1;
-      const resp = (d as any).responsaveis_list as { nome: string }[] | undefined;
+      const resp = (d as Demanda & { responsaveis_list?: { nome: string }[] }).responsaveis_list as { nome: string }[] | undefined;
       resp?.forEach((r) => {
         if (r.nome) membroCounts[r.nome] = (membroCounts[r.nome] || 0) + 1;
       });
       if (!resp) {
-        ([(d as any).responsavel_dev, (d as any).responsavel_requisitos,
-          (d as any).responsavel_arquiteto, (d as any).responsavel_teste] as string[])
+        ([d.responsavel_dev, d.responsavel_requisitos,
+          d.responsavel_arquiteto, d.responsavel_teste] as string[])
           .filter(Boolean).forEach((n) => { membroCounts[n] = (membroCounts[n] || 0) + 1; });
       }
     });

@@ -1,3 +1,4 @@
+import { type ElementType } from "react";
 import { Shield, AlertTriangle, CheckCircle2, ShieldX, ShieldAlert, Clock, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -156,7 +157,7 @@ export function SLADashboardSection({ contractId }: Props) {
 }
 
 function KPICard({ icon: Icon, label, value, sub, iconClass, borderClass = '' }: {
-  icon: any; label: string; value: string | number; sub?: string; iconClass: string; borderClass?: string;
+  icon: ElementType; label: string; value: string | number; sub?: string; iconClass: string; borderClass?: string;
 }) {
   return (
     <Card className={borderClass}>

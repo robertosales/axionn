@@ -39,8 +39,8 @@ export function useContractSla({
       const result = await checkSlaStatus({ demandaId, contractId, priority, createdAt });
       setSlaStatus(result);
       setError(null);
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro ao calcular SLA');
+    } catch (e: unknown) {
+      setError((e as Error)?.message ?? 'Erro ao calcular SLA');
     } finally {
       setLoading(false);
     }

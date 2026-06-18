@@ -320,6 +320,14 @@ export function DemandaDetail({
   const [editHour, setEditHour] = useState<DemandaHour | null>(null);
   const [showEditHourDialog, setShowEditHourDialog] = useState(false);
 
+  // ─── Estado do formulário do dialog de EDIÇÃO de lançamento ───
+  // Mantém os valores editados pelo usuário de forma independente do editHour original.
+  const [editHourForm, setEditHourForm] = useState({
+    horas: "",      // string HH:MM controlada pelo HorasInput
+    fase: "",
+    descricao: "",
+  });
+
   const [responsaveis, setResponsaveis] = useState<DemandaResponsavel[]>([]);
   const [respLoading, setRespLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -455,23 +463,16 @@ export function DemandaDetail({
   // Sustentação → Fluxo de Trabalho.
   const workflowSteps = useWorkflowSteps();
   const dynamicFlow = useMemo(
-    () => workflowSteps.filter((s) => !s.isTerminal && s.key !== "bloqueada").map((s) => s.key),
+    () => workflowSteps.map((s) => s.key),
     [workflowSteps],
   );
 
   const allowedNextStatuses = useMemo<string[]>(() => {
-    if (isTerminal) return [];
-    if (isBloqueada) return [];
+    if (isCancelada) return [];
     if (isRejeitada) return ["em_execucao"];
-    const idx = dynamicFlow.indexOf(demanda.situacao);
-    if (idx < 0) {
-      // Situação fora do fluxo configurado → libera todos os destinos não-terminais
-      return dynamicFlow.filter((k) => k !== demanda.situacao);
-    }
-    const next = dynamicFlow.slice(idx + 1);
-    if (demanda.situacao === "hom_homologada") return [...next, "rejeitada"];
-    return next;
-  }, [dynamicFlow, demanda.situacao, isTerminal, isBloqueada, isRejeitada]);
+    // Permite mover para qualquer etapa configurada no fluxo, igual ao Kanban.
+    return dynamicFlow.filter((k) => k !== demanda.situacao);
+  }, [dynamicFlow, demanda.situacao, isCancelada, isRejeitada]);
 
   const canBlock = !isTerminal && !isBloqueada && demanda.situacao !== "ag_aceite_final";
   const canCancel = !isTerminal && demanda.situacao !== "ag_aceite_final";
@@ -686,6 +687,34 @@ export function DemandaDetail({
     const created_at = hourForm.data ? new Date(hourForm.data + "T12:00:00").toISOString() : undefined;
     await addHour({ horas: horasDecimal, fase: hourForm.fase, descricao: hourForm.descricao, created_at });
     setHourForm({ horas: "", fase: "execucao", descricao: "", data: todayISO() });
+  };
+
+  // ─── Abre o dialog de edição populando editHourForm com os valores atuais ───
+  const handleOpenEditHourDialog = (h: DemandaHour) => {
+    setEditHour(h);
+    setEditHourForm({
+      horas: minutesToDisplay(Number(h.horas)),
+      fase: h.fase,
+      descricao: h.descricao || "",
+    });
+    setShowEditHourDialog(true);
+  };
+
+  // ─── Salva a edição convertendo HH:MM → decimal ───
+  const handleSaveEditHour = async () => {
+    if (!editHour) return;
+    const horasDecimal = hhmmToDecimal(editHourForm.horas);
+    if (!horasDecimal || horasDecimal <= 0) {
+      toast.error("Informe um tempo válido.");
+      return;
+    }
+    await updateHour(editHour.id, {
+      horas: horasDecimal,
+      fase: editHourForm.fase,
+      descricao: editHourForm.descricao,
+    });
+    setShowEditHourDialog(false);
+    setEditHour(null);
   };
 
   const handleSearch = async (q: string) => {
@@ -1008,11 +1037,10 @@ export function DemandaDetail({
                   <span className="text-sm font-medium text-foreground shrink-0">Mover para:</span>
                   <Select value={newStatus} onValueChange={setNewStatus}>
                     <SelectTrigger className="h-9 text-sm flex-1 max-w-xs bg-card">
-                      <SelectValue placeholder="Selecione a próxima etapa..." />
+                      <SelectValue placeholder="Selecione a etapa..." />
                     </SelectTrigger>
                     <SelectContent>
                       {allowedNextStatuses
-                        .filter((s) => s !== "rejeitada")
                         .map((s) => (
                           <SelectItem key={s} value={s}>
                             {resolveLabel(s)}
@@ -1028,7 +1056,7 @@ export function DemandaDetail({
                     onClick={handleMove}
                     disabled={!newStatus}
                   >
-                    Avançar
+                    Mover
                   </Button>
                   {canBlock && (
                     <Button
@@ -1572,10 +1600,7 @@ export function DemandaDetail({
                                       variant="ghost"
                                       size="sm"
                                       className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                                      onClick={() => {
-                                        setEditHour(h);
-                                        setShowEditHourDialog(true);
-                                      }}
+                                      onClick={() => handleOpenEditHourDialog(h)}
                                     >
                                       <Pencil className="h-3.5 w-3.5" />
                                     </Button>
@@ -1724,8 +1749,7 @@ export function DemandaDetail({
                   <div className="px-4 py-4 space-y-3">
                     <div className="grid sm:grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-xs">Fase</Label>
-                        <Select value={evidForm.fase} onValueChange={(v) => setEvidForm((p) => ({ ...p, fase: v }))}>
+                        <Label className="text-xs">Fase</Label>                        <Select value={evidForm.fase} onValueChange={(v) => setEvidForm((p) => ({ ...p, fase: v }))}>
                           <SelectTrigger className="mt-1">
                             <SelectValue />
                           </SelectTrigger>

@@ -91,9 +91,50 @@ export async function createDemanda(demanda: Partial<Demanda> & { team_id: strin
 }
 
 export async function updateDemanda(id: string, updates: Partial<Demanda>) {
+  // Whitelist: somente colunas que realmente existem na tabela public.demandas.
+  // Evita 400 (PGRST204 / column does not exist) quando o caller passa um objeto
+  // Demanda enriquecido pela RPC (ex.: sla_priority, data_abertura) ou campos
+  // derivados que não pertencem à tabela base.
+  const ALLOWED_COLUMNS = new Set<string>([
+    "team_id",
+    "rhm",
+    "projeto",
+    "titulo",
+    "tipo",
+    "situacao",
+    "descricao",
+    "sla",
+    "demandante",
+    "tipo_defeito",
+    "originada_diagnostico",
+    "prazo_inicio_atendimento",
+    "prazo_solucao",
+    "data_previsao_encerramento",
+    "nota_satisfacao",
+    "cobertura_testes",
+    "artefatos_atualizados",
+    "hard_code_identificado",
+    "reincidencia_defeito",
+    "contador_rejeicoes",
+    "responsavel_requisitos",
+    "responsavel_dev",
+    "responsavel_teste",
+    "responsavel_arquiteto",
+    "aceite_data",
+    "aceite_responsavel",
+    "total_horas",
+    "situacao_changed_at",
+    "contract_id",
+    "project_id",
+  ]);
+  const safeUpdates: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(updates as Record<string, unknown>)) {
+    if (ALLOWED_COLUMNS.has(k)) safeUpdates[k] = v;
+  }
+
   const { data, error } = await supabase
     .from("demandas" as any)
-    .update(updates as any)
+    .update(safeUpdates as any)
     .eq("id", id)
     .select()
     .single();
@@ -207,11 +248,15 @@ export async function updateHour(
   data: { horas: number | string; fase: string; descricao: string; user_id?: string },
 ) {
   const payload = { ...data, horas: toDecimalHours(data.horas) };
-  const { error } = await supabase
+  const { data: rows, error } = await supabase
     .from("demanda_hours" as any)
     .update(payload as any)
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (error) throw error;
+  if (!rows || (rows as any[]).length === 0) {
+    throw new Error("Sem permissão para editar este lançamento ou registro não encontrado");
+  }
 }
 
 export async function deleteHour(id: string) {

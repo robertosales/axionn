@@ -1,63 +1,47 @@
+# Edição de lançamento de horas não persiste para usuários comuns
+
 ## Diagnóstico
 
-Os times `[GESP3] - TIME A/B/C` existem e estão vinculados ao contrato **CONTRATO DE FABRICA PF** (`teams.contract_id = d59ab6dc-...`), mas não aparecem em **Visão Geral, Histórico, Capacidade, Times** nem no select **Sala (opcional)** do modal "Editar Projeto".
+Tiago (usuário comum, não admin) clica em "Salvar" no modal de edição de lançamento. O sistema mostra "Registro atualizado com sucesso", mas o registro continua igual.
 
-**Causa raiz**: todos os hooks do dashboard admin descobrem os times do contrato lendo **apenas** `projects.contract_id` + `DISTINCT team_id`. Times sem nenhum projeto ainda criado naquele contrato ficam invisíveis — efeito "ovo e galinha" (não consigo selecionar o time no novo projeto porque ele não aparece, e ele não aparece porque não tem projeto).
+A causa é uma **policy RLS faltante** na tabela `public.demanda_hours`:
 
-Hooks afetados:
+- Hoje só existem policies de UPDATE para administradores:
+  - `Admin full access demanda_hours` → `has_role(auth.uid(), 'admin')`
+  - `demanda_hours_update_admin` → `team_members.role = 'admin'`
+- Para DELETE existe `Member delete own demanda_hours` (`user_id = auth.uid()`), mas **não há equivalente para UPDATE**.
 
-```text
-useTeamsAdmin(contractId)       → src/features/admin/hooks/useTeamsAdmin.ts
-useAdminKpis(contractId)        → src/features/admin/hooks/useAdminKpis.ts
-useSprintHistory(contractId)    → src/features/admin/hooks/useSprintHistory.ts
-useCapacityPlanner(contractId)  → src/features/admin/hooks/useCapacityPlanner.ts
+Como o Supabase com RLS ativo retorna sucesso silencioso quando o UPDATE não afeta nenhuma linha (linhas filtradas pelas policies), o `updateHour()` em `demandas.service.ts` não recebe erro, o hook dispara o toast de sucesso e a UI reabre com os dados antigos.
+
+A regra de negócio definida na memória (`mem://features/sustentacao/time-tracking` e commit `324b6be`) já diz que o dono do lançamento pode editar/excluir suas próprias atividades — falta apenas a policy de UPDATE no banco.
+
+## Mudanças
+
+### 1. Migration — adicionar policy de UPDATE para o dono
+
+Nova migration em `supabase/migrations/` com:
+
+```sql
+CREATE POLICY "Member update own demanda_hours"
+ON public.demanda_hours
+FOR UPDATE
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
 ```
 
-## Plano de correção
+Mantém as policies de admin existentes (gestor continua editando qualquer lançamento) e libera o dono a editar apenas os próprios.
 
-### 1. Novo helper `src/features/admin/lib/resolveContractTeamIds.ts`
+### 2. Hardening em `updateHour` (`src/features/sustentacao/services/demandas.service.ts`)
 
-Resolve os IDs de times do contrato unindo as duas fontes (sem perder dados legados):
+Hoje o serviço não detecta UPDATE que afeta 0 linhas. Para evitar o mesmo "falso sucesso" em qualquer cenário futuro de RLS:
 
-```text
-ids = UNIQUE(
-  SELECT id       FROM teams    WHERE contract_id = :contractId
-  UNION
-  SELECT team_id  FROM projects WHERE contract_id = :contractId AND team_id IS NOT NULL
-)
-```
+- Trocar `.update(payload).eq("id", id)` por `.update(payload).eq("id", id).select("id")`.
+- Se o array retornado vier vazio, lançar um erro (`Sem permissão para editar este lançamento ou registro não encontrado`).
 
-Retorna `string[] | null` (`null` = sem filtro).
+Assim o hook `useDemandas.update` cai no `catch` e mostra o toast de erro correto em vez de "Registro atualizado com sucesso".
 
-### 2. Refatorar os 4 hooks para usar o helper
+## Validação
 
-Cada hook hoje monta `teamIds` lendo só de `projects`. Trocar pela chamada ao helper, mantendo o restante igual:
-
-- `useTeamsAdmin.ts` — substitui o bloco `if (contractId) { ...projects... }`
-- `useAdminKpis.ts` — substitui o `useEffect` que popula `filteredTeamIds`
-- `useSprintHistory.ts` — substitui o bloco `allowedTeamIds` (linhas ~79–89)
-- `useCapacityPlanner.ts` — substitui o bloco `allowedTeamIds` (linhas ~50–62)
-
-### 3. Ordenação alfabética dos times
-
-Aplicar `ORDER BY name ASC` (case-insensitive, locale `pt-BR`) em todas as listas de times derivadas:
-
-- `useTeamsAdmin.ts` — trocar `.order('created_at')` por `.order('name', { ascending: true })`
-- `useCapacityPlanner.ts` — ordenar `teams` por `name` antes de gerar `uniqueTeams`
-- `useAdminKpis.ts` — ordenar o `byTeam` final por `teamName`
-- `useSprintHistory.ts` — ordenar `teamComparativo` por `teamName`
-- `ProjetosAdminPanel.tsx` — garantir que o select "Sala (opcional)" itera sobre a lista já ordenada (sem mudança de UI, vem do hook)
-
-Uso de `String.prototype.localeCompare(..., 'pt-BR', { sensitivity: 'base', numeric: true })` para tratar números (TIME 1/2/3) e acentos corretamente.
-
-### 4. Validação
-
-- "Editar Projeto" → "Sala (opcional)" lista os 7 times em ordem: `[GESP3] - TIME A`, `[GESP3] - TIME B`, `[GESP3] - TIME C`, `[NEXO] - TIME A - B`, `TIME 1`, `TIME 2`, `TIME 3`.
-- Visão Geral, Histórico, Capacidade e Times mostram os 7 times do contrato (KPIs zerados quando ainda não há dados — esperado).
-- Trocar o contrato no `ContractSwitcher` continua filtrando corretamente.
-- Sem alteração em RLS, schema, migration ou políticas.
-
-## Fora do escopo
-
-- Sem migration nem mudança em `contract_room_teams` (vazia, não usada por essas telas).
-- Sem mexer em RBAC, TeamMembers, Developers ou nas listas de membros/analistas (rodada anterior).
+- Logar como Tiago (usuário comum, membro do time), abrir uma demanda → aba Atividades → editar um lançamento próprio → salvar. Esperado: a linha da tabela reflete a nova hora/fase/descrição.
+- Logar como admin e editar um lançamento de outro usuário. Esperado: continua funcionando.
+- Tentar (via console) editar um lançamento de outro usuário como membro comum. Esperado: toast de erro, não mais "sucesso".

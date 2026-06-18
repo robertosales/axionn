@@ -12,6 +12,7 @@ import { MetricasFilterBar, FILTROS_DEFAULT } from "./MetricasFilterBar";
 import type { MetricasFiltros } from "./MetricasFilterBar";
 import { useAuth } from "@/contexts/AuthContext";
 import { SLADashboardSection } from "./SLADashboardSection";
+import { useTeamContract } from "@/features/contracts/hooks/useContractSla";
 import {
   AlertTriangle,
   Clock,
@@ -61,7 +62,17 @@ function LazySection({ children, placeholder }: { children: React.ReactNode; pla
 
 export function SustentacaoDashboard() {
   const [filtros, setFiltros] = useState<MetricasFiltros>(FILTROS_DEFAULT);
-  const { user } = useAuth() as any;
+  const { user, currentTeamId, getModuleRole } = useAuth();
+  const isContractAdmin = getModuleRole("sustentacao") === "admin_contrato";
+
+  // Busca contrato do time para auto-seleção (se não for admin de contrato)
+  const { data: teamContract } = useTeamContract(currentTeamId);
+
+  useEffect(() => {
+    if (!isContractAdmin && teamContract?.contract_id && filtros.contract_id === "all") {
+      setFiltros(prev => ({ ...prev, contract_id: teamContract.contract_id }));
+    }
+  }, [isContractAdmin, teamContract, filtros.contract_id]);
 
   // contract_id vindo do filtro — alimenta o SLADashboardSection
   const contractId = filtros.contract_id !== "all" ? filtros.contract_id : null;

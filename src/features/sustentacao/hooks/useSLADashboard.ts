@@ -24,88 +24,68 @@ export interface SLADashboardItem {
   resolution_breached: boolean;
 }
 
-// Linha bruta retornada por fn_sla_dashboard_batch (campos relevantes)
-interface BatchDemanda {
-  demandaId:       string;
-  titulo:          string | null;
-  situacao:        string;
-  horasAcumuladas: number;
-  prazoHoras:      number;
-  statusSLA:       'dentro' | 'em_risco' | 'violado' | 'concluido';
-  resolutionPct:   number;
-  slaColor:        'green' | 'orange' | 'red' | 'blue';
-  slaSource:       'contract_matrix' | 'legacy_fallback';
+// Retorno do RPC fn_sla_contract_panel
+interface PanelSummary {
+  total: number; dentro: number; em_risco: number; violado: number;
+  no_sla: number; compliance: number;
 }
-
-// Mapeia statusSLA → cor usada pela UI (green/yellow/orange/red)
-function mapColor(status: BatchDemanda['statusSLA'], pct: number): SLADashboardItem['sla_color'] {
-  if (status === 'violado')   return 'red';
-  if (status === 'em_risco')  return 'orange';
-  // dentro: ainda diferencia amarelo (>=70%) de verde
-  if (pct >= 70)              return 'yellow';
-  return 'green';
+interface PanelItem {
+  demanda_id: string; rhm: string; projeto: string; titulo: string | null;
+  priority: string; sla_bucket: 'dentro' | 'em_risco' | 'violado' | 'no_sla';
+  elapsed_minutes: number; resolution_pct: number;
 }
+interface PanelResponse { summary: PanelSummary; items: PanelItem[] }
 
 export function useSLADashboard(contractId: string | null) {
   const [summary, setSummary]   = useState<SLASummary | null>(null);
   const [items, setItems]       = useState<SLADashboardItem[]>([]);
   const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!contractId) { setSummary(null); setItems([]); return; }
+    if (!contractId) { setSummary(null); setItems([]); setError(null); return; }
     setLoading(true);
+    setError(null);
     try {
-      const { data, error } = await supabase.rpc('fn_sla_dashboard_batch', {
+      const { data, error: rpcErr } = await supabase.rpc('fn_sla_contract_panel', {
         p_contract_id: contractId,
-        p_team_id:     null,
-        p_project_id:  null,
-        p_limit:       500,
+        p_limit_risco: 20,
       });
+      if (rpcErr) throw rpcErr;
+      if (!data) throw new Error('SLA panel sem retorno');
 
-      if (error || !data) throw error;
+      const payload = data as unknown as PanelResponse;
+      const s = payload.summary;
 
-      const payload  = data as { summary?: unknown; demandas?: BatchDemanda[] };
-      const demandas = payload.demandas ?? [];
-
-      // Considera "ativo" o que não está concluído. Concluído entra como no_sla.
-      const ativos   = demandas.filter(d => d.statusSLA !== 'concluido');
-      const concluidos = demandas.length - ativos.length;
-
-      const enriched: SLADashboardItem[] = ativos.map(d => ({
-        demanda_id:          d.demandaId,
-        rhm:                 (d.titulo ?? d.demandaId.slice(0, 8)).toString(),
-        projeto:             d.situacao,
-        priority:            d.slaSource === 'contract_matrix' ? 'medium' : 'legacy',
-        sla_color:           mapColor(d.statusSLA, d.resolutionPct),
-        elapsed_minutes:     Math.round((d.horasAcumuladas || 0) * 60),
-        resolution_pct:      d.resolutionPct ?? 0,
-        resolution_breached: d.statusSLA === 'violado',
-      }));
-
-      const green  = enriched.filter(d => d.sla_color === 'green').length;
-      const yellow = enriched.filter(d => d.sla_color === 'yellow').length;
-      const orange = enriched.filter(d => d.sla_color === 'orange').length;
-      const red    = enriched.filter(d => d.sla_color === 'red').length;
-      const no_sla = concluidos;
-      const withSla = enriched.length;
-
+      // Mapeia bucket → cor usada pelos componentes (yellow reservado para "no_sla"/aviso)
       setSummary({
-        total:      demandas.length,
-        green, yellow, orange, red, no_sla,
-        compliance: withSla === 0 ? 100 : Math.round(((green + yellow) / withSla) * 100),
-        em_risco:   orange + red,
-        violados:   red,
+        total:      s.total,
+        green:      s.dentro,
+        yellow:     s.no_sla,
+        orange:     s.em_risco,
+        red:        s.violado,
+        no_sla:     s.no_sla,
+        compliance: s.compliance,
+        em_risco:   s.em_risco,
+        violados:   s.violado,
       });
 
       setItems(
-        enriched
-          .filter(d => d.sla_color === 'orange' || d.sla_color === 'red')
-          .sort((a, b) => b.resolution_pct - a.resolution_pct)
-          .slice(0, 20)
+        (payload.items ?? []).map<SLADashboardItem>(it => ({
+          demanda_id:          it.demanda_id,
+          rhm:                 it.rhm,
+          projeto:             it.projeto,
+          priority:            it.priority,
+          sla_color:           it.sla_bucket === 'violado' ? 'red' : 'orange',
+          elapsed_minutes:     it.elapsed_minutes,
+          resolution_pct:      it.resolution_pct,
+          resolution_breached: it.sla_bucket === 'violado',
+        })),
       );
-    } catch {
+    } catch (e) {
       setSummary(null);
       setItems([]);
+      setError((e as Error)?.message ?? 'Falha ao calcular SLA');
     } finally {
       setLoading(false);
     }
@@ -117,5 +97,5 @@ export function useSLADashboard(contractId: string | null) {
     return () => clearInterval(interval);
   }, [load]);
 
-  return { summary, items, loading, reload: load };
+  return { summary, items, loading, error, reload: load };
 }

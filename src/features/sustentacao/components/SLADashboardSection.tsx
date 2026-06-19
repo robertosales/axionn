@@ -23,7 +23,7 @@ const COLOR_BADGE: Record<string, string> = {
 };
 
 export function SLADashboardSection({ contractId }: Props) {
-  const { summary, items, loading } = useSLADashboard(contractId);
+  const { summary, items, loading, error } = useSLADashboard(contractId);
 
   if (!contractId) {
     return (
@@ -38,6 +38,14 @@ export function SLADashboardSection({ contractId }: Props) {
     return (
       <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
         <Loader2 className="h-4 w-4 animate-spin" /> Carregando SLA...
+      </div>
+    );
+  }
+
+  if (error && !summary) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-4 text-sm text-destructive">
+        SLA temporariamente indisponível. {error}
       </div>
     );
   }

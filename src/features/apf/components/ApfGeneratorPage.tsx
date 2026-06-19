@@ -2,7 +2,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApfGenerateTab } from "./ApfGenerateTab";
 import { ApfTemplatesTab } from "./ApfTemplatesTab";
 import { ApfHuGenerateTab } from "./ApfHuGenerateTab";
-import { FileText, FileCode, LayoutGrid, ShieldCheck, Sparkles } from "lucide-react";
+import { ApfFunctionPointTab } from "./ApfFunctionPointTab";
+import { FileText, FileCode, LayoutGrid, ShieldCheck, Sparkles, Calculator } from "lucide-react";
 
 export function ApfGeneratorPage() {
   return (
@@ -57,6 +58,12 @@ export function ApfGeneratorPage() {
               <span className="sm:hidden">HU</span>
               <Sparkles className="h-3 w-3 text-amber-500" />
             </TabsTrigger>
+            <TabsTrigger value="function-points" className="gap-2 text-sm">
+              <Calculator className="h-4 w-4" />
+              <span className="hidden sm:inline">Contagem por Sprint</span>
+              <span className="sm:hidden">APF</span>
+              <Sparkles className="h-3 w-3 text-primary" />
+            </TabsTrigger>
             <TabsTrigger value="templates" className="gap-2 text-sm">
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden sm:inline">Gerenciar Templates</span>
@@ -76,6 +83,10 @@ export function ApfGeneratorPage() {
 
         <TabsContent value="hu" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
           <ApfHuGenerateTab />
+        </TabsContent>
+
+        <TabsContent value="function-points" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+          <ApfFunctionPointTab />
         </TabsContent>
 
         <TabsContent value="templates" className="mt-0 focus-visible:outline-none focus-visible:ring-0">

@@ -157,8 +157,32 @@ export function ApfFunctionPointTab() {
       });
   }, [teamId, selectedSprintId]);
 
+  // Mapeia mensagens cruas em mensagens amigáveis pt-BR
+  const toFriendly = (raw: string): { title: string; message: string } => {
+    const r = (raw || "").toLowerCase();
+    if (/insufficient_quota|sem cr[eé]ditos|credit balance|quota/.test(r))
+      return {
+        title: "Provedor de IA sem créditos",
+        message: "O provedor configurado está sem créditos disponíveis. Escolha outro provedor abaixo para continuar a contagem.",
+      };
+    if (/rate.?limit|429|too many/.test(r))
+      return {
+        title: "Limite de requisições atingido",
+        message: "O provedor está temporariamente bloqueando novas requisições. Aguarde alguns segundos ou escolha outro provedor.",
+      };
+    if (/invalid.*api.?key|incorrect api key|401|unauthor/.test(r))
+      return {
+        title: "Chave de API inválida",
+        message: "A chave configurada para este provedor não está válida. Selecione outro provedor ou ajuste a chave no painel administrativo.",
+      };
+    return {
+      title: "Não foi possível calcular os Pontos de Função",
+      message: "Ocorreu um erro ao chamar o provedor de IA. Tente outro provedor abaixo ou tente novamente em instantes.",
+    };
+  };
+
   // Fase 4: calibrationContext é passado para a Edge Function
-  const countFpForHu = useCallback(async (hu: HuRow) => {
+  const countFpForHu = useCallback(async (hu: HuRow, overrideProviderId?: string) => {
     setAnalyses((prev) => ({
       ...prev,
       [hu.id]: { huId: hu.id, breakdown: prev[hu.id]?.breakdown ?? {} as AiBreakdown, confidence: 0, loading: true, error: null },
@@ -177,21 +201,39 @@ export function ApfFunctionPointTab() {
             acceptanceCriteria:  null,
             storyType:           null,
           },
-          providerId: aiPayload.providerId,
+          providerId: overrideProviderId ?? aiPayload.providerId,
         },
       });
 
-      if (error) throw new Error(error.message);
+      // FunctionsHttpError: tenta extrair payload JSON (rawError + error) do body
+      if (error) {
+        let rawMsg = error.message || "Erro ao chamar provedor";
+        try {
+          const ctx = (error as any)?.context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            rawMsg = body?.rawError || body?.error || rawMsg;
+          }
+        } catch { /* ignore */ }
+        const err: any = new Error(rawMsg);
+        err.__rawError = rawMsg;
+        throw err;
+      }
 
       const result = data as {
         success?: boolean;
         error?: string;
+        rawError?: string;
         breakdown: AiBreakdown;
         confidence: number;
         total: number;
         analysis_id?: string;
       };
-      if (result.success === false) throw new Error(result.error || "Falha na contagem");
+      if (result.success === false) {
+        const err: any = new Error(result.error || "Falha na contagem");
+        err.__rawError = result.rawError || result.error;
+        throw err;
+      }
       if (result.analysis_id) setLastPfAnalysisId(result.analysis_id);
       const totalPf = result.total ?? result.breakdown?.total ?? 0;
 
@@ -207,11 +249,19 @@ export function ApfFunctionPointTab() {
         )
       );
       toast.success(`PF calculado para ${hu.code}: ${totalPf} PF${isCalibrated ? " 🧠" : ""}`);
+      return true;
     } catch (err: any) {
-      setAnalyses((prev) => ({ ...prev, [hu.id]: { ...prev[hu.id], loading: false, error: err?.message ?? "Erro" } }));
-      toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
+      const rawMsg = err?.__rawError || err?.message || "";
+      const friendly = toFriendly(rawMsg);
+      setAnalyses((prev) => ({ ...prev, [hu.id]: { ...prev[hu.id], loading: false, error: friendly.message } }));
+      // Pré-seleciona um provider diferente do atual usado
+      const currentProviderId = overrideProviderId ?? getAiPayload().providerId;
+      const fallback = providers.find((p) => p.id !== currentProviderId);
+      setRetryProviderId(fallback?.id ?? "");
+      setFriendlyError({ hu, title: friendly.title, message: friendly.message, rawError: rawMsg });
+      return false;
     }
-  }, [teamId, selectedSprintId, getAiPayload, setLastPfAnalysisId, isCalibrated]);
+  }, [teamId, selectedSprintId, getAiPayload, setLastPfAnalysisId, isCalibrated, providers]);
 
   // Fase 4: validateFp agora persiste desvio no learning.service
   const validateFp = useCallback(async (hu: HuRow, fpValue: number) => {

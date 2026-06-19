@@ -27,7 +27,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, Info,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, Info, AlertTriangle,
 } from "lucide-react";
 
 interface SprintOption  { id: string; name: string; is_active: boolean; }
@@ -44,6 +47,18 @@ interface AiBreakdown {
 interface FpAnalysis {
   huId: string; breakdown: AiBreakdown; confidence: number;
   loading: boolean; error: string | null;
+}
+interface AiProviderOption {
+  id: string;
+  name: string;
+  provider_type: string;
+  is_recommended?: boolean | null;
+}
+interface FriendlyError {
+  hu: HuRow;
+  title: string;
+  message: string;
+  rawError?: string;
 }
 
 export function ApfFunctionPointTab() {
@@ -68,6 +83,10 @@ export function ApfFunctionPointTab() {
   const [loadingSprints, setLoadingSprints] = useState(true);
   const [loadingHUs, setLoadingHUs]     = useState(false);
   const [countingAll, setCountingAll]   = useState(false);
+  const [providers, setProviders]       = useState<AiProviderOption[]>([]);
+  const [friendlyError, setFriendlyError] = useState<FriendlyError | null>(null);
+  const [retryProviderId, setRetryProviderId] = useState<string>("");
+  const [retrying, setRetrying]         = useState(false);
 
   const selectedSprintId    = activePipelineSprintId;
   const setSelectedSprintId = setActivePipelineSprintId;
@@ -91,6 +110,17 @@ export function ApfFunctionPointTab() {
         setLoadingSprints(false);
       });
   }, [teamId]);
+
+  // Carrega provedores de IA ativos (para fallback manual após erro)
+  useEffect(() => {
+    supabase
+      .from("ai_providers")
+      .select("id, name, provider_type, is_recommended")
+      .eq("is_active", true)
+      .order("is_recommended", { ascending: false })
+      .order("name")
+      .then(({ data }) => setProviders((data ?? []) as AiProviderOption[]));
+  }, []);
 
   useEffect(() => {
     if (!teamId || !selectedSprintId) { setUserStories([]); return; }
@@ -127,8 +157,32 @@ export function ApfFunctionPointTab() {
       });
   }, [teamId, selectedSprintId]);
 
+  // Mapeia mensagens cruas em mensagens amigáveis pt-BR
+  const toFriendly = (raw: string): { title: string; message: string } => {
+    const r = (raw || "").toLowerCase();
+    if (/insufficient_quota|sem cr[eé]ditos|credit balance|quota/.test(r))
+      return {
+        title: "Provedor de IA sem créditos",
+        message: "O provedor configurado está sem créditos disponíveis. Escolha outro provedor abaixo para continuar a contagem.",
+      };
+    if (/rate.?limit|429|too many/.test(r))
+      return {
+        title: "Limite de requisições atingido",
+        message: "O provedor está temporariamente bloqueando novas requisições. Aguarde alguns segundos ou escolha outro provedor.",
+      };
+    if (/invalid.*api.?key|incorrect api key|401|unauthor/.test(r))
+      return {
+        title: "Chave de API inválida",
+        message: "A chave configurada para este provedor não está válida. Selecione outro provedor ou ajuste a chave no painel administrativo.",
+      };
+    return {
+      title: "Não foi possível calcular os Pontos de Função",
+      message: "Ocorreu um erro ao chamar o provedor de IA. Tente outro provedor abaixo ou tente novamente em instantes.",
+    };
+  };
+
   // Fase 4: calibrationContext é passado para a Edge Function
-  const countFpForHu = useCallback(async (hu: HuRow) => {
+  const countFpForHu = useCallback(async (hu: HuRow, overrideProviderId?: string) => {
     setAnalyses((prev) => ({
       ...prev,
       [hu.id]: { huId: hu.id, breakdown: prev[hu.id]?.breakdown ?? {} as AiBreakdown, confidence: 0, loading: true, error: null },
@@ -147,21 +201,39 @@ export function ApfFunctionPointTab() {
             acceptanceCriteria:  null,
             storyType:           null,
           },
-          providerId: aiPayload.providerId,
+          providerId: overrideProviderId ?? aiPayload.providerId,
         },
       });
 
-      if (error) throw new Error(error.message);
+      // FunctionsHttpError: tenta extrair payload JSON (rawError + error) do body
+      if (error) {
+        let rawMsg = error.message || "Erro ao chamar provedor";
+        try {
+          const ctx = (error as any)?.context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            rawMsg = body?.rawError || body?.error || rawMsg;
+          }
+        } catch { /* ignore */ }
+        const err: any = new Error(rawMsg);
+        err.__rawError = rawMsg;
+        throw err;
+      }
 
       const result = data as {
         success?: boolean;
         error?: string;
+        rawError?: string;
         breakdown: AiBreakdown;
         confidence: number;
         total: number;
         analysis_id?: string;
       };
-      if (result.success === false) throw new Error(result.error || "Falha na contagem");
+      if (result.success === false) {
+        const err: any = new Error(result.error || "Falha na contagem");
+        err.__rawError = result.rawError || result.error;
+        throw err;
+      }
       if (result.analysis_id) setLastPfAnalysisId(result.analysis_id);
       const totalPf = result.total ?? result.breakdown?.total ?? 0;
 
@@ -177,11 +249,19 @@ export function ApfFunctionPointTab() {
         )
       );
       toast.success(`PF calculado para ${hu.code}: ${totalPf} PF${isCalibrated ? " 🧠" : ""}`);
+      return true;
     } catch (err: any) {
-      setAnalyses((prev) => ({ ...prev, [hu.id]: { ...prev[hu.id], loading: false, error: err?.message ?? "Erro" } }));
-      toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
+      const rawMsg = err?.__rawError || err?.message || "";
+      const friendly = toFriendly(rawMsg);
+      setAnalyses((prev) => ({ ...prev, [hu.id]: { ...prev[hu.id], loading: false, error: friendly.message } }));
+      // Pré-seleciona um provider diferente do atual usado
+      const currentProviderId = overrideProviderId ?? getAiPayload().providerId;
+      const fallback = providers.find((p) => p.id !== currentProviderId);
+      setRetryProviderId(fallback?.id ?? "");
+      setFriendlyError({ hu, title: friendly.title, message: friendly.message, rawError: rawMsg });
+      return false;
     }
-  }, [teamId, selectedSprintId, getAiPayload, setLastPfAnalysisId, isCalibrated]);
+  }, [teamId, selectedSprintId, getAiPayload, setLastPfAnalysisId, isCalibrated, providers]);
 
   // Fase 4: validateFp agora persiste desvio no learning.service
   const validateFp = useCallback(async (hu: HuRow, fpValue: number) => {
@@ -439,6 +519,68 @@ export function ApfFunctionPointTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog amigável de erro com escolha de provedor alternativo */}
+      <Dialog open={!!friendlyError} onOpenChange={(o) => { if (!o) setFriendlyError(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              {friendlyError?.title}
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              {friendlyError?.message}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-2 py-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              Escolha outro provedor de IA configurado
+            </label>
+            <Select value={retryProviderId} onValueChange={setRetryProviderId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um provedor..." />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.length === 0 && (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    Nenhum provedor ativo. Configure um no painel administrativo.
+                  </div>
+                )}
+                {providers.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      {p.is_recommended && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
+                      {p.name}
+                      <span className="text-[10px] text-muted-foreground uppercase">{p.provider_type}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setFriendlyError(null)} disabled={retrying}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!retryProviderId || retrying || !friendlyError}
+              onClick={async () => {
+                if (!friendlyError || !retryProviderId) return;
+                setRetrying(true);
+                const ok = await countFpForHu(friendlyError.hu, retryProviderId);
+                setRetrying(false);
+                if (ok) setFriendlyError(null);
+              }}
+              className="gap-2"
+            >
+              {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Tentar com este provedor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -61,6 +61,8 @@ interface FriendlyError {
   rawError?: string;
 }
 
+const LOVABLE_PROVIDER_ID = "__lovable__";
+
 export function ApfFunctionPointTab() {
   const { currentTeam } = useAuth();
   const teamId = currentTeam?.id ?? "";

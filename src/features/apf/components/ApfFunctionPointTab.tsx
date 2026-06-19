@@ -176,7 +176,7 @@ export function ApfFunctionPointTab() {
             : h
         )
       );
-      toast.success(`PF calculado para ${hu.code}: ${result.total_pf} PF${isCalibrated ? " 🧠" : ""}`);
+      toast.success(`PF calculado para ${hu.code}: ${totalPf} PF${isCalibrated ? " 🧠" : ""}`);
     } catch (err: any) {
       setAnalyses((prev) => ({ ...prev, [hu.id]: { ...prev[hu.id], loading: false, error: err?.message ?? "Erro" } }));
       toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);

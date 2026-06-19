@@ -27,7 +27,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, Info,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, Info, AlertTriangle,
 } from "lucide-react";
 
 interface SprintOption  { id: string; name: string; is_active: boolean; }
@@ -44,6 +47,18 @@ interface AiBreakdown {
 interface FpAnalysis {
   huId: string; breakdown: AiBreakdown; confidence: number;
   loading: boolean; error: string | null;
+}
+interface AiProviderOption {
+  id: string;
+  name: string;
+  provider_type: string;
+  is_recommended?: boolean | null;
+}
+interface FriendlyError {
+  hu: HuRow;
+  title: string;
+  message: string;
+  rawError?: string;
 }
 
 export function ApfFunctionPointTab() {
@@ -68,6 +83,10 @@ export function ApfFunctionPointTab() {
   const [loadingSprints, setLoadingSprints] = useState(true);
   const [loadingHUs, setLoadingHUs]     = useState(false);
   const [countingAll, setCountingAll]   = useState(false);
+  const [providers, setProviders]       = useState<AiProviderOption[]>([]);
+  const [friendlyError, setFriendlyError] = useState<FriendlyError | null>(null);
+  const [retryProviderId, setRetryProviderId] = useState<string>("");
+  const [retrying, setRetrying]         = useState(false);
 
   const selectedSprintId    = activePipelineSprintId;
   const setSelectedSprintId = setActivePipelineSprintId;
@@ -91,6 +110,17 @@ export function ApfFunctionPointTab() {
         setLoadingSprints(false);
       });
   }, [teamId]);
+
+  // Carrega provedores de IA ativos (para fallback manual após erro)
+  useEffect(() => {
+    supabase
+      .from("ai_providers")
+      .select("id, name, provider_type, is_recommended")
+      .eq("is_active", true)
+      .order("is_recommended", { ascending: false })
+      .order("name")
+      .then(({ data }) => setProviders((data ?? []) as AiProviderOption[]));
+  }, []);
 
   useEffect(() => {
     if (!teamId || !selectedSprintId) { setUserStories([]); return; }

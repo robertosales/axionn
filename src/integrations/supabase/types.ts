@@ -1575,6 +1575,7 @@ export type Database = {
           story_id: string | null
           story_text: string
           story_title: string | null
+          team_id: string | null
           updated_at: string | null
           validated_at: string | null
           validated_breakdown: Json | null
@@ -1609,6 +1610,7 @@ export type Database = {
           story_id?: string | null
           story_text: string
           story_title?: string | null
+          team_id?: string | null
           updated_at?: string | null
           validated_at?: string | null
           validated_breakdown?: Json | null
@@ -1643,6 +1645,7 @@ export type Database = {
           story_id?: string | null
           story_text?: string
           story_title?: string | null
+          team_id?: string | null
           updated_at?: string | null
           validated_at?: string | null
           validated_breakdown?: Json | null
@@ -1678,6 +1681,13 @@ export type Database = {
             columns: ["story_id"]
             isOneToOne: false
             referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "function_point_analyses_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -3770,6 +3780,9 @@ export type Database = {
       user_stories: {
         Row: {
           added_to_sprint_at: string | null
+          ai_fp_breakdown: Json | null
+          ai_fp_confidence: number | null
+          ai_fp_validated: boolean
           assignee_id: string | null
           backlog_order: number | null
           code: string
@@ -3800,6 +3813,9 @@ export type Database = {
         }
         Insert: {
           added_to_sprint_at?: string | null
+          ai_fp_breakdown?: Json | null
+          ai_fp_confidence?: number | null
+          ai_fp_validated?: boolean
           assignee_id?: string | null
           backlog_order?: number | null
           code: string
@@ -3830,6 +3846,9 @@ export type Database = {
         }
         Update: {
           added_to_sprint_at?: string | null
+          ai_fp_breakdown?: Json | null
+          ai_fp_confidence?: number | null
+          ai_fp_validated?: boolean
           assignee_id?: string | null
           backlog_order?: number | null
           code?: string

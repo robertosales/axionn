@@ -546,11 +546,14 @@ export function ApfFunctionPointTab() {
                 <SelectValue placeholder="Selecione um provedor..." />
               </SelectTrigger>
               <SelectContent>
-                {providers.length === 0 && (
-                  <div className="px-2 py-3 text-xs text-muted-foreground">
-                    Nenhum provedor ativo. Configure um no painel administrativo.
-                  </div>
-                )}
+                {/* Opção sempre disponível: Lovable AI Gateway (grátis) */}
+                <SelectItem value={LOVABLE_PROVIDER_ID}>
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                    Lovable AI (grátis)
+                    <span className="text-[10px] text-muted-foreground uppercase">recomendado</span>
+                  </span>
+                </SelectItem>
                 {providers.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     <span className="flex items-center gap-2">

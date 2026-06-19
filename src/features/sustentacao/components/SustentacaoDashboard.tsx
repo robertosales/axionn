@@ -13,6 +13,7 @@ import type { MetricasFiltros } from "./MetricasFilterBar";
 import { useAuth } from "@/contexts/AuthContext";
 import { SLADashboardSection } from "./SLADashboardSection";
 import { useTeamContract } from "@/features/contracts/hooks/useContractSla";
+import type { Demanda } from "../types/demanda";
 import {
   AlertTriangle,
   Clock,

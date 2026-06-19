@@ -1,9 +1,8 @@
 /**
- * ApfGeneratorPage
- * ----------------
- * Página principal do módulo APF.
- * Agora envolve todas as abas no AiPipelineProvider — provedor de IA
- * e sprint ativa são compartilhados entre Evidências, HU, PF e Templates.
+ * ApfGeneratorPage (v2 — Fase 2)
+ * --------------------------------
+ * Adiciona PipelineStatusBar entre o seletor de provedor e as abas.
+ * Tudo mais permanece igual à Fase 1.
  */
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApfGenerateTab }      from "./ApfGenerateTab";
@@ -12,6 +11,7 @@ import { ApfHuGenerateTab }    from "./ApfHuGenerateTab";
 import { ApfFunctionPointTab } from "./ApfFunctionPointTab";
 import { AiPipelineProvider }  from "../contexts/AiPipelineContext";
 import { AiProviderSelector }  from "./shared/AiProviderSelector";
+import { PipelineStatusBar }   from "./shared/PipelineStatusBar";
 import {
   FileText, FileCode, LayoutGrid,
   ShieldCheck, Sparkles, Calculator,
@@ -40,7 +40,7 @@ export function ApfGeneratorPage() {
             </div>
           </div>
 
-          {/* Hub badge + seletor de provedor unificado */}
+          {/* Hub badge */}
           <div className="flex items-center gap-3 bg-card border border-border rounded-lg px-3 py-2 shrink-0">
             <div className="flex -space-x-2">
               <div className="h-7 w-7 rounded-full border-2 border-background bg-blue-500 flex items-center justify-center text-[10px] font-bold text-white">OA</div>
@@ -56,7 +56,7 @@ export function ApfGeneratorPage() {
           </div>
         </div>
 
-        {/* Seletor de provedor global — afeta TODAS as abas */}
+        {/* Seletor de provedor global */}
         <div className="flex items-center gap-4 bg-muted/40 border border-border rounded-lg px-4 py-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -64,6 +64,9 @@ export function ApfGeneratorPage() {
           </div>
           <AiProviderSelector compact />
         </div>
+
+        {/* Barra de status do pipeline HU → PF → Evidência */}
+        <PipelineStatusBar />
 
         {/* Tabs */}
         <Tabs defaultValue="generate" className="w-full">
@@ -92,7 +95,6 @@ export function ApfGeneratorPage() {
                 <span className="sm:hidden">Templates</span>
               </TabsTrigger>
             </TabsList>
-
             <div className="hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               Sistema Online
@@ -102,15 +104,12 @@ export function ApfGeneratorPage() {
           <TabsContent value="generate" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
             <ApfGenerateTab />
           </TabsContent>
-
           <TabsContent value="hu" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
             <ApfHuGenerateTab />
           </TabsContent>
-
           <TabsContent value="function-points" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
             <ApfFunctionPointTab />
           </TabsContent>
-
           <TabsContent value="templates" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
             <ApfTemplatesTab />
           </TabsContent>

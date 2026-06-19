@@ -261,7 +261,8 @@ export function ApfFunctionPointTab() {
       // Pré-seleciona um provider diferente do atual usado
       const currentProviderId = overrideProviderId ?? getAiPayload().providerId;
       const fallback = providers.find((p) => p.id !== currentProviderId);
-      setRetryProviderId(fallback?.id ?? "");
+      // Padrão: Lovable AI (grátis) — sempre funciona. Se preferir, escolhe outro provedor configurado.
+      setRetryProviderId(LOVABLE_PROVIDER_ID);
       setFriendlyError({ hu, title: friendly.title, message: friendly.message, rawError: rawMsg });
       return false;
     }

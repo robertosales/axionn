@@ -3983,6 +3983,10 @@ export type Database = {
           source: string
         }[]
       }
+      fn_sla_contract_panel: {
+        Args: { p_contract_id: string; p_limit_risco?: number }
+        Returns: Json
+      }
       fn_sla_dashboard_batch: {
         Args: {
           p_contract_id?: string

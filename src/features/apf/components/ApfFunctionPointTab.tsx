@@ -153,8 +153,17 @@ export function ApfFunctionPointTab() {
 
       if (error) throw new Error(error.message);
 
-      const result = data as { analysis_id: string; breakdown: AiBreakdown; confidence: number; total_pf: number };
+      const result = data as {
+        success?: boolean;
+        error?: string;
+        breakdown: AiBreakdown;
+        confidence: number;
+        total: number;
+        analysis_id?: string;
+      };
+      if (result.success === false) throw new Error(result.error || "Falha na contagem");
       if (result.analysis_id) setLastPfAnalysisId(result.analysis_id);
+      const totalPf = result.total ?? result.breakdown?.total ?? 0;
 
       setAnalyses((prev) => ({
         ...prev,
@@ -163,7 +172,7 @@ export function ApfFunctionPointTab() {
       setUserStories((prev) =>
         prev.map((h) =>
           h.id === hu.id
-            ? { ...h, function_points: result.total_pf, ai_fp_breakdown: result.breakdown, ai_fp_confidence: result.confidence }
+            ? { ...h, function_points: totalPf, ai_fp_breakdown: result.breakdown, ai_fp_confidence: result.confidence }
             : h
         )
       );

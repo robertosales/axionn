@@ -45,6 +45,8 @@ interface RequestBody {
   };
   // Provedor: se omitido usa o provider recomendado do time / primeiro ativo
   providerId?: string;
+  // Força Lovable AI Gateway (grátis) ignorando ai_providers
+  forceProvider?: "lovable";
 }
 
 interface FpBreakdown {

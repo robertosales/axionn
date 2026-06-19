@@ -140,23 +140,30 @@ export function ApfFunctionPointTab() {
       const { data, error } = await supabase.functions.invoke("count-function-points", {
         body: {
           teamId,
-          story_id:                  hu.id,
-          sprint_id:                 selectedSprintId,
-          story_code:                hu.code,
-          story_title:               hu.title,
-          story_description:         hu.description,
-          story_acceptance_criteria: null,
-          providerId:          aiPayload.providerId,
-          provider:            aiPayload.provider,
-          apiKey:              aiPayload.apiKey,
-          calibrationContext:  aiPayload.calibrationContext, // 🧠 Fase 4
+          huId:      hu.id,
+          storyText: [hu.title, hu.description].filter(Boolean).join("\n\n"),
+          context: {
+            storyPoints:         hu.story_points ?? null,
+            acceptanceCriteria:  null,
+            storyType:           null,
+          },
+          providerId: aiPayload.providerId,
         },
       });
 
       if (error) throw new Error(error.message);
 
-      const result = data as { analysis_id: string; breakdown: AiBreakdown; confidence: number; total_pf: number };
+      const result = data as {
+        success?: boolean;
+        error?: string;
+        breakdown: AiBreakdown;
+        confidence: number;
+        total: number;
+        analysis_id?: string;
+      };
+      if (result.success === false) throw new Error(result.error || "Falha na contagem");
       if (result.analysis_id) setLastPfAnalysisId(result.analysis_id);
+      const totalPf = result.total ?? result.breakdown?.total ?? 0;
 
       setAnalyses((prev) => ({
         ...prev,
@@ -165,11 +172,11 @@ export function ApfFunctionPointTab() {
       setUserStories((prev) =>
         prev.map((h) =>
           h.id === hu.id
-            ? { ...h, function_points: result.total_pf, ai_fp_breakdown: result.breakdown, ai_fp_confidence: result.confidence }
+            ? { ...h, function_points: totalPf, ai_fp_breakdown: result.breakdown, ai_fp_confidence: result.confidence }
             : h
         )
       );
-      toast.success(`PF calculado para ${hu.code}: ${result.total_pf} PF${isCalibrated ? " 🧠" : ""}`);
+      toast.success(`PF calculado para ${hu.code}: ${totalPf} PF${isCalibrated ? " 🧠" : ""}`);
     } catch (err: any) {
       setAnalyses((prev) => ({ ...prev, [hu.id]: { ...prev[hu.id], loading: false, error: err?.message ?? "Erro" } }));
       toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);

@@ -1,47 +1,32 @@
-# Edição de lançamento de horas não persiste para usuários comuns
+# Corrigir 400 em `count-function-points`
 
-## Diagnóstico
+## Causa raiz
+O frontend (`ApfFunctionPointTab.tsx`) envia o body com os campos:
+`story_id`, `story_title`, `story_description`, `story_acceptance_criteria`, `provider`, `apiKey`, `calibrationContext`.
 
-Tiago (usuário comum, não admin) clica em "Salvar" no modal de edição de lançamento. O sistema mostra "Registro atualizado com sucesso", mas o registro continua igual.
+Mas a edge function `supabase/functions/count-function-points/index.ts` valida e exige:
+`teamId` (UUID), `huId` (UUID), `storyText` (não-vazio), e opcionalmente `context` + `providerId`.
 
-A causa é uma **policy RLS faltante** na tabela `public.demanda_hours`:
+Como `huId` e `storyText` ficam `undefined`, a função retorna **400** com mensagens como `"huId (UUID) é obrigatório"` / `"storyText é obrigatório"`. Daí o erro no console.
 
-- Hoje só existem policies de UPDATE para administradores:
-  - `Admin full access demanda_hours` → `has_role(auth.uid(), 'admin')`
-  - `demanda_hours_update_admin` → `team_members.role = 'admin'`
-- Para DELETE existe `Member delete own demanda_hours` (`user_id = auth.uid()`), mas **não há equivalente para UPDATE**.
+## Correção (apenas frontend, sem alterar a edge function)
 
-Como o Supabase com RLS ativo retorna sucesso silencioso quando o UPDATE não afeta nenhuma linha (linhas filtradas pelas policies), o `updateHour()` em `demandas.service.ts` não recebe erro, o hook dispara o toast de sucesso e a UI reabre com os dados antigos.
+Em `src/features/function-points/hooks/useFunctionPointCounter.ts` e em `src/features/apf/components/ApfFunctionPointTab.tsx`, ajustar o body enviado para `supabase.functions.invoke("count-function-points", ...)`:
 
-A regra de negócio definida na memória (`mem://features/sustentacao/time-tracking` e commit `324b6be`) já diz que o dono do lançamento pode editar/excluir suas próprias atividades — falta apenas a policy de UPDATE no banco.
+- `huId` ← `hu.id`
+- `storyText` ← concatenar `hu.title` + (opcional) `hu.description` em uma única string
+- `context` ← `{ storyPoints: hu.story_points ?? null, acceptanceCriteria: hu.acceptance_criteria ?? null, storyType: hu.type ?? null }`
+- `providerId` ← `aiPayload.providerId` (manter)
+- Remover do payload os campos que a função ignora/não suporta: `story_id`, `sprint_id`, `story_code`, `story_title`, `story_description`, `story_acceptance_criteria`, `provider`, `apiKey`, `calibrationContext`.
 
-## Mudanças
-
-### 1. Migration — adicionar policy de UPDATE para o dono
-
-Nova migration em `supabase/migrations/` com:
-
-```sql
-CREATE POLICY "Member update own demanda_hours"
-ON public.demanda_hours
-FOR UPDATE
-USING (user_id = auth.uid())
-WITH CHECK (user_id = auth.uid());
-```
-
-Mantém as policies de admin existentes (gestor continua editando qualquer lançamento) e libera o dono a editar apenas os próprios.
-
-### 2. Hardening em `updateHour` (`src/features/sustentacao/services/demandas.service.ts`)
-
-Hoje o serviço não detecta UPDATE que afeta 0 linhas. Para evitar o mesmo "falso sucesso" em qualquer cenário futuro de RLS:
-
-- Trocar `.update(payload).eq("id", id)` por `.update(payload).eq("id", id).select("id")`.
-- Se o array retornado vier vazio, lançar um erro (`Sem permissão para editar este lançamento ou registro não encontrado`).
-
-Assim o hook `useDemandas.update` cai no `catch` e mostra o toast de erro correto em vez de "Registro atualizado com sucesso".
+Manter o tratamento de erro amigável já existente no hook.
 
 ## Validação
+1. Recarregar a página `APF → Pontos de Função` em Sala Ágil.
+2. Clicar em "Contar PF" para uma HU.
+3. Confirmar no Network que o POST retorna 200 e `data.breakdown` é renderizado.
+4. Conferir logs do edge function (sem erro 400).
 
-- Logar como Tiago (usuário comum, membro do time), abrir uma demanda → aba Atividades → editar um lançamento próprio → salvar. Esperado: a linha da tabela reflete a nova hora/fase/descrição.
-- Logar como admin e editar um lançamento de outro usuário. Esperado: continua funcionando.
-- Tentar (via console) editar um lançamento de outro usuário como membro comum. Esperado: toast de erro, não mais "sucesso".
+## Escopo
+- Edição apenas no frontend (2 arquivos).
+- Nenhuma alteração de schema, migração ou edge function.

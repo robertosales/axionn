@@ -189,7 +189,7 @@ export function ApfFunctionPointTab() {
       sprintId:         selectedSprintId,
       aiTotalPf:        aiPf,
       validatedTotalPf: fpValue,
-      breakdown:        hu.ai_fp_breakdown,
+      breakdown:        hu.ai_fp_breakdown as unknown as Record<string, number> | null,
       confidence:       hu.ai_fp_confidence,
     });
 

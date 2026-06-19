@@ -3865,6 +3865,7 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      fn_get_team_contract: { Args: { p_team_id: string }; Returns: Json }
       fn_get_user_contracts: {
         Args: { p_user_id?: string }
         Returns: {

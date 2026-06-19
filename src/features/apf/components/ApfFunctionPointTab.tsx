@@ -1,16 +1,21 @@
 /**
- * ApfFunctionPointTab (v2 — Fase 2)
- * ----------------------------------
- * Integrado ao AiPipelineContext:
- *  - Sprint sincronizada com activePipelineSprintId (muda em qualquer aba, reflete aqui)
- *  - Usa getAiPayload() para passar o provedor correto ao Edge Function
- *  - Exibe badge quando há HU recém-gerada (lastHuGenerationId) aguardando contagem
- *  - Salva lastPfAnalysisId no contexto após contagem (aba Evidências usa esse ID)
+ * ApfFunctionPointTab (v3 — Fase 4)
+ * ------------------------------------
+ * Integra o Aprendizado Bidirecional:
+ *  - Carrega insights com useLearningInsights
+ *  - Exibe LearningInsightsPanel no topo
+ *  - validateFp: agora chama saveValidation() do learning.service
+ *    para persistir o desvio e alimentar a calibração
+ *  - countFpForHu: passa calibrationContext do AiPipelineContext para
+ *    a Edge Function, que injeta antes do prompt de contagem
  */
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAiPipeline } from "../contexts/AiPipelineContext";
+import { useLearningInsights } from "../hooks/useLearningInsights";
+import { saveValidation } from "../services/learning.service";
+import { LearningInsightsPanel } from "./learning/LearningInsightsPanel";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,14 +50,17 @@ export function ApfFunctionPointTab() {
   const { currentTeam } = useAuth();
   const teamId = currentTeam?.id ?? "";
 
-  // ── Contexto compartilhado (Fase 1 + Fase 2) ────────────────────────────
   const {
     activePipelineSprintId,
     setActivePipelineSprintId,
     lastHuGenerationId,
     setLastPfAnalysisId,
     getAiPayload,
+    isCalibrated,
   } = useAiPipeline();
+
+  // Fase 4: insights de aprendizado
+  const { insights, loading: loadingInsights, lastRefresh, refresh: refreshInsights } = useLearningInsights();
 
   const [sprints, setSprints]           = useState<SprintOption[]>([]);
   const [userStories, setUserStories]   = useState<HuRow[]>([]);
@@ -61,11 +69,9 @@ export function ApfFunctionPointTab() {
   const [loadingHUs, setLoadingHUs]     = useState(false);
   const [countingAll, setCountingAll]   = useState(false);
 
-  // Sprint: usa o ID do contexto compartilhado
   const selectedSprintId    = activePipelineSprintId;
   const setSelectedSprintId = setActivePipelineSprintId;
 
-  // ── Carrega sprints ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!teamId) return;
     setLoadingSprints(true);
@@ -78,7 +84,6 @@ export function ApfFunctionPointTab() {
       .then(({ data }) => {
         const list = (data ?? []) as SprintOption[];
         setSprints(list);
-        // Pré-seleciona sprint ativa apenas se nenhuma estiver selecionada no contexto
         if (!activePipelineSprintId) {
           const active = list.find((s) => s.is_active);
           if (active) setSelectedSprintId(active.id);
@@ -87,7 +92,6 @@ export function ApfFunctionPointTab() {
       });
   }, [teamId]);
 
-  // ── Carrega HUs ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!teamId || !selectedSprintId) { setUserStories([]); return; }
     setLoadingHUs(true);
@@ -123,7 +127,7 @@ export function ApfFunctionPointTab() {
       });
   }, [teamId, selectedSprintId]);
 
-  // ── Contar PF de uma HU (agora usa getAiPayload do contexto) ────────────
+  // Fase 4: calibrationContext é passado para a Edge Function
   const countFpForHu = useCallback(async (hu: HuRow) => {
     setAnalyses((prev) => ({
       ...prev,
@@ -131,36 +135,33 @@ export function ApfFunctionPointTab() {
     }));
 
     try {
-      const aiPayload = getAiPayload();
+      const aiPayload = getAiPayload(); // já inclui calibrationContext (Fase 4)
 
       const { data, error } = await supabase.functions.invoke("count-function-points", {
         body: {
           teamId,
-          story_id:                   hu.id,
-          sprint_id:                  selectedSprintId,
-          story_code:                 hu.code,
-          story_title:                hu.title,
-          story_description:          hu.description,
-          story_acceptance_criteria:  null,
-          // Fase 2: provedor escolhido pelo usuário
-          providerId: aiPayload.providerId,
-          provider:   aiPayload.provider,
-          apiKey:     aiPayload.apiKey,
+          story_id:                  hu.id,
+          sprint_id:                 selectedSprintId,
+          story_code:                hu.code,
+          story_title:               hu.title,
+          story_description:         hu.description,
+          story_acceptance_criteria: null,
+          providerId:          aiPayload.providerId,
+          provider:            aiPayload.provider,
+          apiKey:              aiPayload.apiKey,
+          calibrationContext:  aiPayload.calibrationContext, // 🧠 Fase 4
         },
       });
 
       if (error) throw new Error(error.message);
 
       const result = data as { analysis_id: string; breakdown: AiBreakdown; confidence: number; total_pf: number };
-
-      // ── Fase 2: salva analysis_id no contexto (aba Evidências usa para rastrear) ──
       if (result.analysis_id) setLastPfAnalysisId(result.analysis_id);
 
       setAnalyses((prev) => ({
         ...prev,
         [hu.id]: { huId: hu.id, breakdown: result.breakdown, confidence: result.confidence, loading: false, error: null },
       }));
-
       setUserStories((prev) =>
         prev.map((h) =>
           h.id === hu.id
@@ -168,16 +169,31 @@ export function ApfFunctionPointTab() {
             : h
         )
       );
-
-      toast.success(`PF calculado para ${hu.code}: ${result.total_pf} PF`);
+      toast.success(`PF calculado para ${hu.code}: ${result.total_pf} PF${isCalibrated ? " 🧠" : ""}`);
     } catch (err: any) {
       setAnalyses((prev) => ({ ...prev, [hu.id]: { ...prev[hu.id], loading: false, error: err?.message ?? "Erro" } }));
       toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
     }
-  }, [teamId, selectedSprintId, getAiPayload, setLastPfAnalysisId]);
+  }, [teamId, selectedSprintId, getAiPayload, setLastPfAnalysisId, isCalibrated]);
 
-  // ── Validar PF ──────────────────────────────────────────────────────────────
+  // Fase 4: validateFp agora persiste desvio no learning.service
   const validateFp = useCallback(async (hu: HuRow, fpValue: number) => {
+    const aiPf = hu.function_points ?? fpValue;
+
+    // Persiste validação + desvio para o aprendizado
+    await saveValidation({
+      teamId,
+      storyId:          hu.id,
+      storyCode:        hu.code,
+      storyTitle:       hu.title,
+      sprintId:         selectedSprintId,
+      aiTotalPf:        aiPf,
+      validatedTotalPf: fpValue,
+      breakdown:        hu.ai_fp_breakdown,
+      confidence:       hu.ai_fp_confidence,
+    });
+
+    // Atualiza user_stories
     const { error } = await supabase
       .from("user_stories")
       .update({ function_points: fpValue, ai_fp_validated: true } as any)
@@ -185,22 +201,16 @@ export function ApfFunctionPointTab() {
 
     if (error) { toast.error("Erro ao salvar validação"); return; }
 
-    // Atualiza também a tabela de histórico de aprendizado
-    await supabase
-      .from("function_point_analyses")
-      .update({ is_validated: true, validated_total_pf: fpValue, validated_at: new Date().toISOString() })
-      .eq("story_id", hu.id)
-      .eq("is_validated", false)
-      .order("created_at", { ascending: false })
-      .limit(1);
-
     setUserStories((prev) =>
       prev.map((h) => h.id === hu.id ? { ...h, function_points: fpValue, ai_fp_validated: true } : h)
     );
-    toast.success(`${hu.code} — ${fpValue} PF validado e salvo! O agente aprendeu com esta validação 🧠`);
-  }, []);
 
-  // ── Calcular todos pendentes ──────────────────────────────────────────────
+    // Recarrega insights após validação
+    refreshInsights();
+
+    toast.success(`${hu.code} — ${fpValue} PF validado! 🧠 Calibração atualizada.`);
+  }, [teamId, selectedSprintId, refreshInsights]);
+
   const countAllPending = useCallback(async () => {
     const pending = userStories.filter((h) => !h.function_points && !h.ai_fp_validated);
     if (pending.length === 0) { toast.info("Todas as HUs já possuem PF calculado."); return; }
@@ -221,12 +231,20 @@ export function ApfFunctionPointTab() {
   return (
     <div className="flex flex-col gap-5">
 
-      {/* Banner Fase 2: HU recém-gerada aguardando contagem */}
+      {/* Fase 4: Painel de Aprendizado Bidirecional */}
+      <LearningInsightsPanel
+        insights={insights}
+        loading={loadingInsights}
+        lastRefresh={lastRefresh}
+        onRefresh={refreshInsights}
+      />
+
+      {/* Banner HU recém-gerada */}
       {lastHuGenerationId && pendingCount > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
           <Info className="h-4 w-4 text-primary shrink-0" />
           <p className="text-sm text-primary flex-1">
-            HUs recém-geradas detectadas nesta sprint — clique em <strong>Calcular PF pendentes</strong> para contar automaticamente.
+            HUs recém-geradas nesta sprint — clique em <strong>Calcular PF pendentes</strong> para contar automaticamente{isCalibrated ? " com calibração ativa 🧠" : ""}.
           </p>
           <ArrowRight className="h-4 w-4 text-primary shrink-0" />
         </div>
@@ -260,7 +278,7 @@ export function ApfFunctionPointTab() {
         {userStories.length > 0 && (
           <Button size="sm" onClick={countAllPending} disabled={countingAll || pendingCount === 0} className="gap-2 shrink-0">
             {countingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Calcular PF pendentes ({pendingCount})
+            Calcular PF pendentes ({pendingCount}){isCalibrated && " 🧠"}
           </Button>
         )}
       </div>
@@ -284,7 +302,7 @@ export function ApfFunctionPointTab() {
         </div>
       )}
 
-      {/* Tabela de HUs */}
+      {/* Tabela */}
       {!selectedSprintId ? (
         <Card className="border-dashed">
           <CardContent className="py-12 flex flex-col items-center gap-2 text-center">
@@ -306,10 +324,8 @@ export function ApfFunctionPointTab() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Histórias de Usuário — Contagem APF por IA
-              {validatedCount > 0 && (
-                <span className="ml-2 text-emerald-600 text-xs">
-                  🧠 {validatedCount} validações alimentando o aprendizado
-                </span>
+              {isCalibrated && (
+                <span className="ml-2 text-primary text-xs">🧠 Calibração ativa</span>
               )}
             </CardTitle>
           </CardHeader>
@@ -336,7 +352,6 @@ export function ApfFunctionPointTab() {
                     const fp          = hu.function_points;
                     const isLoading   = analysis?.loading;
                     const hasError    = analysis?.error;
-
                     return (
                       <TableRow key={hu.id}>
                         <TableCell><span className="font-mono text-xs text-muted-foreground">{hu.code}</span></TableCell>
@@ -394,7 +409,7 @@ export function ApfFunctionPointTab() {
                           <div className="flex items-center justify-end gap-1">
                             {!isLoading && (
                               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1"
-                                onClick={() => countFpForHu(hu)} title="Calcular / Recalcular PF com IA">
+                                onClick={() => countFpForHu(hu)}>
                                 <Sparkles className="h-3 w-3" />
                                 {fp != null ? "Recalc" : "Calcular"}
                               </Button>
@@ -402,7 +417,7 @@ export function ApfFunctionPointTab() {
                             {fp != null && !hu.ai_fp_validated && (
                               <Button size="sm" variant="ghost"
                                 className="h-7 px-2 text-xs text-emerald-600 hover:text-emerald-700 gap-1"
-                                onClick={() => validateFp(hu, fp)} title="Validar e salvar este PF">
+                                onClick={() => validateFp(hu, fp)}>
                                 <CheckCircle2 className="h-3 w-3" /> Validar
                               </Button>
                             )}

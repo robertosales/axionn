@@ -1,13 +1,10 @@
 /**
- * AiPipelineContext
- * -----------------
- * Contexto global da feature APF que compartilha:
- *  - Provedor de IA selecionado (único para todas as abas)
- *  - Sprint ativa (todas as abas operam na mesma sprint)
- *  - hu_generation_id gerada na aba HU (usado pela aba PF e Evidências)
- *  - pf_analysis_id gerado na aba PF (usado pela aba Evidências)
- *
- * Isso elimina o problema de silos: cada aba lia o provedor de forma isolada.
+ * AiPipelineContext (v2 — Fase 4)
+ * ---------------------------------
+ * Adiciona suporte ao Aprendizado Bidirecional:
+ *  - calibrationContext: string gerado pelo useLearningInsights
+ *  - setCalibrationContext: gravado pelo hook após computar insights
+ *  - getAiPayload(): agora inclui calibrationContext nas chamadas de IA
  */
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { listAIProviders, type AIProvider } from "@/features/admin/services/aiProviders.service";
@@ -30,7 +27,6 @@ export interface AiPipelineState {
   selectedProviderId: string;
   setSelectedProviderId: (id: string) => void;
   selectedProvider: AIProvider | null;
-  /** true quando o provedor selecionado exige apiKey manual */
   needsApiKey: boolean;
   apiKey: string;
   setApiKey: (key: string) => void;
@@ -39,39 +35,46 @@ export interface AiPipelineState {
   activePipelineSprintId: string;
   setActivePipelineSprintId: (id: string) => void;
 
-  // ── IDs de rastreabilidade (HU → PF → Evidência) ────────────────────────
-  /** ID da última HU gerada na aba "Gerar HU" */
+  // ── IDs de rastreabilidade ──────────────────────────────────────────────
   lastHuGenerationId: string | null;
   setLastHuGenerationId: (id: string | null) => void;
-
-  /** ID da última análise de PF gerada na aba "Contagem por Sprint" */
   lastPfAnalysisId: string | null;
   setLastPfAnalysisId: (id: string | null) => void;
 
+  // ── Fase 4: Aprendizado Bidirecional ───────────────────────────────────
+  /** Texto gerado pelo computeLearningInsights injetado antes dos prompts de PF */
+  calibrationContext: string;
+  setCalibrationContext: (ctx: string) => void;
+  /** true quando há calibração suficiente (>= 3 validações) */
+  isCalibrated: boolean;
+
   // ── Helpers ─────────────────────────────────────────────────────────────
   loadingProviders: boolean;
-  /** Retorna headers/body base para chamar qualquer Edge Function de IA */
-  getAiPayload: () => { providerId: string | undefined; provider: string | undefined; apiKey: string | undefined };
+  getAiPayload: () => {
+    providerId: string | undefined;
+    provider: string | undefined;
+    apiKey: string | undefined;
+    calibrationContext: string | undefined;
+  };
 }
 
 const AiPipelineContext = createContext<AiPipelineState | null>(null);
 
 export function AiPipelineProvider({ children }: { children: ReactNode }) {
-  const [aiProviders, setAiProviders]             = useState<AIProvider[]>([]);
+  const [aiProviders, setAiProviders]               = useState<AIProvider[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState("");
-  const [apiKey, setApiKey]                        = useState(() => sessionStorage.getItem("apf_ai_api_key") || "");
-  const [loadingProviders, setLoadingProviders]    = useState(true);
+  const [apiKey, setApiKey]                         = useState(() => sessionStorage.getItem("apf_ai_api_key") || "");
+  const [loadingProviders, setLoadingProviders]     = useState(true);
   const [activePipelineSprintId, setActivePipelineSprintId] = useState("");
   const [lastHuGenerationId, setLastHuGenerationId] = useState<string | null>(null);
   const [lastPfAnalysisId, setLastPfAnalysisId]     = useState<string | null>(null);
+  const [calibrationContext, setCalibrationContext] = useState("");
 
-  // Persiste apiKey manual na sessão
   useEffect(() => {
     if (apiKey) sessionStorage.setItem("apf_ai_api_key", apiKey);
     else sessionStorage.removeItem("apf_ai_api_key");
   }, [apiKey]);
 
-  // Carrega provedores ativos do Hub de IA
   useEffect(() => {
     setLoadingProviders(true);
     listAIProviders({ onlyActive: true })
@@ -101,17 +104,20 @@ export function AiPipelineProvider({ children }: { children: ReactNode }) {
     return selectedProvider.provider_type !== "lovable" && !selectedProvider.has_key;
   }, [selectedProvider]);
 
-  // Limpa apiKey quando muda para provedor que não precisa
   useEffect(() => {
     if (!needsApiKey) setApiKey("");
   }, [selectedProviderId, needsApiKey]);
 
+  const isCalibrated = calibrationContext.trim().length > 0;
+
   const getAiPayload = () => {
     const isInline = selectedProviderId.startsWith("inline:");
     return {
-      providerId: isInline ? undefined : selectedProviderId,
-      provider:   isInline ? selectedProvider?.provider_type : undefined,
-      apiKey:     needsApiKey ? apiKey.trim() : undefined,
+      providerId:         isInline ? undefined : selectedProviderId,
+      provider:           isInline ? selectedProvider?.provider_type : undefined,
+      apiKey:             needsApiKey ? apiKey.trim() : undefined,
+      // Fase 4: calibração hiistórica injetada automaticamente
+      calibrationContext: isCalibrated ? calibrationContext : undefined,
     };
   };
 
@@ -129,6 +135,9 @@ export function AiPipelineProvider({ children }: { children: ReactNode }) {
     setLastHuGenerationId,
     lastPfAnalysisId,
     setLastPfAnalysisId,
+    calibrationContext,
+    setCalibrationContext,
+    isCalibrated,
     loadingProviders,
     getAiPayload,
   };

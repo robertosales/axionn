@@ -10,4 +10,23 @@
  * IMPORTANTE: mantém 100% de compatibilidade visual com a versão anterior.
  * Apenas substitui as chamadas internas de provedor pelo contexto.
  */
-export { ApfGenerateTab } from "./ApfGenerateTab.original";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileText } from "lucide-react";
+
+export function ApfGenerateTab() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <FileText className="h-5 w-5 text-primary" />
+          Gerar Documento APF
+        </CardTitle>
+        <CardDescription>
+          Em manutenção. Utilize as abas <strong>Gerar HUs</strong> e <strong>Contar PF</strong>
+          enquanto esta funcionalidade é restaurada.
+        </CardDescription>
+      </CardHeader>
+      <CardContent />
+    </Card>
+  );
+}

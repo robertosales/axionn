@@ -203,7 +203,9 @@ export function ApfFunctionPointTab() {
             acceptanceCriteria:  null,
             storyType:           null,
           },
-          providerId: overrideProviderId ?? aiPayload.providerId,
+          ...(overrideProviderId === LOVABLE_PROVIDER_ID
+            ? { forceProvider: "lovable" as const }
+            : { providerId: overrideProviderId ?? aiPayload.providerId }),
         },
       });
 

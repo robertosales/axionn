@@ -4,7 +4,6 @@
  * Hub central do APF — provedor de IA compartilhado entre todas as abas.
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AiProviderSelector } from "./AiProviderSelector";
 import { Bot } from "lucide-react";
 
 export function ApfHubTab() {
@@ -21,7 +20,10 @@ export function ApfHubTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AiProviderSelector />
+          <p className="text-sm text-muted-foreground">
+            Configure o provedor de IA padrão em <strong>Admin → IAs</strong>. As demais abas
+            (Gerar HUs, Contar PF, Gerar Doc, Previsão) usarão automaticamente o provedor ativo.
+          </p>
         </CardContent>
       </Card>
     </div>

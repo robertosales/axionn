@@ -1,0 +1,508 @@
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
+
+// ── Tipos locais ────────────────────────────────────────────────────────────
+interface SprintOption {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+interface HuRow {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  story_points: number | null;
+  function_points: number | null;
+  ai_fp_breakdown: AiBreakdown | null;
+  ai_fp_confidence: number | null;
+  ai_fp_validated: boolean;
+}
+
+interface AiBreakdown {
+  EI: number;  // External Input
+  EO: number;  // External Output
+  EQ: number;  // External Inquiry
+  ILF: number; // Internal Logical File
+  EIF: number; // External Interface File
+  total: number;
+  reasoning?: string;
+}
+
+interface FpAnalysis {
+  huId: string;
+  breakdown: AiBreakdown;
+  confidence: number;
+  loading: boolean;
+  error: string | null;
+}
+
+// ── Componente ──────────────────────────────────────────────────────────────
+export function ApfFunctionPointTab() {
+  const { currentTeam } = useAuth();
+  const teamId = currentTeam?.id ?? "";
+
+  const [sprints, setSprints] = useState<SprintOption[]>([]);
+  const [selectedSprintId, setSelectedSprintId] = useState<string>("");
+  const [userStories, setUserStories] = useState<HuRow[]>([]);
+  const [analyses, setAnalyses] = useState<Record<string, FpAnalysis>>({});
+  const [loadingSprints, setLoadingSprints] = useState(true);
+  const [loadingHUs, setLoadingHUs] = useState(false);
+  const [countingAll, setCountingAll] = useState(false);
+
+  // ── Carrega sprints ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!teamId) return;
+    setLoadingSprints(true);
+    supabase
+      .from("sprints")
+      .select("id, name, is_active")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        const list = (data ?? []) as SprintOption[];
+        setSprints(list);
+        // Pré-seleciona sprint ativa
+        const active = list.find((s) => s.is_active);
+        if (active) setSelectedSprintId(active.id);
+        setLoadingSprints(false);
+      });
+  }, [teamId]);
+
+  // ── Carrega HUs da sprint selecionada ──────────────────────────────────────
+  useEffect(() => {
+    if (!teamId || !selectedSprintId) {
+      setUserStories([]);
+      return;
+    }
+    setLoadingHUs(true);
+    supabase
+      .from("user_stories")
+      .select(
+        "id, code, title, description, story_points, function_points, ai_fp_breakdown, ai_fp_confidence, ai_fp_validated"
+      )
+      .eq("team_id", teamId)
+      .eq("sprint_id", selectedSprintId)
+      .order("code", { ascending: true })
+      .limit(200)
+      .then(({ data, error }) => {
+        if (error) {
+          // Se colunas ainda não existem, carrega sem elas
+          supabase
+            .from("user_stories")
+            .select("id, code, title, description, story_points, function_points")
+            .eq("team_id", teamId)
+            .eq("sprint_id", selectedSprintId)
+            .order("code", { ascending: true })
+            .limit(200)
+            .then(({ data: fallbackData }) => {
+              setUserStories(
+                (fallbackData ?? []).map((h: any) => ({
+                  ...h,
+                  ai_fp_breakdown: null,
+                  ai_fp_confidence: null,
+                  ai_fp_validated: false,
+                }))
+              );
+              setLoadingHUs(false);
+            });
+          return;
+        }
+        setUserStories(
+          (data ?? []).map((h: any) => ({
+            ...h,
+            ai_fp_breakdown: h.ai_fp_breakdown ?? null,
+            ai_fp_confidence: h.ai_fp_confidence ?? null,
+            ai_fp_validated: h.ai_fp_validated ?? false,
+          }))
+        );
+        setLoadingHUs(false);
+      });
+  }, [teamId, selectedSprintId]);
+
+  // ── Chama Edge Function para contar PF de uma HU ───────────────────────────
+  const countFpForHu = useCallback(
+    async (hu: HuRow) => {
+      setAnalyses((prev) => ({
+        ...prev,
+        [hu.id]: { huId: hu.id, breakdown: prev[hu.id]?.breakdown ?? {} as AiBreakdown, confidence: 0, loading: true, error: null },
+      }));
+
+      try {
+        const { data, error } = await supabase.functions.invoke("count-function-points", {
+          body: {
+            teamId,
+            huId: hu.id,
+            storyText: hu.title + (hu.description ? "\n" + hu.description : ""),
+            context: { storyPoints: hu.story_points },
+          },
+        });
+
+        if (error) throw new Error(error.message);
+
+        const result = data as { breakdown: AiBreakdown; confidence: number; total: number };
+
+        setAnalyses((prev) => ({
+          ...prev,
+          [hu.id]: {
+            huId: hu.id,
+            breakdown: result.breakdown,
+            confidence: result.confidence,
+            loading: false,
+            error: null,
+          },
+        }));
+
+        // Atualiza HU localmente
+        setUserStories((prev) =>
+          prev.map((h) =>
+            h.id === hu.id
+              ? {
+                  ...h,
+                  function_points: result.total,
+                  ai_fp_breakdown: result.breakdown,
+                  ai_fp_confidence: result.confidence,
+                }
+              : h
+          )
+        );
+
+        toast.success(`PF calculado para ${hu.code}: ${result.total} PF`);
+      } catch (err: any) {
+        setAnalyses((prev) => ({
+          ...prev,
+          [hu.id]: {
+            ...prev[hu.id],
+            loading: false,
+            error: err?.message ?? "Erro ao calcular PF",
+          },
+        }));
+        toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
+      }
+    },
+    [teamId]
+  );
+
+  // ── Valida contagem e salva no banco ───────────────────────────────────────
+  const validateFp = useCallback(
+    async (hu: HuRow, fpValue: number) => {
+      const { error } = await supabase
+        .from("user_stories")
+        .update({
+          function_points: fpValue,
+          ai_fp_validated: true,
+        } as any)
+        .eq("id", hu.id);
+
+      if (error) {
+        toast.error("Erro ao salvar validação");
+        return;
+      }
+
+      setUserStories((prev) =>
+        prev.map((h) =>
+          h.id === hu.id ? { ...h, function_points: fpValue, ai_fp_validated: true } : h
+        )
+      );
+      toast.success(`${hu.code} — ${fpValue} PF validado e salvo!`);
+    },
+    []
+  );
+
+  // ── Contar todos de uma vez ────────────────────────────────────────────────
+  const countAllPending = useCallback(async () => {
+    const pending = userStories.filter((h) => !h.function_points && !h.ai_fp_validated);
+    if (pending.length === 0) {
+      toast.info("Todas as HUs já possuem PF calculado.");
+      return;
+    }
+    setCountingAll(true);
+    for (const hu of pending) {
+      await countFpForHu(hu);
+    }
+    setCountingAll(false);
+    toast.success(`Contagem concluída para ${pending.length} HU(s)!`);
+  }, [userStories, countFpForHu]);
+
+  // ── Totais ─────────────────────────────────────────────────────────────────
+  const totalFp = userStories.reduce((acc, h) => acc + (h.function_points ?? 0), 0);
+  const validatedCount = userStories.filter((h) => h.ai_fp_validated).length;
+  const pendingCount = userStories.filter((h) => !h.function_points).length;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  if (loadingSprints) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Seletor de Sprint + ações */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Select
+            value={selectedSprintId}
+            onValueChange={setSelectedSprintId}
+          >
+            <SelectTrigger className="w-full sm:w-72">
+              <SelectValue placeholder="Selecione uma sprint..." />
+            </SelectTrigger>
+            <SelectContent>
+              {sprints.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  <span className="flex items-center gap-2">
+                    {s.is_active && (
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                    )}
+                    {s.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {selectedSprintId && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelectedSprintId("");
+                setTimeout(() => setSelectedSprintId(selectedSprintId), 50);
+              }}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        {userStories.length > 0 && (
+          <Button
+            size="sm"
+            onClick={countAllPending}
+            disabled={countingAll || pendingCount === 0}
+            className="gap-2 shrink-0"
+          >
+            {countingAll ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Calcular PF pendentes ({pendingCount})
+          </Button>
+        )}
+      </div>
+
+      {/* KPIs da sprint */}
+      {userStories.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Total HUs", value: userStories.length, color: "text-foreground" },
+            { label: "Total PF", value: totalFp.toFixed(1), color: "text-primary" },
+            { label: "Validados", value: validatedCount, color: "text-emerald-600" },
+            { label: "Pendentes", value: pendingCount, color: "text-amber-600" },
+          ].map((kpi) => (
+            <Card key={kpi.label} className="border border-border">
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                <p className={`text-2xl font-bold tabular-nums ${kpi.color}`}>{kpi.value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Tabela de HUs */}
+      {!selectedSprintId ? (
+        <Card className="border-dashed">
+          <CardContent className="py-12 flex flex-col items-center gap-2 text-center">
+            <Sparkles className="h-8 w-8 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">Selecione uma sprint para ver as HUs e calcular os Pontos de Função.</p>
+          </CardContent>
+        </Card>
+      ) : loadingHUs ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : userStories.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-12 flex flex-col items-center gap-2 text-center">
+            <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">Nenhuma HU encontrada nesta sprint.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Histórias de Usuário — Contagem APF por IA
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-24">Código</TableHead>
+                    <TableHead>Título</TableHead>
+                    <TableHead className="w-16 text-center">SP</TableHead>
+                    <TableHead className="w-20 text-center">PF IA</TableHead>
+                    <TableHead className="w-28 text-center">Breakdown</TableHead>
+                    <TableHead className="w-24 text-center">Confiança</TableHead>
+                    <TableHead className="w-28 text-center">Status</TableHead>
+                    <TableHead className="w-32 text-right">Ação</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {userStories.map((hu) => {
+                    const analysis = analyses[hu.id];
+                    const breakdown = analysis?.breakdown ?? hu.ai_fp_breakdown;
+                    const confidence = analysis?.confidence ?? hu.ai_fp_confidence;
+                    const fp = hu.function_points;
+                    const isLoading = analysis?.loading;
+                    const hasError = analysis?.error;
+
+                    return (
+                      <TableRow key={hu.id}>
+                        <TableCell>
+                          <span className="font-mono text-xs text-muted-foreground">{hu.code}</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm line-clamp-2">{hu.title}</span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="text-sm tabular-nums">{hu.story_points ?? "—"}</span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {isLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+                          ) : fp != null ? (
+                            <span className="font-semibold tabular-nums text-primary">{fp}</span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {breakdown ? (
+                            <div className="flex flex-wrap gap-1 justify-center">
+                              {Object.entries(breakdown)
+                                .filter(([k]) => ["EI", "EO", "EQ", "ILF", "EIF"].includes(k))
+                                .map(([k, v]) =>
+                                  (v as number) > 0 ? (
+                                    <span
+                                      key={k}
+                                      className="text-[10px] bg-muted px-1 rounded font-mono"
+                                    >
+                                      {k}:{v}
+                                    </span>
+                                  ) : null
+                                )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {confidence != null ? (
+                            <Badge
+                              variant="outline"
+                              className={
+                                confidence >= 0.8
+                                  ? "border-emerald-500 text-emerald-600"
+                                  : confidence >= 0.6
+                                  ? "border-amber-500 text-amber-600"
+                                  : "border-red-400 text-red-500"
+                              }
+                            >
+                              {Math.round(confidence * 100)}%
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {hu.ai_fp_validated ? (
+                            <Badge variant="outline" className="border-emerald-500 text-emerald-600 gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Validado
+                            </Badge>
+                          ) : fp != null ? (
+                            <Badge variant="outline" className="border-amber-500 text-amber-600">
+                              Pendente
+                            </Badge>
+                          ) : hasError ? (
+                            <Badge variant="outline" className="border-red-400 text-red-500 gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              Erro
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              Não calculado
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {!isLoading && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs gap-1"
+                                onClick={() => countFpForHu(hu)}
+                                title="Calcular / Recalcular PF com IA"
+                              >
+                                <Sparkles className="h-3 w-3" />
+                                {fp != null ? "Recalc" : "Calcular"}
+                              </Button>
+                            )}
+                            {fp != null && !hu.ai_fp_validated && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs text-emerald-600 hover:text-emerald-700 gap-1"
+                                onClick={() => validateFp(hu, fp)}
+                                title="Validar e salvar este PF"
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                Validar
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

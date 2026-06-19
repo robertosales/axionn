@@ -908,6 +908,13 @@ export type Database = {
             referencedRelation: "nome_da_view"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "demanda_eventos_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       demanda_evidencias: {
@@ -969,6 +976,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "nome_da_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_evidencias_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
             referencedColumns: ["id"]
           },
         ]
@@ -1047,6 +1061,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "nome_da_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_hours_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
             referencedColumns: ["id"]
           },
         ]
@@ -1158,6 +1179,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "demanda_responsaveis_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_demanda_responsaveis_user"
             columns: ["user_id"]
             isOneToOne: false
@@ -1207,6 +1235,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "nome_da_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_transitions_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
             referencedColumns: ["id"]
           },
         ]
@@ -3699,6 +3734,34 @@ export type Database = {
           updated_at: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "demandas_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_sustentacao_orfas: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          project_id: string | null
+          rhm: string | null
+          situacao: string | null
+          team_id: string | null
+          team_name: string | null
+          titulo: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demandas_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "demandas_team_id_fkey"
             columns: ["team_id"]

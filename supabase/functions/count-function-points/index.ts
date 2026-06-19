@@ -45,6 +45,8 @@ interface RequestBody {
   };
   // Provedor: se omitido usa o provider recomendado do time / primeiro ativo
   providerId?: string;
+  // Força Lovable AI Gateway (grátis) ignorando ai_providers
+  forceProvider?: "lovable";
 }
 
 interface FpBreakdown {
@@ -406,7 +408,7 @@ Deno.serve(async (req: Request) => {
 
     // ── 2. Parse body ─────────────────────────────────────────
     const body = (await req.json().catch(() => ({}))) as RequestBody;
-    const { teamId, huId, storyText, context, providerId } = body;
+    const { teamId, huId, storyText, context, providerId, forceProvider } = body;
 
     if (!teamId || !UUID_REGEX.test(teamId))
       return new Response(JSON.stringify({ error: "teamId (UUID) é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -416,8 +418,29 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "storyText é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     // ── 3. Resolve provider + API key ─────────────────────────
-    const providerRow = await resolveRecommendedProvider(teamId, providerId);
-    const apiKey = await getKeyForRow(providerRow);
+    let providerRow: { id: string; name: string; provider_type: Provider; model: string | null };
+    let apiKey: string | null;
+
+    if (forceProvider === "lovable") {
+      // Atalho: Lovable AI Gateway (grátis) — usa LOVABLE_API_KEY do ambiente
+      const lovableKey = Deno.env.get("LOVABLE_API_KEY") ?? null;
+      if (!lovableKey) {
+        return new Response(
+          JSON.stringify({ error: "Lovable AI não está disponível neste workspace (LOVABLE_API_KEY ausente)." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      providerRow = {
+        id: "__lovable__",
+        name: "Lovable AI (grátis)",
+        provider_type: "lovable",
+        model: "google/gemini-2.5-flash",
+      };
+      apiKey = lovableKey;
+    } else {
+      providerRow = await resolveRecommendedProvider(teamId, providerId);
+      apiKey = await getKeyForRow(providerRow);
+    }
 
     if (!apiKey) {
       return new Response(

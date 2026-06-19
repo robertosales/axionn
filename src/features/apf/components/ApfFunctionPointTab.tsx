@@ -61,6 +61,8 @@ interface FriendlyError {
   rawError?: string;
 }
 
+const LOVABLE_PROVIDER_ID = "__lovable__";
+
 export function ApfFunctionPointTab() {
   const { currentTeam } = useAuth();
   const teamId = currentTeam?.id ?? "";
@@ -201,7 +203,9 @@ export function ApfFunctionPointTab() {
             acceptanceCriteria:  null,
             storyType:           null,
           },
-          providerId: overrideProviderId ?? aiPayload.providerId,
+          ...(overrideProviderId === LOVABLE_PROVIDER_ID
+            ? { forceProvider: "lovable" as const }
+            : { providerId: overrideProviderId ?? aiPayload.providerId }),
         },
       });
 
@@ -257,7 +261,8 @@ export function ApfFunctionPointTab() {
       // Pré-seleciona um provider diferente do atual usado
       const currentProviderId = overrideProviderId ?? getAiPayload().providerId;
       const fallback = providers.find((p) => p.id !== currentProviderId);
-      setRetryProviderId(fallback?.id ?? "");
+      // Padrão: Lovable AI (grátis) — sempre funciona. Se preferir, escolhe outro provedor configurado.
+      setRetryProviderId(LOVABLE_PROVIDER_ID);
       setFriendlyError({ hu, title: friendly.title, message: friendly.message, rawError: rawMsg });
       return false;
     }
@@ -542,11 +547,14 @@ export function ApfFunctionPointTab() {
                 <SelectValue placeholder="Selecione um provedor..." />
               </SelectTrigger>
               <SelectContent>
-                {providers.length === 0 && (
-                  <div className="px-2 py-3 text-xs text-muted-foreground">
-                    Nenhum provedor ativo. Configure um no painel administrativo.
-                  </div>
-                )}
+                {/* Opção sempre disponível: Lovable AI Gateway (grátis) */}
+                <SelectItem value={LOVABLE_PROVIDER_ID}>
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                    Lovable AI (grátis)
+                    <span className="text-[10px] text-muted-foreground uppercase">recomendado</span>
+                  </span>
+                </SelectItem>
                 {providers.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     <span className="flex items-center gap-2">

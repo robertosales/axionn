@@ -519,6 +519,68 @@ export function ApfFunctionPointTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog amigável de erro com escolha de provedor alternativo */}
+      <Dialog open={!!friendlyError} onOpenChange={(o) => { if (!o) setFriendlyError(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              {friendlyError?.title}
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              {friendlyError?.message}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-2 py-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              Escolha outro provedor de IA configurado
+            </label>
+            <Select value={retryProviderId} onValueChange={setRetryProviderId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um provedor..." />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.length === 0 && (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    Nenhum provedor ativo. Configure um no painel administrativo.
+                  </div>
+                )}
+                {providers.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      {p.is_recommended && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
+                      {p.name}
+                      <span className="text-[10px] text-muted-foreground uppercase">{p.provider_type}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setFriendlyError(null)} disabled={retrying}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!retryProviderId || retrying || !friendlyError}
+              onClick={async () => {
+                if (!friendlyError || !retryProviderId) return;
+                setRetrying(true);
+                const ok = await countFpForHu(friendlyError.hu, retryProviderId);
+                setRetrying(false);
+                if (ok) setFriendlyError(null);
+              }}
+              className="gap-2"
+            >
+              {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Tentar com este provedor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -269,6 +269,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "apf_generations_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
             foreignKeyName: "apf_generations_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
@@ -908,6 +915,13 @@ export type Database = {
             referencedRelation: "nome_da_view"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "demanda_eventos_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
+            referencedColumns: ["id"]
+          },
         ]
       }
       demanda_evidencias: {
@@ -969,6 +983,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "nome_da_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_evidencias_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
             referencedColumns: ["id"]
           },
         ]
@@ -1047,6 +1068,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "nome_da_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_hours_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
             referencedColumns: ["id"]
           },
         ]
@@ -1158,6 +1186,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "demanda_responsaveis_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fk_demanda_responsaveis_user"
             columns: ["user_id"]
             isOneToOne: false
@@ -1207,6 +1242,13 @@ export type Database = {
             columns: ["demanda_id"]
             isOneToOne: false
             referencedRelation: "nome_da_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demanda_transitions_demanda_id_fkey"
+            columns: ["demanda_id"]
+            isOneToOne: false
+            referencedRelation: "v_sustentacao_orfas"
             referencedColumns: ["id"]
           },
         ]
@@ -1506,6 +1548,140 @@ export type Database = {
           },
         ]
       }
+      function_point_analyses: {
+        Row: {
+          ai_breakdown: Json | null
+          ai_confidence: number | null
+          ai_raw_count: number | null
+          ai_reasoning: string | null
+          ai_total_pf: number | null
+          apf_generation_id: string | null
+          baseline_id: string | null
+          baseline_version: number | null
+          created_at: string
+          delta_pf: number | null
+          few_shot_count: number | null
+          few_shot_examples_used: number | null
+          id: string
+          is_validated: boolean
+          model_used: string | null
+          project_id: string
+          prompt_version: string | null
+          sprint_id: string | null
+          story_acceptance_criteria: string | null
+          story_code: string | null
+          story_context: Json | null
+          story_description: string | null
+          story_id: string | null
+          story_text: string
+          story_title: string | null
+          updated_at: string | null
+          validated_at: string | null
+          validated_breakdown: Json | null
+          validated_by: string | null
+          validated_count: number | null
+          validated_total_pf: number | null
+          validation_notes: string | null
+        }
+        Insert: {
+          ai_breakdown?: Json | null
+          ai_confidence?: number | null
+          ai_raw_count?: number | null
+          ai_reasoning?: string | null
+          ai_total_pf?: number | null
+          apf_generation_id?: string | null
+          baseline_id?: string | null
+          baseline_version?: number | null
+          created_at?: string
+          delta_pf?: number | null
+          few_shot_count?: number | null
+          few_shot_examples_used?: number | null
+          id?: string
+          is_validated?: boolean
+          model_used?: string | null
+          project_id: string
+          prompt_version?: string | null
+          sprint_id?: string | null
+          story_acceptance_criteria?: string | null
+          story_code?: string | null
+          story_context?: Json | null
+          story_description?: string | null
+          story_id?: string | null
+          story_text: string
+          story_title?: string | null
+          updated_at?: string | null
+          validated_at?: string | null
+          validated_breakdown?: Json | null
+          validated_by?: string | null
+          validated_count?: number | null
+          validated_total_pf?: number | null
+          validation_notes?: string | null
+        }
+        Update: {
+          ai_breakdown?: Json | null
+          ai_confidence?: number | null
+          ai_raw_count?: number | null
+          ai_reasoning?: string | null
+          ai_total_pf?: number | null
+          apf_generation_id?: string | null
+          baseline_id?: string | null
+          baseline_version?: number | null
+          created_at?: string
+          delta_pf?: number | null
+          few_shot_count?: number | null
+          few_shot_examples_used?: number | null
+          id?: string
+          is_validated?: boolean
+          model_used?: string | null
+          project_id?: string
+          prompt_version?: string | null
+          sprint_id?: string | null
+          story_acceptance_criteria?: string | null
+          story_code?: string | null
+          story_context?: Json | null
+          story_description?: string | null
+          story_id?: string | null
+          story_text?: string
+          story_title?: string | null
+          updated_at?: string | null
+          validated_at?: string | null
+          validated_breakdown?: Json | null
+          validated_by?: string | null
+          validated_count?: number | null
+          validated_total_pf?: number | null
+          validation_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "function_point_analyses_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "project_fp_baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "function_point_analyses_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "function_point_analyses_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
+            foreignKeyName: "function_point_analyses_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       impediments: {
         Row: {
           criticality: string
@@ -1569,6 +1745,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sprints"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "impediments_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
           },
           {
             foreignKeyName: "impediments_team_id_fkey"
@@ -1976,6 +2159,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "planning_sessions_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
             foreignKeyName: "planning_sessions_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
@@ -2081,6 +2271,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      project_fp_baselines: {
+        Row: {
+          additional_instructions: string
+          anchor_examples: Json
+          complexity_rules: Json
+          created_at: string
+          created_by: string | null
+          domain_context: string
+          function_type_criteria: Json
+          id: string
+          project_id: string
+          status: string
+          technology_stack: string[]
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          additional_instructions?: string
+          anchor_examples?: Json
+          complexity_rules?: Json
+          created_at?: string
+          created_by?: string | null
+          domain_context?: string
+          function_type_criteria?: Json
+          id?: string
+          project_id: string
+          status?: string
+          technology_stack?: string[]
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          additional_instructions?: string
+          anchor_examples?: Json
+          complexity_rules?: Json
+          created_at?: string
+          created_by?: string | null
+          domain_context?: string
+          function_type_criteria?: Json
+          id?: string
+          project_id?: string
+          status?: string
+          technology_stack?: string[]
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
       }
       project_teams: {
         Row: {
@@ -2691,6 +2929,13 @@ export type Database = {
             referencedRelation: "sprints"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "rdm_sprints_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
         ]
       }
       rdms: {
@@ -2787,6 +3032,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sprints"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rdms_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
           },
           {
             foreignKeyName: "rdms_team_id_fkey"
@@ -2943,6 +3195,13 @@ export type Database = {
             referencedRelation: "sprints"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "retro_actions_target_sprint_id_fkey"
+            columns: ["target_sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
         ]
       }
       retro_cards: {
@@ -2992,6 +3251,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sprints"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retro_cards_action_target_sprint_id_fkey"
+            columns: ["action_target_sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
           },
           {
             foreignKeyName: "retro_cards_session_id_fkey"
@@ -3081,6 +3347,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sprints"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retro_sessions_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
           },
           {
             foreignKeyName: "retro_sessions_team_id_fkey"
@@ -3608,11 +3881,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "user_stories_previous_sprint_id_fkey"
+            columns: ["previous_sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
             foreignKeyName: "user_stories_sprint_id_fkey"
             columns: ["sprint_id"]
             isOneToOne: false
             referencedRelation: "sprints"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_stories_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
           },
           {
             foreignKeyName: "user_stories_team_id_fkey"
@@ -3708,6 +3995,34 @@ export type Database = {
           },
         ]
       }
+      v_sustentacao_orfas: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          project_id: string | null
+          rhm: string | null
+          situacao: string | null
+          team_id: string | null
+          team_name: string | null
+          titulo: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demandas_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demandas_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_contract_coverage: {
         Row: {
           com_contrato: number | null
@@ -3761,6 +4076,19 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vw_sprint_pf_summary: {
+        Row: {
+          avg_delta_pf: number | null
+          last_count_at: string | null
+          sprint_id: string | null
+          sprint_name: string | null
+          stories_validated: number | null
+          total_ai_pf: number | null
+          total_stories_counted: number | null
+          total_validated_pf: number | null
+        }
+        Relationships: []
       }
       vw_user_contract_roles: {
         Row: {
@@ -3861,6 +4189,18 @@ export type Database = {
         Returns: undefined
       }
       fn_get_contract_tree: { Args: { p_contract_id?: string }; Returns: Json }
+      fn_get_fewshot_examples: {
+        Args: { p_limit?: number }
+        Returns: {
+          story_acceptance_criteria: string
+          story_code: string
+          story_description: string
+          story_title: string
+          validated_breakdown: Json
+          validated_total_pf: number
+          validation_notes: string
+        }[]
+      }
       fn_get_project_sla_matrix: {
         Args: { p_project_id: string }
         Returns: Json
@@ -3919,6 +4259,10 @@ export type Database = {
           response_minutes: number
           source: string
         }[]
+      }
+      fn_sla_contract_panel: {
+        Args: { p_contract_id: string; p_limit_risco?: number }
+        Returns: Json
       }
       fn_sla_dashboard_batch: {
         Args: {

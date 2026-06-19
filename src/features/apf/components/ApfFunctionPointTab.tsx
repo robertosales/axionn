@@ -140,16 +140,14 @@ export function ApfFunctionPointTab() {
       const { data, error } = await supabase.functions.invoke("count-function-points", {
         body: {
           teamId,
-          story_id:                  hu.id,
-          sprint_id:                 selectedSprintId,
-          story_code:                hu.code,
-          story_title:               hu.title,
-          story_description:         hu.description,
-          story_acceptance_criteria: null,
-          providerId:          aiPayload.providerId,
-          provider:            aiPayload.provider,
-          apiKey:              aiPayload.apiKey,
-          calibrationContext:  aiPayload.calibrationContext, // 🧠 Fase 4
+          huId:      hu.id,
+          storyText: [hu.title, hu.description].filter(Boolean).join("\n\n"),
+          context: {
+            storyPoints:         hu.story_points ?? null,
+            acceptanceCriteria:  null,
+            storyType:           null,
+          },
+          providerId: aiPayload.providerId,
         },
       });
 

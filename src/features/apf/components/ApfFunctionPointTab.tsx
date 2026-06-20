@@ -1,98 +1,92 @@
-/**
- * ApfFunctionPointTab (v3 — Fase 4)
- * ------------------------------------
- * Integra o Aprendizado Bidirecional:
- *  - Carrega insights com useLearningInsights
- *  - Exibe LearningInsightsPanel no topo
- *  - validateFp: agora chama saveValidation() do learning.service
- *    para persistir o desvio e alimentar a calibração
- *  - countFpForHu: passa calibrationContext do AiPipelineContext para
- *    a Edge Function, que injeta antes do prompt de contagem
- */
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAiPipeline } from "../contexts/AiPipelineContext";
-import { useLearningInsights } from "../hooks/useLearningInsights";
-import { saveValidation } from "../services/learning.service";
-import { LearningInsightsPanel } from "./learning/LearningInsightsPanel";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, Info, AlertTriangle,
-} from "lucide-react";
+import { Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 
-interface SprintOption  { id: string; name: string; is_active: boolean; }
-interface HuRow {
-  id: string; code: string; title: string;
-  description: string | null; story_points: number | null;
-  function_points: number | null; ai_fp_breakdown: AiBreakdown | null;
-  ai_fp_confidence: number | null; ai_fp_validated: boolean;
-}
-interface AiBreakdown {
-  EI: number; EO: number; EQ: number; ILF: number; EIF: number;
-  total: number; reasoning?: string;
-}
-interface FpAnalysis {
-  huId: string; breakdown: AiBreakdown; confidence: number;
-  loading: boolean; error: string | null;
-}
-interface AiProviderOption {
+// ── Tipos locais ────────────────────────────────────────────────────────────
+interface SprintOption {
   id: string;
   name: string;
-  provider_type: string;
-  is_recommended?: boolean | null;
+  is_active: boolean;
 }
-interface FriendlyError {
-  hu: HuRow;
+
+interface HuRow {
+  id: string;
+  code: string;
   title: string;
-  message: string;
-  rawError?: string;
+  description: string | null;
+  acceptance_criteria: string | null; // ← NOVO
+  story_points: number | null;
+  function_points: number | null;
+  ai_fp_breakdown: AiBreakdown | null;
+  ai_fp_confidence: number | null;
+  ai_fp_validated: boolean;
 }
 
-const LOVABLE_PROVIDER_ID = "__lovable__";
+interface AiBreakdown {
+  EI: number;  // External Input
+  EO: number;  // External Output
+  EQ: number;  // External Inquiry
+  ILF: number; // Internal Logical File
+  EIF: number; // External Interface File
+  total: number;
+  reasoning?: string;
+}
 
+interface FpAnalysis {
+  huId: string;
+  breakdown: AiBreakdown;
+  confidence: number;
+  loading: boolean;
+  error: string | null;
+}
+
+// ── Helper: monta o texto completo enviado à IA ──────────────────────────────
+function buildStoryText(hu: HuRow): string {
+  const parts: string[] = [];
+  parts.push(`Título: ${hu.title}`);
+  if (hu.description?.trim()) {
+    parts.push(`\nDescrição:\n${hu.description.trim()}`);
+  }
+  if (hu.acceptance_criteria?.trim()) {
+    parts.push(`\nCritérios de Aceite:\n${hu.acceptance_criteria.trim()}`);
+  }
+  return parts.join("");
+}
+
+// ── Componente ──────────────────────────────────────────────────────────────
 export function ApfFunctionPointTab() {
   const { currentTeam } = useAuth();
   const teamId = currentTeam?.id ?? "";
 
-  const {
-    activePipelineSprintId,
-    setActivePipelineSprintId,
-    lastHuGenerationId,
-    setLastPfAnalysisId,
-    getAiPayload,
-    isCalibrated,
-  } = useAiPipeline();
-
-  // Fase 4: insights de aprendizado
-  const { insights, loading: loadingInsights, lastRefresh, refresh: refreshInsights } = useLearningInsights();
-
-  const [sprints, setSprints]           = useState<SprintOption[]>([]);
-  const [userStories, setUserStories]   = useState<HuRow[]>([]);
-  const [analyses, setAnalyses]         = useState<Record<string, FpAnalysis>>({});
+  const [sprints, setSprints] = useState<SprintOption[]>([]);
+  const [selectedSprintId, setSelectedSprintId] = useState<string>("");
+  const [userStories, setUserStories] = useState<HuRow[]>([]);
+  const [analyses, setAnalyses] = useState<Record<string, FpAnalysis>>({});
   const [loadingSprints, setLoadingSprints] = useState(true);
-  const [loadingHUs, setLoadingHUs]     = useState(false);
-  const [countingAll, setCountingAll]   = useState(false);
-  const [providers, setProviders]       = useState<AiProviderOption[]>([]);
-  const [friendlyError, setFriendlyError] = useState<FriendlyError | null>(null);
-  const [retryProviderId, setRetryProviderId] = useState<string>("");
-  const [retrying, setRetrying]         = useState(false);
+  const [loadingHUs, setLoadingHUs] = useState(false);
+  const [countingAll, setCountingAll] = useState(false);
 
-  const selectedSprintId    = activePipelineSprintId;
-  const setSelectedSprintId = setActivePipelineSprintId;
-
+  // ── Carrega sprints ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!teamId) return;
     setLoadingSprints(true);
@@ -105,247 +99,192 @@ export function ApfFunctionPointTab() {
       .then(({ data }) => {
         const list = (data ?? []) as SprintOption[];
         setSprints(list);
-        if (!activePipelineSprintId) {
-          const active = list.find((s) => s.is_active);
-          if (active) setSelectedSprintId(active.id);
-        }
+        const active = list.find((s) => s.is_active);
+        if (active) setSelectedSprintId(active.id);
         setLoadingSprints(false);
       });
   }, [teamId]);
 
-  // Carrega provedores de IA ativos (para fallback manual após erro)
+  // ── Carrega HUs da sprint selecionada ──────────────────────────────────────
   useEffect(() => {
-    supabase
-      .from("ai_providers")
-      .select("id, name, provider_type, is_recommended")
-      .eq("is_active", true)
-      .order("is_recommended", { ascending: false })
-      .order("name")
-      .then(({ data }) => setProviders((data ?? []) as AiProviderOption[]));
-  }, []);
-
-  useEffect(() => {
-    if (!teamId || !selectedSprintId) { setUserStories([]); return; }
+    if (!teamId || !selectedSprintId) {
+      setUserStories([]);
+      return;
+    }
     setLoadingHUs(true);
     supabase
       .from("user_stories")
-      .select("id, code, title, description, story_points, function_points, ai_fp_breakdown, ai_fp_confidence, ai_fp_validated")
+      .select(
+        "id, code, title, description, acceptance_criteria, story_points, function_points, ai_fp_breakdown, ai_fp_confidence, ai_fp_validated"
+      )
       .eq("team_id", teamId)
       .eq("sprint_id", selectedSprintId)
       .order("code", { ascending: true })
       .limit(200)
       .then(({ data, error }) => {
         if (error) {
+          // Fallback para bancos sem as colunas APF ainda migradas
           supabase
             .from("user_stories")
-            .select("id, code, title, description, story_points, function_points")
+            .select("id, code, title, description, acceptance_criteria, story_points, function_points")
             .eq("team_id", teamId)
             .eq("sprint_id", selectedSprintId)
             .order("code", { ascending: true })
             .limit(200)
-            .then(({ data: fb }) => {
-              setUserStories((fb ?? []).map((h: any) => ({ ...h, ai_fp_breakdown: null, ai_fp_confidence: null, ai_fp_validated: false })));
+            .then(({ data: fallbackData }) => {
+              setUserStories(
+                (fallbackData ?? []).map((h: any) => ({
+                  ...h,
+                  acceptance_criteria: h.acceptance_criteria ?? null,
+                  ai_fp_breakdown: null,
+                  ai_fp_confidence: null,
+                  ai_fp_validated: false,
+                }))
+              );
               setLoadingHUs(false);
             });
           return;
         }
-        setUserStories((data ?? []).map((h: any) => ({
-          ...h,
-          ai_fp_breakdown: h.ai_fp_breakdown ?? null,
-          ai_fp_confidence: h.ai_fp_confidence ?? null,
-          ai_fp_validated: h.ai_fp_validated ?? false,
-        })));
+        setUserStories(
+          (data ?? []).map((h: any) => ({
+            ...h,
+            acceptance_criteria: h.acceptance_criteria ?? null,
+            ai_fp_breakdown: h.ai_fp_breakdown ?? null,
+            ai_fp_confidence: h.ai_fp_confidence ?? null,
+            ai_fp_validated: h.ai_fp_validated ?? false,
+          }))
+        );
         setLoadingHUs(false);
       });
   }, [teamId, selectedSprintId]);
 
-  // Mapeia mensagens cruas em mensagens amigáveis pt-BR
-  const toFriendly = (raw: string): { title: string; message: string } => {
-    const r = (raw || "").toLowerCase();
-    if (/insufficient_quota|sem cr[eé]ditos|credit balance|quota/.test(r))
-      return {
-        title: "Provedor de IA sem créditos",
-        message: "O provedor configurado está sem créditos disponíveis. Escolha outro provedor abaixo para continuar a contagem.",
-      };
-    if (/rate.?limit|429|too many/.test(r))
-      return {
-        title: "Limite de requisições atingido",
-        message: "O provedor está temporariamente bloqueando novas requisições. Aguarde alguns segundos ou escolha outro provedor.",
-      };
-    if (/invalid.*api.?key|incorrect api key|401|unauthor/.test(r))
-      return {
-        title: "Chave de API inválida",
-        message: "A chave configurada para este provedor não está válida. Selecione outro provedor ou ajuste a chave no painel administrativo.",
-      };
-    return {
-      title: "Não foi possível calcular os Pontos de Função",
-      message: "Ocorreu um erro ao chamar o provedor de IA. Tente outro provedor abaixo ou tente novamente em instantes.",
-    };
-  };
-
-  // Fase 4: calibrationContext é passado para a Edge Function
-  const countFpForHu = useCallback(async (hu: HuRow, overrideProviderId?: string) => {
-    setAnalyses((prev) => ({
-      ...prev,
-      [hu.id]: { huId: hu.id, breakdown: prev[hu.id]?.breakdown ?? {} as AiBreakdown, confidence: 0, loading: true, error: null },
-    }));
-
-    try {
-      const aiPayload = getAiPayload(); // já inclui calibrationContext (Fase 4)
-
-      const { data, error } = await supabase.functions.invoke("count-function-points", {
-        body: {
-          teamId,
-          huId:      hu.id,
-          storyText: [hu.title, hu.description].filter(Boolean).join("\n\n"),
-          context: {
-            storyPoints:         hu.story_points ?? null,
-            acceptanceCriteria:  null,
-            storyType:           null,
-          },
-          ...(overrideProviderId === LOVABLE_PROVIDER_ID
-            ? { forceProvider: "lovable" as const }
-            : { providerId: overrideProviderId ?? aiPayload.providerId }),
-        },
-      });
-
-      // FunctionsHttpError: tenta extrair payload JSON (rawError + error) do body
-      if (error) {
-        let rawMsg = error.message || "Erro ao chamar provedor";
-        try {
-          const ctx = (error as any)?.context;
-          if (ctx && typeof ctx.json === "function") {
-            const body = await ctx.json();
-            rawMsg = body?.rawError || body?.error || rawMsg;
-          }
-        } catch { /* ignore */ }
-        const err: any = new Error(rawMsg);
-        err.__rawError = rawMsg;
-        throw err;
-      }
-
-      const result = data as {
-        success?: boolean;
-        error?: string;
-        rawError?: string;
-        breakdown: AiBreakdown;
-        confidence: number;
-        total: number;
-        analysis_id?: string;
-      };
-      if (result.success === false) {
-        const err: any = new Error(result.error || "Falha na contagem");
-        err.__rawError = result.rawError || result.error;
-        throw err;
-      }
-      if (result.analysis_id) setLastPfAnalysisId(result.analysis_id);
-      const totalPf = result.total ?? result.breakdown?.total ?? 0;
-
+  // ── Chama Edge Function para contar PF de uma HU ───────────────────────────
+  const countFpForHu = useCallback(
+    async (hu: HuRow) => {
       setAnalyses((prev) => ({
         ...prev,
-        [hu.id]: { huId: hu.id, breakdown: result.breakdown, confidence: result.confidence, loading: false, error: null },
+        [hu.id]: { huId: hu.id, breakdown: prev[hu.id]?.breakdown ?? {} as AiBreakdown, confidence: 0, loading: true, error: null },
       }));
+
+      try {
+        const { data, error } = await supabase.functions.invoke("count-function-points", {
+          body: {
+            teamId,
+            huId: hu.id,
+            // ── Texto enriquecido: Título + Descrição + Critérios de Aceite ──
+            storyText: buildStoryText(hu),
+            context: { storyPoints: hu.story_points },
+          },
+        });
+
+        if (error) throw new Error(error.message);
+
+        const result = data as { breakdown: AiBreakdown; confidence: number; total: number };
+
+        setAnalyses((prev) => ({
+          ...prev,
+          [hu.id]: {
+            huId: hu.id,
+            breakdown: result.breakdown,
+            confidence: result.confidence,
+            loading: false,
+            error: null,
+          },
+        }));
+
+        setUserStories((prev) =>
+          prev.map((h) =>
+            h.id === hu.id
+              ? {
+                  ...h,
+                  function_points: result.total,
+                  ai_fp_breakdown: result.breakdown,
+                  ai_fp_confidence: result.confidence,
+                }
+              : h
+          )
+        );
+
+        toast.success(`PF calculado para ${hu.code}: ${result.total} PF`);
+      } catch (err: any) {
+        setAnalyses((prev) => ({
+          ...prev,
+          [hu.id]: {
+            ...prev[hu.id],
+            loading: false,
+            error: err?.message ?? "Erro ao calcular PF",
+          },
+        }));
+        toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
+      }
+    },
+    [teamId]
+  );
+
+  // ── Valida contagem e salva no banco ───────────────────────────────────────
+  const validateFp = useCallback(
+    async (hu: HuRow, fpValue: number) => {
+      const { error } = await supabase
+        .from("user_stories")
+        .update({
+          function_points: fpValue,
+          ai_fp_validated: true,
+        } as any)
+        .eq("id", hu.id);
+
+      if (error) {
+        toast.error("Erro ao salvar validação");
+        return;
+      }
+
       setUserStories((prev) =>
         prev.map((h) =>
-          h.id === hu.id
-            ? { ...h, function_points: totalPf, ai_fp_breakdown: result.breakdown, ai_fp_confidence: result.confidence }
-            : h
+          h.id === hu.id ? { ...h, function_points: fpValue, ai_fp_validated: true } : h
         )
       );
-      toast.success(`PF calculado para ${hu.code}: ${totalPf} PF${isCalibrated ? " 🧠" : ""}`);
-      return true;
-    } catch (err: any) {
-      const rawMsg = err?.__rawError || err?.message || "";
-      const friendly = toFriendly(rawMsg);
-      setAnalyses((prev) => ({ ...prev, [hu.id]: { ...prev[hu.id], loading: false, error: friendly.message } }));
-      // Pré-seleciona um provider diferente do atual usado
-      const currentProviderId = overrideProviderId ?? getAiPayload().providerId;
-      const fallback = providers.find((p) => p.id !== currentProviderId);
-      // Padrão: Lovable AI (grátis) — sempre funciona. Se preferir, escolhe outro provedor configurado.
-      setRetryProviderId(LOVABLE_PROVIDER_ID);
-      setFriendlyError({ hu, title: friendly.title, message: friendly.message, rawError: rawMsg });
-      return false;
-    }
-  }, [teamId, selectedSprintId, getAiPayload, setLastPfAnalysisId, isCalibrated, providers]);
+      toast.success(`${hu.code} — ${fpValue} PF validado e salvo!`);
+    },
+    []
+  );
 
-  // Fase 4: validateFp agora persiste desvio no learning.service
-  const validateFp = useCallback(async (hu: HuRow, fpValue: number) => {
-    const aiPf = hu.function_points ?? fpValue;
-
-    // Persiste validação + desvio para o aprendizado
-    await saveValidation({
-      teamId,
-      storyId:          hu.id,
-      storyCode:        hu.code,
-      storyTitle:       hu.title,
-      sprintId:         selectedSprintId,
-      aiTotalPf:        aiPf,
-      validatedTotalPf: fpValue,
-      breakdown:        hu.ai_fp_breakdown as unknown as Record<string, number> | null,
-      confidence:       hu.ai_fp_confidence,
-    });
-
-    // Atualiza user_stories
-    const { error } = await supabase
-      .from("user_stories")
-      .update({ function_points: fpValue, ai_fp_validated: true } as any)
-      .eq("id", hu.id);
-
-    if (error) { toast.error("Erro ao salvar validação"); return; }
-
-    setUserStories((prev) =>
-      prev.map((h) => h.id === hu.id ? { ...h, function_points: fpValue, ai_fp_validated: true } : h)
-    );
-
-    // Recarrega insights após validação
-    refreshInsights();
-
-    toast.success(`${hu.code} — ${fpValue} PF validado! 🧠 Calibração atualizada.`);
-  }, [teamId, selectedSprintId, refreshInsights]);
-
+  // ── Contar todos pendentes ─────────────────────────────────────────────────
   const countAllPending = useCallback(async () => {
     const pending = userStories.filter((h) => !h.function_points && !h.ai_fp_validated);
-    if (pending.length === 0) { toast.info("Todas as HUs já possuem PF calculado."); return; }
+    if (pending.length === 0) {
+      toast.info("Todas as HUs já possuem PF calculado.");
+      return;
+    }
     setCountingAll(true);
-    for (const hu of pending) await countFpForHu(hu);
+    for (const hu of pending) {
+      await countFpForHu(hu);
+    }
     setCountingAll(false);
     toast.success(`Contagem concluída para ${pending.length} HU(s)!`);
   }, [userStories, countFpForHu]);
 
-  const totalFp        = userStories.reduce((acc, h) => acc + (h.function_points ?? 0), 0);
+  // ── Totais ─────────────────────────────────────────────────────────────────
+  const totalFp = userStories.reduce((acc, h) => acc + (h.function_points ?? 0), 0);
   const validatedCount = userStories.filter((h) => h.ai_fp_validated).length;
-  const pendingCount   = userStories.filter((h) => !h.function_points).length;
+  const pendingCount = userStories.filter((h) => !h.function_points).length;
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   if (loadingSprints) {
-    return <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-col gap-5">
-
-      {/* Fase 4: Painel de Aprendizado Bidirecional */}
-      <LearningInsightsPanel
-        insights={insights}
-        loading={loadingInsights}
-        lastRefresh={lastRefresh}
-        onRefresh={refreshInsights}
-      />
-
-      {/* Banner HU recém-gerada */}
-      {lastHuGenerationId && pendingCount > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-          <Info className="h-4 w-4 text-primary shrink-0" />
-          <p className="text-sm text-primary flex-1">
-            HUs recém-geradas nesta sprint — clique em <strong>Calcular PF pendentes</strong> para contar automaticamente{isCalibrated ? " com calibração ativa 🧠" : ""}.
-          </p>
-          <ArrowRight className="h-4 w-4 text-primary shrink-0" />
-        </div>
-      )}
-
       {/* Seletor de Sprint + ações */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <Select value={selectedSprintId} onValueChange={setSelectedSprintId}>
+          <Select
+            value={selectedSprintId}
+            onValueChange={setSelectedSprintId}
+          >
             <SelectTrigger className="w-full sm:w-72">
               <SelectValue placeholder="Selecione uma sprint..." />
             </SelectTrigger>
@@ -353,242 +292,179 @@ export function ApfFunctionPointTab() {
               {sprints.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   <span className="flex items-center gap-2">
-                    {s.is_active && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
+                    {s.is_active && (
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                    )}
                     {s.name}
                   </span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+
           {selectedSprintId && (
-            <Button size="sm" variant="outline"
-              onClick={() => { setSelectedSprintId(""); setTimeout(() => setSelectedSprintId(selectedSprintId), 50); }}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelectedSprintId("");
+                setTimeout(() => setSelectedSprintId(selectedSprintId), 50);
+              }}
+            >
               <RefreshCw className="h-4 w-4" />
             </Button>
           )}
         </div>
+
         {userStories.length > 0 && (
-          <Button size="sm" onClick={countAllPending} disabled={countingAll || pendingCount === 0} className="gap-2 shrink-0">
-            {countingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Calcular PF pendentes ({pendingCount}){isCalibrated && " 🧠"}
+          <Button
+            size="sm"
+            onClick={countAllPending}
+            disabled={countingAll || pendingCount === 0}
+            className="gap-2 shrink-0"
+          >
+            {countingAll ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Calcular PF pendentes ({pendingCount})
           </Button>
         )}
       </div>
 
-      {/* KPIs */}
+      {/* KPIs da sprint */}
       {userStories.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Total HUs",  value: userStories.length, color: "text-foreground" },
-            { label: "Total PF",   value: totalFp.toFixed(1), color: "text-primary" },
-            { label: "Validados",  value: validatedCount,     color: "text-emerald-600" },
-            { label: "Pendentes",  value: pendingCount,       color: "text-amber-600" },
+            { label: "Total HUs", value: userStories.length, color: "text-foreground" },
+            { label: "Total PF", value: totalFp.toFixed(1), color: "text-primary" },
+            { label: "Validados", value: validatedCount, color: "text-emerald-600" },
+            { label: "Pendentes", value: pendingCount, color: "text-amber-600" },
           ].map((kpi) => (
-            <Card key={kpi.label} className="border border-border">
-              <CardContent className="pt-4 pb-3 px-4">
+            <Card key={kpi.label}>
+              <CardContent className="pt-4 pb-3">
                 <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                <p className={`text-2xl font-bold tabular-nums ${kpi.color}`}>{kpi.value}</p>
+                <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      {/* Tabela */}
-      {!selectedSprintId ? (
-        <Card className="border-dashed">
-          <CardContent className="py-12 flex flex-col items-center gap-2 text-center">
-            <Sparkles className="h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">Selecione uma sprint para ver as HUs e calcular os Pontos de Função.</p>
-          </CardContent>
-        </Card>
-      ) : loadingHUs ? (
-        <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      {/* Tabela de HUs */}
+      {loadingHUs ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
       ) : userStories.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-12 flex flex-col items-center gap-2 text-center">
-            <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">Nenhuma HU encontrada nesta sprint.</p>
-          </CardContent>
-        </Card>
+        <p className="text-center text-muted-foreground py-12">
+          {selectedSprintId ? "Nenhuma HU encontrada nesta sprint." : "Selecione uma sprint para iniciar."}
+        </p>
       ) : (
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Histórias de Usuário — Contagem APF por IA
-              {isCalibrated && (
-                <span className="ml-2 text-primary text-xs">🧠 Calibração ativa</span>
-              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-24">Código</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead className="w-16 text-center">SP</TableHead>
-                    <TableHead className="w-20 text-center">PF IA</TableHead>
-                    <TableHead className="w-28 text-center">Breakdown</TableHead>
-                    <TableHead className="w-24 text-center">Confiança</TableHead>
-                    <TableHead className="w-28 text-center">Status</TableHead>
-                    <TableHead className="w-32 text-right">Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {userStories.map((hu) => {
-                    const analysis    = analyses[hu.id];
-                    const breakdown   = analysis?.breakdown ?? hu.ai_fp_breakdown;
-                    const confidence  = analysis?.confidence ?? hu.ai_fp_confidence;
-                    const fp          = hu.function_points;
-                    const isLoading   = analysis?.loading;
-                    const hasError    = analysis?.error;
-                    return (
-                      <TableRow key={hu.id}>
-                        <TableCell><span className="font-mono text-xs text-muted-foreground">{hu.code}</span></TableCell>
-                        <TableCell><span className="text-sm line-clamp-2">{hu.title}</span></TableCell>
-                        <TableCell className="text-center"><span className="text-sm tabular-nums">{hu.story_points ?? "—"}</span></TableCell>
-                        <TableCell className="text-center">
-                          {isLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
-                          ) : fp != null ? (
-                            <span className="font-semibold tabular-nums text-primary">{fp}</span>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">—</span>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-24">Código</TableHead>
+                  <TableHead>Título</TableHead>
+                  <TableHead className="w-12 text-center">SP</TableHead>
+                  <TableHead className="w-20 text-center">PF IA</TableHead>
+                  <TableHead className="w-28 text-center">Breakdown</TableHead>
+                  <TableHead className="w-24 text-center">Confiança</TableHead>
+                  <TableHead className="w-28 text-center">Status</TableHead>
+                  <TableHead className="w-24 text-center">Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {userStories.map((hu) => {
+                  const analysis = analyses[hu.id];
+                  const fpValue = hu.function_points ?? analysis?.breakdown?.total;
+                  const confidence = hu.ai_fp_confidence ?? analysis?.confidence;
+                  const breakdown = hu.ai_fp_breakdown ?? analysis?.breakdown;
+                  const isLoading = analysis?.loading ?? false;
+                  const hasError = !!analysis?.error;
+
+                  return (
+                    <TableRow key={hu.id}>
+                      <TableCell className="font-mono text-xs">{hu.code}</TableCell>
+                      <TableCell>
+                        <div>
+                          <span className="text-sm">{hu.title}</span>
+                          {/* Indicador visual: CA preenchido */}
+                          {hu.acceptance_criteria && (
+                            <Badge variant="outline" className="ml-2 text-[10px] py-0 px-1 text-emerald-600 border-emerald-300">
+                              CA
+                            </Badge>
                           )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {breakdown ? (
-                            <div className="flex flex-wrap gap-1 justify-center">
-                              {Object.entries(breakdown)
-                                .filter(([k]) => ["EI","EO","EQ","ILF","EIF"].includes(k))
-                                .map(([k, v]) =>
-                                  (v as number) > 0 ? (
-                                    <span key={k} className="text-[10px] bg-muted px-1 rounded font-mono">{k}:{v}</span>
-                                  ) : null
-                                )}
-                            </div>
-                          ) : <span className="text-muted-foreground text-xs">—</span>}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {confidence != null ? (
-                            <Badge variant="outline" className={
-                              confidence >= 0.8 ? "border-emerald-500 text-emerald-600"
-                              : confidence >= 0.6 ? "border-amber-500 text-amber-600"
-                              : "border-red-400 text-red-500"
-                            }>
-                              {Math.round(confidence * 100)}%
-                            </Badge>
-                          ) : <span className="text-muted-foreground text-xs">—</span>}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {hu.ai_fp_validated ? (
-                            <Badge variant="outline" className="border-emerald-500 text-emerald-600 gap-1">
-                              <CheckCircle2 className="h-3 w-3" /> Validado
-                            </Badge>
-                          ) : fp != null ? (
-                            <Badge variant="outline" className="border-amber-500 text-amber-600">Pendente</Badge>
-                          ) : hasError ? (
-                            <Badge variant="outline" className="border-red-400 text-red-500 gap-1">
-                              <AlertCircle className="h-3 w-3" /> Erro
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-muted-foreground">Não calculado</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {!isLoading && (
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1"
-                                onClick={() => countFpForHu(hu)}>
-                                <Sparkles className="h-3 w-3" />
-                                {fp != null ? "Recalc" : "Calcular"}
-                              </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center text-sm">{hu.story_points ?? 0}</TableCell>
+                      <TableCell className="text-center font-semibold text-primary">
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : fpValue ? fpValue : "—"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {breakdown ? (
+                          <Badge variant="outline" className="text-xs">
+                            {Object.entries(breakdown)
+                              .filter(([k, v]) => k !== "total" && k !== "reasoning" && (v as number) > 0)
+                              .map(([k, v]) => `${k}:${v}`)
+                              .join(" ")}
+                          </Badge>
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {confidence != null ? (
+                          <Badge
+                            variant="outline"
+                            className={confidence >= 0.7 ? "text-emerald-600 border-emerald-300" : "text-amber-600 border-amber-300"}
+                          >
+                            {Math.round(confidence * 100)}%
+                          </Badge>
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {hu.ai_fp_validated ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Validado
+                          </Badge>
+                        ) : hasError ? (
+                          <Badge variant="destructive" className="gap-1">
+                            <AlertCircle className="h-3 w-3" /> Erro
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">Não calculado</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {hu.ai_fp_validated ? (
+                          <Button size="sm" variant="ghost" onClick={() => countFpForHu(hu)} disabled={isLoading}>
+                            <RefreshCw className="h-3 w-3 mr-1" /> Recalc
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="ghost" onClick={() => fpValue ? validateFp(hu, fpValue) : countFpForHu(hu)} disabled={isLoading}>
+                            {fpValue ? (
+                              <><CheckCircle2 className="h-3 w-3 mr-1" /> Validar</>
+                            ) : (
+                              <><Sparkles className="h-3 w-3 mr-1" /> Calcular</>
                             )}
-                            {fp != null && !hu.ai_fp_validated && (
-                              <Button size="sm" variant="ghost"
-                                className="h-7 px-2 text-xs text-emerald-600 hover:text-emerald-700 gap-1"
-                                onClick={() => validateFp(hu, fp)}>
-                                <CheckCircle2 className="h-3 w-3" /> Validar
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
-
-      {/* Dialog amigável de erro com escolha de provedor alternativo */}
-      <Dialog open={!!friendlyError} onOpenChange={(o) => { if (!o) setFriendlyError(null); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-600">
-              <AlertTriangle className="h-5 w-5" />
-              {friendlyError?.title}
-            </DialogTitle>
-            <DialogDescription className="pt-2">
-              {friendlyError?.message}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-2 py-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              Escolha outro provedor de IA configurado
-            </label>
-            <Select value={retryProviderId} onValueChange={setRetryProviderId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um provedor..." />
-              </SelectTrigger>
-              <SelectContent>
-                {/* Opção sempre disponível: Lovable AI Gateway (grátis) */}
-                <SelectItem value={LOVABLE_PROVIDER_ID}>
-                  <span className="flex items-center gap-2">
-                    <Sparkles className="h-3 w-3 text-primary shrink-0" />
-                    Lovable AI (grátis)
-                    <span className="text-[10px] text-muted-foreground uppercase">recomendado</span>
-                  </span>
-                </SelectItem>
-                {providers.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <span className="flex items-center gap-2">
-                      {p.is_recommended && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
-                      {p.name}
-                      <span className="text-[10px] text-muted-foreground uppercase">{p.provider_type}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setFriendlyError(null)} disabled={retrying}>
-              Cancelar
-            </Button>
-            <Button
-              disabled={!retryProviderId || retrying || !friendlyError}
-              onClick={async () => {
-                if (!friendlyError || !retryProviderId) return;
-                setRetrying(true);
-                const ok = await countFpForHu(friendlyError.hu, retryProviderId);
-                setRetrying(false);
-                if (ok) setFriendlyError(null);
-              }}
-              className="gap-2"
-            >
-              {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Tentar com este provedor
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

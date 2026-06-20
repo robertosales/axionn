@@ -13,14 +13,6 @@
 --              { system_prompt, user_prompt_template, model_meta }
 -- ============================================================
 
--- ------------------------------------------------------------
--- RPC: build_apf_prompt
--- Parâmetros:
---   p_contract_id  UUID  — id do contrato
---   p_hu_text      TEXT  — texto das HUs da sprint (opcional)
---                          se NULL retorna só o system_prompt
--- Retorna: JSONB
--- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.build_apf_prompt(
   p_contract_id UUID,
   p_hu_text     TEXT DEFAULT NULL
@@ -37,6 +29,9 @@ DECLARE
   v_factors      JSONB;
   v_categories   JSONB;
   v_template     JSONB;
+  v_func_table   TEXT;
+  v_factor_table TEXT;
+  v_cat_list     TEXT;
   v_system       TEXT;
   v_user_tpl     TEXT;
   v_result       JSONB;
@@ -69,10 +64,10 @@ BEGIN
   -- --------------------------------------------------------
   SELECT jsonb_agg(
     jsonb_build_object(
-      'sigla',      ft.sigla,
-      'name',       ft.name,
-      'class',      ft.func_class,
-      'weight',     ft.weight
+      'sigla',  ft.sigla,
+      'name',   ft.name,
+      'class',  ft.func_class,
+      'weight', ft.weight
     ) ORDER BY ft.sort_order, ft.sigla
   )
   INTO v_func_types
@@ -114,7 +109,7 @@ BEGIN
     AND c.is_active = true;
 
   -- --------------------------------------------------------
-  -- 6. Template de saída (seções do documento de evidência)
+  -- 6. Template de saída
   -- --------------------------------------------------------
   SELECT ot.sections
   INTO v_template
@@ -123,154 +118,122 @@ BEGIN
   LIMIT 1;
 
   -- --------------------------------------------------------
-  -- 7. Montar o SYSTEM PROMPT
+  -- 7. Formatar tabelas Markdown (sem format() com %.2f)
   -- --------------------------------------------------------
-  v_system := format(
-$PROMPT$
-%s
 
-## PRINCÍPIO FUNDAMENTAL
-%s
+  -- Tipos de função
+  SELECT string_agg(
+    '| ' || (ft->>'sigla') ||
+    ' | ' || (ft->>'name') ||
+    ' | ' || (ft->>'class') ||
+    ' | ' || ROUND((ft->>'weight')::NUMERIC, 2)::TEXT || ' PF |',
+    E'\n'
+  )
+  INTO v_func_table
+  FROM jsonb_array_elements(v_func_types) ft;
 
-## HIERARQUIA DE DECISÃO
-%s
+  -- Fatores de impacto
+  SELECT string_agg(
+    '| ' || (f->>'sigla') ||
+    ' | ' || (f->>'name') ||
+    ' | ' || (f->>'contribution_pct') || '%' ||
+    ' | ' || (f->>'action_on_baseline') ||
+    CASE WHEN (f->>'is_inm')::BOOLEAN THEN ' | *INM* |' ELSE ' | |' END,
+    E'\n'
+  )
+  INTO v_factor_table
+  FROM jsonb_array_elements(v_factors) f;
 
-## REGRAS CRÍTICAS
-%s
-
-## PROCESSO ELEMENTAR E UNICIDADE
-%s
-
-## GRANULARIDADE
-%s
-
-## HISTÓRICO DO TIME E PRECEDÊNCIA
-%s
-
-## CONSISTÊNCIA CONTRATUAL
-%s
-
-## FECHAMENTO DO PROCESSO ELEMENTAR
-%s
-
----
-## REFERÊNCIA: TIPOS DE FUNÇÃO DO CONTRATO
-Os pesos a seguir são os valores contratuais configurados. NÃO use outros valores.
-
-%s
-
----
-## REFERÊNCIA: FATORES DE IMPACTO
-Aplique exatamente a contribuição (%) indicada para cada fator.
-
-%s
-
----
-## REFERÊNCIA: CATEGORIAS FUNCIONAIS
-%s
-
----
-## FORMATO DE SAÍDA
-Para CADA Elemento Funcional identificado, retorne um objeto JSON com os campos:
-{
-  "ef_description": "<descrição completa da EF>",
-  "hu_ref": "<HU de origem, ex: HU049>",
-  "function_sigla": "<TRN|ARQ|...>",
-  "factor_sigla": "<I|A|A75|...>",
-  "category_sigla": "<ARN|ADS|ATD|AGR|NM>",
-  "complexity": "Padrão",
-  "pf_bruto": <peso do tipo>,
-  "contribution_pct": <% do fator>,
-  "pf_fs": <pf_bruto * contribution_pct / 100>,
-  "justification": "<justificativa objetiva citando a regra aplicada>",
-  "evidence_literal": "<trecho literal do requisito que fundamenta a contagem>",
-  "precedent_ref": "<referência ao precedente se aplicável, ou null>"
-}
-
-Se houver zonas cinzentas (ambiguidade de interpretação), retorne também:
-{
-  "gray_zones": [
-    {
-      "hu_ref": "<HU>",
-      "scenario": "<descrição do cenário ambíguo>",
-      "interpretation_a": "<opção A>",
-      "interpretation_b": "<opção B>",
-      "pf_difference": <diferença de PF entre A e B>,
-      "decision": "<decisão adotada>",
-      "confidence_level": "<alto|médio|baixo>"
-    }
-  ]
-}
-$PROMPT$,
-    COALESCE(v_rules.rule_mission,                ''),
-    COALESCE(v_rules.rule_fundamental_principle,  ''),
-    COALESCE(v_rules.rule_decision_hierarchy,     ''),
-    COALESCE(v_rules.rule_critical_guidelines,    ''),
-    COALESCE(v_rules.rule_elementary_process,     ''),
-    COALESCE(v_rules.rule_granularity,            ''),
-    COALESCE(v_rules.rule_precedence_override,    ''),
-    COALESCE(v_rules.rule_contractual_consistency,''),
-    COALESCE(v_rules.rule_closure,                ''),
-    -- Tipos de função formatados como tabela Markdown
-    (
-      SELECT string_agg(
-        format('| %s | %s | %s | %.2f PF |',
-          ft->>'sigla', ft->>'name', ft->>'class', (ft->>'weight')::NUMERIC),
-        E'\n'
-      )
-      FROM jsonb_array_elements(v_func_types) ft
-    ),
-    -- Fatores formatados como tabela Markdown
-    (
-      SELECT string_agg(
-        format('| %s | %s | %s%% | %s |%s',
-          f->>'sigla',
-          f->>'name',
-          f->>'contribution_pct',
-          f->>'action_on_baseline',
-          CASE WHEN (f->>'is_inm')::BOOLEAN THEN ' *INM*' ELSE '' END
-        ),
-        E'\n'
-      )
-      FROM jsonb_array_elements(v_factors) f
-    ),
-    -- Categorias formatadas
-    (
-      SELECT string_agg(
-        format('- **%s**: %s — %s',
-          c->>'sigla', c->>'name', COALESCE(c->>'description', '')),
-        E'\n'
-      )
-      FROM jsonb_array_elements(v_categories) c
-    )
-  );
+  -- Categorias
+  SELECT string_agg(
+    '- **' || (c->>'sigla') || '**: ' || (c->>'name') ||
+    CASE WHEN (c->>'description') IS NOT NULL
+         THEN ' — ' || (c->>'description')
+         ELSE ''
+    END,
+    E'\n'
+  )
+  INTO v_cat_list
+  FROM jsonb_array_elements(v_categories) c;
 
   -- --------------------------------------------------------
-  -- 8. Montar o USER PROMPT TEMPLATE
+  -- 8. Montar o SYSTEM PROMPT via concatenação
+  -- --------------------------------------------------------
+  v_system :=
+    COALESCE(v_rules.rule_mission, '') || E'\n\n' ||
+    '## PRINCÍPIO FUNDAMENTAL' || E'\n' ||
+    COALESCE(v_rules.rule_fundamental_principle, '') || E'\n\n' ||
+    '## HIERARQUIA DE DECISÃO' || E'\n' ||
+    COALESCE(v_rules.rule_decision_hierarchy, '') || E'\n\n' ||
+    '## REGRAS CRÍTICAS' || E'\n' ||
+    COALESCE(v_rules.rule_critical_guidelines, '') || E'\n\n' ||
+    '## PROCESSO ELEMENTAR E UNICIDADE' || E'\n' ||
+    COALESCE(v_rules.rule_elementary_process, '') || E'\n\n' ||
+    '## GRANULARIDADE' || E'\n' ||
+    COALESCE(v_rules.rule_granularity, '') || E'\n\n' ||
+    '## HISTÓRICO DO TIME E PRECEDÊNCIA' || E'\n' ||
+    COALESCE(v_rules.rule_precedence_override, '') || E'\n\n' ||
+    '## CONSISTÊNCIA CONTRATUAL' || E'\n' ||
+    COALESCE(v_rules.rule_contractual_consistency, '') || E'\n\n' ||
+    '## FECHAMENTO DO PROCESSO ELEMENTAR' || E'\n' ||
+    COALESCE(v_rules.rule_closure, '') || E'\n\n' ||
+    '---' || E'\n' ||
+    '## REFERÊNCIA: TIPOS DE FUNÇÃO DO CONTRATO' || E'\n' ||
+    '| Sigla | Nome | Classe | Peso |' || E'\n' ||
+    '|-------|------|--------|------|' || E'\n' ||
+    COALESCE(v_func_table, '') || E'\n\n' ||
+    '---' || E'\n' ||
+    '## REFERÊNCIA: FATORES DE IMPACTO' || E'\n' ||
+    '| Sigla | Nome | Contribuição | Ação Baseline | INM |' || E'\n' ||
+    '|-------|------|--------------|--------------|-----|' || E'\n' ||
+    COALESCE(v_factor_table, '') || E'\n\n' ||
+    '---' || E'\n' ||
+    '## REFERÊNCIA: CATEGORIAS FUNCIONAIS' || E'\n' ||
+    COALESCE(v_cat_list, '') || E'\n\n' ||
+    '---' || E'\n' ||
+    '## FORMATO DE SAÍDA' || E'\n' ||
+    'Para CADA Elemento Funcional identificado, retorne um objeto JSON com os campos:' || E'\n' ||
+    E'{\n' ||
+    E'  "ef_description": "<descrição completa da EF>",\n' ||
+    E'  "hu_ref": "<HU de origem, ex: HU049>",\n' ||
+    E'  "function_sigla": "<TRN|ARQ|...>",\n' ||
+    E'  "factor_sigla": "<I|A|A75|...>",\n' ||
+    E'  "category_sigla": "<ARN|ADS|ATD|AGR|NM>",\n' ||
+    E'  "complexity": "Padrão",\n' ||
+    E'  "pf_bruto": <peso do tipo>,\n' ||
+    E'  "contribution_pct": <pct do fator>,\n' ||
+    E'  "pf_fs": <pf_bruto * contribution_pct / 100>,\n' ||
+    E'  "justification": "<justificativa citando a regra aplicada>",\n' ||
+    E'  "evidence_literal": "<trecho literal do requisito>",\n' ||
+    E'  "precedent_ref": "<referência ao precedente ou null>"\n' ||
+    E'}\n\n' ||
+    'Se houver zonas cinzentas, retorne também o campo "gray_zones" com o array de ambiguidades.';
+
+  -- --------------------------------------------------------
+  -- 9. User prompt template
   -- --------------------------------------------------------
   v_user_tpl := CASE
     WHEN p_hu_text IS NOT NULL THEN
-      format(
-        E'Realize a contagem APF para as seguintes Histórias de Usuário:\n\n%s\n\nRetorne o resultado em JSON conforme especificado.',
-        p_hu_text
-      )
+      'Realize a contagem APF para as seguintes Histórias de Usuário:' ||
+      E'\n\n' || p_hu_text ||
+      E'\n\nRetorne o resultado em JSON conforme especificado.'
     ELSE
       'Realize a contagem APF para as Histórias de Usuário fornecidas. Retorne o resultado em JSON conforme especificado no system prompt.'
   END;
 
   -- --------------------------------------------------------
-  -- 9. Montar resultado final
+  -- 10. Resultado final
   -- --------------------------------------------------------
   v_result := jsonb_build_object(
     'model_meta', jsonb_build_object(
-      'model_id',       v_model.id,
-      'model_name',     v_model.name,
-      'standard',       v_model.standard,
-      'contract_id',    p_contract_id,
-      'function_types', v_func_types,
-      'impact_factors', v_factors,
-      'categories',     v_categories,
-      'output_template_sections', v_template
+      'model_id',                  v_model.id,
+      'model_name',                v_model.name,
+      'standard',                  v_model.standard,
+      'contract_id',               p_contract_id,
+      'function_types',            v_func_types,
+      'impact_factors',            v_factors,
+      'categories',                v_categories,
+      'output_template_sections',  v_template
     ),
     'system_prompt',        v_system,
     'user_prompt_template', v_user_tpl
@@ -286,12 +249,4 @@ COMMENT ON FUNCTION public.build_apf_prompt(UUID, TEXT) IS
    Retorna JSONB com: system_prompt, user_prompt_template, model_meta.
    Uso: SELECT build_apf_prompt(''<contract_id>'', ''<texto das HUs>'');';
 
--- Permissão: apenas usuários autenticados
 GRANT EXECUTE ON FUNCTION public.build_apf_prompt(UUID, TEXT) TO authenticated;
-
--- ============================================================
--- TESTE RÁPIDO (comente antes de commitar em prod)
--- SELECT jsonb_pretty(
---   build_apf_prompt('d59ab6dc-421f-41b4-b415-ae0bc072ebd4')
--- );
--- ============================================================

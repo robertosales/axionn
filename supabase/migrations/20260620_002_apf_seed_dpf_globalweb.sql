@@ -315,6 +315,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.apf_create_dpf_globalweb_model(UUID) IS
-  'Cria o modelo de contagem PFS/DPF-GlobalWeb para um contrato. ' ||
-  'Popula tipos (TRN/ARQ), 34 fatores de impacto, categorias, regras da IA e template de saída. ' ||
-  'Chamada pela UI quando gestor clica em Importar padrão DPF-GlobalWeb no ContractWizardDialog.';
+  'Cria o modelo de contagem PFS/DPF-GlobalWeb para um contrato. Popula tipos (TRN/ARQ), 34 fatores de impacto, categorias, regras da IA e template de saída. Chamada pela UI quando gestor clica em Importar padrão DPF-GlobalWeb no ContractWizardDialog.';

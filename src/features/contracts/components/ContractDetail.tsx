@@ -16,6 +16,12 @@ interface Props {
   onUpdate: () => void;
 }
 
+/** Normaliza ISO timestamp ou YYYY-MM-DD para YYYY-MM-DD (o que o <input type="date"> precisa) */
+function toDateInput(value?: string | null): string {
+  if (!value) return '';
+  return value.slice(0, 10);
+}
+
 export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
   const { contract, loading } = useContractDetail(contractId);
   const [editing, setEditing] = useState(false);
@@ -194,7 +200,13 @@ export function ContractDetail({ contractId, onClose, onUpdate }: Props) {
 
       {editing && (
         <ContractForm
-          initialData={{ ...contract, room_mode: roomMode }}
+          initialData={{
+            ...contract,
+            room_mode:  roomMode,
+            // Normaliza datas para YYYY-MM-DD antes de passar ao formulário
+            starts_at:  toDateInput(contract.starts_at),
+            ends_at:    toDateInput(contract.ends_at),
+          }}
           onClose={() => setEditing(false)}
           onSuccess={() => {
             setEditing(false);

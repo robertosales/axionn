@@ -2,32 +2,32 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────────
 
 export interface Contract {
-  id: string;
-  name: string;
-  status: string;
-  start_date: string | null;
-  end_date:   string | null;
-  company_id: string | null;
-  number:          string | null;
-  object:          string | null;
-  value_per_pfus:  number | null;
-  currency:        string | null;
-  projectCount?: number;
-  slaCount?:     number;
+  id:             string;
+  name:           string;
+  status:         string;
+  starts_at:      string | null;   // nome real no banco
+  ends_at:        string | null;   // nome real no banco
+  company_id:     string | null;
+  number:         string | null;
+  object:         string | null;
+  value_per_pfus: number | null;
+  currency:       string | null;
+  projectCount?:  number;
+  slaCount?:      number;
 }
 
 export interface ContractFormData {
-  name:       string;
-  status:     string;
-  start_date: string;
-  end_date:   string;
-  company_id: string | null;
+  name:           string;
+  status:         string;
+  starts_at:      string;          // nome real no banco
+  ends_at:        string;          // nome real no banco
+  company_id:     string | null;
   number:         string;
   object:         string;
-  value_per_pfus: string;   // string no form, parseFloat antes de persistir
+  value_per_pfus: string;          // string no form, parseFloat antes de persistir
   currency:       string;
   // Relações
   team_ids:    string[];
@@ -38,8 +38,8 @@ export interface ContractFormData {
 export const EMPTY_CONTRACT_FORM: ContractFormData = {
   name:           '',
   status:         'active',
-  start_date:     '',
-  end_date:       '',
+  starts_at:      '',
+  ends_at:        '',
   company_id:     null,
   number:         '',
   object:         '',
@@ -57,7 +57,7 @@ export interface ContractKpis {
   critical: number;
 }
 
-// ── Hook ───────────────────────────────────────────────────────────────────
+// ── Hook ────────────────────────────────────────────────────────────────────────
 
 export function useContracts() {
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -70,7 +70,7 @@ export function useContracts() {
       const { data } = await supabase
         .from('contracts')
         .select(`
-          id, name, status, start_date, end_date,
+          id, name, status, starts_at, ends_at,
           company_id, number, object, value_per_pfus, currency,
           projects:projects(id),
           contract_slas:contract_slas(id)
@@ -81,14 +81,14 @@ export function useContracts() {
         id:             c.id,
         name:           c.name,
         status:         c.status,
-        start_date:     c.start_date,
-        end_date:       c.end_date,
+        starts_at:      c.starts_at,
+        ends_at:        c.ends_at,
         company_id:     c.company_id,
         number:         c.number,
         object:         c.object,
         value_per_pfus: c.value_per_pfus,
         currency:       c.currency,
-        projectCount:   (c.projects || []).length,
+        projectCount:   (c.projects      || []).length,
         slaCount:       (c.contract_slas || []).length,
       }));
 
@@ -98,9 +98,9 @@ export function useContracts() {
         active:   list.filter(c => c.status === 'active').length,
         paused:   list.filter(c => c.status === 'paused').length,
         critical: list.filter(c => {
-          if (!c.end_date) return false;
+          if (!c.ends_at) return false;
           const daysLeft = Math.ceil(
-            (new Date(c.end_date).getTime() - Date.now()) / 86_400_000
+            (new Date(c.ends_at).getTime() - Date.now()) / 86_400_000
           );
           return daysLeft >= 0 && daysLeft <= 30;
         }).length,
@@ -112,12 +112,12 @@ export function useContracts() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── loadFormData ──────────────────────────────────────────────────────────
+  // ── loadFormData ───────────────────────────────────────────────────────────────
   const loadFormData = async (contractId: string): Promise<ContractFormData> => {
     const { data } = await supabase
       .from('contracts')
       .select(`
-        id, name, status, start_date, end_date,
+        id, name, status, starts_at, ends_at,
         company_id, number, object, value_per_pfus, currency,
         contract_teams:contract_teams(team_id),
         projects:projects(id),
@@ -128,11 +128,11 @@ export function useContracts() {
 
     if (!data) return { ...EMPTY_CONTRACT_FORM };
     return {
-      name:           data.name       ?? '',
-      status:         data.status     ?? 'active',
-      start_date:     data.start_date ?? '',
-      end_date:       data.end_date   ?? '',
-      company_id:     data.company_id ?? null,
+      name:           (data as any).name       ?? '',
+      status:         (data as any).status     ?? 'active',
+      starts_at:      (data as any).starts_at  ?? '',
+      ends_at:        (data as any).ends_at    ?? '',
+      company_id:     (data as any).company_id ?? null,
       number:         (data as any).number         ?? '',
       object:         (data as any).object         ?? '',
       value_per_pfus: (data as any).value_per_pfus != null
@@ -145,7 +145,7 @@ export function useContracts() {
     };
   };
 
-  // ── persist helpers ───────────────────────────────────────────────────────
+  // ── persist helpers ───────────────────────────────────────────────────────────
   const persistRelations = async (contractId: string, data: ContractFormData) => {
     await Promise.all([
       supabase.from('contract_teams').delete().eq('contract_id', contractId),
@@ -168,20 +168,18 @@ export function useContracts() {
   };
 
   const buildPayload = (data: ContractFormData) => ({
-    name:       data.name.trim(),
-    status:     data.status,
-    start_date: data.start_date || null,
-    end_date:   data.end_date   || null,
-    company_id: data.company_id || null,
-    number:     data.number.trim()  || null,
-    object:     data.object.trim()  || null,
-    value_per_pfus: data.value_per_pfus
-      ? parseFloat(data.value_per_pfus)
-      : null,
-    currency:   data.currency || 'BRL',
+    name:           data.name.trim(),
+    status:         data.status,
+    starts_at:      data.starts_at || null,
+    ends_at:        data.ends_at   || null,
+    company_id:     data.company_id || null,
+    number:         data.number.trim()  || null,
+    object:         data.object.trim()  || null,
+    value_per_pfus: data.value_per_pfus ? parseFloat(data.value_per_pfus) : null,
+    currency:       data.currency || 'BRL',
   });
 
-  // ── CRUD ──────────────────────────────────────────────────────────────────
+  // ── CRUD ───────────────────────────────────────────────────────────────────────
   const create = async (data: ContractFormData): Promise<boolean> => {
     const { data: inserted, error } = await supabase
       .from('contracts')

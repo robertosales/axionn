@@ -1,12 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useReleases } from "../hooks/useReleases";
-import { Button }  from "@/components/ui/button";
-import { Badge }   from "@/components/ui/badge";
+import { useContracts } from "@/features/admin/hooks/useContracts";
+import { Button }   from "@/components/ui/button";
+import { Badge }    from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Input }   from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input }    from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tag, Plus, Trash2, Edit2, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import type { Release, ReleaseStatus, ReleaseHU } from "../hooks/useReleases";
@@ -14,41 +19,62 @@ import type { Release, ReleaseStatus, ReleaseHU } from "../hooks/useReleases";
 const STATUS_CONFIG: Record<ReleaseStatus, { label: string; color: string }> = {
   planned:     { label: "Planejada",    color: "text-blue-500 border-blue-300 bg-blue-50/40 dark:bg-blue-950/20" },
   in_progress: { label: "Em progresso", color: "text-amber-500 border-amber-300 bg-amber-50/40 dark:bg-amber-950/20" },
-  released:    { label: "Lançada",      color: "text-emerald-600 border-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/20" },
+  released:    { label: "Laçada",       color: "text-emerald-600 border-emerald-300 bg-emerald-50/40 dark:bg-emerald-950/20" },
   cancelled:   { label: "Cancelada",    color: "text-muted-foreground border-border" },
 };
 
 const DONE_STATUSES = ["done", "concluido", "concluído"];
+const NO_CONTRACT   = "__none__";
 
 export function ReleasesPage() {
   const { releases, sprints, loading, createRelease, updateRelease, deleteRelease, getHUs } = useReleases();
+  const { contracts, loading: loadingContracts } = useContracts();
+
   const [newOpen,    setNewOpen]    = useState(false);
   const [editTarget, setEditTarget] = useState<Release | null>(null);
   const [expanded,   setExpanded]   = useState<string | null>(null);
   const [huMap,      setHuMap]      = useState<Record<string, ReleaseHU[]>>({});
 
   // Form state
-  const [version,    setVersion]    = useState("");
-  const [name,       setName]       = useState("");
-  const [status,     setStatus]     = useState<ReleaseStatus>("planned");
-  const [releaseDate,setReleaseDate]= useState("");
-  const [description,setDescription]= useState("");
-  const [changelog,  setChangelog]  = useState("");
-  const [selectedSprints, setSelectedSprints] = useState<string[]>([]);
+  const [version,         setVersion]         = useState("");
+  const [name,            setName]             = useState("");
+  const [status,          setStatus]           = useState<ReleaseStatus>("planned");
+  const [releaseDate,     setReleaseDate]      = useState("");
+  const [description,     setDescription]     = useState("");
+  const [changelog,       setChangelog]        = useState("");
+  const [selectedSprints, setSelectedSprints]  = useState<string[]>([]);
+  const [contractId,      setContractId]       = useState<string | null>(null);
 
-  const resetForm = () => { setVersion(""); setName(""); setStatus("planned"); setReleaseDate(""); setDescription(""); setChangelog(""); setSelectedSprints([]); };
+  const resetForm = () => {
+    setVersion(""); setName(""); setStatus("planned");
+    setReleaseDate(""); setDescription(""); setChangelog("");
+    setSelectedSprints([]); setContractId(null);
+  };
 
   const openEdit = (r: Release) => {
     setEditTarget(r);
     setVersion(r.version); setName(r.name); setStatus(r.status);
     setReleaseDate(r.release_date ?? ""); setDescription(r.description ?? "");
     setChangelog(r.changelog ?? ""); setSelectedSprints(r.sprint_ids ?? []);
+    setContractId(r.contract_id ?? null);
   };
 
   const handleSave = async () => {
-    const data = { version, name, status, release_date: releaseDate || null, description: description || null, changelog: changelog || null, sprint_ids: selectedSprints };
-    if (editTarget) { await updateRelease(editTarget.id, data); setEditTarget(null); }
-    else { await createRelease(data as any); setNewOpen(false); }
+    const data = {
+      version, name, status,
+      release_date: releaseDate || null,
+      description:  description || null,
+      changelog:    changelog   || null,
+      sprint_ids:   selectedSprints,
+      contract_id:  contractId  || null,
+    };
+    if (editTarget) {
+      await updateRelease(editTarget.id, data);
+      setEditTarget(null);
+    } else {
+      await createRelease(data as any);
+      setNewOpen(false);
+    }
     resetForm();
   };
 
@@ -62,74 +88,178 @@ export function ReleasesPage() {
   };
 
   const toggleSprint = (id: string) =>
-    setSelectedSprints(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
+    setSelectedSprints(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
 
-  if (loading) return <div className="space-y-3 p-4">{[1,2,3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>;
+  // Mapa id -> nome para exibir na lista
+  const contractMap = Object.fromEntries(contracts.map(c => [c.id, c.name]));
 
-  const FormDialog = ({ open, onClose, title }: { open: boolean; onClose: () => void; title: string }) => (
+  if (loading) return (
+    <div className="space-y-3 p-4">
+      {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+    </div>
+  );
+
+  // ── FormDialog inline ────────────────────────────────────────────────────
+  const FormDialog = ({
+    open, onClose, title,
+  }: { open: boolean; onClose: () => void; title: string }) => (
     <Dialog open={open} onOpenChange={v => { if (!v) { onClose(); resetForm(); } }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div className="space-y-3 py-1">
+
+          {/* Versão + Status */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Versão *</label>
-              <Input value={version} onChange={e => setVersion(e.target.value)} className="h-8 text-xs" placeholder="ex: v2.1.0" />
+              <Input
+                value={version}
+                onChange={e => setVersion(e.target.value)}
+                className="h-8 text-xs"
+                placeholder="ex: v2.1.0"
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Status</label>
               <Select value={status} onValueChange={v => setStatus(v as ReleaseStatus)}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>{Object.entries(STATUS_CONFIG).map(([k,v]) => <SelectItem key={k} value={k} className="text-xs">{v.label}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {Object.entries(STATUS_CONFIG).map(([k, v]) => (
+                    <SelectItem key={k} value={k} className="text-xs">{v.label}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
           </div>
+
+          {/* Nome */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Nome</label>
-            <Input value={name} onChange={e => setName(e.target.value)} className="h-8 text-xs" placeholder="ex: Release Kanban Avançado" />
+            <Input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="h-8 text-xs"
+              placeholder="ex: Release Kanban Avançado"
+            />
           </div>
+
+          {/* Contrato */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">
+              Contrato <span className="text-muted-foreground font-normal">(opcional)</span>
+            </label>
+            {loadingContracts ? (
+              <Skeleton className="h-8 w-full rounded-md" />
+            ) : (
+              <Select
+                value={contractId ?? NO_CONTRACT}
+                onValueChange={v => setContractId(v === NO_CONTRACT ? null : v)}
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sem contrato" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CONTRACT} className="text-xs">— Sem contrato —</SelectItem>
+                  {contracts.map(c => (
+                    <SelectItem key={c.id} value={c.id} className="text-xs">
+                      {c.name}
+                      {c.number ? ` — ${c.number}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Data de lançamento */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Data de lançamento</label>
-            <Input type="date" value={releaseDate} onChange={e => setReleaseDate(e.target.value)} className="h-8 text-xs" />
+            <Input
+              type="date"
+              value={releaseDate}
+              onChange={e => setReleaseDate(e.target.value)}
+              className="h-8 text-xs"
+            />
           </div>
+
+          {/* Sprints */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Sprints incluídos</label>
             <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto rounded-lg border border-border p-2">
               {sprints.map(s => (
-                <button key={s.id} onClick={() => toggleSprint(s.id)}
+                <button
+                  key={s.id}
+                  onClick={() => toggleSprint(s.id)}
                   className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${
                     selectedSprints.includes(s.id)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-muted/30 border-border hover:border-primary/50"
-                  }`}>{s.name}</button>
+                  }`}
+                >
+                  {s.name}
+                </button>
               ))}
             </div>
           </div>
+
+          {/* Descrição */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Descrição</label>
-            <Textarea value={description} onChange={e => setDescription(e.target.value)} className="text-xs min-h-16 resize-none" placeholder="Objetivo desta release..." />
+            <Textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              className="text-xs min-h-16 resize-none"
+              placeholder="Objetivo desta release..."
+            />
           </div>
+
+          {/* Changelog */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Changelog (Markdown)</label>
-            <Textarea value={changelog} onChange={e => setChangelog(e.target.value)} className="text-xs min-h-24 resize-none font-mono" placeholder="## O que há de novo\n- Feature X\n- Correção Y" />
+            <Textarea
+              value={changelog}
+              onChange={e => setChangelog(e.target.value)}
+              className="text-xs min-h-24 resize-none font-mono"
+              placeholder="## O que há de novo\n- Feature X\n- Correção Y"
+            />
           </div>
         </div>
+
         <DialogFooter>
-          <Button variant="outline" onClick={() => { onClose(); resetForm(); }} className="text-xs h-8">Cancelar</Button>
-          <Button onClick={handleSave} disabled={!version} className="text-xs h-8 gap-1"><Plus className="h-3.5 w-3.5" /> Salvar</Button>
+          <Button
+            variant="outline"
+            onClick={() => { onClose(); resetForm(); }}
+            className="text-xs h-8"
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={!version}
+            className="text-xs h-8 gap-1"
+          >
+            <Plus className="h-3.5 w-3.5" /> Salvar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 
+  // ── Page ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 p-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold flex items-center gap-2"><Tag className="h-5 w-5 text-primary" /> Releases</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Gerencie versões e changelogs do projeto.</p>
+          <h1 className="text-lg font-bold flex items-center gap-2">
+            <Tag className="h-5 w-5 text-primary" /> Releases
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Gerencie versões e changelogs do projeto.
+          </p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setNewOpen(true)}><Plus className="h-3.5 w-3.5" /> Nova Release</Button>
+        <Button size="sm" className="gap-1.5" onClick={() => setNewOpen(true)}>
+          <Plus className="h-3.5 w-3.5" /> Nova Release
+        </Button>
       </div>
 
       {releases.length === 0 ? (
@@ -140,10 +270,10 @@ export function ReleasesPage() {
       ) : (
         <div className="space-y-3">
           {releases.map(r => {
-            const cfg = STATUS_CONFIG[r.status];
+            const cfg  = STATUS_CONFIG[r.status];
             const hus  = huMap[r.id] ?? [];
             const isExpanded = expanded === r.id;
-            const doneHUs = hus.filter(h => DONE_STATUSES.some(ds => h.status?.toLowerCase().includes(ds)));
+            const contractName = r.contract_id ? contractMap[r.contract_id] : null;
             return (
               <div key={r.id} className="rounded-xl border border-border bg-card overflow-hidden">
                 <div className="flex items-start justify-between gap-4 p-4">
@@ -152,23 +282,40 @@ export function ReleasesPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-sm font-mono">{r.version}</span>
                         {r.name && <span className="text-sm text-muted-foreground">{r.name}</span>}
-                        <Badge variant="outline" className={`text-[10px] ${cfg.color}`}>{cfg.label}</Badge>
+                        <Badge variant="outline" className={`text-[10px] ${cfg.color}`}>
+                          {cfg.label}
+                        </Badge>
+                        {contractName && (
+                          <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">
+                            📄 {contractName}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
                         {r.release_date && <span>📅 {r.release_date}</span>}
                         {r.hu_count !== undefined && (
                           <span>📦 {r.done_count}/{r.hu_count} HUs concluídas</span>
                         )}
-                        {r.sprint_ids?.length > 0 && <span>🏋 {r.sprint_ids.length} sprint{r.sprint_ids.length !== 1 ? "s" : ""}</span>}
+                        {(r.sprint_ids?.length ?? 0) > 0 && (
+                          <span>🏃 {r.sprint_ids.length} sprint{r.sprint_ids.length !== 1 ? "s" : ""}</span>
+                        )}
                       </div>
-                      {r.description && <p className="text-xs text-muted-foreground mt-1.5 max-w-xl">{r.description}</p>}
+                      {r.description && (
+                        <p className="text-xs text-muted-foreground mt-1.5 max-w-xl">{r.description}</p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteRelease(r.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}>
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteRelease(r.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleExpand(r)}>
-                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      {isExpanded
+                        ? <ChevronUp   className="h-3.5 w-3.5" />
+                        : <ChevronDown className="h-3.5 w-3.5" />}
                     </Button>
                   </div>
                 </div>
@@ -177,26 +324,44 @@ export function ReleasesPage() {
                   <div className="border-t border-border">
                     <Tabs defaultValue="hus" className="p-4">
                       <TabsList className="mb-3">
-                        <TabsTrigger value="hus" className="text-xs gap-1">📦 HUs ({hus.length})</TabsTrigger>
-                        {r.changelog && <TabsTrigger value="changelog" className="text-xs gap-1"><FileText className="h-3 w-3" /> Changelog</TabsTrigger>}
+                        <TabsTrigger value="hus" className="text-xs gap-1">
+                          📦 HUs ({hus.length})
+                        </TabsTrigger>
+                        {r.changelog && (
+                          <TabsTrigger value="changelog" className="text-xs gap-1">
+                            <FileText className="h-3 w-3" /> Changelog
+                          </TabsTrigger>
+                        )}
                       </TabsList>
                       <TabsContent value="hus">
                         {hus.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">Nenhuma HU nos sprints desta release.</p>
+                          <p className="text-xs text-muted-foreground">
+                            Nenhuma HU nos sprints desta release.
+                          </p>
                         ) : (
                           <div className="space-y-1.5">
                             {hus.map(h => (
-                              <div key={h.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2 text-xs hover:bg-muted/30">
+                              <div
+                                key={h.id}
+                                className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2 text-xs hover:bg-muted/30"
+                              >
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <span className="font-mono text-[10px] text-muted-foreground shrink-0">{h.code}</span>
+                                  <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+                                    {h.code}
+                                  </span>
                                   <span className="truncate">{h.title}</span>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <span className="text-muted-foreground text-[10px]">{h.assignee}</span>
-                                  <Badge variant={DONE_STATUSES.some(ds => h.status.toLowerCase().includes(ds)) ? "default" : "secondary"} className="text-[9px]">
+                                  <Badge
+                                    variant={DONE_STATUSES.some(ds => h.status.toLowerCase().includes(ds)) ? "default" : "secondary"}
+                                    className="text-[9px]"
+                                  >
                                     {DONE_STATUSES.some(ds => h.status.toLowerCase().includes(ds)) ? "✅" : h.status}
                                   </Badge>
-                                  {h.story_points > 0 && <Badge variant="outline" className="text-[9px]">{h.story_points}pt</Badge>}
+                                  {h.story_points > 0 && (
+                                    <Badge variant="outline" className="text-[9px]">{h.story_points}pt</Badge>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -205,7 +370,9 @@ export function ReleasesPage() {
                       </TabsContent>
                       {r.changelog && (
                         <TabsContent value="changelog">
-                          <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-3">{r.changelog}</pre>
+                          <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-3">
+                            {r.changelog}
+                          </pre>
                         </TabsContent>
                       )}
                     </Tabs>
@@ -217,8 +384,8 @@ export function ReleasesPage() {
         </div>
       )}
 
-      <FormDialog open={newOpen} onClose={() => setNewOpen(false)} title="Nova Release" />
-      <FormDialog open={!!editTarget} onClose={() => setEditTarget(null)} title="Editar Release" />
+      <FormDialog open={newOpen}      onClose={() => setNewOpen(false)}    title="Nova Release" />
+      <FormDialog open={!!editTarget} onClose={() => setEditTarget(null)}  title="Editar Release" />
     </div>
   );
 }

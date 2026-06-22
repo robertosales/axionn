@@ -52,23 +52,20 @@ function SelectSection({
     [items, search],
   );
 
-  const allFilteredIds  = filtered.map(i => i.id);
-  const allSelected     = filtered.length > 0 && allFilteredIds.every(id => selected.includes(id));
-  const someSelected    = allFilteredIds.some(id => selected.includes(id)) && !allSelected;
+  const allFilteredIds = filtered.map(i => i.id);
+  const allSelected    = filtered.length > 0 && allFilteredIds.every(id => selected.includes(id));
+  const someSelected   = allFilteredIds.some(id => selected.includes(id)) && !allSelected;
 
   const toggleAll = () => {
     if (allSelected) {
-      // desmarca todos os visíveis
       onChange(selected.filter(id => !allFilteredIds.includes(id)));
     } else {
-      // marca todos os visíveis sem duplicar
       onChange([...new Set([...selected, ...allFilteredIds])]);
     }
   };
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
-      {/* Cabeçalho */}
       <div className="flex items-center gap-2 px-3 py-2 bg-muted/40 border-b border-border">
         <span className="text-muted-foreground">{icon}</span>
         <span className="text-xs font-semibold uppercase tracking-wide flex-1">{title}</span>
@@ -91,8 +88,6 @@ function SelectSection({
         </p>
       ) : (
         <div className="p-2 space-y-1.5">
-
-          {/* Busca + Marca todos */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
@@ -106,7 +101,6 @@ function SelectSection({
             <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
               <Checkbox
                 checked={allSelected}
-                // indeterminate via data-attr para o Radix Checkbox
                 data-state={someSelected ? 'indeterminate' : allSelected ? 'checked' : 'unchecked'}
                 onCheckedChange={toggleAll}
                 className="h-3.5 w-3.5"
@@ -115,7 +109,6 @@ function SelectSection({
             </label>
           </div>
 
-          {/* Lista */}
           <div className="max-h-44 overflow-y-auto space-y-0.5 pr-0.5">
             {filtered.length === 0 && (
               <p className="text-xs text-muted-foreground py-2 text-center">Nenhum resultado.</p>
@@ -127,9 +120,7 @@ function SelectSection({
                   key={item.id}
                   className={[
                     'flex items-center gap-2.5 px-2 py-1.5 rounded cursor-pointer transition-colors',
-                    checked
-                      ? 'bg-primary/8 hover:bg-primary/12'
-                      : 'hover:bg-muted/50',
+                    checked ? 'bg-primary/8 hover:bg-primary/12' : 'hover:bg-muted/50',
                   ].join(' ')}
                 >
                   <Checkbox
@@ -139,9 +130,7 @@ function SelectSection({
                   />
                   <span className="text-sm flex-1 leading-tight">{item.label}</span>
                   {item.sub && (
-                    <Badge variant="secondary" className="text-[10px] shrink-0">
-                      {item.sub}
-                    </Badge>
+                    <Badge variant="secondary" className="text-[10px] shrink-0">{item.sub}</Badge>
                   )}
                 </label>
               );
@@ -206,11 +195,7 @@ export function ContractWizardDialog({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Número do contrato</Label>
-          <Input
-            value={form.number}
-            onChange={e => set('number', e.target.value)}
-            placeholder="Ex: 2026/0042"
-          />
+          <Input value={form.number} onChange={e => set('number', e.target.value)} placeholder="Ex: 2026/0042" />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Moeda</Label>
@@ -241,9 +226,7 @@ export function ContractWizardDialog({
             value={form.value_per_pfus}
             onChange={e => set('value_per_pfus', e.target.value)}
             placeholder="Ex: 1250.00"
-            type="number"
-            min={0}
-            step="0.01"
+            type="number" min={0} step="0.01"
           />
         </div>
         <div className="space-y-1">
@@ -258,9 +241,7 @@ export function ContractWizardDialog({
               <SelectTrigger className="h-9"><SelectValue placeholder="Sem empresa" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_COMPANY}>— Sem empresa —</SelectItem>
-                {companies.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
+                {companies.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
@@ -282,18 +263,20 @@ export function ContractWizardDialog({
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Início</Label>
-          <Input value={form.start_date} onChange={e => set('start_date', e.target.value)} type="date" className="h-9 text-sm" />
+          {/* campo mapeado para starts_at — nome real no banco */}
+          <Input value={form.starts_at} onChange={e => set('starts_at', e.target.value)} type="date" className="h-9 text-sm" />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Término</Label>
-          <Input value={form.end_date} onChange={e => set('end_date', e.target.value)} type="date" className="h-9 text-sm" />
+          {/* campo mapeado para ends_at — nome real no banco */}
+          <Input value={form.ends_at} onChange={e => set('ends_at', e.target.value)} type="date" className="h-9 text-sm" />
         </div>
       </div>
     </div>
   );
 
   // ── Step 1 — Times & Projetos ─────────────────────────────────────────
-  const teamItems    = teams.map(t => ({
+  const teamItems = teams.map(t => ({
     id:    t.id,
     label: t.name,
     sub:   t.memberCount !== undefined
@@ -301,10 +284,7 @@ export function ContractWizardDialog({
       : undefined,
   }));
 
-  const projetoItems = (projetos as any[]).map(p => ({
-    id:    p.id,
-    label: p.name,
-  }));
+  const projetoItems = (projetos as any[]).map(p => ({ id: p.id, label: p.name }));
 
   const renderStep1 = () => (
     <div className="space-y-3">
@@ -348,12 +328,9 @@ export function ContractWizardDialog({
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            {contractId ? 'Editar Contrato' : 'Novo Contrato'}
-          </DialogTitle>
+          <DialogTitle>{contractId ? 'Editar Contrato' : 'Novo Contrato'}</DialogTitle>
         </DialogHeader>
 
-        {/* Step indicator */}
         <div className="flex gap-1">
           {STEPS.map((label, i) => (
             <button
@@ -395,11 +372,7 @@ export function ContractWizardDialog({
               Próximo →
             </Button>
           ) : (
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={saving || !form.name.trim()}
-            >
+            <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim()}>
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
               Salvar
             </Button>

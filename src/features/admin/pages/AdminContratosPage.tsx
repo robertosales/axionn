@@ -77,10 +77,10 @@ export function AdminContratosPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { icon: <CheckCircle2 className="h-4 w-4" />, label: "Ativos",     value: kpis.active   },
-          { icon: <PauseCircle  className="h-4 w-4" />, label: "Pausados",   value: kpis.paused   },
+          { icon: <CheckCircle2  className="h-4 w-4" />, label: "Ativos",      value: kpis.active   },
+          { icon: <PauseCircle   className="h-4 w-4" />, label: "Pausados",    value: kpis.paused   },
           { icon: <AlertTriangle className="h-4 w-4" />, label: "Alertas SLA", value: kpis.critical },
-          { icon: <LayoutGrid   className="h-4 w-4" />, label: "Total",      value: kpis.total    },
+          { icon: <LayoutGrid    className="h-4 w-4" />, label: "Total",       value: kpis.total    },
         ].map(({ icon, label, value }) => (
           <div key={label} className="rounded-lg border bg-card p-3">
             <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
@@ -123,11 +123,16 @@ export function AdminContratosPage() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{contract.name}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        {contract.start_date && (
+                        {contract.number && (
                           <span className="text-[11px] text-muted-foreground">
-                            {new Date(contract.start_date).toLocaleDateString("pt-BR")} –{" "}
-                            {contract.end_date
-                              ? new Date(contract.end_date).toLocaleDateString("pt-BR")
+                            #{contract.number}
+                          </span>
+                        )}
+                        {contract.starts_at && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(contract.starts_at).toLocaleDateString("pt-BR")} –{" "}
+                            {contract.ends_at
+                              ? new Date(contract.ends_at).toLocaleDateString("pt-BR")
                               : "sem fim"}
                           </span>
                         )}
@@ -150,9 +155,7 @@ export function AdminContratosPage() {
                       {meta.label}
                     </Badge>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
+                      variant="ghost" size="icon" className="h-7 w-7"
                       onClick={() => handleEdit(contract)}
                       disabled={loadingEdit}
                     >
@@ -161,8 +164,7 @@ export function AdminContratosPage() {
                         : <Pencil className="h-3.5 w-3.5" />}
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="icon"
+                      variant="ghost" size="icon"
                       className="h-7 w-7 text-destructive hover:text-destructive"
                       onClick={() => setDeleteTarget(contract)}
                     >

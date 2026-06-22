@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Building2, CheckCircle2, FlaskConical, PauseCircle,
   LayoutGrid, Plus, Pencil, Trash2, ShieldCheck, X,
-  ChevronDown, ChevronUp, Loader2,
+  ChevronDown, ChevronUp, Loader2, AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +32,38 @@ import {
   EMPTY_LICENSE_FORM,
 } from '../hooks/useLicenses';
 
+// ── CNPJ utils ─────────────────────────────────────────────────────────────
+
+/** Aplica a máscara XX.XXX.XXX/XXXX-XX mantendo apenas dígitos. */
+function maskCnpj(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  return digits
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+/** Valida os dois dígitos verificadores do CNPJ. Aceita apenas os 14 dígitos puros. */
+function isCnpjValid(cnpj: string): boolean {
+  const d = cnpj.replace(/\D/g, '');
+  if (d.length !== 14) return false;
+  if (/^(\d)\1+$/.test(d)) return false; // todos iguais
+
+  const calc = (len: number) => {
+    let sum = 0;
+    let pos = len - 7;
+    for (let i = len; i >= 1; i--) {
+      sum += parseInt(d[len - i]) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    const rem = sum % 11;
+    return rem < 2 ? 0 : 11 - rem;
+  };
+
+  return calc(12) === parseInt(d[12]) && calc(13) === parseInt(d[13]);
+}
+
 // ── Status metadata ────────────────────────────────────────────────────────
 const STATUS_META: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   active:    { label: 'Ativa',     variant: 'default'     },
@@ -60,17 +92,41 @@ function CompanyFormDialog({
 }) {
   const [form, setForm] = useState<CompanyFormData>(initial ?? EMPTY_COMPANY_FORM);
   const [saving, setSaving] = useState(false);
+  const [cnpjTouched, setCnpjTouched] = useState(false);
 
   // reset ao abrir
-  useState(() => { setForm(initial ?? EMPTY_COMPANY_FORM); });
+  useState(() => {
+    setForm(initial ?? EMPTY_COMPANY_FORM);
+    setCnpjTouched(false);
+  });
 
   const set = (k: keyof CompanyFormData, v: string) =>
     setForm(prev => ({ ...prev, [k]: v }));
 
+  // Comprimento dos dígitos do CNPJ preenchido
+  const cnpjDigits = form.cnpj.replace(/\D/g, '');
+  const cnpjFilled = cnpjDigits.length > 0;
+  const cnpjComplete = cnpjDigits.length === 14;
+  const cnpjError = cnpjTouched && cnpjFilled && (!cnpjComplete || !isCnpjValid(form.cnpj));
+
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    set('cnpj', maskCnpj(e.target.value));
+  };
+
   const handleSave = async () => {
     if (!form.name.trim()) return;
+    // Bloqueia se CNPJ preenchido mas inválido
+    if (cnpjFilled && !isCnpjValid(form.cnpj)) {
+      setCnpjTouched(true);
+      return;
+    }
     setSaving(true);
-    const ok = await onSave(form);
+    // Grava apenas os dígitos (sem máscara), conforme padrão da migration
+    const payload: CompanyFormData = {
+      ...form,
+      cnpj: form.cnpj ? form.cnpj.replace(/\D/g, '') : '',
+    };
+    const ok = await onSave(payload);
     setSaving(false);
     if (ok) onClose();
   };
@@ -91,14 +147,36 @@ function CompanyFormDialog({
               placeholder="Nome da empresa"
             />
           </div>
+
+          {/* CNPJ com máscara e validação */}
           <div className="space-y-1">
             <Label className="text-xs">CNPJ</Label>
-            <Input
-              value={form.cnpj}
-              onChange={e => set('cnpj', e.target.value)}
-              placeholder="00.000.000/0001-00"
-            />
+            <div className="relative">
+              <Input
+                value={form.cnpj}
+                onChange={handleCnpjChange}
+                onBlur={() => cnpjFilled && setCnpjTouched(true)}
+                placeholder="00.000.000/0001-00"
+                maxLength={18}
+                inputMode="numeric"
+                className={cnpjError ? 'border-destructive pr-8' : ''}
+              />
+              {cnpjError && (
+                <AlertCircle className="h-4 w-4 text-destructive absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              )}
+            </div>
+            {cnpjError && (
+              <p className="text-[11px] text-destructive flex items-center gap-1">
+                {cnpjDigits.length < 14
+                  ? 'CNPJ incompleto (14 dígitos necessários)'
+                  : 'CNPJ inválido — verifique os dígitos verificadores'}
+              </p>
+            )}
+            {cnpjTouched && cnpjComplete && isCnpjValid(form.cnpj) && (
+              <p className="text-[11px] text-green-600 dark:text-green-400">CNPJ válido ✓</p>
+            )}
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">E-mail</Label>
@@ -146,7 +224,11 @@ function CompanyFormDialog({
           <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim()}>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saving || !form.name.trim() || (cnpjFilled && !isCnpjValid(form.cnpj))}
+          >
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
             Salvar
           </Button>
@@ -332,7 +414,8 @@ export function AdminEmpresasPage() {
     setEditingId(company.id);
     setEditingData({
       name:     company.name,
-      cnpj:     company.cnpj     ?? '',
+      // Exibe com máscara ao editar (o banco guarda só dígitos)
+      cnpj:     company.cnpj ? maskCnpj(company.cnpj) : '',
       email:    company.email    ?? '',
       phone:    company.phone    ?? '',
       logo_url: company.logo_url ?? '',
@@ -413,6 +496,10 @@ export function AdminEmpresasPage() {
             {companies.map(company => {
               const meta = STATUS_META[company.status] ?? STATUS_META.inactive;
               const isExpanded = expandedId === company.id;
+              // Formata CNPJ para exibição na lista
+              const cnpjDisplay = company.cnpj
+                ? maskCnpj(company.cnpj)
+                : null;
               return (
                 <div key={company.id}>
                   {/* Row principal */}
@@ -433,9 +520,9 @@ export function AdminEmpresasPage() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{company.name}</p>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          {company.cnpj && (
+                          {cnpjDisplay && (
                             <span className="text-[11px] text-muted-foreground">
-                              CNPJ: {company.cnpj}
+                              CNPJ: {cnpjDisplay}
                             </span>
                           )}
                           {(company.teamCount ?? 0) > 0 && (

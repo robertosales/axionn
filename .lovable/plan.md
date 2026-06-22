@@ -1,32 +1,34 @@
-# Corrigir 400 em `count-function-points`
+# Conectar aba "Contar PF" ao backend APF real
 
-## Causa raiz
-O frontend (`ApfFunctionPointTab.tsx`) envia o body com os campos:
-`story_id`, `story_title`, `story_description`, `story_acceptance_criteria`, `provider`, `apiKey`, `calibrationContext`.
+## Objetivo
+Substituir a chamada da Edge Function inexistente `count-function-points` em `src/features/apf/components/ApfFunctionPointTab.tsx` pelo fluxo real já deployado: `open_counting_session` → `build_apf_prompt` → `apf-generate` → `save_counting_items`.
 
-Mas a edge function `supabase/functions/count-function-points/index.ts` valida e exige:
-`teamId` (UUID), `huId` (UUID), `storyText` (não-vazio), e opcionalmente `context` + `providerId`.
+Sem mudanças em layout, estilos, JSX, KPIs, validação humana ou carregamento de sprints/HUs.
 
-Como `huId` e `storyText` ficam `undefined`, a função retorna **400** com mensagens como `"huId (UUID) é obrigatório"` / `"storyText é obrigatório"`. Daí o erro no console.
+## Mudanças
 
-## Correção (apenas frontend, sem alterar a edge function)
+**Arquivo único:** `src/features/apf/components/ApfFunctionPointTab.tsx`
 
-Em `src/features/function-points/hooks/useFunctionPointCounter.ts` e em `src/features/apf/components/ApfFunctionPointTab.tsx`, ajustar o body enviado para `supabase.functions.invoke("count-function-points", ...)`:
+Reescrever apenas o corpo do `try { ... }` dentro de `countFpForHu`:
 
-- `huId` ← `hu.id`
-- `storyText` ← concatenar `hu.title` + (opcional) `hu.description` em uma única string
-- `context` ← `{ storyPoints: hu.story_points ?? null, acceptanceCriteria: hu.acceptance_criteria ?? null, storyType: hu.type ?? null }`
-- `providerId` ← `aiPayload.providerId` (manter)
-- Remover do payload os campos que a função ignora/não suporta: `story_id`, `sprint_id`, `story_code`, `story_title`, `story_description`, `story_acceptance_criteria`, `provider`, `apiKey`, `calibrationContext`.
+1. **PASSO 1** — `supabase.rpc("open_counting_session", { p_project_id: teamId, p_sprint_ref: selectedSprintId, p_release_ref: null, p_redmine_ref: hu.code, p_baseline_id: null })` → retorna `sessionId`.
+2. **PASSO 2** — `supabase.rpc("build_apf_prompt", { p_session_id: sessionId })` → retorna `builtPrompt`.
+3. **PASSO 3** — `supabase.functions.invoke("apf-generate", { body: { prompt: \`${builtPrompt}\n\n=== HISTÓRIA DE USUÁRIO ===\n${buildStoryText(hu)}\n=== FIM ===\`, skipDocx: true } })`. Se `!aiResult.success`, lançar `aiResult.userMessage`.
+4. **Parse** de `aiResult.markdown`: limpar cercas ```json, `JSON.parse`, aceitar `Array` direto, `.items`, `.efs` ou `.functions`. Montar `breakdown = {EI,EO,EQ,ILF,EIF,total}` somando 1 por tipo e peso 3/4/6 conforme `complexity` SIMPLE/MEDIUM/COMPLEX. `confidence = parsed.confidence ?? 0.8`. Erro amigável se JSON inválido ou lista vazia.
+5. **PASSO 4** — `supabase.rpc("save_counting_items", { p_session_id: sessionId, p_items: items, p_ai_model: aiResult.providerUsed ?? null })`.
+6. **Estado local** — atualizar `analyses[hu.id]` e `userStories` com `breakdown`, `totalPf`, `confidence` (mesma forma que hoje, só trocando a origem dos dados). Toast de sucesso com `totalPf`.
 
-Manter o tratamento de erro amigável já existente no hook.
+O `catch` existente permanece — continua mostrando toast amigável (incluindo a mensagem de "sem créditos" vinda de `aiResult.userMessage`).
 
-## Validação
-1. Recarregar a página `APF → Pontos de Função` em Sala Ágil.
-2. Clicar em "Contar PF" para uma HU.
-3. Confirmar no Network que o POST retorna 200 e `data.breakdown` é renderizado.
-4. Conferir logs do edge function (sem erro 400).
+## Não alterar
+- `buildStoryText`, `validateFp`, `countAllPending`, carregamento de sprints/HUs, tipos, imports, JSX, KPIs, tabela.
 
-## Escopo
-- Edição apenas no frontend (2 arquivos).
-- Nenhuma alteração de schema, migração ou edge function.
+## Ponto de atenção (precisa decisão sua)
+O componente hoje tem um seletor de provedor de IA (incluindo "Lovable AI grátis") adicionado nas últimas mensagens, que envia `providerId`/`forceProvider` para `count-function-points`. A função `apf-generate` **não aceita esses parâmetros** — ela escolhe o provedor sozinha no backend.
+
+Opções:
+- **A (recomendada, segue o prompt):** remover o seletor de provedor da UI desta aba. O `apf-generate` faz fallback automático entre provedores configurados.
+- **B:** manter o seletor visualmente mas ignorar a seleção (não tem efeito real).
+- **C:** não tocar no seletor agora e adaptar depois o `apf-generate` para aceitar `forceProvider`.
+
+Qual seguir?

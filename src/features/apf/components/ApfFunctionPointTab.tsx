@@ -167,26 +167,79 @@ export function ApfFunctionPointTab() {
       }));
 
       try {
-        const { data, error } = await supabase.functions.invoke("count-function-points", {
+        // PASSO 1 — Abre sessão de contagem no banco
+        const { data: sessionId, error: e1 } = await supabase.rpc("open_counting_session" as any, {
+          p_project_id: teamId,
+          p_sprint_ref: selectedSprintId,
+          p_release_ref: null,
+          p_redmine_ref: hu.code,
+          p_baseline_id: null,
+        });
+        if (e1 || !sessionId) throw new Error(e1?.message ?? "Falha ao abrir sessão APF");
+
+        // PASSO 2 — Monta o prompt personalizado do time
+        const { data: builtPrompt, error: e2 } = await supabase.rpc("build_apf_prompt" as any, {
+          p_session_id: sessionId,
+        });
+        if (e2 || !builtPrompt) throw new Error(e2?.message ?? "Falha ao montar prompt APF");
+
+        // PASSO 3 — Chama a IA via Edge Function real
+        const { data: aiResult, error: e3 } = await supabase.functions.invoke("apf-generate", {
           body: {
-            teamId,
-            huId: hu.id,
-            // ── Texto enriquecido: Título + Descrição + Critérios de Aceite ──
-            storyText: buildStoryText(hu),
-            context: { storyPoints: hu.story_points },
+            prompt: `${builtPrompt}\n\n=== HISTÓRIA DE USUÁRIO ===\n${buildStoryText(hu)}\n=== FIM ===`,
+            skipDocx: true,
           },
         });
+        if (e3) throw new Error(e3.message);
+        if (!aiResult?.success) throw new Error(aiResult?.userMessage ?? "Erro na IA");
 
-        if (error) throw new Error(error.message);
+        // Parse do JSON retornado em aiResult.markdown
+        let items: any[];
+        let breakdown: AiBreakdown;
+        let totalPf: number;
+        let confidence: number;
 
-        const result = data as { breakdown: AiBreakdown; confidence: number; total: number };
+        try {
+          const raw = String(aiResult.markdown ?? "")
+            .trim()
+            .replace(/^```json?\s*/i, "")
+            .replace(/\s*```$/, "");
+          const parsed = JSON.parse(raw);
+          const list: any[] = Array.isArray(parsed)
+            ? parsed
+            : (parsed.items ?? parsed.efs ?? parsed.functions ?? []);
+
+          breakdown = { EI: 0, EO: 0, EQ: 0, ILF: 0, EIF: 0, total: 0 };
+          for (const item of list) {
+            const type = String(item.type ?? item.tipo ?? "").toUpperCase();
+            const complexity = String(item.complexity ?? item.complexidade ?? "MEDIUM").toUpperCase();
+            const weight = complexity === "SIMPLE" ? 3 : complexity === "COMPLEX" ? 6 : 4;
+            if (type in breakdown) (breakdown as any)[type] += 1;
+            breakdown.total += weight;
+          }
+
+          items = list;
+          totalPf = breakdown.total;
+          confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.8;
+        } catch {
+          throw new Error("A IA não retornou JSON válido. Tente novamente.");
+        }
+        if (!items.length) throw new Error("A IA não retornou nenhum item de contagem.");
+
+        // PASSO 4 — Salva os itens da contagem
+        const { error: e4 } = await supabase.rpc("save_counting_items" as any, {
+          p_session_id: sessionId,
+          p_items: items,
+          p_ai_model: aiResult.providerUsed ?? null,
+        });
+        if (e4) throw new Error(e4.message);
 
         setAnalyses((prev) => ({
           ...prev,
           [hu.id]: {
             huId: hu.id,
-            breakdown: result.breakdown,
-            confidence: result.confidence,
+            breakdown,
+            confidence,
             loading: false,
             error: null,
           },
@@ -197,15 +250,15 @@ export function ApfFunctionPointTab() {
             h.id === hu.id
               ? {
                   ...h,
-                  function_points: result.total,
-                  ai_fp_breakdown: result.breakdown,
-                  ai_fp_confidence: result.confidence,
+                  function_points: totalPf,
+                  ai_fp_breakdown: breakdown,
+                  ai_fp_confidence: confidence,
                 }
               : h
           )
         );
 
-        toast.success(`PF calculado para ${hu.code}: ${result.total} PF`);
+        toast.success(`PF calculado para ${hu.code}: ${totalPf} PF`);
       } catch (err: any) {
         setAnalyses((prev) => ({
           ...prev,
@@ -218,7 +271,7 @@ export function ApfFunctionPointTab() {
         toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
       }
     },
-    [teamId]
+    [teamId, selectedSprintId]
   );
 
   // ── Valida contagem e salva no banco ───────────────────────────────────────

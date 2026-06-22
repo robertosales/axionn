@@ -224,55 +224,53 @@ $$;
 
 -- -----------------------------------------------------------------------------
 -- 8. RLS — Row Level Security
+-- Padrão do projeto: usar public.is_admin() ao invés de coluna is_admin
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.licenses  ENABLE ROW LEVEL SECURITY;
 
--- Admin vê tudo
-CREATE POLICY "admin_all_companies" ON public.companies
+-- Admin vê e gerencia tudo
+CREATE POLICY "companies_admin_all" ON public.companies
   FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-       WHERE id = auth.uid() AND is_admin = true
-    )
-  );
+  USING      (public.is_admin())
+  WITH CHECK (public.is_admin());
 
-CREATE POLICY "admin_all_licenses" ON public.licenses
+CREATE POLICY "licenses_admin_all" ON public.licenses
   FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-       WHERE id = auth.uid() AND is_admin = true
-    )
-  );
+  USING      (public.is_admin())
+  WITH CHECK (public.is_admin());
 
--- Usuário comum vê apenas a empresa do seu time
-CREATE POLICY "member_read_own_company" ON public.companies
+-- Usuário comum: leitura apenas da empresa do seu time
+CREATE POLICY "companies_member_select" ON public.companies
   FOR SELECT TO authenticated
   USING (
     id IN (
-      SELECT t.company_id FROM public.teams t
-      INNER JOIN public.team_members tm ON tm.team_id = t.id
-      WHERE tm.user_id = auth.uid()
+      SELECT t.company_id
+        FROM public.teams t
+       INNER JOIN public.team_members tm ON tm.team_id = t.id
+       WHERE tm.user_id = auth.uid()
+         AND t.company_id IS NOT NULL
     )
   );
 
-CREATE POLICY "member_read_own_license" ON public.licenses
+-- Usuário comum: leitura apenas da licença da sua empresa
+CREATE POLICY "licenses_member_select" ON public.licenses
   FOR SELECT TO authenticated
   USING (
     company_id IN (
-      SELECT t.company_id FROM public.teams t
-      INNER JOIN public.team_members tm ON tm.team_id = t.id
-      WHERE tm.user_id = auth.uid()
+      SELECT t.company_id
+        FROM public.teams t
+       INNER JOIN public.team_members tm ON tm.team_id = t.id
+       WHERE tm.user_id = auth.uid()
+         AND t.company_id IS NOT NULL
     )
   );
 
 -- -----------------------------------------------------------------------------
 -- 9. ÍNDICES DE PERFORMANCE
 -- -----------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_companies_status    ON public.companies(status);
-CREATE INDEX IF NOT EXISTS idx_companies_cnpj      ON public.companies(cnpj) WHERE cnpj IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_licenses_company    ON public.licenses(company_id);
-CREATE INDEX IF NOT EXISTS idx_licenses_status     ON public.licenses(status);
-CREATE INDEX IF NOT EXISTS idx_licenses_reset      ON public.licenses(quota_reset_at);
+CREATE INDEX IF NOT EXISTS idx_companies_status ON public.companies(status);
+CREATE INDEX IF NOT EXISTS idx_companies_cnpj   ON public.companies(cnpj) WHERE cnpj IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_licenses_company ON public.licenses(company_id);
+CREATE INDEX IF NOT EXISTS idx_licenses_status  ON public.licenses(status);
+CREATE INDEX IF NOT EXISTS idx_licenses_reset   ON public.licenses(quota_reset_at);

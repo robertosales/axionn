@@ -69,7 +69,6 @@ interface HuRow {
   ai_fp_confidence: number | null;
   ai_fp_validated: boolean;
   contract_id: string | null;
-  // metadados RAG armazenados após countFpForHu
   _sessionId?: string;
   _providerUsed?: string;
   _ragWasUsed?: boolean;
@@ -96,7 +95,6 @@ interface FpAnalysis {
   error: string | null;
 }
 
-// Estado do diálogo de validação
 interface ValidationDialog {
   open: boolean;
   hu: HuRow | null;
@@ -114,6 +112,19 @@ function buildStoryText(hu: HuRow): string {
   return parts.join("");
 }
 
+/** Busca o UUID do provider recomendado/ativo para passar como providerId na Edge Function. */
+async function resolveActiveProviderId(): Promise<string | null> {
+  const { data } = await supabase
+    .from("ai_providers" as any)
+    .select("id")
+    .eq("is_active", true)
+    .order("is_recommended", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data as any)?.id ?? null;
+}
+
 // ── Componente ───────────────────────────────────────────────────────────────
 export function ApfFunctionPointTab() {
   const { currentTeam } = useAuth();
@@ -128,6 +139,7 @@ export function ApfFunctionPointTab() {
   const [countingAll, setCountingAll]           = useState(false);
   const [teamContractId, setTeamContractId]     = useState<string | null>(null);
   const [teamProjectId, setTeamProjectId]       = useState<string | null>(null);
+  const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [validating, setValidating]             = useState(false);
 
   const [dialog, setDialog] = useState<ValidationDialog>({
@@ -135,7 +147,6 @@ export function ApfFunctionPointTab() {
     correctionReason: "", correctionNotes: "", wasCorrected: false,
   });
 
-  // Learning insights
   const {
     insights,
     loading: insightsLoading,
@@ -143,12 +154,16 @@ export function ApfFunctionPointTab() {
     refresh: insightsRefreshFn,
   } = useLearningInsights();
 
+  // ── Carrega providerId ativo uma vez ─────────────────────────────────────
+  useEffect(() => {
+    resolveActiveProviderId().then(setActiveProviderId);
+  }, []);
+
   // ── Contrato e Projeto do time ──────────────────────────────────────────────
   useEffect(() => {
     if (!teamId) { setTeamContractId(null); setTeamProjectId(null); return; }
     let cancelled = false;
     (async () => {
-      // 1. Busca contract_id via contract_teams
       const { data: ct } = await supabase
         .from("contract_teams").select("contract_id")
         .eq("team_id", teamId).limit(1).maybeSingle();
@@ -158,7 +173,6 @@ export function ApfFunctionPointTab() {
 
       if (contractId) {
         setTeamContractId(contractId);
-        // 2. Resolve project_id: busca projeto vinculado ao mesmo team_id
         const { data: proj } = await supabase
           .from("projects").select("id")
           .eq("team_id", teamId).eq("contract_id", contractId)
@@ -167,7 +181,6 @@ export function ApfFunctionPointTab() {
         return;
       }
 
-      // Fallback: busca via modelo APF ativo
       const { data: model } = await supabase
         .from("apf_counting_models" as any).select("contract_id")
         .eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -250,7 +263,11 @@ export function ApfFunctionPointTab() {
       const contractId = hu.contract_id ?? teamContractId;
       if (!contractId) throw new Error("Esta HU não está vinculada a um contrato. Edite a HU/time e selecione o contrato APF.");
 
-      // Resolve project_id via sprint → team → project (com fallback para teamProjectId já carregado)
+      // Resolve providerId — usa estado ou faz query fresh
+      const providerId = activeProviderId ?? await resolveActiveProviderId();
+      if (!providerId) throw new Error("Nenhum provedor de IA ativo cadastrado. Configure um provider em Configurações → IA.");
+
+      // Resolve project_id via sprint → team → project
       let resolvedProjectId: string | null = teamProjectId;
       if (!resolvedProjectId && selectedSprintId) {
         const { data: sprintData } = await supabase
@@ -276,6 +293,7 @@ export function ApfFunctionPointTab() {
 
       const { data: aiResult, error: e3 } = await supabase.functions.invoke("apf-generate", {
         body: {
+          providerId,
           prompt: `${builtPrompt}\n\n=== HISTÓRIA DE USUÁRIO ===\n${buildStoryText(hu)}\n=== FIM ===`,
           skipDocx: true,
         },
@@ -319,7 +337,6 @@ export function ApfFunctionPointTab() {
         [hu.id]: { huId: hu.id, breakdown, confidence, loading: false, error: null },
       }));
 
-      // Persiste metadados RAG no estado local para usar na validação
       setUserStories((prev) => prev.map((h) =>
         h.id !== hu.id ? h : {
           ...h,
@@ -343,38 +360,31 @@ export function ApfFunctionPointTab() {
       }));
       toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
     }
-  }, [teamId, selectedSprintId, teamContractId, teamProjectId]);
+  }, [teamId, selectedSprintId, teamContractId, teamProjectId, activeProviderId]);
 
   // ── Abre diálogo de validação ───────────────────────────────────────────────
   const openValidationDialog = useCallback((hu: HuRow, fpValue: number) => {
     const aiTotalPf    = hu.ai_fp_breakdown?.total ?? analyses[hu.id]?.breakdown?.total ?? fpValue;
     const wasCorrected = fpValue !== aiTotalPf;
-    setDialog({
-      open: true, hu, fpValue,
-      correctionReason: "", correctionNotes: "", wasCorrected,
-    });
+    setDialog({ open: true, hu, fpValue, correctionReason: "", correctionNotes: "", wasCorrected });
   }, [analyses]);
 
-  // ── Confirma validação — fecha o loop de aprendizado ───────────────────────
+  // ── Confirma validação ─────────────────────────────────────────────────────
   const confirmValidation = useCallback(async () => {
     const { hu, fpValue, correctionReason, correctionNotes, wasCorrected } = dialog;
     if (!hu) return;
-
     if (wasCorrected && !correctionReason) {
       toast.warning("Selecione o motivo da correção antes de validar.");
       return;
     }
-
     setValidating(true);
     try {
-      // 1. Atualiza user_stories
       const { error: dbErr } = await supabase
         .from("user_stories")
         .update({ function_points: fpValue, ai_fp_validated: true } as any)
         .eq("id", hu.id);
       if (dbErr) throw new Error(dbErr.message);
 
-      // 2. Persiste evento de validação (fecha o loop de aprendizado)
       const aiBreakdown = hu.ai_fp_breakdown ?? analyses[hu.id]?.breakdown;
       const { error: fnErr } = await supabase.functions.invoke("apf-validate", {
         body: {
@@ -383,7 +393,6 @@ export function ApfFunctionPointTab() {
           team_id:                   teamId,
           hu_text:                   buildStoryText(hu),
           hu_title:                  hu.title,
-
           ai_functional_type:        "mixed",
           ai_complexity:             "mixed",
           ai_pf_bruto:               aiBreakdown?.total ?? null,
@@ -393,26 +402,20 @@ export function ApfFunctionPointTab() {
           prompt_version_hash:       hu._promptVersionHash ?? null,
           rag_was_used:              hu._ragWasUsed ?? false,
           rag_case_count:            hu._ragCaseCount ?? 0,
-
           validated_functional_type: "mixed",
           validated_complexity:      "mixed",
           validated_pf_bruto:        fpValue,
-
           correction_reason_code:    wasCorrected ? correctionReason : undefined,
           correction_notes:          correctionNotes || undefined,
         },
       });
-      // Não bloqueia o fluxo se apf-validate falhar — só loga
       if (fnErr) console.warn("apf-validate não persistido:", fnErr.message);
 
       setUserStories((prev) => prev.map((h) =>
         h.id === hu.id ? { ...h, function_points: fpValue, ai_fp_validated: true } : h
       ));
-
       setDialog((d) => ({ ...d, open: false }));
       toast.success(`${hu.code} — ${fpValue} PF validado!`);
-
-      // Atualiza painel de learning insights
       insightsRefreshFn();
     } catch (err: any) {
       toast.error("Erro ao validar", { description: err?.message });
@@ -448,7 +451,6 @@ export function ApfFunctionPointTab() {
   return (
     <div className="flex flex-col gap-5">
 
-      {/* 🧠 Learning Insights — painel de aprendizado bidirecional */}
       <LearningInsightsPanel
         insights={insights}
         loading={insightsLoading}
@@ -496,7 +498,7 @@ export function ApfFunctionPointTab() {
         )}
       </div>
 
-      {/* KPIs da sprint */}
+      {/* KPIs */}
       {userStories.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
@@ -634,7 +636,7 @@ export function ApfFunctionPointTab() {
         </Card>
       )}
 
-      {/* Diálogo de validação com motivo de correção */}
+      {/* Diálogo de validação */}
       <Dialog
         open={dialog.open}
         onOpenChange={(open) => !validating && setDialog((d) => ({ ...d, open }))}
@@ -648,7 +650,6 @@ export function ApfFunctionPointTab() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Resumo IA vs. especialista */}
             <div className="rounded-md bg-muted/50 border border-border px-4 py-3 space-y-1">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">PF sugerido pela IA</span>
@@ -662,7 +663,6 @@ export function ApfFunctionPointTab() {
               </div>
             </div>
 
-            {/* Motivo — só aparece quando houve correção */}
             {dialog.wasCorrected && (
               <>
                 <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-900/10 border border-amber-200 px-3 py-2">
@@ -671,16 +671,13 @@ export function ApfFunctionPointTab() {
                     Você alterou o PF sugerido pela IA. Selecione o motivo principal para treinar o modelo.
                   </p>
                 </div>
-
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">
                     Motivo da correção <span className="text-red-500">*</span>
                   </Label>
                   <Select
                     value={dialog.correctionReason}
-                    onValueChange={(v) =>
-                      setDialog((d) => ({ ...d, correctionReason: v as CorrectionReason }))
-                    }
+                    onValueChange={(v) => setDialog((d) => ({ ...d, correctionReason: v as CorrectionReason }))}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione o motivo..." />
@@ -692,16 +689,13 @@ export function ApfFunctionPointTab() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">Observações (opcional)</Label>
                   <Textarea
                     placeholder="Descreva brevemente o que a IA errou..."
                     className="text-sm resize-none h-20"
                     value={dialog.correctionNotes}
-                    onChange={(e) =>
-                      setDialog((d) => ({ ...d, correctionNotes: e.target.value }))
-                    }
+                    onChange={(e) => setDialog((d) => ({ ...d, correctionNotes: e.target.value }))}
                   />
                 </div>
               </>

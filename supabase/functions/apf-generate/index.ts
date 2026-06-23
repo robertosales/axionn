@@ -24,6 +24,11 @@
  *   - Adicionado type "sakana" ao union Provider
  *   - Adicionada função callSakana() com reasoning: { effort: "high" }
  *   - Adicionado case "sakana" no callProvider()
+ *
+ * FIX-004 — Suporte ao provedor Groq (2026-06-23)
+ *   - Adicionado type "groq" ao union Provider
+ *   - Adicionada função callGroq() com endpoint https://api.groq.com/openai/v1/chat/completions
+ *   - Adicionado case "groq" no callProvider()
  */
 
 import {
@@ -58,7 +63,7 @@ const corsHeaders = {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity" | "sakana";
+type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity" | "sakana" | "groq";
 
 interface FileInput {
   name: string;
@@ -433,7 +438,7 @@ function buildFullPrompt(prompt: string, processedFiles: { name: string; content
     processedFiles.length > 0
       ? `\n\n=== ARQUIVOS DE CONTEXTO ===\n${processedFiles.map((f) => `--- ${f.name} ---\n${f.content}`).join("\n\n")}\n=== FIM DOS ARQUIVOS ===\n`
       : "";
-  return `Você é um especialista em Análise de Pontos de Função (APF) seguindo a metodologia IFPUG e o Guia de Métricas DPF.\n\nSiga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro.\n\nREGRA — BASELINE:\n- Se um arquivo de BASELINE APF foi fornecido, use a lista de itens para classificar cada funcionalidade:\n  - Impacto \"I\" (Inclusão) = funcionalidade NÃO existe no baseline\n  - Impacto \"A\" (Alteração) = funcionalidade JÁ EXISTE no baseline\n  - Impacto \"E\" (Exclusão) = funcionalidade foi removida\n- Calcule PF FS = PF Bruto × Contribuição FS do fator de impacto aplicado\n\nREGRA — FORMATO DO DOCUMENTO:\n- Use o modelo de documento fornecido como referência de estrutura e seções\n- Mantenha as mesmas seções numeradas: 1. Dados do Atendimento, 2. Contexto, 3. Tabela de Funcionalidades, 4. Funcionalidades Impactadas na Baseline, 5. Itens Não Identificados, 6. Banco de Dados, 7. Contagem de PF (7.1 Detalhamento, 7.2 Consolidado por HU, 7.3 Resumo Executivo), 8. Solicitação de Mudança, 9. Legenda\n- SEMPRE gere a seção 7.2 com a tabela: | HU / Escopo | Qtd. Funções | PF Bruto | PF FS |\n\nREGRA — TABELAS:\n- Use formato Markdown padrão com pipes e linha separadora\n- NÃO inclua tabela dentro de bloco de código\n\nREGRA CRÍTICA — PERGUNTAS NO PROMPT:\n- NÃO inclua perguntas literais no documento gerado\n- Se houver \"=== RESPOSTAS DO USUÁRIO ===\", incorpore as respostas naturalmente ao texto\n${ctx}\n=== INSTRUÇÕES DO USUÁRIO ===\n${prompt}`;
+  return `Você é um especialista em Análise de Pontos de Função (APF) seguindo a metodologia IFPUG e o Guia de Métricas DPF.\n\nSiga estritamente as instruções abaixo. A resposta deve ser apenas o conteúdo do documento, em texto puro.\n\nREGRA — BASELINE:\n- Se um arquivo de BASELINE APF foi fornecido, use a lista de itens para classificar cada funcionalidade:\n  - Impacto "I" (Inclusão) = funcionalidade NÃO existe no baseline\n  - Impacto "A" (Alteração) = funcionalidade JÁ EXISTE no baseline\n  - Impacto "E" (Exclusão) = funcionalidade foi removida\n- Calcule PF FS = PF Bruto × Contribuição FS do fator de impacto aplicado\n\nREGRA — FORMATO DO DOCUMENTO:\n- Use o modelo de documento fornecido como referência de estrutura e seções\n- Mantenha as mesmas seções numeradas: 1. Dados do Atendimento, 2. Contexto, 3. Tabela de Funcionalidades, 4. Funcionalidades Impactadas na Baseline, 5. Itens Não Identificados, 6. Banco de Dados, 7. Contagem de PF (7.1 Detalhamento, 7.2 Consolidado por HU, 7.3 Resumo Executivo), 8. Solicitação de Mudança, 9. Legenda\n- SEMPRE gere a seção 7.2 com a tabela: | HU / Escopo | Qtd. Funções | PF Bruto | PF FS |\n\nREGRA — TABELAS:\n- Use formato Markdown padrão com pipes e linha separadora\n- NÃO inclua tabela dentro de bloco de código\n\nREGRA CRÍTICA — PERGUNTAS NO PROMPT:\n- NÃO inclua perguntas literais no documento gerado\n- Se houver "=== RESPOSTAS DO USUÁRIO ===", incorpore as respostas naturalmente ao texto\n${ctx}\n=== INSTRUÇÕES DO USUÁRIO ===\n${prompt}`;
 }
 
 class ProviderError extends Error {
@@ -532,6 +537,18 @@ async function callSakana(p: string, k: string, m = "fugu") {
   if (!text) throw new Error(`Sakana AI retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
   return text;
 }
+async function callGroq(p: string, k: string, m = "llama-3.3-70b-versatile") {
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: m, messages: [{ role: "user", content: p }] }),
+  });
+  if (!r.ok) throw new ProviderError("Groq", r.status, await r.text());
+  const data = await r.json();
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error(`Groq retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
+  return text;
+}
 
 async function callProvider(type: Provider, prompt: string, apiKey: string, model?: string): Promise<string> {
   switch (type) {
@@ -547,6 +564,8 @@ async function callProvider(type: Provider, prompt: string, apiKey: string, mode
       return await callPerplexity(prompt, apiKey, model);
     case "sakana":
       return await callSakana(prompt, apiKey, model);
+    case "groq":
+      return await callGroq(prompt, apiKey, model);
   }
 }
 
@@ -782,7 +801,6 @@ Deno.serve(async (req: Request) => {
     const isServiceRole = SERVICE_KEY && token === SERVICE_KEY;
 
     if (!isServiceRole) {
-      // Caminho normal: JWT de usuário — valida com auth.getUser()
       const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
       const {
         data: { user },
@@ -795,7 +813,6 @@ Deno.serve(async (req: Request) => {
         });
       }
     }
-    // isServiceRole === true: worker interno autenticado — bypassa auth.getUser()
 
     // ── 2. Parse e validação do body ──
     const body = (await req.json().catch(() => ({}))) as RequestBody;

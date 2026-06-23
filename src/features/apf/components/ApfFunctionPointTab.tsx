@@ -318,7 +318,7 @@ export function ApfFunctionPointTab() {
         toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
       }
     },
-    [teamId, selectedSprintId]
+    [teamId, selectedSprintId, teamContractId]
   );
 
   // ── Valida contagem e salva no banco ───────────────────────────────────────

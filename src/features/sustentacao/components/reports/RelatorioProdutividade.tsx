@@ -598,17 +598,137 @@ export function RelatorioProdutividade({ onBack }: Props) {
   const handleExportXLSX = () => {
     if (grupos.length === 0) { toast.warning("Nenhum dado para exportar"); return; }
     const wb = XLSX.utils.book_new();
-    const resumo = grupos.map(g => ({
-      Analista: g.nome,
-      Cargo: g.cargo,
-      Atividades: g.atividades.length,
-      Resolvidos: g.resolvidos,
-      "Em Aberto": g.emAberto,
-      "Taxa Resolucao (%)": Number(g.taxaResolucao.toFixed(1)),
-      "Horas Totais": Number(g.totalHoras.toFixed(1)),
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumo), "Resumo por Analista");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flatRows), "Detalhado");
+
+    // ── Aba 1: Detalhado agrupado (Analista → Demanda → Lançamentos)
+    const headers = [
+      "Analista", "Cargo", "RHM", "Projeto", "Situação",
+      "Início", "Fim", "Horas do Analista",
+      "Data Lançamento", "Fase", "Descrição", "Horas Lançadas",
+    ];
+    const aoa: (string | number)[][] = [];
+    const merges: XLSX.Range[] = [];
+    const boldRows = new Set<number>();
+    const headerRows = new Set<number>();
+    const analystHeaderRows = new Set<number>();
+    const totalRow: { idx: number } = { idx: -1 };
+
+    aoa.push(headers);
+    headerRows.add(aoa.length - 1);
+
+    let totalGeralHoras = 0;
+    let totalGeralLancadas = 0;
+
+    grupos.forEach(g => {
+      // Cabeçalho do analista (linha mesclada)
+      aoa.push([`👤 ${g.nome}${g.cargo ? ` — ${g.cargo}` : ""}`, "", "", "", "", "", "", "", "", "", "", ""]);
+      const analystHeaderIdx = aoa.length - 1;
+      analystHeaderRows.add(analystHeaderIdx);
+      merges.push({ s: { r: analystHeaderIdx, c: 0 }, e: { r: analystHeaderIdx, c: headers.length - 1 } });
+
+      let subtotalAnalista = 0;
+
+      g.atividades.forEach(a => {
+        const linhas = a.horasDetalhadas.length > 0 ? a.horasDetalhadas : [null];
+        let subtotalDemanda = 0;
+
+        linhas.forEach((h, i) => {
+          if (h) subtotalDemanda += Number(h.horas) || 0;
+          aoa.push([
+            i === 0 ? g.nome : "",
+            i === 0 ? g.cargo : "",
+            i === 0 ? a.rhm : "",
+            i === 0 ? a.projeto : "",
+            i === 0 ? situacaoLabel(a.situacao) : "",
+            i === 0 ? a.dataInicio : "",
+            i === 0 ? a.dataFim : "",
+            i === 0 ? Number(a.horasAnalista.toFixed(2)) : "",
+            h ? h.data : "",
+            h ? h.fase : "",
+            h ? h.descricao : "(sem lançamentos no período)",
+            h ? Number(Number(h.horas).toFixed(2)) : "",
+          ]);
+        });
+
+        // Subtotal por demanda
+        aoa.push([
+          "", "", "", `Subtotal RHM ${a.rhm}`, "", "", "", "", "", "", "Total horas lançadas:", Number(subtotalDemanda.toFixed(2)),
+        ]);
+        boldRows.add(aoa.length - 1);
+        totalGeralLancadas += subtotalDemanda;
+        subtotalAnalista += Number(a.horasAnalista) || 0;
+      });
+
+      // Subtotal por analista
+      aoa.push([
+        `SUBTOTAL ${g.nome}`, "", "", "", "", "",
+        "Horas do analista:", Number(subtotalAnalista.toFixed(2)),
+        "", "", "Atividades:", g.atividades.length,
+      ]);
+      boldRows.add(aoa.length - 1);
+      totalGeralHoras += subtotalAnalista;
+
+      // Linha em branco entre analistas
+      aoa.push(["", "", "", "", "", "", "", "", "", "", "", ""]);
+    });
+
+    // Total geral
+    aoa.push([
+      "TOTAL GERAL DO TIME", "", "", "", "", "",
+      "Horas (analistas):", Number(totalGeralHoras.toFixed(2)),
+      "", "", "Horas lançadas:", Number(totalGeralLancadas.toFixed(2)),
+    ]);
+    totalRow.idx = aoa.length - 1;
+    boldRows.add(totalRow.idx);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!merges"] = merges;
+    ws["!cols"] = [
+      { wch: 26 }, { wch: 18 }, { wch: 10 }, { wch: 32 }, { wch: 18 },
+      { wch: 12 }, { wch: 12 }, { wch: 16 },
+      { wch: 14 }, { wch: 22 }, { wch: 48 }, { wch: 14 },
+    ];
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+    (ws as any)["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }) };
+
+    // Estilos básicos (sheetjs community não aplica cores, mas mantém negrito via s.font.bold em alguns viewers)
+    const applyStyle = (rowIdx: number, style: any) => {
+      for (let c = 0; c < headers.length; c++) {
+        const ref = XLSX.utils.encode_cell({ r: rowIdx, c });
+        if (!ws[ref]) ws[ref] = { t: "s", v: "" };
+        (ws[ref] as any).s = { ...(ws[ref] as any).s, ...style };
+      }
+    };
+    headerRows.forEach(r => applyStyle(r, { font: { bold: true } }));
+    analystHeaderRows.forEach(r => applyStyle(r, { font: { bold: true, sz: 12 } }));
+    boldRows.forEach(r => applyStyle(r, { font: { bold: true } }));
+
+    XLSX.utils.book_append_sheet(wb, ws, "Produtividade");
+
+    // ── Aba 2: Resumo executivo
+    const resumo = [
+      ...grupos.map(g => ({
+        Analista: g.nome,
+        Cargo: g.cargo,
+        Atividades: g.atividades.length,
+        Resolvidos: g.resolvidos,
+        "Em Aberto": g.emAberto,
+        "Taxa Resolução (%)": Number(g.taxaResolucao.toFixed(1)),
+        "Horas Totais": Number(g.totalHoras.toFixed(2)),
+      })),
+      {
+        Analista: "TOTAL DO TIME",
+        Cargo: "",
+        Atividades: grupos.reduce((s, g) => s + g.atividades.length, 0),
+        Resolvidos: grupos.reduce((s, g) => s + g.resolvidos, 0),
+        "Em Aberto": grupos.reduce((s, g) => s + g.emAberto, 0),
+        "Taxa Resolução (%)": "",
+        "Horas Totais": Number(totalGeralHoras.toFixed(2)),
+      },
+    ];
+    const wsResumo = XLSX.utils.json_to_sheet(resumo);
+    wsResumo["!cols"] = [{ wch: 26 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
+
     const escopo = analista === "all" ? "todos" : (nomeMap.get(analista) || analista).replace(/\s+/g, "_").toLowerCase();
     XLSX.writeFile(wb, `produtividade-${escopo}-${new Date().toISOString().slice(0,10)}.xlsx`);
     toast.success("XLSX exportado com sucesso");

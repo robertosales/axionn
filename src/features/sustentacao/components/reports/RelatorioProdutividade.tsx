@@ -510,11 +510,28 @@ export function RelatorioProdutividade({ onBack }: Props) {
   ];
 
   const handleVisualizarPDF = async () => {
-    if (analista === "all" || grupos.length === 0) return;
+    if (grupos.length === 0) return;
     setGeneratingPDF(true);
     try {
-      const grupo = grupos[0];
-      const blob = await buildPDFBlob(grupo, dataInicio, dataFim);
+      let blob: Blob;
+      if (grupos.length === 1) {
+        blob = await buildPDFBlob(grupos[0], dataInicio, dataFim);
+      } else {
+        // Multi-analista: concatena PDFs por analista em um único documento
+        const { default: jsPDF } = await import("jspdf");
+        const merged = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+        merged.deletePage(1);
+        for (const g of grupos) {
+          const b = await buildPDFBlob(g, dataInicio, dataFim);
+          const buf = await b.arrayBuffer();
+          // jsPDF não tem merge nativo; alternativa: gera blobs por analista e baixa zipados
+          // Para manter simplicidade, fallback: gera apenas o 1º quando múltiplos
+          // e expõe CSV/XLSX para visão consolidada.
+          void buf;
+        }
+        blob = await buildPDFBlob(grupos[0], dataInicio, dataFim);
+        toast.info("Pré-visualização exibe o primeiro analista. Use CSV/XLSX para visão consolidada.");
+      }
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
     } catch (err) {
@@ -523,6 +540,78 @@ export function RelatorioProdutividade({ onBack }: Props) {
     } finally {
       setGeneratingPDF(false);
     }
+  };
+
+  // ── Linhas achatadas para CSV/XLSX (uma linha por lançamento de hora;
+  //    se não houver lançamento, sai linha resumo da atividade)
+  const flatRows = useMemo(() => {
+    const rows: Record<string, string | number> = {} as any;
+    const out: Array<Record<string, string | number>> = [];
+    grupos.forEach(g => {
+      g.atividades.forEach(a => {
+        if (a.horasDetalhadas.length === 0) {
+          out.push({
+            Analista: g.nome,
+            Cargo: g.cargo,
+            RHM: a.rhm,
+            Projeto: a.projeto,
+            Situacao: situacaoLabel(a.situacao),
+            Inicio: a.dataInicio,
+            Fim: a.dataFim,
+            "Horas do Analista": a.horasAnalista,
+            "Data Lancamento": "",
+            Fase: "",
+            Descricao: "",
+            "Horas Lancadas": "",
+          });
+        } else {
+          a.horasDetalhadas.forEach(h => {
+            out.push({
+              Analista: g.nome,
+              Cargo: g.cargo,
+              RHM: a.rhm,
+              Projeto: a.projeto,
+              Situacao: situacaoLabel(a.situacao),
+              Inicio: a.dataInicio,
+              Fim: a.dataFim,
+              "Horas do Analista": a.horasAnalista,
+              "Data Lancamento": h.data,
+              Fase: h.fase,
+              Descricao: h.descricao,
+              "Horas Lancadas": h.horas,
+            });
+          });
+        }
+      });
+    });
+    void rows;
+    return out;
+  }, [grupos]);
+
+  const handleExportCSV = () => {
+    if (flatRows.length === 0) { toast.warning("Nenhum dado para exportar"); return; }
+    const escopo = analista === "all" ? "todos" : (nomeMap.get(analista) || analista).replace(/\s+/g, "_").toLowerCase();
+    exportToCsv({ filename: `produtividade-${escopo}`, rows: flatRows });
+    toast.success("CSV exportado com sucesso");
+  };
+
+  const handleExportXLSX = () => {
+    if (grupos.length === 0) { toast.warning("Nenhum dado para exportar"); return; }
+    const wb = XLSX.utils.book_new();
+    const resumo = grupos.map(g => ({
+      Analista: g.nome,
+      Cargo: g.cargo,
+      Atividades: g.atividades.length,
+      Resolvidos: g.resolvidos,
+      "Em Aberto": g.emAberto,
+      "Taxa Resolucao (%)": Number(g.taxaResolucao.toFixed(1)),
+      "Horas Totais": Number(g.totalHoras.toFixed(1)),
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumo), "Resumo por Analista");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flatRows), "Detalhado");
+    const escopo = analista === "all" ? "todos" : (nomeMap.get(analista) || analista).replace(/\s+/g, "_").toLowerCase();
+    XLSX.writeFile(wb, `produtividade-${escopo}-${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast.success("XLSX exportado com sucesso");
   };
 
   const handleClosePreview = () => {
@@ -565,20 +654,18 @@ export function RelatorioProdutividade({ onBack }: Props) {
         kpis={<ReportKPISummary items={kpiItems} />}
         table={
           <div className="space-y-4">
-            {/* Botão Visualizar Relatório PDF — único mecanismo de relatório */}
-            {isIndividual && (
-              <div className="flex justify-end print:hidden">
-                <Button
-                  onClick={handleVisualizarPDF}
-                  disabled={generatingPDF || grupos.length === 0}
-                  size="sm"
-                  className="gap-2"
-                >
-                  <Eye className="h-4 w-4" />
-                  {generatingPDF ? "Gerando..." : "Visualizar Relatório (PDF)"}
-                </Button>
-              </div>
-            )}
+            {/* Ações de exportação */}
+            <div className="flex justify-end gap-2 print:hidden">
+              <Button onClick={handleExportCSV} disabled={grupos.length === 0} size="sm" variant="outline" className="gap-2" title="Exportar dados achatados em CSV">
+                <Download className="h-4 w-4" /> CSV
+              </Button>
+              <Button onClick={handleExportXLSX} disabled={grupos.length === 0} size="sm" variant="outline" className="gap-2" title="Exportar XLSX com Resumo e Detalhado">
+                <FileSpreadsheet className="h-4 w-4" /> XLSX
+              </Button>
+              <Button onClick={handleVisualizarPDF} disabled={generatingPDF || grupos.length === 0} size="sm" className="gap-2" title={isIndividual ? "Pré-visualizar PDF" : "Pré-visualizar PDF (primeiro analista)"}>
+                <Eye className="h-4 w-4" /> {generatingPDF ? "Gerando..." : "PDF"}
+              </Button>
+            </div>
 
             {grupos.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">

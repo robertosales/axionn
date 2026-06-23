@@ -150,6 +150,16 @@ async function resolveProvider(
   }
 
   if (!apiKey) {
+    if (row.provider_type === "sakana") {
+      const envKey = Deno.env.get("SAKANA_API_KEY");
+      if (envKey && envKey.trim().length >= 10) {
+        apiKey = envKey.trim();
+        console.log(`[VAULT] Usando SAKANA_API_KEY do ambiente para provider "${row.name}".`);
+      }
+    }
+  }
+
+  if (!apiKey) {
     if (bodyApiKey && bodyApiKey.trim().length >= 10) {
       apiKey = bodyApiKey.trim();
       console.log(`[VAULT] Usando chave inline informada pelo usuário para provider "${row.name}".`);

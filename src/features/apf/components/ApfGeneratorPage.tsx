@@ -1,19 +1,20 @@
 /**
- * ApfGeneratorPage (v3 — Fase 5)
- * ---------------------------------
- * Adiciona a aba "Previsão" (APF Preditivo) ao layout de navegação.
+ * ApfGeneratorPage (v4 — Motor de Aprendizado)
+ * -----------------------------------------------
+ * Adiciona a aba "Biblioteca" (Stage 4+5) ao layout de navegação.
  * Mantém todas as abas anteriores intactas.
  */
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AiPipelineProvider }   from "../contexts/AiPipelineContext";
-import { ApfHubTab }           from "./shared/ApfHubTab";
-import { ApfHuGenerateTab }     from "./ApfHuGenerateTab";
-import { ApfFunctionPointTab }  from "./ApfFunctionPointTab";
-import { ApfGenerateTab }       from "./ApfGenerateTab";
-import { ApfTemplatesTab }      from "./ApfTemplatesTab";
-import { ApfPredictiveTab }     from "./ApfPredictiveTab";
+import { AiPipelineProvider }    from "../contexts/AiPipelineContext";
+import { ApfHubTab }            from "./shared/ApfHubTab";
+import { ApfHuGenerateTab }      from "./ApfHuGenerateTab";
+import { ApfFunctionPointTab }   from "./ApfFunctionPointTab";
+import { ApfGenerateTab }        from "./ApfGenerateTab";
+import { ApfTemplatesTab }       from "./ApfTemplatesTab";
+import { ApfPredictiveTab }      from "./ApfPredictiveTab";
+import { ApfKnowledgeLibrary }   from "./learning/ApfKnowledgeLibrary";
 import {
-  Cpu, Sparkles, FileText, LayoutGrid, BrainCircuit, Bot
+  Cpu, Sparkles, FileText, LayoutGrid, BrainCircuit, Bot, BookOpen
 } from "lucide-react";
 
 const TABS = [
@@ -23,6 +24,7 @@ const TABS = [
   { value: "generate",   label: "Gerar Doc",  icon: FileText,     short: "Doc"       },
   { value: "templates",  label: "Templates",  icon: LayoutGrid,   short: "Templates" },
   { value: "predictive", label: "Previsão",   icon: BrainCircuit, short: "Previsão"  },
+  { value: "biblioteca", label: "Biblioteca", icon: BookOpen,     short: "Biblio"    },
 ] as const;
 
 export function ApfGeneratorPage() {
@@ -45,12 +47,13 @@ export function ApfGeneratorPage() {
           </TabsList>
 
           <div className="mt-4">
-            <TabsContent value="hub"       className="m-0"><ApfHubTab /></TabsContent>
-            <TabsContent value="hu"        className="m-0"><ApfHuGenerateTab /></TabsContent>
-            <TabsContent value="pf"        className="m-0"><ApfFunctionPointTab /></TabsContent>
-            <TabsContent value="generate"  className="m-0"><ApfGenerateTab /></TabsContent>
-            <TabsContent value="templates" className="m-0"><ApfTemplatesTab /></TabsContent>
+            <TabsContent value="hub"        className="m-0"><ApfHubTab /></TabsContent>
+            <TabsContent value="hu"         className="m-0"><ApfHuGenerateTab /></TabsContent>
+            <TabsContent value="pf"         className="m-0"><ApfFunctionPointTab /></TabsContent>
+            <TabsContent value="generate"   className="m-0"><ApfGenerateTab /></TabsContent>
+            <TabsContent value="templates"  className="m-0"><ApfTemplatesTab /></TabsContent>
             <TabsContent value="predictive" className="m-0"><ApfPredictiveTab /></TabsContent>
+            <TabsContent value="biblioteca" className="m-0"><ApfKnowledgeLibrary /></TabsContent>
           </div>
         </Tabs>
       </div>

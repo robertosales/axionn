@@ -121,7 +121,7 @@ export function useContracts() {
         company_id, number, object, value_per_pfus, currency,
         contract_teams:contract_teams(team_id),
         projects:projects(id),
-        contract_slas:contract_slas(sla_id)
+        contract_slas:contract_slas(id)
       `)
       .eq('id', contractId)
       .single();
@@ -141,7 +141,7 @@ export function useContracts() {
       currency:       (data as any).currency       ?? 'BRL',
       team_ids:    ((data as any).contract_teams || []).map((r: any) => r.team_id),
       project_ids: ((data as any).projects       || []).map((r: any) => r.id),
-      sla_ids:     ((data as any).contract_slas  || []).map((r: any) => r.sla_id),
+      sla_ids:     ((data as any).contract_slas  || []).map((r: any) => r.id),
     };
   };
 
@@ -150,7 +150,6 @@ export function useContracts() {
     await Promise.all([
       supabase.from('contract_teams').delete().eq('contract_id', contractId),
       supabase.from('projects').update({ contract_id: null }).eq('contract_id', contractId),
-      supabase.from('contract_slas').delete().eq('contract_id', contractId),
     ]);
     const inserts: Promise<any>[] = [];
     if (data.team_ids.length)
@@ -160,10 +159,6 @@ export function useContracts() {
     if (data.project_ids.length)
       inserts.push(supabase.from('projects').update({ contract_id: contractId })
         .in('id', data.project_ids));
-    if (data.sla_ids.length)
-      inserts.push(supabase.from('contract_slas').insert(
-        data.sla_ids.map(sid => ({ contract_id: contractId, sla_id: sid }))
-      ));
     await Promise.all(inserts);
   };
 

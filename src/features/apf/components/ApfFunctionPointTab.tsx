@@ -40,6 +40,7 @@ interface HuRow {
   ai_fp_breakdown: AiBreakdown | null;
   ai_fp_confidence: number | null;
   ai_fp_validated: boolean;
+  contract_id: string | null;
 }
 
 interface AiBreakdown {
@@ -85,6 +86,41 @@ export function ApfFunctionPointTab() {
   const [loadingSprints, setLoadingSprints] = useState(true);
   const [loadingHUs, setLoadingHUs] = useState(false);
   const [countingAll, setCountingAll] = useState(false);
+  const [teamContractId, setTeamContractId] = useState<string | null>(null);
+
+  // ── Resolve um contrato padrão para o time (via contract_teams ou modelo APF ativo)
+  useEffect(() => {
+    if (!teamId) {
+      setTeamContractId(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data: ct } = await supabase
+        .from("contract_teams")
+        .select("contract_id")
+        .eq("team_id", teamId)
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (ct?.contract_id) {
+        setTeamContractId(ct.contract_id);
+        return;
+      }
+      const { data: model } = await supabase
+        .from("apf_counting_models" as any)
+        .select("contract_id")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      setTeamContractId((model as any)?.contract_id ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId]);
 
   // ── Carrega sprints ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -115,7 +151,7 @@ export function ApfFunctionPointTab() {
     supabase
       .from("user_stories")
       .select(
-        "id, code, title, description, acceptance_criteria, story_points, function_points, ai_fp_breakdown, ai_fp_confidence, ai_fp_validated"
+        "id, code, title, description, acceptance_criteria, story_points, function_points, ai_fp_breakdown, ai_fp_confidence, ai_fp_validated, contract_id"
       )
       .eq("team_id", teamId)
       .eq("sprint_id", selectedSprintId)
@@ -126,7 +162,7 @@ export function ApfFunctionPointTab() {
           // Fallback para bancos sem as colunas APF ainda migradas
           supabase
             .from("user_stories")
-            .select("id, code, title, description, acceptance_criteria, story_points, function_points")
+            .select("id, code, title, description, acceptance_criteria, story_points, function_points, contract_id")
             .eq("team_id", teamId)
             .eq("sprint_id", selectedSprintId)
             .order("code", { ascending: true })
@@ -139,6 +175,7 @@ export function ApfFunctionPointTab() {
                   ai_fp_breakdown: null,
                   ai_fp_confidence: null,
                   ai_fp_validated: false,
+                  contract_id: h.contract_id ?? null,
                 }))
               );
               setLoadingHUs(false);
@@ -152,6 +189,7 @@ export function ApfFunctionPointTab() {
             ai_fp_breakdown: h.ai_fp_breakdown ?? null,
             ai_fp_confidence: h.ai_fp_confidence ?? null,
             ai_fp_validated: h.ai_fp_validated ?? false,
+            contract_id: h.contract_id ?? null,
           }))
         );
         setLoadingHUs(false);
@@ -167,9 +205,18 @@ export function ApfFunctionPointTab() {
       }));
 
       try {
+        // Resolve contrato: HU > time > modelo APF ativo
+        const contractId = hu.contract_id ?? teamContractId;
+        if (!contractId) {
+          throw new Error(
+            "Esta HU não está vinculada a um contrato. Edite a HU/time e selecione o contrato APF antes de contar PF."
+          );
+        }
+
         // PASSO 1 — Abre sessão de contagem no banco
         const { data: sessionId, error: e1 } = await supabase.rpc("open_counting_session" as any, {
-          p_project_id: teamId,
+          p_contract_id: contractId,
+          p_project_id: null,
           p_sprint_ref: selectedSprintId,
           p_release_ref: null,
           p_redmine_ref: hu.code,
@@ -271,7 +318,7 @@ export function ApfFunctionPointTab() {
         toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
       }
     },
-    [teamId, selectedSprintId]
+    [teamId, selectedSprintId, teamContractId]
   );
 
   // ── Valida contagem e salva no banco ───────────────────────────────────────

@@ -31,24 +31,29 @@
  *     provider_used, model_used,
  *     ai_remaining   // cotas restantes (null = ilimitado)
  *   }
+ *
+ * FIX-003 — Suporte ao provedor Sakana AI (2026-06-22)
+ *   - Adicionado type "sakana" ao union Provider
+ *   - Adicionada função callSakana() com response_format json_object e reasoning high
+ *   - Adicionado case "sakana" no callAI()
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SITE_URL = Deno.env.get("SITE_URL") ?? "*";
+const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON_KEY      = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SITE_URL      = Deno.env.get("SITE_URL") ?? "*";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": SITE_URL,
+  "Access-Control-Allow-Origin":  SITE_URL,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Provider = "openai" | "anthropic" | "gemini" | "lovable" | "perplexity" | "sakana.ai";
+type Provider = "openai" | "anthropic" | "gemini" | "lovable" | "perplexity" | "sakana";
 
 // ─────────────────────────────────────────────────────────────
 // Resolução de provider
@@ -173,18 +178,30 @@ async function callPerplexity(prompt: string, apiKey: string, model = "sonar"): 
   return data.choices?.[0]?.message?.content ?? "";
 }
 
+async function callSakana(prompt: string, apiKey: string, model = "fugu"): Promise<string> {
+  const res = await fetch("https://api.sakana.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      response_format: { type: "json_object" },
+      messages: [{ role: "user", content: prompt }],
+      reasoning: { effort: "high" },
+    }),
+  });
+  if (!res.ok) throw new Error(`Sakana [${res.status}]: ${await res.text()}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
 async function callAI(type: Provider, prompt: string, apiKey: string, model?: string): Promise<string> {
   switch (type) {
-    case "openai":
-      return callOpenAI(prompt, apiKey, model);
-    case "anthropic":
-      return callAnthropic(prompt, apiKey, model);
-    case "gemini":
-      return callGemini(prompt, apiKey, model);
-    case "lovable":
-      return callLovable(prompt, apiKey, model);
-    case "perplexity":
-      return callPerplexity(prompt, apiKey, model);
+    case "openai":     return callOpenAI(prompt, apiKey, model);
+    case "anthropic":  return callAnthropic(prompt, apiKey, model);
+    case "gemini":     return callGemini(prompt, apiKey, model);
+    case "lovable":    return callLovable(prompt, apiKey, model);
+    case "perplexity": return callPerplexity(prompt, apiKey, model);
+    case "sakana":     return callSakana(prompt, apiKey, model);
   }
 }
 
@@ -204,9 +221,9 @@ function parseAIResponse(raw: string): any[] {
     parsed = JSON.parse(match[0]);
   }
 
-  if (Array.isArray(parsed)) return parsed;
-  if (Array.isArray(parsed.items)) return parsed.items;
-  if (Array.isArray(parsed.efs)) return parsed.efs;
+  if (Array.isArray(parsed))        return parsed;
+  if (Array.isArray(parsed.items))  return parsed.items;
+  if (Array.isArray(parsed.efs))    return parsed.efs;
 
   throw new Error(`Estrutura JSON inesperada da IA: ${JSON.stringify(parsed).slice(0, 200)}`);
 }
@@ -215,7 +232,11 @@ function parseAIResponse(raw: string): any[] {
 // Resolve team_id a partir do project_id
 // ─────────────────────────────────────────────────────────────
 async function resolveTeamId(admin: ReturnType<typeof createClient>, projectId: string): Promise<string | null> {
-  const { data } = await admin.from("projects").select("team_id").eq("id", projectId).maybeSingle();
+  const { data } = await admin
+    .from("projects")
+    .select("team_id")
+    .eq("id", projectId)
+    .maybeSingle();
   return (data as any)?.team_id ?? null;
 }
 
@@ -248,10 +269,7 @@ Deno.serve(async (req: Request) => {
       const userClient = createClient(SUPABASE_URL, ANON_KEY, {
         global: { headers: { Authorization: authHeader } },
       });
-      const {
-        data: { user },
-        error: authErr,
-      } = await userClient.auth.getUser();
+      const { data: { user }, error: authErr } = await userClient.auth.getUser();
       if (authErr || !user) {
         return new Response(JSON.stringify({ error: "Token inválido" }), {
           status: 401,
@@ -297,8 +315,8 @@ Deno.serve(async (req: Request) => {
         console.warn(`[apf-count] quota bloqueada — team=${teamId} reason="${reason}"`);
         return new Response(
           JSON.stringify({
-            success: false,
-            error: reason,
+            success:      false,
+            error:        reason,
             ai_remaining: quota.ai_remaining ?? 0,
             pf_remaining: quota.pf_remaining ?? 0,
           }),
@@ -312,8 +330,8 @@ Deno.serve(async (req: Request) => {
 
     // ── 6. Abre a sessão de contagem ─────────────────────────
     const { data: sessionId, error: sessionErr } = await admin.rpc("open_counting_session", {
-      p_project_id: project_id,
-      p_sprint_ref: sprint_ref ?? null,
+      p_project_id:  project_id,
+      p_sprint_ref:  sprint_ref  ?? null,
       p_release_ref: release_ref ?? null,
       p_redmine_ref: redmine_ref ?? null,
       p_baseline_id: baseline_id ?? null,
@@ -332,7 +350,7 @@ Deno.serve(async (req: Request) => {
 
     // ── 8. Resolve provider e chama a IA ─────────────────────
     const resolved = await resolveProvider(providerId);
-    const aiModel = model ?? resolved.model;
+    const aiModel  = model ?? resolved.model;
 
     console.log(`[apf-count] session=${sessionId} provider="${resolved.name}" model=${aiModel}`);
 
@@ -348,8 +366,8 @@ Deno.serve(async (req: Request) => {
     // ── 10. Persiste itens e atualiza totais ─────────────────
     const { data: summary, error: saveErr } = await admin.rpc("save_counting_items", {
       p_session_id: sessionId,
-      p_items: items,
-      p_ai_model: `${resolved.name} / ${aiModel}`,
+      p_items:      items,
+      p_ai_model:   `${resolved.name} / ${aiModel}`,
     });
     if (saveErr) throw new Error(`Falha ao salvar itens: ${saveErr.message}`);
 
@@ -357,7 +375,7 @@ Deno.serve(async (req: Request) => {
     if (teamId) {
       const totalPfUs: number = summary?.total_pf_fs ?? 0;
       const { error: incErr } = await admin.rpc("increment_license_usage", {
-        p_team_id: teamId,
+        p_team_id:  teamId,
         p_pf_count: totalPfUs,
         p_ai_calls: 1,
       });
@@ -383,27 +401,28 @@ Deno.serve(async (req: Request) => {
     // ── 13. Resposta ─────────────────────────────────────────
     return new Response(
       JSON.stringify({
-        success: true,
-        session_id: sessionId,
-        inserted_items: summary.inserted_items,
-        inserted_gz: summary.inserted_gz,
-        total_pf_bruto: summary.total_pf_bruto,
-        total_pf_fs: summary.total_pf_fs,
+        success:         true,
+        session_id:      sessionId,
+        inserted_items:  summary.inserted_items,
+        inserted_gz:     summary.inserted_gz,
+        total_pf_bruto:  summary.total_pf_bruto,
+        total_pf_fs:     summary.total_pf_fs,
         total_functions: summary.total_functions,
-        total_hus: summary.total_hus,
-        provider_used: resolved.name,
-        model_used: aiModel,
-        ai_remaining: aiRemaining,
-        pf_remaining: pfRemaining,
+        total_hus:       summary.total_hus,
+        provider_used:   resolved.name,
+        model_used:      aiModel,
+        ai_remaining:    aiRemaining,
+        pf_remaining:    pfRemaining,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Erro desconhecido";
     console.error("[apf-count] erro:", message);
-    return new Response(JSON.stringify({ success: false, error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 });

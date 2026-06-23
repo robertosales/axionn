@@ -19,6 +19,11 @@
  *   - Chamadas com Bearer SERVICE_ROLE_KEY bypassam auth.getUser()
  *   - Permite que process-apf-job processe fila sem JWT de usuário
  *   - Chamadas externas (frontend) mantêm validação JWT intacta
+ *
+ * FIX-003 — Suporte ao provedor Sakana AI (2026-06-22)
+ *   - Adicionado type "sakana" ao union Provider
+ *   - Adicionada função callSakana() com reasoning: { effort: "high" }
+ *   - Adicionado case "sakana" no callProvider()
  */
 
 import {
@@ -53,7 +58,7 @@ const corsHeaders = {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Provider = "openai" | "anthropic" | "gemini" | "lovable" | "perplexity" | "sakana.ai";
+type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity" | "sakana";
 
 interface FileInput {
   name: string;
@@ -501,6 +506,22 @@ async function callPerplexity(p: string, k: string, m = "sonar") {
   if (!text) throw new Error(`Perplexity retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
   return text;
 }
+async function callSakana(p: string, k: string, m = "fugu") {
+  const r = await fetch("https://api.sakana.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: m,
+      messages: [{ role: "user", content: p }],
+      reasoning: { effort: "high" },
+    }),
+  });
+  if (!r.ok) throw new ProviderError("Sakana AI", r.status, await r.text());
+  const data = await r.json();
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error(`Sakana AI retornou resposta inesperada: ${JSON.stringify(data).slice(0, 200)}`);
+  return text;
+}
 
 async function callProvider(type: Provider, prompt: string, apiKey: string, model?: string): Promise<string> {
   switch (type) {
@@ -514,6 +535,8 @@ async function callProvider(type: Provider, prompt: string, apiKey: string, mode
       return await callAnthropic(prompt, apiKey, model);
     case "perplexity":
       return await callPerplexity(prompt, apiKey, model);
+    case "sakana":
+      return await callSakana(prompt, apiKey, model);
   }
 }
 

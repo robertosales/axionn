@@ -31,7 +31,7 @@ const corsHeaders = {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
+type Provider = "openai" | "anthropic" | "gemini" | "lovable" | "perplexity" | "sakana.ai";
 
 // ─── Tipos ───────────────────────────────────────────────────
 interface RequestBody {
@@ -50,11 +50,11 @@ interface RequestBody {
 }
 
 interface FpBreakdown {
-  EI: number;   // External Input
-  EO: number;   // External Output
-  EQ: number;   // External Inquiry
-  ILF: number;  // Internal Logical File
-  EIF: number;  // External Interface File
+  EI: number; // External Input
+  EO: number; // External Output
+  EQ: number; // External Inquiry
+  ILF: number; // Internal Logical File
+  EIF: number; // External Interface File
   total: number;
   reasoning: string;
 }
@@ -195,12 +195,18 @@ async function callAnthropic(prompt: string, apiKey: string, model = "claude-3-5
 
 async function callProvider(type: Provider, prompt: string, apiKey: string, model?: string | null): Promise<string> {
   switch (type) {
-    case "lovable":   return callLovable(prompt, apiKey, model ?? undefined);
-    case "openai":    return callOpenAI(prompt, apiKey, model ?? undefined);
-    case "gemini":    return callGemini(prompt, apiKey, model ?? undefined);
-    case "anthropic": return callAnthropic(prompt, apiKey, model ?? undefined);
-    case "perplexity": return callOpenAI(prompt, apiKey, model ?? "sonar"); // Perplexity é compatível OpenAI
-    default:           return callOpenAI(prompt, apiKey, model ?? undefined);
+    case "lovable":
+      return callLovable(prompt, apiKey, model ?? undefined);
+    case "openai":
+      return callOpenAI(prompt, apiKey, model ?? undefined);
+    case "gemini":
+      return callGemini(prompt, apiKey, model ?? undefined);
+    case "anthropic":
+      return callAnthropic(prompt, apiKey, model ?? undefined);
+    case "perplexity":
+      return callOpenAI(prompt, apiKey, model ?? "sonar"); // Perplexity é compatível OpenAI
+    default:
+      return callOpenAI(prompt, apiKey, model ?? undefined);
   }
 }
 
@@ -294,7 +300,10 @@ ${contextBlock ? "\n## Contexto adicional:\n" + contextBlock : ""}
 function parseFpResponse(raw: string): FpBreakdown {
   let text = raw.trim();
   // Remove blocos de código caso o provider ignore o response_format
-  text = text.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "").trim();
+  text = text
+    .replace(/^```[\w]*\n?/, "")
+    .replace(/\n?```$/, "")
+    .trim();
 
   let parsed: any;
   try {
@@ -306,17 +315,17 @@ function parseFpResponse(raw: string): FpBreakdown {
     parsed = JSON.parse(match[0]);
   }
 
-  const EI  = Math.max(0, parseInt(parsed.EI  ?? 0, 10));
-  const EO  = Math.max(0, parseInt(parsed.EO  ?? 0, 10));
-  const EQ  = Math.max(0, parseInt(parsed.EQ  ?? 0, 10));
+  const EI = Math.max(0, parseInt(parsed.EI ?? 0, 10));
+  const EO = Math.max(0, parseInt(parsed.EO ?? 0, 10));
+  const EQ = Math.max(0, parseInt(parsed.EQ ?? 0, 10));
   const ILF = Math.max(0, parseInt(parsed.ILF ?? 0, 10));
   const EIF = Math.max(0, parseInt(parsed.EIF ?? 0, 10));
 
   // Calcula PF bruto com pesos IFPUG (complexidade simples)
-  const total = (EI * 3) + (EO * 4) + (EQ * 3) + (ILF * 7) + (EIF * 5);
+  const total = EI * 3 + EO * 4 + EQ * 3 + ILF * 7 + EIF * 5;
 
   const confidence = Math.min(1, Math.max(0, parseFloat(parsed.confidence ?? 0.7)));
-  const reasoning  = String(parsed.reasoning ?? "").slice(0, 1000);
+  const reasoning = String(parsed.reasoning ?? "").slice(0, 1000);
 
   return { EI, EO, EQ, ILF, EIF, total, confidence, reasoning };
 }
@@ -397,7 +406,10 @@ Deno.serve(async (req: Request) => {
       const userClient = createClient(SUPABASE_URL, ANON_KEY, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: { user }, error: authErr } = await userClient.auth.getUser();
+      const {
+        data: { user },
+        error: authErr,
+      } = await userClient.auth.getUser();
       if (authErr || !user) {
         return new Response(JSON.stringify({ error: "Token inválido" }), {
           status: 401,
@@ -411,11 +423,20 @@ Deno.serve(async (req: Request) => {
     const { teamId, huId, storyText, context, providerId, forceProvider } = body;
 
     if (!teamId || !UUID_REGEX.test(teamId))
-      return new Response(JSON.stringify({ error: "teamId (UUID) é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "teamId (UUID) é obrigatório" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     if (!huId || !UUID_REGEX.test(huId))
-      return new Response(JSON.stringify({ error: "huId (UUID) é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "huId (UUID) é obrigatório" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     if (!storyText?.trim())
-      return new Response(JSON.stringify({ error: "storyText é obrigatório" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "storyText é obrigatório" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
 
     // ── 3. Resolve provider + API key ─────────────────────────
     let providerRow: { id: string; name: string; provider_type: Provider; model: string | null };
@@ -444,7 +465,9 @@ Deno.serve(async (req: Request) => {
 
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: `API key não configurada para "${providerRow.name}". Configure no painel administrativo.` }),
+        JSON.stringify({
+          error: `API key não configurada para "${providerRow.name}". Configure no painel administrativo.`,
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -523,12 +546,11 @@ Deno.serve(async (req: Request) => {
       friendly = "O provedor de IA está sem créditos. Configure outro provider no painel.";
     else if (/invalid.*api.key|incorrect api key/i.test(msg))
       friendly = "Chave de API inválida. Verifique no painel administrativo.";
-    else if (/rate limit|429/i.test(msg))
-      friendly = "Limite de requisições atingido. Aguarde alguns segundos.";
+    else if (/rate limit|429/i.test(msg)) friendly = "Limite de requisições atingido. Aguarde alguns segundos.";
 
-    return new Response(
-      JSON.stringify({ success: false, error: friendly, rawError: msg }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ success: false, error: friendly, rawError: msg }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

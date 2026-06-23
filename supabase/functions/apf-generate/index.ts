@@ -53,7 +53,7 @@ const corsHeaders = {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Provider = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity";
+type Provider = "openai" | "anthropic" | "gemini" | "lovable" | "perplexity" | "sakana.ai";
 
 interface FileInput {
   name: string;
@@ -913,10 +913,10 @@ Deno.serve(async (req: Request) => {
             .update({ status: "error", error_message: userMessage })
             .eq("id", generationId);
         }
-        return new Response(
-          JSON.stringify({ success: false, reason, userMessage, attempts }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ success: false, reason, userMessage, attempts }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -955,7 +955,8 @@ Deno.serve(async (req: Request) => {
     else if (/invalid.*api.key|incorrect api key/i.test(raw))
       friendly = "Chave de API inválida para o provider. Contate o administrador.";
     else if (/401/i.test(raw))
-      friendly = "Chave de API recusada pelo provider (401). Verifique a chave configurada no Vault ou na variável de ambiente.";
+      friendly =
+        "Chave de API recusada pelo provider (401). Verifique a chave configurada no Vault ou na variável de ambiente.";
     else if (/rate limit|429/i.test(raw))
       friendly = "Limite de requisições atingido. Aguarde alguns segundos e tente novamente.";
     else if (/não configurada/i.test(raw)) friendly = raw;

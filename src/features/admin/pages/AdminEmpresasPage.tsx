@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Building2, CheckCircle2, FlaskConical, PauseCircle,
   LayoutGrid, Plus, Pencil, Trash2, ShieldCheck, X,
@@ -13,7 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -94,11 +94,12 @@ function CompanyFormDialog({
   const [saving, setSaving] = useState(false);
   const [cnpjTouched, setCnpjTouched] = useState(false);
 
-  // reset ao abrir
-  useState(() => {
+  useEffect(() => {
+    if (!open) return;
     setForm(initial ?? EMPTY_COMPANY_FORM);
     setCnpjTouched(false);
-  });
+    setSaving(false);
+  }, [open, initial]);
 
   const set = (k: keyof CompanyFormData, v: string) =>
     setForm(prev => ({ ...prev, [k]: v }));
@@ -136,6 +137,9 @@ function CompanyFormDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{initial ? 'Editar Empresa' : 'Nova Empresa'}</DialogTitle>
+          <DialogDescription>
+            {initial ? 'Atualize os dados cadastrais da empresa.' : 'Cadastre uma nova empresa cliente.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
@@ -586,7 +590,11 @@ export function AdminEmpresasPage() {
       <CompanyFormDialog
         open={formOpen}
         initial={editingData}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingId(null);
+          setEditingData(null);
+        }}
         onSave={handleSave}
       />
 

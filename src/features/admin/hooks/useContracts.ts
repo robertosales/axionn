@@ -153,12 +153,12 @@ export function useContracts() {
     ]);
     const inserts: Promise<any>[] = [];
     if (data.team_ids.length)
-      inserts.push(supabase.from('contract_teams').insert(
+      inserts.push(Promise.resolve(supabase.from('contract_teams').insert(
         data.team_ids.map(tid => ({ contract_id: contractId, team_id: tid }))
-      ));
+      )));
     if (data.project_ids.length)
-      inserts.push(supabase.from('projects').update({ contract_id: contractId })
-        .in('id', data.project_ids));
+      inserts.push(Promise.resolve(supabase.from('projects').update({ contract_id: contractId })
+        .in('id', data.project_ids)));
     await Promise.all(inserts);
   };
 

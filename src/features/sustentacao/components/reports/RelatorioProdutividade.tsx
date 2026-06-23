@@ -12,6 +12,8 @@ import { getReportConfig } from "../../utils/reportConfig";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { exportToCsv } from "@/lib/exportToCsv";
+import * as XLSX from "xlsx";
 import {
   ReportLayout,
   ReportPageHeader,
@@ -23,7 +25,7 @@ import type { KPIItem } from "@/shared/components/reports";
 import {
   ChevronDown, ChevronRight,
   ClipboardList, CheckCircle2, Clock, AlertTriangle,
-  FileText, Eye,
+  FileText, Eye, FileSpreadsheet, Download,
 } from "lucide-react";
 import { getInitials } from "@/lib/personName";
 import {
@@ -47,6 +49,25 @@ function useDemandaResponsaveis() {
   }, [currentTeamId]);
 
   return { responsaveis };
+}
+
+/**
+ * Resolve nomes/cargos de TODOS os user_ids que aparecem no relatório,
+ * sem restringir aos team_members do time ativo (corrige analistas vazios).
+ */
+function useProfilesByIds(userIds: string[]) {
+  const [profiles, setProfiles] = useState<Array<{ user_id: string; display_name: string; email: string; role?: string }>>([]);
+  const idsKey = useMemo(() => [...new Set(userIds.filter(Boolean))].sort().join(","), [userIds]);
+  useEffect(() => {
+    const ids = idsKey ? idsKey.split(",") : [];
+    if (ids.length === 0) { setProfiles([]); return; }
+    supabase
+      .from("profiles")
+      .select("user_id, display_name, email, role")
+      .in("user_id", ids)
+      .then(({ data }) => setProfiles((data || []) as any[]));
+  }, [idsKey]);
+  return profiles;
 }
 
 function fmtDate(d?: string | null) { return d ? new Date(d).toLocaleDateString("pt-BR") : "—"; }

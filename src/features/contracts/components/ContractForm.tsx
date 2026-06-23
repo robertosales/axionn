@@ -14,14 +14,14 @@ import {
   DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DEFAULT_SLAS, ROOM_MODE_CONFIG } from '../types/contract';
-import type { ContractFormData, SlaRow, RoomMode } from '../types/contract';
+import type { ContractFormData, SlaRow, RoomMode, ContractSla } from '../types/contract';
 import { useSaveContract } from '../hooks/useContracts';
 import { SlaMatrixEditor } from './SlaMatrixEditor';
 
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
-  initialData?: Partial<ContractFormData & { id: string }>;
+  initialData?: Partial<ContractFormData & { id: string; contract_slas?: ContractSla[] }>;
 }
 
 const EMPTY_FORM: ContractFormData = {
@@ -32,6 +32,23 @@ const EMPTY_FORM: ContractFormData = {
   starts_at:   '',
   ends_at:     '',
 };
+
+/** Garante que datas ISO (2026-01-15T00:00:00+00:00) virem YYYY-MM-DD para o <input type="date"> */
+function toDateInput(value?: string | null): string {
+  if (!value) return '';
+  return value.slice(0, 10);
+}
+
+/** Extrai SlaRow[] a partir de contract_slas do banco, com fallback para DEFAULT_SLAS */
+function resolveInitialSlas(contractSlas?: ContractSla[]): SlaRow[] {
+  if (!contractSlas || contractSlas.length === 0) return DEFAULT_SLAS;
+  return contractSlas.map((s) => ({
+    priority:                s.priority,
+    response_time_minutes:   s.response_time_minutes,
+    resolution_time_minutes: s.resolution_time_minutes,
+    business_hours_only:     s.business_hours_only,
+  }));
+}
 
 const ROOM_MODE_OPTIONS: { value: RoomMode; icon: React.ReactNode; label: string; desc: string }[] = [
   {
@@ -55,9 +72,20 @@ const ROOM_MODE_OPTIONS: { value: RoomMode; icon: React.ReactNode; label: string
 ];
 
 export function ContractForm({ onClose, onSuccess, initialData }: Props) {
-  const [step, setStep]   = useState<1 | 2 | 3>(1);
-  const [form, setForm]   = useState<ContractFormData>({ ...EMPTY_FORM, ...initialData });
-  const [slas, setSlas]   = useState<SlaRow[]>(DEFAULT_SLAS);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // ── Form: normaliza datas ISO → YYYY-MM-DD ao popular ─────────────────────
+  const [form, setForm] = useState<ContractFormData>({
+    ...EMPTY_FORM,
+    ...initialData,
+    starts_at: toDateInput(initialData?.starts_at),
+    ends_at:   toDateInput(initialData?.ends_at),
+  });
+
+  // ── SLAs: carrega do contrato existente ou usa defaults ────────────────────
+  const [slas, setSlas] = useState<SlaRow[]>(
+    resolveInitialSlas(initialData?.contract_slas)
+  );
 
   const { save, saving, error } = useSaveContract();
 

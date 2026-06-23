@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type ProviderType = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity" | "manus";
+export type ProviderType = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity" | "manus" | "sakana";
 
 export interface AIProvider {
   id: string;
@@ -21,10 +21,15 @@ export const PROVIDER_TYPE_LABEL: Record<ProviderType, string> = {
   anthropic: "Anthropic Claude",
   perplexity: "Perplexity",
   manus: "Manus AI",
+  sakana: "Fugu",
 };
 
 export async function listAIProviders(opts: { onlyActive?: boolean } = {}): Promise<AIProvider[]> {
-  let q = supabase.from("ai_providers" as any).select("*").order("is_recommended", { ascending: false }).order("name");
+  let q = supabase
+    .from("ai_providers" as any)
+    .select("*")
+    .order("is_recommended", { ascending: false })
+    .order("name");
   if (opts.onlyActive) q = q.eq("is_active", true);
   const { data, error } = await q;
   if (error) throw error;
@@ -47,20 +52,29 @@ export async function createAIProvider(payload: {
   return data as unknown as AIProvider;
 }
 
-export async function updateAIProvider(id: string, patch: Partial<{
-  name: string;
-  provider_type: ProviderType;
-  model: string | null;
-  is_recommended: boolean;
-  is_active: boolean;
-}>): Promise<void> {
-  const { error } = await supabase.from("ai_providers" as any).update(patch as any).eq("id", id);
+export async function updateAIProvider(
+  id: string,
+  patch: Partial<{
+    name: string;
+    provider_type: ProviderType;
+    model: string | null;
+    is_recommended: boolean;
+    is_active: boolean;
+  }>,
+): Promise<void> {
+  const { error } = await supabase
+    .from("ai_providers" as any)
+    .update(patch as any)
+    .eq("id", id);
   if (error) throw error;
 }
 
 export async function deleteAIProvider(id: string): Promise<void> {
   await supabase.rpc("delete_ai_provider_key" as any, { p_id: id } as any);
-  const { error } = await supabase.from("ai_providers" as any).delete().eq("id", id);
+  const { error } = await supabase
+    .from("ai_providers" as any)
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 

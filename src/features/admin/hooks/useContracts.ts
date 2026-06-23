@@ -1,101 +1,95 @@
-/**
- * useContracts — admin pages compat hook.
- *
- * Mapeia o shape esperado pelo AdminContratosPage / ContractWizardDialog
- * para a estrutura real no banco (tables: contracts, contract_slas, projects).
- *
- *   Frontend          ↔ Banco
- *   start_date         starts_at
- *   end_date           ends_at
- *   criticidade        priority (urgent|high|medium|low)
- *   sla_type           sla_type (24x7|business_hours|custom)
- */
-import { useCallback, useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-export type SlaType = '24x7' | 'business_hours' | 'custom';
-
-export interface ContractSla {
-  id?:                       string;
-  contract_id?:              string;
-  criticidade:               'baixa' | 'media' | 'alta' | 'critica';
-  sla_type:                  SlaType;
-  response_time_minutes:     number;
-  resolution_time_minutes:   number;
-}
+// ── Types ────────────────────────────────────────────────────────────────────────
 
 export interface Contract {
-  id:           string;
-  name:         string;
-  description:  string | null;
-  status:       string;
-  start_date:   string | null;
-  end_date:     string | null;
-  projectCount?: number;
-  slaCount?:    number;
+  id:             string;
+  name:           string;
+  status:         string;
+  starts_at:      string | null;   // nome real no banco
+  ends_at:        string | null;   // nome real no banco
+  company_id:     string | null;
+  number:         string | null;
+  object:         string | null;
+  value_per_pfus: number | null;
+  currency:       string | null;
+  projectCount?:  number;
+  slaCount?:      number;
 }
 
 export interface ContractFormData {
-  name:        string;
-  description: string;
-  status:      string;
-  start_date:  string;
-  end_date:    string;
+  name:           string;
+  status:         string;
+  starts_at:      string;          // nome real no banco
+  ends_at:        string;          // nome real no banco
+  company_id:     string | null;
+  number:         string;
+  object:         string;
+  value_per_pfus: string;          // string no form, parseFloat antes de persistir
+  currency:       string;
+  // Relações
+  team_ids:    string[];
   project_ids: string[];
-  slas:        ContractSla[];
+  sla_ids:     string[];
 }
 
-const DEFAULT_SLAS: ContractSla[] = [
-  { criticidade: 'baixa',   sla_type: 'business_hours', response_time_minutes: 240, resolution_time_minutes: 960  },
-  { criticidade: 'media',   sla_type: 'business_hours', response_time_minutes: 120, resolution_time_minutes: 480  },
-  { criticidade: 'alta',    sla_type: 'business_hours', response_time_minutes: 45,  resolution_time_minutes: 240  },
-  { criticidade: 'critica', sla_type: '24x7',           response_time_minutes: 15,  resolution_time_minutes: 120  },
-];
-
-export const EMPTY_FORM: ContractFormData = {
-  name:        '',
-  description: '',
-  status:      'active',
-  start_date:  '',
-  end_date:    '',
+export const EMPTY_CONTRACT_FORM: ContractFormData = {
+  name:           '',
+  status:         'active',
+  starts_at:      '',
+  ends_at:        '',
+  company_id:     null,
+  number:         '',
+  object:         '',
+  value_per_pfus: '',
+  currency:       'BRL',
+  team_ids:    [],
   project_ids: [],
-  slas:        DEFAULT_SLAS,
+  sla_ids:     [],
 };
 
-// ── Mapeamento criticidade ↔ priority ───────────────────────────────────────
-const CRITICIDADE_TO_PRIORITY: Record<ContractSla['criticidade'], string> = {
-  baixa: 'low', media: 'medium', alta: 'high', critica: 'urgent',
-};
-const PRIORITY_TO_CRITICIDADE: Record<string, ContractSla['criticidade']> = {
-  low: 'baixa', medium: 'media', high: 'alta', urgent: 'critica',
-};
+export interface ContractKpis {
+  total:    number;
+  active:   number;
+  paused:   number;
+  critical: number;
+}
 
-interface Kpis { total: number; active: number; paused: number; critical: number }
+// ── Hook ────────────────────────────────────────────────────────────────────────
 
 export function useContracts() {
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [kpis, setKpis]           = useState<Kpis>({ total: 0, active: 0, paused: 0, critical: 0 });
+  const [loading,   setLoading]   = useState(true);
+  const [kpis,      setKpis]      = useState<ContractKpis>({ total: 0, active: 0, paused: 0, critical: 0 });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await (supabase as any)
+      const { data } = await supabase
         .from('contracts')
-        .select('id, name, description, status, starts_at, ends_at, contract_slas(id), projects(id)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+        .select(`
+          id, name, status, starts_at, ends_at,
+          company_id, number, object, value_per_pfus, currency,
+          projects:projects(id),
+          contract_slas:contract_slas(id)
+        `)
+        .order('name', { ascending: true });
 
-      const list: Contract[] = (data ?? []).map((c: any) => ({
-        id:           c.id,
-        name:         c.name,
-        description:  c.description,
-        status:       c.status,
-        start_date:   c.starts_at,
-        end_date:     c.ends_at,
-        projectCount: c.projects?.length ?? 0,
-        slaCount:     c.contract_slas?.length ?? 0,
+      const list: Contract[] = (data || []).map((c: any) => ({
+        id:             c.id,
+        name:           c.name,
+        status:         c.status,
+        starts_at:      c.starts_at,
+        ends_at:        c.ends_at,
+        company_id:     c.company_id,
+        number:         c.number,
+        object:         c.object,
+        value_per_pfus: c.value_per_pfus,
+        currency:       c.currency,
+        projectCount:   (c.projects      || []).length,
+        slaCount:       (c.contract_slas || []).length,
       }));
 
       setContracts(list);
@@ -103,10 +97,14 @@ export function useContracts() {
         total:    list.length,
         active:   list.filter(c => c.status === 'active').length,
         paused:   list.filter(c => c.status === 'paused').length,
-        critical: list.filter(c => c.status === 'expired' || c.status === 'cancelled').length,
+        critical: list.filter(c => {
+          if (!c.ends_at) return false;
+          const daysLeft = Math.ceil(
+            (new Date(c.ends_at).getTime() - Date.now()) / 86_400_000
+          );
+          return daysLeft >= 0 && daysLeft <= 30;
+        }).length,
       });
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro ao carregar contratos');
     } finally {
       setLoading(false);
     }
@@ -114,128 +112,101 @@ export function useContracts() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── loadFormData: monta o ContractFormData para o wizard ──────────────────
-  const loadFormData = useCallback(async (id: string): Promise<ContractFormData> => {
-    const { data, error } = await (supabase as any)
+  // ── loadFormData ───────────────────────────────────────────────────────────────
+  const loadFormData = async (contractId: string): Promise<ContractFormData> => {
+    const { data } = await supabase
       .from('contracts')
-      .select('*, contract_slas(*), projects(id)')
-      .eq('id', id)
+      .select(`
+        id, name, status, starts_at, ends_at,
+        company_id, number, object, value_per_pfus, currency,
+        contract_teams:contract_teams(team_id),
+        projects:projects(id),
+        contract_slas:contract_slas(id)
+      `)
+      .eq('id', contractId)
       .single();
-    if (error || !data) return { ...EMPTY_FORM };
 
-    const slas: ContractSla[] = DEFAULT_SLAS.map(def => {
-      const dbRow = (data.contract_slas ?? []).find(
-        (r: any) => PRIORITY_TO_CRITICIDADE[r.priority] === def.criticidade,
-      );
-      if (!dbRow) return def;
-      return {
-        id:                       dbRow.id,
-        contract_id:              dbRow.contract_id,
-        criticidade:              def.criticidade,
-        sla_type:                 (dbRow.sla_type as SlaType) ?? def.sla_type,
-        response_time_minutes:    dbRow.response_time_minutes,
-        resolution_time_minutes:  dbRow.resolution_time_minutes,
-      };
-    });
-
+    if (!data) return { ...EMPTY_CONTRACT_FORM };
     return {
-      name:        data.name ?? '',
-      description: data.description ?? '',
-      status:      data.status ?? 'active',
-      start_date:  data.starts_at ? String(data.starts_at).slice(0, 10) : '',
-      end_date:    data.ends_at   ? String(data.ends_at).slice(0, 10)   : '',
-      project_ids: (data.projects ?? []).map((p: any) => p.id),
-      slas,
+      name:           (data as any).name       ?? '',
+      status:         (data as any).status     ?? 'active',
+      starts_at:      (data as any).starts_at  ?? '',
+      ends_at:        (data as any).ends_at    ?? '',
+      company_id:     (data as any).company_id ?? null,
+      number:         (data as any).number         ?? '',
+      object:         (data as any).object         ?? '',
+      value_per_pfus: (data as any).value_per_pfus != null
+        ? String((data as any).value_per_pfus)
+        : '',
+      currency:       (data as any).currency       ?? 'BRL',
+      team_ids:    ((data as any).contract_teams || []).map((r: any) => r.team_id),
+      project_ids: ((data as any).projects       || []).map((r: any) => r.id),
+      sla_ids:     ((data as any).contract_slas  || []).map((r: any) => r.id),
     };
-  }, []);
+  };
 
-  // ── helper compartilhado: persiste SLAs + projetos vinculados ─────────────
-  async function persistRelations(contractId: string, form: ContractFormData) {
-    // SLAs: delete + insert
-    await (supabase as any).from('contract_slas').delete().eq('contract_id', contractId);
-    if (form.slas.length > 0) {
-      const rows = form.slas.map(s => ({
-        contract_id:              contractId,
-        priority:                 CRITICIDADE_TO_PRIORITY[s.criticidade],
-        sla_type:                 s.sla_type,
-        response_time_minutes:    s.response_time_minutes,
-        resolution_time_minutes:  s.resolution_time_minutes,
-        business_hours_only:      s.sla_type === 'business_hours',
-      }));
-      const { error: e1 } = await (supabase as any).from('contract_slas').insert(rows);
-      if (e1) throw e1;
-    }
+  // ── persist helpers ───────────────────────────────────────────────────────────
+  const persistRelations = async (contractId: string, data: ContractFormData) => {
+    await Promise.all([
+      supabase.from('contract_teams').delete().eq('contract_id', contractId),
+      supabase.from('projects').update({ contract_id: null }).eq('contract_id', contractId),
+    ]);
+    const inserts: Promise<any>[] = [];
+    if (data.team_ids.length)
+      inserts.push(Promise.resolve(supabase.from('contract_teams').insert(
+        data.team_ids.map(tid => ({ contract_id: contractId, team_id: tid }))
+      )));
+    if (data.project_ids.length)
+      inserts.push(Promise.resolve(supabase.from('projects').update({ contract_id: contractId })
+        .in('id', data.project_ids)));
+    await Promise.all(inserts);
+  };
 
-    // Projetos: desvincula os antigos, vincula os novos
-    await (supabase as any).from('projects').update({ contract_id: null }).eq('contract_id', contractId);
-    if (form.project_ids.length > 0) {
-      const { error: e2 } = await (supabase as any)
-        .from('projects')
-        .update({ contract_id: contractId })
-        .in('id', form.project_ids);
-      if (e2) throw e2;
-    }
-  }
+  const buildPayload = (data: ContractFormData) => ({
+    name:           data.name.trim(),
+    status:         data.status,
+    starts_at:      data.starts_at || null,
+    ends_at:        data.ends_at   || null,
+    company_id:     data.company_id || null,
+    number:         data.number.trim()  || null,
+    object:         data.object.trim()  || null,
+    value_per_pfus: data.value_per_pfus ? parseFloat(data.value_per_pfus) : null,
+    currency:       data.currency || 'BRL',
+  });
 
-  const create = useCallback(async (form: ContractFormData): Promise<boolean> => {
-    try {
-      const { data, error } = await (supabase as any)
-        .from('contracts')
-        .insert({
-          name:        form.name,
-          description: form.description || null,
-          status:      form.status,
-          starts_at:   form.start_date || null,
-          ends_at:     form.end_date   || null,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
-      await persistRelations(data.id, form);
-      toast.success('Contrato criado');
-      await load();
-      return true;
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro ao criar contrato');
-      return false;
-    }
-  }, [load]);
+  // ── CRUD ───────────────────────────────────────────────────────────────────────
+  const create = async (data: ContractFormData): Promise<boolean> => {
+    const { data: inserted, error } = await supabase
+      .from('contracts')
+      .insert(buildPayload(data))
+      .select('id')
+      .single();
+    if (error || !inserted) { toast.error('Erro ao criar contrato'); return false; }
+    await persistRelations(inserted.id, data);
+    toast.success('Contrato criado com sucesso');
+    await load();
+    return true;
+  };
 
-  const update = useCallback(async (id: string, form: ContractFormData): Promise<boolean> => {
-    try {
-      const { error } = await (supabase as any)
-        .from('contracts')
-        .update({
-          name:        form.name,
-          description: form.description || null,
-          status:      form.status,
-          starts_at:   form.start_date || null,
-          ends_at:     form.end_date   || null,
-        })
-        .eq('id', id);
-      if (error) throw error;
-      await persistRelations(id, form);
-      toast.success('Contrato atualizado');
-      await load();
-      return true;
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro ao atualizar contrato');
-      return false;
-    }
-  }, [load]);
+  const update = async (id: string, data: ContractFormData): Promise<boolean> => {
+    const { error } = await supabase
+      .from('contracts')
+      .update(buildPayload(data))
+      .eq('id', id);
+    if (error) { toast.error('Erro ao atualizar contrato'); return false; }
+    await persistRelations(id, data);
+    toast.success('Contrato atualizado');
+    await load();
+    return true;
+  };
 
-  const remove = useCallback(async (id: string) => {
-    try {
-      await (supabase as any).from('projects').update({ contract_id: null }).eq('contract_id', id);
-      await (supabase as any).from('contract_slas').delete().eq('contract_id', id);
-      const { error } = await (supabase as any).from('contracts').delete().eq('id', id);
-      if (error) throw error;
-      toast.success('Contrato excluído');
-      await load();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Erro ao excluir contrato');
-    }
-  }, [load]);
+  const remove = async (id: string): Promise<boolean> => {
+    const { error } = await supabase.from('contracts').delete().eq('id', id);
+    if (error) { toast.error('Erro ao excluir contrato'); return false; }
+    toast.success('Contrato excluído');
+    await load();
+    return true;
+  };
 
-  return { contracts, loading, kpis, create, update, remove, loadFormData, reload: load };
+  return { contracts, loading, kpis, create, update, remove, loadFormData };
 }

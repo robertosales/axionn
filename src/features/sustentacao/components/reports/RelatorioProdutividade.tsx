@@ -12,6 +12,8 @@ import { getReportConfig } from "../../utils/reportConfig";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { exportToCsv } from "@/lib/exportToCsv";
+import * as XLSX from "xlsx";
 import {
   ReportLayout,
   ReportPageHeader,
@@ -23,7 +25,7 @@ import type { KPIItem } from "@/shared/components/reports";
 import {
   ChevronDown, ChevronRight,
   ClipboardList, CheckCircle2, Clock, AlertTriangle,
-  FileText, Eye,
+  FileText, Eye, FileSpreadsheet, Download,
 } from "lucide-react";
 import { getInitials } from "@/lib/personName";
 import {
@@ -47,6 +49,25 @@ function useDemandaResponsaveis() {
   }, [currentTeamId]);
 
   return { responsaveis };
+}
+
+/**
+ * Resolve nomes/cargos de TODOS os user_ids que aparecem no relatório,
+ * sem restringir aos team_members do time ativo (corrige analistas vazios).
+ */
+function useProfilesByIds(userIds: string[]) {
+  const [profiles, setProfiles] = useState<Array<{ user_id: string; display_name: string; email: string; role?: string }>>([]);
+  const idsKey = useMemo(() => [...new Set(userIds.filter(Boolean))].sort().join(","), [userIds]);
+  useEffect(() => {
+    const ids = idsKey ? idsKey.split(",") : [];
+    if (ids.length === 0) { setProfiles([]); return; }
+    supabase
+      .from("profiles")
+      .select("user_id, display_name, email, role")
+      .in("user_id", ids)
+      .then(({ data }) => setProfiles((data || []) as any[]));
+  }, [idsKey]);
+  return profiles;
 }
 
 function fmtDate(d?: string | null) { return d ? new Date(d).toLocaleDateString("pt-BR") : "—"; }
@@ -299,7 +320,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
   const { demandas }    = useDemandas();
   const { transitions } = useAllTransitions();
   const { hours }       = useAllHours();
-  const profiles        = useProfiles();
+  const teamProfiles    = useProfiles();
   const { responsaveis } = useDemandaResponsaveis();
   const { teams, user, isAdmin, currentTeamId } = useAuth();
   const { fases }       = useFases();
@@ -324,7 +345,27 @@ export function RelatorioProdutividade({ onBack }: Props) {
   }, [user?.id, isAdmin]);
 
   const sustTeams  = teams.filter(t => t.module === "sustentacao");
-  const profileIds = useMemo(() => new Set(profiles.map(p => p.user_id)), [profiles]);
+
+  // Coleta TODOS os user_ids referenciados (hours + responsaveis + responsavel_* das demandas)
+  const allUserIds = useMemo(() => {
+    const s = new Set<string>();
+    hours.forEach(h => { const uid = (h as any).user_id || (h as any).lancado_por; if (uid) s.add(uid); });
+    responsaveis.forEach(r => { if (r.user_id) s.add(r.user_id); });
+    demandas.forEach(d => {
+      [d.responsavel_dev, d.responsavel_requisitos, d.responsavel_teste, d.responsavel_arquiteto].forEach(uid => { if (uid) s.add(uid); });
+    });
+    return [...s];
+  }, [hours, responsaveis, demandas]);
+  const extraProfiles = useProfilesByIds(allUserIds);
+
+  // Mescla profiles do time com profiles resolvidos por ID (sem duplicar)
+  const profiles = useMemo(() => {
+    const m = new Map<string, { user_id: string; display_name: string; email: string; role?: string }>();
+    teamProfiles.forEach(p => m.set(p.user_id, p as any));
+    extraProfiles.forEach(p => { if (!m.has(p.user_id)) m.set(p.user_id, p); });
+    return [...m.values()];
+  }, [teamProfiles, extraProfiles]);
+
   const nomeMap    = useMemo(() => { const m = new Map<string,string>(); profiles.forEach(p => m.set(p.user_id, p.display_name||p.email||p.user_id.slice(0,8))); return m; }, [profiles]);
   const cargoMap   = useMemo(() => { const m = new Map<string,string>(); profiles.forEach(p => m.set(p.user_id, (p as any).role || (p as any).cargo || "")); return m; }, [profiles]);
 
@@ -406,15 +447,17 @@ export function RelatorioProdutividade({ onBack }: Props) {
       responsaveisPorDemanda.get(d.id)?.forEach(uid => idSet.add(uid));
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => idSet.add(uid));
     });
-    return profiles.filter(p => idSet.has(p.user_id)).map(p => ({ user_id: p.user_id, display_name: p.display_name || p.email || p.user_id.slice(0,8) })).sort((a, b) => a.display_name.localeCompare(b.display_name));
-  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, profiles]);
+    return [...idSet]
+      .map(uid => ({ user_id: uid, display_name: nomeMap.get(uid) || `Usuário ${uid.slice(0, 8)}` }))
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, nomeMap]);
 
   const grupos = useMemo(() => {
     const todosIds = new Set<string>();
     demandasFiltradas.forEach(d => {
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => todosIds.add(uid));
     });
-    const ids = analista !== "all" ? [analista] : [...todosIds].filter(id => profileIds.has(id));
+      const ids = analista !== "all" ? [analista] : [...todosIds];
     return ids.map(userId => {
       const atividades: AtividadeRow[] = demandasFiltradas
         .filter(d => horasPorDemandaUser.get(d.id)?.has(userId) ?? false)
@@ -432,7 +475,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
             dataInicio: fmtDate(d.created_at),
             dataFim: fmtDate(d.aceite_data ?? conclusao?.created_at ?? null),
             horasAnalista,
-            outrosAnalistas: [...outrosIds].filter(id => profileIds.has(id)).map(id => nomeMap.get(id) || id.slice(0,8)),
+          outrosAnalistas: [...outrosIds].map(id => nomeMap.get(id) || `Usuário ${id.slice(0,8)}`),
             horasDetalhadas: horasDetalhadasMap.get(`${d.id}::${userId}`) ?? [],
           };
         });
@@ -440,9 +483,9 @@ export function RelatorioProdutividade({ onBack }: Props) {
       const resolvidos   = atividades.filter(a => isResolvido(a.situacao)).length;
       const emAberto     = atividades.length - resolvidos;
       const cargo        = cargoMap.get(userId) ?? "";
-      return { userId, nome: nomeMap.get(userId) || userId.slice(0,8), cargo, atividades, totalHoras, resolvidos, emAberto, taxaResolucao: atividades.length > 0 ? (resolvidos / atividades.length) * 100 : 0 };
+      return { userId, nome: nomeMap.get(userId) || `Usuário ${userId.slice(0,8)}`, cargo, atividades, totalHoras, resolvidos, emAberto, taxaResolucao: atividades.length > 0 ? (resolvidos / atividades.length) * 100 : 0 };
     }).filter(g => g.atividades.length > 0).sort((a, b) => b.resolvidos - a.resolvidos);
-  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, horasDetalhadasMap, transitions, nomeMap, cargoMap, analista, profileIds]);
+  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, horasDetalhadasMap, transitions, nomeMap, cargoMap, analista]);
 
   const kpis = useMemo(() => ({
     totalAtividades: grupos.reduce((s, g) => s + g.atividades.length, 0),
@@ -467,11 +510,28 @@ export function RelatorioProdutividade({ onBack }: Props) {
   ];
 
   const handleVisualizarPDF = async () => {
-    if (analista === "all" || grupos.length === 0) return;
+    if (grupos.length === 0) return;
     setGeneratingPDF(true);
     try {
-      const grupo = grupos[0];
-      const blob = await buildPDFBlob(grupo, dataInicio, dataFim);
+      let blob: Blob;
+      if (grupos.length === 1) {
+        blob = await buildPDFBlob(grupos[0], dataInicio, dataFim);
+      } else {
+        // Multi-analista: concatena PDFs por analista em um único documento
+        const { default: jsPDF } = await import("jspdf");
+        const merged = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+        merged.deletePage(1);
+        for (const g of grupos) {
+          const b = await buildPDFBlob(g, dataInicio, dataFim);
+          const buf = await b.arrayBuffer();
+          // jsPDF não tem merge nativo; alternativa: gera blobs por analista e baixa zipados
+          // Para manter simplicidade, fallback: gera apenas o 1º quando múltiplos
+          // e expõe CSV/XLSX para visão consolidada.
+          void buf;
+        }
+        blob = await buildPDFBlob(grupos[0], dataInicio, dataFim);
+        toast.info("Pré-visualização exibe o primeiro analista. Use CSV/XLSX para visão consolidada.");
+      }
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
     } catch (err) {
@@ -480,6 +540,198 @@ export function RelatorioProdutividade({ onBack }: Props) {
     } finally {
       setGeneratingPDF(false);
     }
+  };
+
+  // ── Linhas achatadas para CSV/XLSX (uma linha por lançamento de hora;
+  //    se não houver lançamento, sai linha resumo da atividade)
+  const flatRows = useMemo(() => {
+    const rows: Record<string, string | number> = {} as any;
+    const out: Array<Record<string, string | number>> = [];
+    grupos.forEach(g => {
+      g.atividades.forEach(a => {
+        if (a.horasDetalhadas.length === 0) {
+          out.push({
+            Analista: g.nome,
+            Cargo: g.cargo,
+            RHM: a.rhm,
+            Projeto: a.projeto,
+            Situacao: situacaoLabel(a.situacao),
+            Inicio: a.dataInicio,
+            Fim: a.dataFim,
+            "Horas do Analista": a.horasAnalista,
+            "Data Lancamento": "",
+            Fase: "",
+            Descricao: "",
+            "Horas Lancadas": "",
+          });
+        } else {
+          a.horasDetalhadas.forEach(h => {
+            out.push({
+              Analista: g.nome,
+              Cargo: g.cargo,
+              RHM: a.rhm,
+              Projeto: a.projeto,
+              Situacao: situacaoLabel(a.situacao),
+              Inicio: a.dataInicio,
+              Fim: a.dataFim,
+              "Horas do Analista": a.horasAnalista,
+              "Data Lancamento": h.data,
+              Fase: h.fase,
+              Descricao: h.descricao,
+              "Horas Lancadas": h.horas,
+            });
+          });
+        }
+      });
+    });
+    void rows;
+    return out;
+  }, [grupos]);
+
+  const handleExportCSV = () => {
+    if (flatRows.length === 0) { toast.warning("Nenhum dado para exportar"); return; }
+    const escopo = analista === "all" ? "todos" : (nomeMap.get(analista) || analista).replace(/\s+/g, "_").toLowerCase();
+    exportToCsv({ filename: `produtividade-${escopo}`, rows: flatRows });
+    toast.success("CSV exportado com sucesso");
+  };
+
+  const handleExportXLSX = () => {
+    if (grupos.length === 0) { toast.warning("Nenhum dado para exportar"); return; }
+    const wb = XLSX.utils.book_new();
+
+    // ── Aba 1: Detalhado agrupado (Analista → Demanda → Lançamentos)
+    const headers = [
+      "Analista", "Cargo", "RHM", "Projeto", "Situação",
+      "Início", "Fim", "Horas do Analista",
+      "Data Lançamento", "Fase", "Descrição", "Horas Lançadas",
+    ];
+    const aoa: (string | number)[][] = [];
+    const merges: XLSX.Range[] = [];
+    const boldRows = new Set<number>();
+    const headerRows = new Set<number>();
+    const analystHeaderRows = new Set<number>();
+    const totalRow: { idx: number } = { idx: -1 };
+
+    aoa.push(headers);
+    headerRows.add(aoa.length - 1);
+
+    let totalGeralHoras = 0;
+    let totalGeralLancadas = 0;
+
+    grupos.forEach(g => {
+      // Cabeçalho do analista (linha mesclada)
+      aoa.push([`👤 ${g.nome}${g.cargo ? ` — ${g.cargo}` : ""}`, "", "", "", "", "", "", "", "", "", "", ""]);
+      const analystHeaderIdx = aoa.length - 1;
+      analystHeaderRows.add(analystHeaderIdx);
+      merges.push({ s: { r: analystHeaderIdx, c: 0 }, e: { r: analystHeaderIdx, c: headers.length - 1 } });
+
+      let subtotalAnalista = 0;
+
+      g.atividades.forEach(a => {
+        const linhas = a.horasDetalhadas.length > 0 ? a.horasDetalhadas : [null];
+        let subtotalDemanda = 0;
+
+        linhas.forEach((h, i) => {
+          if (h) subtotalDemanda += Number(h.horas) || 0;
+          aoa.push([
+            i === 0 ? g.nome : "",
+            i === 0 ? g.cargo : "",
+            i === 0 ? a.rhm : "",
+            i === 0 ? a.projeto : "",
+            i === 0 ? situacaoLabel(a.situacao) : "",
+            i === 0 ? a.dataInicio : "",
+            i === 0 ? a.dataFim : "",
+            i === 0 ? Number(a.horasAnalista.toFixed(2)) : "",
+            h ? h.data : "",
+            h ? h.fase : "",
+            h ? h.descricao : "(sem lançamentos no período)",
+            h ? Number(Number(h.horas).toFixed(2)) : "",
+          ]);
+        });
+
+        // Subtotal por demanda
+        aoa.push([
+          "", "", "", `Subtotal RHM ${a.rhm}`, "", "", "", "", "", "", "Total horas lançadas:", Number(subtotalDemanda.toFixed(2)),
+        ]);
+        boldRows.add(aoa.length - 1);
+        totalGeralLancadas += subtotalDemanda;
+        subtotalAnalista += Number(a.horasAnalista) || 0;
+      });
+
+      // Subtotal por analista
+      aoa.push([
+        `SUBTOTAL ${g.nome}`, "", "", "", "", "",
+        "Horas do analista:", Number(subtotalAnalista.toFixed(2)),
+        "", "", "Atividades:", g.atividades.length,
+      ]);
+      boldRows.add(aoa.length - 1);
+      totalGeralHoras += subtotalAnalista;
+
+      // Linha em branco entre analistas
+      aoa.push(["", "", "", "", "", "", "", "", "", "", "", ""]);
+    });
+
+    // Total geral
+    aoa.push([
+      "TOTAL GERAL DO TIME", "", "", "", "", "",
+      "Horas (analistas):", Number(totalGeralHoras.toFixed(2)),
+      "", "", "Horas lançadas:", Number(totalGeralLancadas.toFixed(2)),
+    ]);
+    totalRow.idx = aoa.length - 1;
+    boldRows.add(totalRow.idx);
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!merges"] = merges;
+    ws["!cols"] = [
+      { wch: 26 }, { wch: 18 }, { wch: 10 }, { wch: 32 }, { wch: 18 },
+      { wch: 12 }, { wch: 12 }, { wch: 16 },
+      { wch: 14 }, { wch: 22 }, { wch: 48 }, { wch: 14 },
+    ];
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+    (ws as any)["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }) };
+
+    // Estilos básicos (sheetjs community não aplica cores, mas mantém negrito via s.font.bold em alguns viewers)
+    const applyStyle = (rowIdx: number, style: any) => {
+      for (let c = 0; c < headers.length; c++) {
+        const ref = XLSX.utils.encode_cell({ r: rowIdx, c });
+        if (!ws[ref]) ws[ref] = { t: "s", v: "" };
+        (ws[ref] as any).s = { ...(ws[ref] as any).s, ...style };
+      }
+    };
+    headerRows.forEach(r => applyStyle(r, { font: { bold: true } }));
+    analystHeaderRows.forEach(r => applyStyle(r, { font: { bold: true, sz: 12 } }));
+    boldRows.forEach(r => applyStyle(r, { font: { bold: true } }));
+
+    XLSX.utils.book_append_sheet(wb, ws, "Produtividade");
+
+    // ── Aba 2: Resumo executivo
+    const resumo = [
+      ...grupos.map(g => ({
+        Analista: g.nome,
+        Cargo: g.cargo,
+        Atividades: g.atividades.length,
+        Resolvidos: g.resolvidos,
+        "Em Aberto": g.emAberto,
+        "Taxa Resolução (%)": Number(g.taxaResolucao.toFixed(1)),
+        "Horas Totais": Number(g.totalHoras.toFixed(2)),
+      })),
+      {
+        Analista: "TOTAL DO TIME",
+        Cargo: "",
+        Atividades: grupos.reduce((s, g) => s + g.atividades.length, 0),
+        Resolvidos: grupos.reduce((s, g) => s + g.resolvidos, 0),
+        "Em Aberto": grupos.reduce((s, g) => s + g.emAberto, 0),
+        "Taxa Resolução (%)": "",
+        "Horas Totais": Number(totalGeralHoras.toFixed(2)),
+      },
+    ];
+    const wsResumo = XLSX.utils.json_to_sheet(resumo);
+    wsResumo["!cols"] = [{ wch: 26 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
+
+    const escopo = analista === "all" ? "todos" : (nomeMap.get(analista) || analista).replace(/\s+/g, "_").toLowerCase();
+    XLSX.writeFile(wb, `produtividade-${escopo}-${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast.success("XLSX exportado com sucesso");
   };
 
   const handleClosePreview = () => {
@@ -522,20 +774,18 @@ export function RelatorioProdutividade({ onBack }: Props) {
         kpis={<ReportKPISummary items={kpiItems} />}
         table={
           <div className="space-y-4">
-            {/* Botão Visualizar Relatório PDF — único mecanismo de relatório */}
-            {isIndividual && (
-              <div className="flex justify-end print:hidden">
-                <Button
-                  onClick={handleVisualizarPDF}
-                  disabled={generatingPDF || grupos.length === 0}
-                  size="sm"
-                  className="gap-2"
-                >
-                  <Eye className="h-4 w-4" />
-                  {generatingPDF ? "Gerando..." : "Visualizar Relatório (PDF)"}
-                </Button>
-              </div>
-            )}
+            {/* Ações de exportação */}
+            <div className="flex justify-end gap-2 print:hidden">
+              <Button onClick={handleExportCSV} disabled={grupos.length === 0} size="sm" variant="outline" className="gap-2" title="Exportar dados achatados em CSV">
+                <Download className="h-4 w-4" /> CSV
+              </Button>
+              <Button onClick={handleExportXLSX} disabled={grupos.length === 0} size="sm" variant="outline" className="gap-2" title="Exportar XLSX com Resumo e Detalhado">
+                <FileSpreadsheet className="h-4 w-4" /> XLSX
+              </Button>
+              <Button onClick={handleVisualizarPDF} disabled={generatingPDF || grupos.length === 0} size="sm" className="gap-2" title={isIndividual ? "Pré-visualizar PDF" : "Pré-visualizar PDF (primeiro analista)"}>
+                <Eye className="h-4 w-4" /> {generatingPDF ? "Gerando..." : "PDF"}
+              </Button>
+            </div>
 
             {grupos.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">

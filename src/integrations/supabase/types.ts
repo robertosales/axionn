@@ -1244,6 +1244,42 @@ export type Database = {
           },
         ]
       }
+      companies: {
+        Row: {
+          cnpj: string | null
+          created_at: string
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       contract_audit_log: {
         Row: {
           action: string
@@ -1413,47 +1449,105 @@ export type Database = {
           },
         ]
       }
+      contract_teams: {
+        Row: {
+          contract_id: string
+          created_at: string
+          id: string
+          team_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          id?: string
+          team_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_teams_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contracts: {
         Row: {
+          company_id: string | null
           created_at: string | null
           created_by: string | null
+          currency: string
           description: string | null
           ends_at: string | null
           id: string
           name: string
+          number: string | null
+          object: string | null
           org_id: string | null
           room_mode: string
           starts_at: string | null
           status: string | null
           updated_at: string | null
+          value_per_pfus: number | null
         }
         Insert: {
+          company_id?: string | null
           created_at?: string | null
           created_by?: string | null
+          currency?: string
           description?: string | null
           ends_at?: string | null
           id?: string
           name: string
+          number?: string | null
+          object?: string | null
           org_id?: string | null
           room_mode?: string
           starts_at?: string | null
           status?: string | null
           updated_at?: string | null
+          value_per_pfus?: number | null
         }
         Update: {
+          company_id?: string | null
           created_at?: string | null
           created_by?: string | null
+          currency?: string
           description?: string | null
           ends_at?: string | null
           id?: string
           name?: string
+          number?: string | null
+          object?: string | null
           org_id?: string | null
           room_mode?: string
           starts_at?: string | null
           status?: string | null
           updated_at?: string | null
+          value_per_pfus?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contracts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contracts_org_id_fkey"
             columns: ["org_id"]
@@ -2400,6 +2494,59 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      licenses: {
+        Row: {
+          ai_calls_quota: number | null
+          ai_calls_used: number
+          company_id: string
+          created_at: string
+          id: string
+          pf_quota_month: number | null
+          pf_used_month: number
+          plan: string
+          quota_reset_at: string
+          status: string
+          updated_at: string
+          valid_until: string
+        }
+        Insert: {
+          ai_calls_quota?: number | null
+          ai_calls_used?: number
+          company_id: string
+          created_at?: string
+          id?: string
+          pf_quota_month?: number | null
+          pf_used_month?: number
+          plan?: string
+          quota_reset_at?: string
+          status?: string
+          updated_at?: string
+          valid_until?: string
+        }
+        Update: {
+          ai_calls_quota?: number | null
+          ai_calls_used?: number
+          company_id?: string
+          created_at?: string
+          id?: string
+          pf_quota_month?: number | null
+          pf_used_month?: number
+          plan?: string
+          quota_reset_at?: string
+          status?: string
+          updated_at?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "licenses_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -3777,6 +3924,7 @@ export type Database = {
       releases: {
         Row: {
           bugs_fixed: number | null
+          contract_id: string | null
           created_at: string
           hus_included: number | null
           id: string
@@ -3789,6 +3937,7 @@ export type Database = {
         }
         Insert: {
           bugs_fixed?: number | null
+          contract_id?: string | null
           created_at?: string
           hus_included?: number | null
           id?: string
@@ -3801,6 +3950,7 @@ export type Database = {
         }
         Update: {
           bugs_fixed?: number | null
+          contract_id?: string | null
           created_at?: string
           hus_included?: number | null
           id?: string
@@ -3811,7 +3961,15 @@ export type Database = {
           team_id?: string
           version?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "releases_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       retro_action_items: {
         Row: {
@@ -4336,6 +4494,7 @@ export type Database = {
       }
       teams: {
         Row: {
+          company_id: string | null
           contract_id: string | null
           created_at: string
           created_by: string | null
@@ -4348,6 +4507,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_id?: string | null
           contract_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -4360,6 +4520,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_id?: string | null
           contract_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -4372,6 +4533,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "teams_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "teams_contract_id_fkey"
             columns: ["contract_id"]
@@ -4910,6 +5078,7 @@ export type Database = {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      check_license_quota: { Args: { p_team_id: string }; Returns: Json }
       claim_next_apf_job: {
         Args: never
         Returns: {
@@ -5096,6 +5265,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_license_usage: {
+        Args: { p_ai_calls?: number; p_pf_count?: number; p_team_id: string }
+        Returns: undefined
+      }
       is_admin: { Args: never; Returns: boolean }
       is_contract_admin: {
         Args: { _contract_id: string; _user_id: string }
@@ -5133,7 +5306,8 @@ export type Database = {
       open_counting_session: {
         Args: {
           p_baseline_id?: string
-          p_project_id: string
+          p_contract_id: string
+          p_project_id?: string
           p_redmine_ref?: string
           p_release_ref?: string
           p_sprint_ref?: string
@@ -5190,6 +5364,12 @@ export type Database = {
         | "architect"
         | "qa_analyst"
         | "admin_contrato"
+      contract_status:
+        | "draft"
+        | "active"
+        | "suspended"
+        | "expired"
+        | "terminated"
       org_member_role: "owner" | "admin" | "member"
       org_plan: "free" | "pro" | "enterprise"
       org_status: "active" | "trial" | "suspended" | "cancelled"
@@ -5339,6 +5519,13 @@ export const Constants = {
         "architect",
         "qa_analyst",
         "admin_contrato",
+      ],
+      contract_status: [
+        "draft",
+        "active",
+        "suspended",
+        "expired",
+        "terminated",
       ],
       org_member_role: ["owner", "admin", "member"],
       org_plan: ["free", "pro", "enterprise"],

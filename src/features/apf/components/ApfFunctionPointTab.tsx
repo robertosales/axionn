@@ -54,6 +54,7 @@ interface SprintOption {
   id: string;
   name: string;
   is_active: boolean;
+  team_id: string;
 }
 
 interface HuRow {
@@ -126,6 +127,7 @@ export function ApfFunctionPointTab() {
   const [loadingHUs, setLoadingHUs]             = useState(false);
   const [countingAll, setCountingAll]           = useState(false);
   const [teamContractId, setTeamContractId]     = useState<string | null>(null);
+  const [teamProjectId, setTeamProjectId]       = useState<string | null>(null);
   const [validating, setValidating]             = useState(false);
 
   const [dialog, setDialog] = useState<ValidationDialog>({
@@ -141,21 +143,45 @@ export function ApfFunctionPointTab() {
     refresh: insightsRefreshFn,
   } = useLearningInsights();
 
-  // ── Contrato do time ────────────────────────────────────────────────────────
+  // ── Contrato e Projeto do time ──────────────────────────────────────────────
   useEffect(() => {
-    if (!teamId) { setTeamContractId(null); return; }
+    if (!teamId) { setTeamContractId(null); setTeamProjectId(null); return; }
     let cancelled = false;
     (async () => {
+      // 1. Busca contract_id via contract_teams
       const { data: ct } = await supabase
         .from("contract_teams").select("contract_id")
         .eq("team_id", teamId).limit(1).maybeSingle();
       if (cancelled) return;
-      if (ct?.contract_id) { setTeamContractId(ct.contract_id); return; }
+
+      const contractId = ct?.contract_id ?? null;
+
+      if (contractId) {
+        setTeamContractId(contractId);
+        // 2. Resolve project_id: busca projeto vinculado ao mesmo team_id
+        const { data: proj } = await supabase
+          .from("projects").select("id")
+          .eq("team_id", teamId).eq("contract_id", contractId)
+          .limit(1).maybeSingle();
+        if (!cancelled) setTeamProjectId((proj as any)?.id ?? null);
+        return;
+      }
+
+      // Fallback: busca via modelo APF ativo
       const { data: model } = await supabase
         .from("apf_counting_models" as any).select("contract_id")
         .eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (cancelled) return;
-      setTeamContractId((model as any)?.contract_id ?? null);
+      const fallbackContractId = (model as any)?.contract_id ?? null;
+      setTeamContractId(fallbackContractId);
+
+      if (fallbackContractId) {
+        const { data: proj } = await supabase
+          .from("projects").select("id")
+          .eq("team_id", teamId).eq("contract_id", fallbackContractId)
+          .limit(1).maybeSingle();
+        if (!cancelled) setTeamProjectId((proj as any)?.id ?? null);
+      }
     })();
     return () => { cancelled = true; };
   }, [teamId]);
@@ -164,7 +190,7 @@ export function ApfFunctionPointTab() {
   useEffect(() => {
     if (!teamId) return;
     setLoadingSprints(true);
-    supabase.from("sprints").select("id, name, is_active")
+    supabase.from("sprints").select("id, name, is_active, team_id")
       .eq("team_id", teamId).order("created_at", { ascending: false }).limit(30)
       .then(({ data }) => {
         const list = (data ?? []) as SprintOption[];
@@ -224,8 +250,22 @@ export function ApfFunctionPointTab() {
       const contractId = hu.contract_id ?? teamContractId;
       if (!contractId) throw new Error("Esta HU não está vinculada a um contrato. Edite a HU/time e selecione o contrato APF.");
 
+      // Resolve project_id via sprint → team → project (com fallback para teamProjectId já carregado)
+      let resolvedProjectId: string | null = teamProjectId;
+      if (!resolvedProjectId && selectedSprintId) {
+        const { data: sprintData } = await supabase
+          .from("sprints").select("team_id").eq("id", selectedSprintId).maybeSingle();
+        if (sprintData?.team_id) {
+          const { data: projData } = await supabase
+            .from("projects").select("id")
+            .eq("team_id", sprintData.team_id).eq("contract_id", contractId)
+            .limit(1).maybeSingle();
+          resolvedProjectId = (projData as any)?.id ?? null;
+        }
+      }
+
       const { data: sessionId, error: e1 } = await supabase.rpc("open_counting_session" as any, {
-        p_contract_id: contractId, p_project_id: null,
+        p_contract_id: contractId, p_project_id: resolvedProjectId,
         p_sprint_ref: selectedSprintId, p_release_ref: null,
         p_redmine_ref: hu.code, p_baseline_id: null,
       });
@@ -303,7 +343,7 @@ export function ApfFunctionPointTab() {
       }));
       toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
     }
-  }, [teamId, selectedSprintId, teamContractId]);
+  }, [teamId, selectedSprintId, teamContractId, teamProjectId]);
 
   // ── Abre diálogo de validação ───────────────────────────────────────────────
   const openValidationDialog = useCallback((hu: HuRow, fpValue: number) => {
@@ -339,7 +379,7 @@ export function ApfFunctionPointTab() {
       const { error: fnErr } = await supabase.functions.invoke("apf-validate", {
         body: {
           session_id:                hu._sessionId ?? hu.id,
-          project_id:                teamId,
+          project_id:                teamProjectId ?? teamId,
           team_id:                   teamId,
           hu_text:                   buildStoryText(hu),
           hu_title:                  hu.title,
@@ -379,7 +419,7 @@ export function ApfFunctionPointTab() {
     } finally {
       setValidating(false);
     }
-  }, [dialog, analyses, teamId, insightsRefreshFn]);
+  }, [dialog, analyses, teamId, teamProjectId, insightsRefreshFn]);
 
   // ── Contar todos pendentes ──────────────────────────────────────────────────
   const countAllPending = useCallback(async () => {

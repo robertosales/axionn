@@ -320,7 +320,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
   const { demandas }    = useDemandas();
   const { transitions } = useAllTransitions();
   const { hours }       = useAllHours();
-  const profiles        = useProfiles();
+  const teamProfiles    = useProfiles();
   const { responsaveis } = useDemandaResponsaveis();
   const { teams, user, isAdmin, currentTeamId } = useAuth();
   const { fases }       = useFases();
@@ -345,7 +345,27 @@ export function RelatorioProdutividade({ onBack }: Props) {
   }, [user?.id, isAdmin]);
 
   const sustTeams  = teams.filter(t => t.module === "sustentacao");
-  const profileIds = useMemo(() => new Set(profiles.map(p => p.user_id)), [profiles]);
+
+  // Coleta TODOS os user_ids referenciados (hours + responsaveis + responsavel_* das demandas)
+  const allUserIds = useMemo(() => {
+    const s = new Set<string>();
+    hours.forEach(h => { const uid = (h as any).user_id || (h as any).lancado_por; if (uid) s.add(uid); });
+    responsaveis.forEach(r => { if (r.user_id) s.add(r.user_id); });
+    demandas.forEach(d => {
+      [d.responsavel_dev, d.responsavel_requisitos, d.responsavel_teste, d.responsavel_arquiteto].forEach(uid => { if (uid) s.add(uid); });
+    });
+    return [...s];
+  }, [hours, responsaveis, demandas]);
+  const extraProfiles = useProfilesByIds(allUserIds);
+
+  // Mescla profiles do time com profiles resolvidos por ID (sem duplicar)
+  const profiles = useMemo(() => {
+    const m = new Map<string, { user_id: string; display_name: string; email: string; role?: string }>();
+    teamProfiles.forEach(p => m.set(p.user_id, p as any));
+    extraProfiles.forEach(p => { if (!m.has(p.user_id)) m.set(p.user_id, p); });
+    return [...m.values()];
+  }, [teamProfiles, extraProfiles]);
+
   const nomeMap    = useMemo(() => { const m = new Map<string,string>(); profiles.forEach(p => m.set(p.user_id, p.display_name||p.email||p.user_id.slice(0,8))); return m; }, [profiles]);
   const cargoMap   = useMemo(() => { const m = new Map<string,string>(); profiles.forEach(p => m.set(p.user_id, (p as any).role || (p as any).cargo || "")); return m; }, [profiles]);
 
@@ -427,15 +447,17 @@ export function RelatorioProdutividade({ onBack }: Props) {
       responsaveisPorDemanda.get(d.id)?.forEach(uid => idSet.add(uid));
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => idSet.add(uid));
     });
-    return profiles.filter(p => idSet.has(p.user_id)).map(p => ({ user_id: p.user_id, display_name: p.display_name || p.email || p.user_id.slice(0,8) })).sort((a, b) => a.display_name.localeCompare(b.display_name));
-  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, profiles]);
+    return [...idSet]
+      .map(uid => ({ user_id: uid, display_name: nomeMap.get(uid) || `Usuário ${uid.slice(0, 8)}` }))
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, nomeMap]);
 
   const grupos = useMemo(() => {
     const todosIds = new Set<string>();
     demandasFiltradas.forEach(d => {
       horasPorDemandaUser.get(d.id)?.forEach((_, uid) => todosIds.add(uid));
     });
-    const ids = analista !== "all" ? [analista] : [...todosIds].filter(id => profileIds.has(id));
+      const ids = analista !== "all" ? [analista] : [...todosIds];
     return ids.map(userId => {
       const atividades: AtividadeRow[] = demandasFiltradas
         .filter(d => horasPorDemandaUser.get(d.id)?.has(userId) ?? false)
@@ -453,7 +475,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
             dataInicio: fmtDate(d.created_at),
             dataFim: fmtDate(d.aceite_data ?? conclusao?.created_at ?? null),
             horasAnalista,
-            outrosAnalistas: [...outrosIds].filter(id => profileIds.has(id)).map(id => nomeMap.get(id) || id.slice(0,8)),
+          outrosAnalistas: [...outrosIds].map(id => nomeMap.get(id) || `Usuário ${id.slice(0,8)}`),
             horasDetalhadas: horasDetalhadasMap.get(`${d.id}::${userId}`) ?? [],
           };
         });
@@ -461,9 +483,9 @@ export function RelatorioProdutividade({ onBack }: Props) {
       const resolvidos   = atividades.filter(a => isResolvido(a.situacao)).length;
       const emAberto     = atividades.length - resolvidos;
       const cargo        = cargoMap.get(userId) ?? "";
-      return { userId, nome: nomeMap.get(userId) || userId.slice(0,8), cargo, atividades, totalHoras, resolvidos, emAberto, taxaResolucao: atividades.length > 0 ? (resolvidos / atividades.length) * 100 : 0 };
+      return { userId, nome: nomeMap.get(userId) || `Usuário ${userId.slice(0,8)}`, cargo, atividades, totalHoras, resolvidos, emAberto, taxaResolucao: atividades.length > 0 ? (resolvidos / atividades.length) * 100 : 0 };
     }).filter(g => g.atividades.length > 0).sort((a, b) => b.resolvidos - a.resolvidos);
-  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, horasDetalhadasMap, transitions, nomeMap, cargoMap, analista, profileIds]);
+  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, horasDetalhadasMap, transitions, nomeMap, cargoMap, analista]);
 
   const kpis = useMemo(() => ({
     totalAtividades: grupos.reduce((s, g) => s + g.atividades.length, 0),

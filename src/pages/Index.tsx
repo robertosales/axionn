@@ -14,7 +14,7 @@ import { KanbanBoard } from "@/components/KanbanBoard";
 import { DashboardHome } from "@/components/DashboardHome";
 import { DemandasPorTimeSection } from "@/features/contracts/DemandasPorTimeSection";
 
-// ─── Componentes pesados — lazy loaded ───────────────────────────────────────
+// ─── Componentes pesados — lazy loaded  ───────────────────────────────────────
 const AgileHistory = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
 const UserRolesManager = lazy(() =>
   import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })),

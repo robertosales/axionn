@@ -1,67 +1,54 @@
-## Problema
+## Diagnóstico
 
-Ao clicar em "Contar PF" para a HU-028, aparece:
+Mesmo com **71 registros** detectados pelo filtro, todos os KPIs mostram **0** e o dropdown "Analista" só lista "Todos". Causa raiz na cadeia de dados de `RelatorioProdutividade.tsx`:
 
-> Projeto 178baae3-8343-485b-be9b-9d6f53d7d451 não encontrado ou sem contrato vinculado
+1. **`useProfiles` restringe perfis a `team_members` do time ativo.**
+   - Query: `team_members WHERE team_id = currentTeamId` → `profiles IN (...)`.
+2. **`demandasFiltradas`** (71) vem de `demanda_hours` do time → OK.
+3. **`analistasList`** e **`grupos`** filtram por `profileIds` (`profiles.user_id`).
+   - Hoje, os `user_id` que lançaram horas/são responsáveis **não estão em `team_members`** do time ativo (gestores, ex-membros, analistas alocados via `demanda_responsaveis` sem membership formal).
+   - Resultado: `analistasList = []`, `grupos = []`, KPIs = 0.
+4. **Exportação**: hoje só existe PDF e apenas quando `analista !== "all"`. Não há CSV nem XLSX.
 
-Esse UUID é do **time** `[NEXO] - TIME A - B`, não de um projeto. O bug está em `ApfFunctionPointTab.tsx` (linha 172):
+## Plano de Correção
 
-```ts
-supabase.rpc("open_counting_session", {
-  p_project_id: teamId,   // ❌ passando time como se fosse projeto
-  ...
-})
-```
+### 1. Resolver perfis pelos IDs realmente usados no relatório
+Em vez de limitar a `team_members`, buscar os profiles de **todos os `user_id`** que aparecem em `demanda_hours` + `demanda_responsaveis` + responsáveis diretos da `demandas` do time.
 
-A RPC procura em `public.projects` e não encontra nada. Mesmo se passasse um projeto, a tabela `user_stories` não tem `project_id` — a HU está ligada a `team_id` e (opcionalmente) `contract_id`. Hoje a HU-028 está com `contract_id = NULL` e o time não tem registro em `contract_teams`, então não há como inferir o contrato automaticamente.
+- Criar um hook local `useReportProfiles(userIds: string[])` em `RelatorioProdutividade.tsx` (ou ampliar `useProfiles` com parâmetro opcional `userIds`) que faça:
+  ```
+  profiles WHERE user_id IN (ids) AND is_active = true
+  ```
+- Coletar os IDs a partir de `hours` + `responsaveis` + campos `responsavel_*` das `demandas` do time, deduplicar e passar ao hook.
+- Manter `useProfiles` (membership) para outros usos; o relatório passa a usar o hook novo.
 
-Existe apenas **1 modelo APF ativo** (contrato `d59ab6dc...`).
+### 2. Remover dependência de `profileIds` no agrupamento
+- `analistasList`: incluir qualquer `user_id` com horas/responsabilidade no período; usar `nomeMap` (já preenchido pelos profiles resolvidos no passo 1) com fallback para "Usuário {id curto}" se ainda assim faltar perfil.
+- `grupos`: parar de filtrar `todosIds` por `profileIds` — exibir todos que têm horas no período.
 
-## Plano
+### 3. Exportação CSV / XLSX / PDF
+Substituir o único botão "Visualizar PDF" por um grupo de ações sempre visível (inclusive em "Todos"):
 
-### 1. Tornar a RPC `open_counting_session` baseada em contrato, não em projeto
+- **PDF**: manter `buildPDFBlob` atual; quando `analista === "all"`, iterar pelos `grupos` adicionando uma página por analista (mesmo layout).
+- **CSV**: usar `src/lib/exportToCsv.ts` (já existe no projeto) com colunas:
+  `Analista | Cargo | RHM | Projeto | Situação | Início | Fim | Horas do Analista | Data Lançamento | Fase | Descrição | Horas Lançadas`.
+  Uma linha por lançamento de hora (achatado). Se a demanda não tem horas detalhadas, sai uma linha com horas vazias.
+- **XLSX**: usar `xlsx` (já consta como dep transitiva) ou `xlsxwriter` via util novo `exportToXlsx` em `src/shared/components/reports/exportToXLSX.ts`, com 2 abas:
+  1. **Resumo por Analista** (Nome, Cargo, Atividades, Resolvidos, Em Aberto, Taxa, Horas).
+  2. **Detalhado** (mesmas colunas do CSV).
+- Botões com ícones (`FileText`, `FileSpreadsheet`, `Download`) e `disabled` quando `grupos.length === 0`.
 
-Migration alterando a função para aceitar `p_contract_id` diretamente (e tornar `p_project_id` opcional, apenas para metadados):
+### 4. Pequenos ajustes de UX
+- Mensagem de empty-state diferenciada quando há horas mas nenhum perfil resolvido: "Há lançamentos no período, mas os autores não possuem perfil ativo."
+- Tooltip nos botões de exportação indicando o escopo (analista único × todos).
 
-```sql
-CREATE OR REPLACE FUNCTION public.open_counting_session(
-  p_contract_id  UUID,
-  p_project_id   UUID DEFAULT NULL,
-  p_sprint_ref   TEXT DEFAULT NULL,
-  p_release_ref  TEXT DEFAULT NULL,
-  p_redmine_ref  TEXT DEFAULT NULL,
-  p_baseline_id  UUID DEFAULT NULL
-) RETURNS UUID ...
-```
+## Arquivos afetados
 
-Resolução do `model_id` passa a ser direta pelo `contract_id`. Se `p_contract_id` for nulo, tenta resolver via `projects.contract_id`. Mantém GRANT EXECUTE para `authenticated`.
+- `src/features/sustentacao/components/reports/RelatorioProdutividade.tsx` — novo hook local, remoção do filtro por `profileIds`, novos handlers e botões CSV/XLSX/PDF, PDF multi-analista.
+- `src/shared/components/reports/exportToXLSX.ts` — **novo** util de exportação XLSX (2 abas).
+- (Opcional) `src/features/sustentacao/hooks/useAllTransitions.ts` — adicionar `useProfilesByIds(ids)` reutilizável; ou manter o hook local no relatório.
 
-A versão antiga (assinatura atual) é mantida como wrapper para não quebrar nada que ainda use a chamada antiga.
-
-### 2. Ajustar `ApfFunctionPointTab.tsx` para resolver o contrato corretamente
-
-Ordem de resolução do `contractId` no front-end:
-1. `hu.contract_id` (se a HU já tiver contrato);
-2. contrato do time via `contract_teams` (quando existir);
-3. fallback: contrato do único `apf_counting_models` ativo associado ao time/módulo.
-
-Se nenhum contrato for resolvido, mostrar toast claro:
-> "Esta HU não está vinculada a um contrato. Edite a HU/time e selecione o contrato APF antes de contar PF."
-
-Passar `p_contract_id` (e não mais `teamId` como projeto) para `open_counting_session`.
-
-### 3. Sem mudanças de schema em `user_stories`
-
-A coluna `contract_id` já existe — só precisa ser populada ao criar HU. (Fora do escopo deste fix, mas vou registrar como follow-up.)
-
-## Verificação
-
-- Recarregar a aba APF, clicar "Contar PF" em HU-028 e confirmar que a sessão abre sem erro de "projeto não encontrado".
-- Confirmar que HUs com `contract_id` preenchido também funcionam.
-- Toast amigável quando não houver contrato resolvível.
-
-## Detalhes técnicos
-
-- Arquivos: `src/features/apf/components/ApfFunctionPointTab.tsx` + nova migration alterando `open_counting_session`.
-- Sem alteração em `save_counting_items` (já recebe `session_id`).
-- Sem deleção de colunas/tabelas.
+## Não-objetivos
+- Não alterar `useProfiles` existente (outros consumidores dependem da semântica de membership).
+- Não mexer em RLS nem em schema de `demanda_hours` / `profiles`.
+- Não tocar no relatório de Sala Ágil.

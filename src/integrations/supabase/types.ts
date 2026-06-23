@@ -573,6 +573,44 @@ export type Database = {
           },
         ]
       }
+      apf_embedding_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error_message: string | null
+          event_id: string
+          id: string
+          processed_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          event_id: string
+          id?: string
+          processed_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          event_id?: string
+          id?: string
+          processed_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_embedding_queue_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "apf_validation_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_function_types: {
         Row: {
           created_at: string
@@ -895,6 +933,152 @@ export type Database = {
           },
         ]
       }
+      apf_knowledge_patterns: {
+        Row: {
+          canonical_complexity: string
+          canonical_functional_type: string
+          confidence: number
+          correction_rate: number | null
+          created_at: string
+          domain: string | null
+          evidence_count: number
+          hu_pattern_keywords: string[] | null
+          id: string
+          pattern_description: string | null
+          pattern_embedding: string | null
+          pattern_name: string
+          status: string
+          team_id: string | null
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+        }
+        Insert: {
+          canonical_complexity: string
+          canonical_functional_type: string
+          confidence?: number
+          correction_rate?: number | null
+          created_at?: string
+          domain?: string | null
+          evidence_count?: number
+          hu_pattern_keywords?: string[] | null
+          id?: string
+          pattern_description?: string | null
+          pattern_embedding?: string | null
+          pattern_name: string
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Update: {
+          canonical_complexity?: string
+          canonical_functional_type?: string
+          confidence?: number
+          correction_rate?: number | null
+          created_at?: string
+          domain?: string | null
+          evidence_count?: number
+          hu_pattern_keywords?: string[] | null
+          id?: string
+          pattern_description?: string | null
+          pattern_embedding?: string | null
+          pattern_name?: string
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_knowledge_patterns_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_learning_metrics: {
+        Row: {
+          complexity_accuracy: number | null
+          corrected_items: number
+          correction_by_reason: Json | null
+          correction_rate: number | null
+          created_at: string
+          domain: string | null
+          id: string
+          provider_id: string | null
+          rag_accuracy_delta: number | null
+          rag_accuracy_with: number | null
+          rag_accuracy_without: number | null
+          rag_hits: number
+          rag_total: number
+          team_id: string | null
+          top_correction_reason: string | null
+          total_items: number
+          type_accuracy: number | null
+          week_start: string
+        }
+        Insert: {
+          complexity_accuracy?: number | null
+          corrected_items?: number
+          correction_by_reason?: Json | null
+          correction_rate?: number | null
+          created_at?: string
+          domain?: string | null
+          id?: string
+          provider_id?: string | null
+          rag_accuracy_delta?: number | null
+          rag_accuracy_with?: number | null
+          rag_accuracy_without?: number | null
+          rag_hits?: number
+          rag_total?: number
+          team_id?: string | null
+          top_correction_reason?: string | null
+          total_items?: number
+          type_accuracy?: number | null
+          week_start: string
+        }
+        Update: {
+          complexity_accuracy?: number | null
+          corrected_items?: number
+          correction_by_reason?: Json | null
+          correction_rate?: number | null
+          created_at?: string
+          domain?: string | null
+          id?: string
+          provider_id?: string | null
+          rag_accuracy_delta?: number | null
+          rag_accuracy_with?: number | null
+          rag_accuracy_without?: number | null
+          rag_hits?: number
+          rag_total?: number
+          team_id?: string | null
+          top_correction_reason?: string | null
+          total_items?: number
+          type_accuracy?: number | null
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_learning_metrics_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_learning_metrics_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_modules: {
         Row: {
           created_at: string | null
@@ -1005,6 +1189,50 @@ export type Database = {
           },
         ]
       }
+      apf_similar_cases: {
+        Row: {
+          complexity: string
+          created_at: string
+          domain: string | null
+          event_id: string
+          functional_type: string
+          hu_embedding: string | null
+          id: string
+          pf_value: number | null
+          team_id: string | null
+        }
+        Insert: {
+          complexity: string
+          created_at?: string
+          domain?: string | null
+          event_id: string
+          functional_type: string
+          hu_embedding?: string | null
+          id?: string
+          pf_value?: number | null
+          team_id?: string | null
+        }
+        Update: {
+          complexity?: string
+          created_at?: string
+          domain?: string | null
+          event_id?: string
+          functional_type?: string
+          hu_embedding?: string | null
+          id?: string
+          pf_value?: number | null
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_similar_cases_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "apf_validation_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_templates: {
         Row: {
           created_at: string
@@ -1065,6 +1293,131 @@ export type Database = {
           },
           {
             foreignKeyName: "apf_templates_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_validation_events: {
+        Row: {
+          ai_complexity: string
+          ai_confidence_score: number | null
+          ai_functional_type: string
+          ai_pf_bruto: number | null
+          ai_reasoning: string | null
+          corrected_by: string | null
+          correction_notes: string | null
+          correction_reason_code:
+            | Database["public"]["Enums"]["apf_correction_reason"]
+            | null
+          counting_item_id: string | null
+          created_at: string
+          embedding_generated_at: string | null
+          hu_embedding: string | null
+          hu_text: string
+          hu_title: string | null
+          id: string
+          project_domain: string | null
+          project_id: string | null
+          prompt_version_hash: string | null
+          provider_id: string | null
+          rag_case_count: number
+          rag_was_used: boolean
+          session_id: string
+          team_id: string | null
+          validated_complexity: string
+          validated_functional_type: string
+          validated_pf_bruto: number | null
+          was_corrected: boolean | null
+        }
+        Insert: {
+          ai_complexity: string
+          ai_confidence_score?: number | null
+          ai_functional_type: string
+          ai_pf_bruto?: number | null
+          ai_reasoning?: string | null
+          corrected_by?: string | null
+          correction_notes?: string | null
+          correction_reason_code?:
+            | Database["public"]["Enums"]["apf_correction_reason"]
+            | null
+          counting_item_id?: string | null
+          created_at?: string
+          embedding_generated_at?: string | null
+          hu_embedding?: string | null
+          hu_text: string
+          hu_title?: string | null
+          id?: string
+          project_domain?: string | null
+          project_id?: string | null
+          prompt_version_hash?: string | null
+          provider_id?: string | null
+          rag_case_count?: number
+          rag_was_used?: boolean
+          session_id: string
+          team_id?: string | null
+          validated_complexity: string
+          validated_functional_type: string
+          validated_pf_bruto?: number | null
+          was_corrected?: boolean | null
+        }
+        Update: {
+          ai_complexity?: string
+          ai_confidence_score?: number | null
+          ai_functional_type?: string
+          ai_pf_bruto?: number | null
+          ai_reasoning?: string | null
+          corrected_by?: string | null
+          correction_notes?: string | null
+          correction_reason_code?:
+            | Database["public"]["Enums"]["apf_correction_reason"]
+            | null
+          counting_item_id?: string | null
+          created_at?: string
+          embedding_generated_at?: string | null
+          hu_embedding?: string | null
+          hu_text?: string
+          hu_title?: string | null
+          id?: string
+          project_domain?: string | null
+          project_id?: string | null
+          prompt_version_hash?: string | null
+          provider_id?: string | null
+          rag_case_count?: number
+          rag_was_used?: boolean
+          session_id?: string
+          team_id?: string | null
+          validated_complexity?: string
+          validated_functional_type?: string
+          validated_pf_bruto?: number | null
+          was_corrected?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_validation_events_counting_item_id_fkey"
+            columns: ["counting_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_validation_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_validation_events_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_validation_events_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -4900,6 +5253,54 @@ export type Database = {
           },
         ]
       }
+      v_apf_accuracy_trend: {
+        Row: {
+          accuracy_pct: number | null
+          complexity_accuracy_pct: number | null
+          corrected_items: number | null
+          provider_id: string | null
+          team_id: string | null
+          total_items: number | null
+          type_accuracy_pct: number | null
+          week: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_validation_events_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_validation_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_apf_confidence_calibration: {
+        Row: {
+          actual_accuracy: number | null
+          calibration_error: number | null
+          confidence_bucket: number | null
+          total: number | null
+        }
+        Relationships: []
+      }
+      v_apf_confusion_matrix: {
+        Row: {
+          ai_complexity: string | null
+          ai_functional_type: string | null
+          occurrences: number | null
+          pct_of_ai_type: number | null
+          validated_complexity: string | null
+          validated_functional_type: string | null
+        }
+        Relationships: []
+      }
       v_sustentacao_orfas: {
         Row: {
           created_at: string | null
@@ -5105,6 +5506,18 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      compute_learning_metrics: {
+        Args: { p_week_start?: string }
+        Returns: Json
+      }
+      consolidate_apf_patterns: {
+        Args: {
+          p_lookback_days?: number
+          p_min_evidence?: number
+          p_team_id?: string
+        }
+        Returns: Json
+      }
       delete_ai_provider_key: { Args: { p_id: string }; Returns: undefined }
       fn_audit_log_insert: {
         Args: {
@@ -5302,6 +5715,46 @@ export type Database = {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      match_similar_apf_cases:
+        | {
+            Args: {
+              p_domain?: string
+              p_limit?: number
+              p_query_embedding: string
+              p_similarity_threshold?: number
+              p_team_id?: string
+            }
+            Returns: {
+              correction_reason_code: string
+              domain: string
+              hu_text: string
+              hu_title: string
+              id: string
+              similarity: number
+              validated_complexity: string
+              validated_functional_type: string
+              validated_pf_bruto: number
+              was_corrected: boolean
+            }[]
+          }
+        | {
+            Args: {
+              match_count?: number
+              match_threshold?: number
+              p_domain?: string
+              p_team_id?: string
+              query_embedding: string
+            }
+            Returns: {
+              complexity: string
+              domain: string
+              event_id: string
+              functional_type: string
+              id: string
+              pf_value: number
+              similarity: number
+            }[]
+          }
       my_org_ids: { Args: never; Returns: string[] }
       open_counting_session: {
         Args: {
@@ -5347,6 +5800,17 @@ export type Database = {
     }
     Enums: {
       apf_baseline_status: "draft" | "active" | "archived"
+      apf_correction_reason:
+        | "ambiguous_hu"
+        | "wrong_functional_type"
+        | "wrong_complexity"
+        | "domain_convention"
+        | "baseline_conflict"
+        | "scope_misunderstanding"
+        | "split_required"
+        | "merge_required"
+        | "already_counted"
+        | "not_countable"
       apf_function_class: "transactional" | "data"
       apf_session_status:
         | "in_progress"
@@ -5501,6 +5965,18 @@ export const Constants = {
   public: {
     Enums: {
       apf_baseline_status: ["draft", "active", "archived"],
+      apf_correction_reason: [
+        "ambiguous_hu",
+        "wrong_functional_type",
+        "wrong_complexity",
+        "domain_convention",
+        "baseline_conflict",
+        "scope_misunderstanding",
+        "split_required",
+        "merge_required",
+        "already_counted",
+        "not_countable",
+      ],
       apf_function_class: ["transactional", "data"],
       apf_session_status: [
         "in_progress",

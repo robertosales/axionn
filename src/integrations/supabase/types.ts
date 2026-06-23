@@ -5306,7 +5306,8 @@ export type Database = {
       open_counting_session: {
         Args: {
           p_baseline_id?: string
-          p_project_id: string
+          p_contract_id: string
+          p_project_id?: string
           p_redmine_ref?: string
           p_release_ref?: string
           p_sprint_ref?: string

@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type ProviderType = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity" | "manus";
+export type ProviderType = "lovable" | "openai" | "gemini" | "anthropic" | "perplexity" | "manus" | "sakana";
 
 export interface AIProvider {
   id: string;

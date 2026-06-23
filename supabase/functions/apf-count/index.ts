@@ -3,24 +3,29 @@
  * apf-count — Edge Function
  *
  * Fluxo completo de contagem APF em um único endpoint:
- *   1. open_counting_session()    — cria sessão no banco
- *   2. check_license_quota()      — bloqueia se cota esgotada (HTTP 402)
- *   3. build_apf_prompt()         — monta prompt dinâmico com regras do modelo
- *   4. Chama a IA                 — retorna JSON estruturado com os EFs
- *   5. save_counting_items()      — persiste itens, gray_zones e totais
- *   6. increment_license_usage()  — registra 1 chamada IA + total de PF-US
- *   7. Retorna resumo ao frontend
+ *   1. open_counting_session()       — cria sessão no banco
+ *   2. check_license_quota()         — bloqueia se cota esgotada (HTTP 402)
+ *   3. build_apf_prompt()            — monta prompt dinâmico com regras do modelo
+ *   4. [RAG] generateQueryEmbedding  — vetoriza o texto das HUs
+ *   5. [RAG] match_similar_apf_cases — busca casos similares validados
+ *   6. [RAG] buildRagContext()        — formata e injeta casos no prompt
+ *   7. Chama a IA                    — retorna JSON estruturado com os EFs
+ *   8. save_counting_items()         — persiste itens, gray_zones e totais
+ *   9. increment_license_usage()     — registra 1 chamada IA + total de PF-US
+ *  10. Retorna resumo ao frontend    — inclui rag_case_count e rag_was_used
  *
  * Body esperado:
  *   {
- *     project_id:   string (UUID, obrigatório)
- *     sprint_ref:   string (ex: "Sprint 01")
- *     release_ref:  string (ex: "Release 05")
- *     redmine_ref:  string (ex: "25044")
- *     baseline_id:  string (UUID, opcional)
- *     providerId:   string (UUID, opcional — usa openai/gpt-4o se omitido)
- *     model:        string (opcional — override do modelo do provider)
- *     hu_texts:     string (opcional — texto bruto das HUs para injetar no prompt)
+ *     project_id:       string (UUID, obrigatório)
+ *     sprint_ref:       string (ex: "Sprint 01")
+ *     release_ref:      string (ex: "Release 05")
+ *     redmine_ref:      string (ex: "25044")
+ *     baseline_id:      string (UUID, opcional)
+ *     providerId:       string (UUID, opcional — usa openai/gpt-4o se omitido)
+ *     model:            string (opcional — override do modelo do provider)
+ *     hu_texts:         string (opcional — texto bruto das HUs para injetar no prompt)
+ *     project_domain:   string (opcional — 'financeiro'|'saúde'|'governo'|'varejo'|...)
+ *     rag_enabled:      boolean (opcional — default true; false desativa RAG)
  *   }
  *
  * Resposta de sucesso:
@@ -29,21 +34,22 @@
  *     session_id, inserted_items, inserted_gz,
  *     total_pf_bruto, total_pf_fs, total_functions, total_hus,
  *     provider_used, model_used,
- *     ai_remaining   // cotas restantes (null = ilimitado)
+ *     ai_remaining,
+ *     rag_was_used,      // boolean: RAG foi ativado e encontrou casos
+ *     rag_case_count     // número de casos similares injetados no prompt
  *   }
  *
- * FIX-003 — Suporte ao provedor Sakana AI (2026-06-22)
- *   - Adicionado type "sakana" ao union Provider
- *   - Adicionada função callSakana() com response_format json_object e reasoning high
- *   - Adicionado case "sakana" no callAI()
+ * CHANGELOG:
+ *   FIX-003 (2026-06-22) — Suporte ao provedor Sakana AI
+ *   STAGE-3 (2026-06-23) — RAG ativo: busca semântica + injeção no prompt
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SUPABASE_URL  = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANON_KEY      = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SITE_URL      = Deno.env.get("SITE_URL") ?? "*";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SITE_URL     = Deno.env.get("SITE_URL") ?? "*";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  SITE_URL,
@@ -56,13 +62,160 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 type Provider = "openai" | "anthropic" | "gemini" | "lovable" | "perplexity" | "sakana";
 
 // ─────────────────────────────────────────────────────────────
-// Resolução de provider
+// RAG — Configurações
+// ─────────────────────────────────────────────────────────────
+const RAG_SIMILARITY_THRESHOLD = 0.80;  // mínimo de similaridade coseno
+const RAG_MAX_CASES            = 5;     // máximo de casos injetados no prompt
+const EMBEDDING_MODEL          = "text-embedding-3-small";
+const EMBEDDING_DIMENSIONS     = 1536;
+
+/**
+ * Gera o embedding vetorial de um texto usando a API da OpenAI.
+ * Sempre usa OpenAI para embeddings (independente do provider de contagem),
+ * garantindo compatibilidade com os vetores já armazenados no banco.
+ */
+async function generateQueryEmbedding(
+  text: string,
+  openaiKey: string,
+): Promise<number[] | null> {
+  try {
+    const res = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: EMBEDDING_MODEL,
+        input: text.slice(0, 8000),
+        dimensions: EMBEDDING_DIMENSIONS,
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`[RAG] Embedding API error ${res.status}:`, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    return data.data?.[0]?.embedding ?? null;
+  } catch (err) {
+    console.warn("[RAG] generateQueryEmbedding falhou:", err);
+    return null;
+  }
+}
+
+interface SimilarCase {
+  id: string;
+  hu_text: string;
+  hu_title: string | null;
+  validated_functional_type: string;
+  validated_complexity: string;
+  validated_pf_bruto: number | null;
+  was_corrected: boolean;
+  correction_reason_code: string | null;
+  domain: string | null;
+  similarity: number;
+}
+
+/**
+ * Busca casos APF similares via pgvector.
+ * Prioriza casos do mesmo time e domínio, mas também retorna globais.
+ */
+async function fetchSimilarCases(
+  admin: ReturnType<typeof createClient>,
+  embedding: number[],
+  teamId: string | null,
+  domain: string | null,
+): Promise<SimilarCase[]> {
+  try {
+    const { data, error } = await admin.rpc("match_similar_apf_cases", {
+      p_query_embedding:    `[${embedding.join(",")}]`,
+      p_team_id:            teamId,
+      p_domain:             domain,
+      p_limit:              RAG_MAX_CASES,
+      p_similarity_threshold: RAG_SIMILARITY_THRESHOLD,
+    });
+    if (error) {
+      console.warn("[RAG] match_similar_apf_cases error:", error.message);
+      return [];
+    }
+    return (data as SimilarCase[]) ?? [];
+  } catch (err) {
+    console.warn("[RAG] fetchSimilarCases falhou:", err);
+    return [];
+  }
+}
+
+/**
+ * Formata os casos similares em bloco de contexto para injetar no prompt.
+ * O formato é projetado para ser lido pelo modelo de contagem APF.
+ */
+function buildRagContext(cases: SimilarCase[]): string {
+  if (!cases.length) return "";
+
+  const lines = cases.map((c, i) => {
+    const title = c.hu_title ?? c.hu_text.slice(0, 100);
+    const similarity = Math.round(c.similarity * 100);
+    const status = c.was_corrected
+      ? `⚠️  IA havia errado (motivo: ${c.correction_reason_code ?? "não informado"}) — use a classificação validada`
+      : `✅ IA acertou — classificação confirmada por especialista`;
+
+    return [
+      `--- Caso ${i + 1} (${similarity}% similar) ---`,
+      `HU: "${title}"`,
+      `Tipo funcional: ${c.validated_functional_type}`,
+      `Complexidade:   ${c.validated_complexity}`,
+      `PF:             ${c.validated_pf_bruto ?? "n/a"}`,
+      `Status:         ${status}`,
+    ].join("\n");
+  });
+
+  return [
+    "=== CASOS APF SIMILARES JÁ VALIDADOS POR ESPECIALISTAS ===",
+    "Use estes casos como referência para sua classificação.",
+    "Casos com ⚠️ indicam onde a IA errou anteriormente — preste atenção redobrada.",
+    "",
+    lines.join("\n\n"),
+    "=== FIM DOS CASOS DE REFERÊNCIA ===",
+  ].join("\n");
+}
+
+/**
+ * Busca a API key da OpenAI para uso exclusivo nos embeddings RAG.
+ * Tenta o vault primeiro; se falhar, tenta variável de ambiente.
+ */
+async function resolveOpenAIKeyForEmbedding(
+  admin: ReturnType<typeof createClient>,
+): Promise<string | null> {
+  try {
+    // 1. Tenta buscar do vault via RPC padrão do sistema
+    const { data } = await admin
+      .from("ai_providers")
+      .select("id")
+      .eq("provider_type", "openai")
+      .eq("is_active", true)
+      .order("is_recommended", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data?.id) {
+      const { data: keyData } = await admin.rpc("get_ai_provider_key_by_id", { p_id: data.id });
+      if (typeof keyData === "string" && keyData.trim().length > 0) return keyData.trim();
+    }
+  } catch { /* ignora — fallback abaixo */ }
+
+  // 2. Fallback: variável de ambiente direta
+  return Deno.env.get("OPENAI_API_KEY") ?? null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Resolução de provider de contagem
 // ─────────────────────────────────────────────────────────────
 async function resolveProvider(providerId?: string): Promise<{
   providerType: Provider;
   apiKey: string;
   model: string;
   name: string;
+  providerId: string;
 }> {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -109,7 +262,7 @@ async function resolveProvider(providerId?: string): Promise<{
   if (!apiKey) throw new Error(`API key não configurada para "${row.name}". Configure no painel administrativo.`);
 
   const model = row.model ?? "gpt-4o";
-  return { providerType: row.provider_type, apiKey, model, name: row.name };
+  return { providerType: row.provider_type, apiKey, model, name: row.name, providerId: row.id };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -253,8 +406,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // ── 1. Autenticação ──────────────────────────────────────
-    const authHeader = req.headers.get("Authorization");
+    // ── 1. Autenticação ───────────────────────────────────────────────
+const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
         status: 401,
@@ -278,9 +431,14 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── 2. Parse e validação do body ─────────────────────────
+    // ── 2. Parse e validação do body ─────────────────────────────────
     const body = await req.json().catch(() => ({}));
-    const { project_id, sprint_ref, release_ref, redmine_ref, baseline_id, providerId, model, hu_texts } = body;
+    const {
+      project_id, sprint_ref, release_ref, redmine_ref,
+      baseline_id, providerId, model, hu_texts,
+      project_domain = null,
+      rag_enabled = true,
+    } = body;
 
     if (!project_id || !UUID_REGEX.test(project_id)) {
       return new Response(JSON.stringify({ error: "project_id inválido ou ausente" }), {
@@ -295,20 +453,18 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── 3. Cliente admin para RPCs ───────────────────────────
+    // ── 3. Cliente admin ───────────────────────────────────────────────
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-    // ── 4. Resolve team_id do projeto ────────────────────────
+    // ── 4. Resolve team_id ──────────────────────────────────────────────
     const teamId = await resolveTeamId(admin, project_id);
 
-    // ── 5. Guardrail: verifica quota ANTES da IA ─────────────
+    // ── 5. Guardrail: verifica quota ANTES da IA ─────────────────────────
     if (teamId) {
       const { data: quota, error: quotaErr } = await admin.rpc("check_license_quota", {
         p_team_id: teamId,
       });
-
       if (quotaErr) {
-        // Falha na RPC não bloqueia — loga e segue (fail-open)
         console.warn("[apf-count] check_license_quota falhou:", quotaErr.message);
       } else if (quota && quota.allowed === false) {
         const reason = quota.reason ?? "Cota de chamadas à IA esgotada para este mês.";
@@ -320,15 +476,12 @@ Deno.serve(async (req: Request) => {
             ai_remaining: quota.ai_remaining ?? 0,
             pf_remaining: quota.pf_remaining ?? 0,
           }),
-          {
-            status: 402, // Payment Required
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }
 
-    // ── 6. Abre a sessão de contagem ─────────────────────────
+    // ── 6. Abre a sessão de contagem ──────────────────────────────────
     const { data: sessionId, error: sessionErr } = await admin.rpc("open_counting_session", {
       p_project_id:  project_id,
       p_sprint_ref:  sprint_ref  ?? null,
@@ -338,32 +491,74 @@ Deno.serve(async (req: Request) => {
     });
     if (sessionErr) throw new Error(`Falha ao abrir sessão: ${sessionErr.message}`);
 
-    // ── 7. Monta o prompt dinâmico via RPC ───────────────────
+    // ── 7. Monta o prompt dinâmico via RPC ─────────────────────────────
     const { data: promptData, error: promptErr } = await admin.rpc("build_apf_prompt", {
       p_session_id: sessionId,
     });
     if (promptErr) throw new Error(`Falha ao montar prompt: ${promptErr.message}`);
 
-    const finalPrompt = hu_texts
+    // Injeta hu_texts no prompt base
+    const basePrompt = hu_texts
       ? `${promptData}\n\n=== HISTÓRIAS DE USUÁRIO DA SPRINT ===\n${hu_texts}\n=== FIM DAS HISTÓRIAS ===`
       : promptData;
 
-    // ── 8. Resolve provider e chama a IA ─────────────────────
+    // ── 8. [RAG] Busca casos similares e injeta no prompt ────────────────
+    let ragWasUsed  = false;
+    let ragCaseCount = 0;
+    let finalPrompt = basePrompt;
+
+    if (rag_enabled && hu_texts?.trim()) {
+      // Busca a key OpenAI para embedding (independente do provider de contagem)
+      const openaiKey = await resolveOpenAIKeyForEmbedding(admin);
+
+      if (openaiKey) {
+        console.log(`[RAG] Gerando embedding para team=${teamId} domain=${project_domain}`);
+
+        const embedding = await generateQueryEmbedding(hu_texts, openaiKey);
+
+        if (embedding) {
+          const similarCases = await fetchSimilarCases(admin, embedding, teamId, project_domain);
+          ragCaseCount = similarCases.length;
+
+          if (ragCaseCount > 0) {
+            ragWasUsed  = true;
+            const ragContext = buildRagContext(similarCases);
+
+            // Injeta o contexto RAG ANTES das HUs — o modelo lê os exemplos antes de classificar
+            finalPrompt = hu_texts
+              ? `${promptData}\n\n${ragContext}\n\n=== HISTÓRIAS DE USUÁRIO DA SPRINT ===\n${hu_texts}\n=== FIM DAS HISTÓRIAS ===`
+              : `${promptData}\n\n${ragContext}`;
+
+            console.log(`[RAG] ${ragCaseCount} casos similares injetados no prompt (team=${teamId})`);
+          } else {
+            console.log(`[RAG] Nenhum caso acima do threshold ${RAG_SIMILARITY_THRESHOLD} encontrado`);
+          }
+        } else {
+          console.warn("[RAG] Embedding gerado como null — seguindo sem RAG");
+        }
+      } else {
+        console.warn("[RAG] OpenAI key não disponível — seguindo sem RAG");
+      }
+    } else {
+      if (!rag_enabled) console.log("[RAG] Desativado explicitamente pelo caller");
+      if (!hu_texts?.trim()) console.log("[RAG] hu_texts vazio — não há o que vetorizar");
+    }
+
+    // ── 9. Resolve provider e chama a IA ──────────────────────────────
     const resolved = await resolveProvider(providerId);
     const aiModel  = model ?? resolved.model;
 
-    console.log(`[apf-count] session=${sessionId} provider="${resolved.name}" model=${aiModel}`);
+    console.log(`[apf-count] session=${sessionId} provider="${resolved.name}" model=${aiModel} rag=${ragWasUsed}(${ragCaseCount} casos)`);
 
     const aiRaw = await callAI(resolved.providerType, finalPrompt, resolved.apiKey, aiModel);
 
     if (!aiRaw?.trim()) throw new Error("A IA retornou resposta vazia.");
 
-    // ── 9. Parse do JSON ──────────────────────────────────────
+    // ── 10. Parse do JSON ───────────────────────────────────────────────
     const items = parseAIResponse(aiRaw);
-
     if (!items.length) throw new Error("A IA não retornou nenhum item de contagem.");
 
-    // ── 10. Persiste itens e atualiza totais ─────────────────
+    // ── 11. Persiste itens e atualiza totais ────────────────────────────
     const { data: summary, error: saveErr } = await admin.rpc("save_counting_items", {
       p_session_id: sessionId,
       p_items:      items,
@@ -371,7 +566,7 @@ Deno.serve(async (req: Request) => {
     });
     if (saveErr) throw new Error(`Falha ao salvar itens: ${saveErr.message}`);
 
-    // ── 11. Incrementa uso na licença ────────────────────────
+    // ── 12. Incrementa uso na licença ───────────────────────────────────
     if (teamId) {
       const totalPfUs: number = summary?.total_pf_fs ?? 0;
       const { error: incErr } = await admin.rpc("increment_license_usage", {
@@ -380,14 +575,13 @@ Deno.serve(async (req: Request) => {
         p_ai_calls: 1,
       });
       if (incErr) {
-        // Não bloqueia o retorno — apenas loga
         console.error("[apf-count] increment_license_usage falhou:", incErr.message);
       } else {
         console.log(`[apf-count] uso registrado — team=${teamId} pf=${totalPfUs} ai_calls=1`);
       }
     }
 
-    // ── 12. Busca cotas atualizadas para retornar ao front ────
+    // ── 13. Busca cotas atualizadas ──────────────────────────────────────
     let aiRemaining: number | null = null;
     let pfRemaining: number | null = null;
     if (teamId) {
@@ -398,7 +592,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── 13. Resposta ─────────────────────────────────────────
+    // ── 14. Resposta ──────────────────────────────────────────────────
     return new Response(
       JSON.stringify({
         success:         true,
@@ -413,6 +607,9 @@ Deno.serve(async (req: Request) => {
         model_used:      aiModel,
         ai_remaining:    aiRemaining,
         pf_remaining:    pfRemaining,
+        // — RAG metadata (para rastreio no apf-validate e no dashboard)
+        rag_was_used:    ragWasUsed,
+        rag_case_count:  ragCaseCount,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

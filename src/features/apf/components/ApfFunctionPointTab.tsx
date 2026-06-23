@@ -139,7 +139,7 @@ export function ApfFunctionPointTab() {
     loading: insightsLoading,
     lastRefresh: insightsRefresh,
     refresh: insightsRefreshFn,
-  } = useLearningInsights(teamId);
+  } = useLearningInsights();
 
   // ── Contrato do time ────────────────────────────────────────────────────────
   useEffect(() => {

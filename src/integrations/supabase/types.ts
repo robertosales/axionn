@@ -944,6 +944,7 @@ export type Database = {
           evidence_count: number
           hu_pattern_keywords: string[] | null
           id: string
+          occurrence_count: number | null
           pattern_description: string | null
           pattern_embedding: string | null
           pattern_name: string
@@ -963,6 +964,7 @@ export type Database = {
           evidence_count?: number
           hu_pattern_keywords?: string[] | null
           id?: string
+          occurrence_count?: number | null
           pattern_description?: string | null
           pattern_embedding?: string | null
           pattern_name: string
@@ -982,6 +984,7 @@ export type Database = {
           evidence_count?: number
           hu_pattern_keywords?: string[] | null
           id?: string
+          occurrence_count?: number | null
           pattern_description?: string | null
           pattern_embedding?: string | null
           pattern_name?: string
@@ -1003,7 +1006,10 @@ export type Database = {
       }
       apf_learning_metrics: {
         Row: {
+          accuracy_rate: number | null
+          avg_confidence_score: number | null
           complexity_accuracy: number | null
+          corrected_count: number | null
           corrected_items: number
           correction_by_reason: Json | null
           correction_rate: number | null
@@ -1019,11 +1025,15 @@ export type Database = {
           team_id: string | null
           top_correction_reason: string | null
           total_items: number
+          total_validations: number | null
           type_accuracy: number | null
           week_start: string
         }
         Insert: {
+          accuracy_rate?: number | null
+          avg_confidence_score?: number | null
           complexity_accuracy?: number | null
+          corrected_count?: number | null
           corrected_items?: number
           correction_by_reason?: Json | null
           correction_rate?: number | null
@@ -1039,11 +1049,15 @@ export type Database = {
           team_id?: string | null
           top_correction_reason?: string | null
           total_items?: number
+          total_validations?: number | null
           type_accuracy?: number | null
           week_start: string
         }
         Update: {
+          accuracy_rate?: number | null
+          avg_confidence_score?: number | null
           complexity_accuracy?: number | null
+          corrected_count?: number | null
           corrected_items?: number
           correction_by_reason?: Json | null
           correction_rate?: number | null
@@ -1059,6 +1073,7 @@ export type Database = {
           team_id?: string | null
           top_correction_reason?: string | null
           total_items?: number
+          total_validations?: number | null
           type_accuracy?: number | null
           week_start?: string
         }

@@ -33,23 +33,21 @@ import { Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw, AlertTriangle 
 import { LearningInsightsPanel } from "./learning/LearningInsightsPanel";
 import { useLearningInsights } from "../hooks/useLearningInsights";
 
-// ── Constantes ──────────────────────────────────────────────────────────────
 const CORRECTION_REASONS = [
-  { value: "wrong_functional_type",  label: "Tipo funcional errado (EE/SE/CE/ALI/AIE)" },
-  { value: "wrong_complexity",       label: "Complexidade errada (Baixa/Média/Alta)" },
-  { value: "wrong_pf_value",         label: "Valor de PF calculado errado" },
-  { value: "missing_function",       label: "Função não identificada pela IA" },
-  { value: "extra_function",         label: "Função extra (não deveria existir)" },
-  { value: "wrong_boundary",         label: "Fronteira do sistema incorreta" },
-  { value: "wrong_det_count",        label: "Contagem de DETs incorreta" },
-  { value: "wrong_ret_count",        label: "Contagem de RETs incorreta" },
-  { value: "wrong_ftr_count",        label: "Contagem de FTRs incorreta" },
-  { value: "other",                  label: "Outro motivo" },
+  { value: "wrong_functional_type", label: "Tipo funcional errado (EE/SE/CE/ALI/AIE)" },
+  { value: "wrong_complexity", label: "Complexidade errada (Baixa/Média/Alta)" },
+  { value: "wrong_pf_value", label: "Valor de PF calculado errado" },
+  { value: "missing_function", label: "Função não identificada pela IA" },
+  { value: "extra_function", label: "Função extra (não deveria existir)" },
+  { value: "wrong_boundary", label: "Fronteira do sistema incorreta" },
+  { value: "wrong_det_count", label: "Contagem de DETs incorreta" },
+  { value: "wrong_ret_count", label: "Contagem de RETs incorreta" },
+  { value: "wrong_ftr_count", label: "Contagem de FTRs incorreta" },
+  { value: "other", label: "Outro motivo" },
 ] as const;
 
 type CorrectionReason = typeof CORRECTION_REASONS[number]["value"];
 
-// ── Tipos ────────────────────────────────────────────────────────────────────
 interface SprintOption {
   id: string;
   name: string;
@@ -104,60 +102,30 @@ interface ValidationDialog {
   wasCorrected: boolean;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+interface CountFunctionPointsResponse {
+  success?: boolean;
+  analysis_id?: string | null;
+  ai_raw_count?: number;
+  ai_breakdown?: Partial<AiBreakdown> & { complexity?: string };
+  ai_confidence?: number;
+  ai_reasoning?: string;
+  providerUsed?: string;
+  model_used?: string;
+  few_shot_examples_used?: number;
+  error?: string;
+  rawError?: string;
+}
+
 function buildStoryText(hu: HuRow): string {
-  const parts: string[] = [`Título: ${hu.title}`];
-  if (hu.description?.trim()) parts.push(`\nDescrição:\n${hu.description.trim()}`);
-  if (hu.acceptance_criteria?.trim()) parts.push(`\nCritérios de Aceite:\n${hu.acceptance_criteria.trim()}`);
-  return parts.join("");
+  const parts: string[] = [
+    `Código interno: ${hu.code}`,
+    `Título: ${hu.title}`,
+  ];
+  if (hu.description?.trim()) parts.push(`Descrição:\n${hu.description.trim()}`);
+  if (hu.acceptance_criteria?.trim()) parts.push(`Critérios de Aceite:\n${hu.acceptance_criteria.trim()}`);
+  return parts.join("\n\n");
 }
 
-/**
- * Parser JSON defensivo — lida com as variações comuns de resposta da IA:
- *  1. JSON puro (caso ideal)
- *  2. JSON dentro de bloco de código ```…``` (qualquer linguagem ou sem linguagem)
- *  3. JSON embutido no meio de texto livre (extrai o primeiro [ ou { balanceado)
- */
-function extractJsonFromAiResponse(raw: string): unknown {
-  const text = raw.trim();
-
-  // 1. Tenta parse direto
-  try { return JSON.parse(text); } catch { /* continua */ }
-
-  // 2. Extrai bloco de código ```...```
-  const fenceMatch = text.match(/```[\w]*\s*([\s\S]*?)```/);
-  if (fenceMatch) {
-    try { return JSON.parse(fenceMatch[1].trim()); } catch { /* continua */ }
-  }
-
-  // 3. Extrai o primeiro array [ ] ou objeto { } balanceado
-  const firstBracket = text.search(/[\[{]/);
-  if (firstBracket !== -1) {
-    const opener = text[firstBracket];
-    const closer = opener === "[" ? "]" : "}";
-    let depth = 0;
-    let inString = false;
-    let escape = false;
-    for (let i = firstBracket; i < text.length; i++) {
-      const ch = text[i];
-      if (escape) { escape = false; continue; }
-      if (ch === "\\" && inString) { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === opener) depth++;
-      else if (ch === closer) {
-        depth--;
-        if (depth === 0) {
-          try { return JSON.parse(text.slice(firstBracket, i + 1)); } catch { break; }
-        }
-      }
-    }
-  }
-
-  throw new Error("A IA não retornou JSON válido. Tente novamente.");
-}
-
-/** Busca o UUID do provider recomendado/ativo para passar como providerId na Edge Function. */
 async function resolveActiveProviderId(): Promise<string | null> {
   const { data } = await supabase
     .from("ai_providers" as any)
@@ -170,26 +138,75 @@ async function resolveActiveProviderId(): Promise<string | null> {
   return (data as any)?.id ?? null;
 }
 
-// ── Componente ───────────────────────────────────────────────────────────────
+async function getEdgeFunctionErrorMessage(error: any, data?: CountFunctionPointsResponse | null): Promise<string> {
+  if (data?.error) return data.error;
+
+  const response = error?.context;
+  if (response && typeof response.clone === "function") {
+    try {
+      const payload = await response.clone().json();
+      if (payload?.error) return String(payload.error);
+      if (payload?.message) return String(payload.message);
+    } catch {
+      try {
+        const text = await response.clone().text();
+        if (text?.trim()) return text.trim();
+      } catch {
+        // Mantém o fallback abaixo.
+      }
+    }
+  }
+
+  return error?.message ?? "Falha ao executar a contagem de Pontos de Função.";
+}
+
+function normalizeBreakdown(data: CountFunctionPointsResponse): AiBreakdown {
+  const raw = data.ai_breakdown;
+  if (!raw || typeof raw !== "object") {
+    throw new Error("A função de contagem não retornou o breakdown APF esperado.");
+  }
+
+  const EI = Math.max(0, Number(raw.EI ?? 0));
+  const EO = Math.max(0, Number(raw.EO ?? 0));
+  const EQ = Math.max(0, Number(raw.EQ ?? 0));
+  const ILF = Math.max(0, Number(raw.ILF ?? 0));
+  const EIF = Math.max(0, Number(raw.EIF ?? 0));
+  const calculatedTotal = EI * 3 + EO * 4 + EQ * 3 + ILF * 7 + EIF * 5;
+  const total = Number.isFinite(Number(raw.total)) ? Number(raw.total) : calculatedTotal;
+
+  return {
+    EI,
+    EO,
+    EQ,
+    ILF,
+    EIF,
+    total,
+    reasoning: String(raw.reasoning ?? data.ai_reasoning ?? ""),
+  };
+}
+
 export function ApfFunctionPointTab() {
   const { currentTeam } = useAuth();
   const teamId = currentTeam?.id ?? "";
 
-  const [sprints, setSprints]                   = useState<SprintOption[]>([]);
+  const [sprints, setSprints] = useState<SprintOption[]>([]);
   const [selectedSprintId, setSelectedSprintId] = useState<string>("");
-  const [userStories, setUserStories]           = useState<HuRow[]>([]);
-  const [analyses, setAnalyses]                 = useState<Record<string, FpAnalysis>>({});
-  const [loadingSprints, setLoadingSprints]     = useState(true);
-  const [loadingHUs, setLoadingHUs]             = useState(false);
-  const [countingAll, setCountingAll]           = useState(false);
-  const [teamContractId, setTeamContractId]     = useState<string | null>(null);
-  const [teamProjectId, setTeamProjectId]       = useState<string | null>(null);
+  const [userStories, setUserStories] = useState<HuRow[]>([]);
+  const [analyses, setAnalyses] = useState<Record<string, FpAnalysis>>({});
+  const [loadingSprints, setLoadingSprints] = useState(true);
+  const [loadingHUs, setLoadingHUs] = useState(false);
+  const [countingAll, setCountingAll] = useState(false);
+  const [teamProjectId, setTeamProjectId] = useState<string | null>(null);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
-  const [validating, setValidating]             = useState(false);
+  const [validating, setValidating] = useState(false);
 
   const [dialog, setDialog] = useState<ValidationDialog>({
-    open: false, hu: null, fpValue: 0,
-    correctionReason: "", correctionNotes: "", wasCorrected: false,
+    open: false,
+    hu: null,
+    fpValue: 0,
+    correctionReason: "",
+    correctionNotes: "",
+    wasCorrected: false,
   });
 
   const {
@@ -199,253 +216,235 @@ export function ApfFunctionPointTab() {
     refresh: insightsRefreshFn,
   } = useLearningInsights();
 
-  // ── Carrega providerId ativo uma vez ─────────────────────────────────────
   useEffect(() => {
     resolveActiveProviderId().then(setActiveProviderId);
   }, []);
 
-  // ── Contrato e Projeto do time ──────────────────────────────────────────────
   useEffect(() => {
-    if (!teamId) { setTeamContractId(null); setTeamProjectId(null); return; }
+    if (!teamId) {
+      setTeamProjectId(null);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
-      const { data: ct } = await supabase
-        .from("contract_teams").select("contract_id")
-        .eq("team_id", teamId).limit(1).maybeSingle();
+      const { data: contractTeam } = await supabase
+        .from("contract_teams")
+        .select("contract_id")
+        .eq("team_id", teamId)
+        .limit(1)
+        .maybeSingle();
       if (cancelled) return;
 
-      const contractId = ct?.contract_id ?? null;
+      let contractId = contractTeam?.contract_id ?? null;
+      if (!contractId) {
+        const { data: model } = await supabase
+          .from("apf_counting_models" as any)
+          .select("contract_id")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        contractId = (model as any)?.contract_id ?? null;
+      }
 
-      if (contractId) {
-        setTeamContractId(contractId);
-        const { data: proj } = await supabase
-          .from("projects").select("id")
-          .eq("team_id", teamId).eq("contract_id", contractId)
-          .limit(1).maybeSingle();
-        if (!cancelled) setTeamProjectId((proj as any)?.id ?? null);
+      if (!contractId) {
+        setTeamProjectId(null);
         return;
       }
 
-      const { data: model } = await supabase
-        .from("apf_counting_models" as any).select("contract_id")
-        .eq("is_active", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (cancelled) return;
-      const fallbackContractId = (model as any)?.contract_id ?? null;
-      setTeamContractId(fallbackContractId);
-
-      if (fallbackContractId) {
-        const { data: proj } = await supabase
-          .from("projects").select("id")
-          .eq("team_id", teamId).eq("contract_id", fallbackContractId)
-          .limit(1).maybeSingle();
-        if (!cancelled) setTeamProjectId((proj as any)?.id ?? null);
-      }
+      const { data: project } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("team_id", teamId)
+        .eq("contract_id", contractId)
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setTeamProjectId((project as any)?.id ?? null);
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [teamId]);
 
-  // ── Sprints ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!teamId) return;
+    if (!teamId) {
+      setSprints([]);
+      setLoadingSprints(false);
+      return;
+    }
+
     setLoadingSprints(true);
-    supabase.from("sprints").select("id, name, is_active, team_id")
-      .eq("team_id", teamId).order("created_at", { ascending: false }).limit(30)
+    supabase
+      .from("sprints")
+      .select("id, name, is_active, team_id")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false })
+      .limit(30)
       .then(({ data }) => {
         const list = (data ?? []) as SprintOption[];
         setSprints(list);
         const active = list.find((s) => s.is_active);
         if (active) setSelectedSprintId(active.id);
+        else if (list.length && !selectedSprintId) setSelectedSprintId(list[0].id);
         setLoadingSprints(false);
       });
   }, [teamId]);
 
-  // ── HUs da sprint ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!teamId || !selectedSprintId) { setUserStories([]); return; }
+    if (!teamId || !selectedSprintId) {
+      setUserStories([]);
+      return;
+    }
+
     setLoadingHUs(true);
-    supabase.from("user_stories")
+    supabase
+      .from("user_stories")
       .select("id, code, title, description, acceptance_criteria, story_points, function_points, ai_fp_breakdown, ai_fp_confidence, ai_fp_validated, contract_id")
-      .eq("team_id", teamId).eq("sprint_id", selectedSprintId)
-      .order("code", { ascending: true }).limit(200)
+      .eq("team_id", teamId)
+      .eq("sprint_id", selectedSprintId)
+      .order("code", { ascending: true })
+      .limit(200)
       .then(({ data, error }) => {
         if (error) {
-          supabase.from("user_stories")
+          supabase
+            .from("user_stories")
             .select("id, code, title, description, acceptance_criteria, story_points, function_points, contract_id")
-            .eq("team_id", teamId).eq("sprint_id", selectedSprintId)
-            .order("code", { ascending: true }).limit(200)
-            .then(({ data: fd }) => {
-              setUserStories((fd ?? []).map((h: any) => ({
-                ...h,
-                acceptance_criteria: h.acceptance_criteria ?? null,
+            .eq("team_id", teamId)
+            .eq("sprint_id", selectedSprintId)
+            .order("code", { ascending: true })
+            .limit(200)
+            .then(({ data: fallbackData }) => {
+              setUserStories((fallbackData ?? []).map((hu: any) => ({
+                ...hu,
+                acceptance_criteria: hu.acceptance_criteria ?? null,
                 ai_fp_breakdown: null,
                 ai_fp_confidence: null,
                 ai_fp_validated: false,
-                contract_id: h.contract_id ?? null,
+                contract_id: hu.contract_id ?? null,
               })));
               setLoadingHUs(false);
             });
           return;
         }
-        setUserStories((data ?? []).map((h: any) => ({
-          ...h,
-          acceptance_criteria: h.acceptance_criteria ?? null,
-          ai_fp_breakdown:     h.ai_fp_breakdown ?? null,
-          ai_fp_confidence:    h.ai_fp_confidence ?? null,
-          ai_fp_validated:     h.ai_fp_validated ?? false,
-          contract_id:         h.contract_id ?? null,
+
+        setUserStories((data ?? []).map((hu: any) => ({
+          ...hu,
+          acceptance_criteria: hu.acceptance_criteria ?? null,
+          ai_fp_breakdown: hu.ai_fp_breakdown ?? null,
+          ai_fp_confidence: hu.ai_fp_confidence ?? null,
+          ai_fp_validated: hu.ai_fp_validated ?? false,
+          contract_id: hu.contract_id ?? null,
         })));
         setLoadingHUs(false);
       });
   }, [teamId, selectedSprintId]);
 
-  // ── Calcular PF via IA ──────────────────────────────────────────────────────
-  const countFpForHu = useCallback(async (hu: HuRow) => {
-    setAnalyses((prev) => ({
-      ...prev,
-      [hu.id]: { huId: hu.id, breakdown: prev[hu.id]?.breakdown ?? {} as AiBreakdown, confidence: 0, loading: true, error: null },
+  const countFpForHu = useCallback(async (hu: HuRow): Promise<boolean> => {
+    setAnalyses((previous) => ({
+      ...previous,
+      [hu.id]: {
+        huId: hu.id,
+        breakdown: previous[hu.id]?.breakdown ?? ({} as AiBreakdown),
+        confidence: 0,
+        loading: true,
+        error: null,
+      },
     }));
+
     try {
-      const contractId = hu.contract_id ?? teamContractId;
-      if (!contractId) throw new Error("Esta HU não está vinculada a um contrato. Edite a HU/time e selecione o contrato APF.");
+      if (!teamId) throw new Error("Nenhum time foi selecionado para realizar a contagem.");
 
-      // Resolve providerId — usa estado ou faz query fresh
       const providerId = activeProviderId ?? await resolveActiveProviderId();
-      if (!providerId) throw new Error("Nenhum provedor de IA ativo cadastrado. Configure um provider em Configurações → IA.");
-
-      // Resolve project_id via sprint → team → project
-      let resolvedProjectId: string | null = teamProjectId;
-      if (!resolvedProjectId && selectedSprintId) {
-        const { data: sprintData } = await supabase
-          .from("sprints").select("team_id").eq("id", selectedSprintId).maybeSingle();
-        if (sprintData?.team_id) {
-          const { data: projData } = await supabase
-            .from("projects").select("id")
-            .eq("team_id", sprintData.team_id).eq("contract_id", contractId)
-            .limit(1).maybeSingle();
-          resolvedProjectId = (projData as any)?.id ?? null;
-        }
+      if (!providerId) {
+        throw new Error("Nenhum provedor de IA ativo cadastrado. Configure um provider em Configurações → IA.");
       }
 
-      const { data: sessionId, error: e1 } = await supabase.rpc("open_counting_session" as any, {
-        p_contract_id: contractId, p_project_id: resolvedProjectId,
-        p_sprint_ref: selectedSprintId, p_release_ref: null,
-        p_redmine_ref: hu.code, p_baseline_id: null,
-      });
-      if (e1 || !sessionId) throw new Error(e1?.message ?? "Falha ao abrir sessão APF");
-
-      const { data: builtPrompt, error: e2 } = await supabase.rpc("build_apf_prompt" as any, { p_session_id: sessionId });
-      if (e2 || !builtPrompt) throw new Error(e2?.message ?? "Falha ao montar prompt APF");
-
-      const { data: aiResult, error: e3 } = await supabase.functions.invoke("apf-generate", {
-        body: {
-          providerId,
-          prompt: `${builtPrompt}\n\n=== HISTÓRIA DE USUÁRIO ===\n${buildStoryText(hu)}\n=== FIM ===`,
-          skipDocx: true,
+      const storyText = buildStoryText(hu);
+      const { data, error } = await supabase.functions.invoke<CountFunctionPointsResponse>(
+        "count-function-points",
+        {
+          body: {
+            teamId,
+            huId: hu.id,
+            storyText,
+            providerId,
+            context: {
+              storyPoints: hu.story_points,
+              acceptanceCriteria: hu.acceptance_criteria,
+            },
+          },
         },
-      });
-      if (e3) throw new Error(e3.message);
-      if (!aiResult?.success) throw new Error(aiResult?.userMessage ?? "Erro na IA");
+      );
 
-      let items: any[];
-      let breakdown: AiBreakdown;
-      let totalPf: number;
-      let confidence: number;
+      if (error) throw new Error(await getEdgeFunctionErrorMessage(error, data));
+      if (!data?.success) throw new Error(data?.error ?? "A contagem de Pontos de Função não foi concluída.");
 
-      // Parser defensivo: suporta JSON puro, bloco ```...```, ou JSON embutido em texto
-      const rawMarkdown = String(aiResult.markdown ?? "");
-      console.warn(`[apf-count] raw markdown (${hu.code}, ${rawMarkdown.length} chars):`, rawMarkdown.slice(0, 800));
-      const parsed = extractJsonFromAiResponse(rawMarkdown);
+      const breakdown = normalizeBreakdown(data);
+      const totalPf = Number(data.ai_raw_count ?? breakdown.total);
+      const confidence = Math.min(1, Math.max(0, Number(data.ai_confidence ?? 0.7)));
 
-      // Normalização ampliada — aceita diversas chaves e formas
-      const ITEM_KEYS = ["items", "efs", "functions", "componentes", "componentes_funcionais", "funcoes", "functionPoints", "pontos_funcao"];
-      const looksLikeItem = (x: any) => x && typeof x === "object" && (x.type || x.tipo);
-      const pickList = (obj: any): any[] => {
-        if (!obj) return [];
-        if (Array.isArray(obj)) return obj.filter(looksLikeItem);
-        for (const k of ITEM_KEYS) {
-          if (Array.isArray(obj[k])) return obj[k].filter(looksLikeItem);
-        }
-        // 1 nível: data/result/payload/output
-        for (const k of ["data", "result", "payload", "output"]) {
-          if (obj[k]) {
-            const inner = pickList(obj[k]);
-            if (inner.length) return inner;
-          }
-        }
-        // Varredura: primeiro array de itens válidos
-        for (const v of Object.values(obj)) {
-          if (Array.isArray(v) && v.some(looksLikeItem)) return (v as any[]).filter(looksLikeItem);
-        }
-        // Objeto único é um item
-        if (looksLikeItem(obj)) return [obj];
-        return [];
-      };
-      const list: any[] = pickList(parsed);
-
-      breakdown = { EI: 0, EO: 0, EQ: 0, ILF: 0, EIF: 0, total: 0 };
-      for (const item of list) {
-        const type = String(item.type ?? item.tipo ?? "").toUpperCase();
-        if (!type) continue; // ignora entradas sem tipo
-        const complexity = String(item.complexity ?? item.complexidade ?? "MEDIUM").toUpperCase();
-        const weight = complexity === "SIMPLE" ? 3 : complexity === "COMPLEX" ? 6 : 4;
-        if (type in breakdown) (breakdown as any)[type] += 1;
-        breakdown.total += weight;
-      }
-      items = list;
-      totalPf = breakdown.total;
-      confidence = typeof (parsed as any)?.confidence === "number" ? (parsed as any).confidence : 0.8;
-
-      if (!items.length) {
-        const snippet = rawMarkdown.slice(0, 200).replace(/\s+/g, " ");
-        throw new Error(
-          `A IA não retornou nenhum item. Provedor: ${aiResult.providerUsed ?? "?"}. ` +
-          `Verifique o console para a resposta crua. Trecho: "${snippet}"`
-        );
-      }
-
-      const { error: e4 } = await supabase.rpc("save_counting_items" as any, {
-        p_session_id: sessionId, p_items: items, p_ai_model: aiResult.providerUsed ?? null,
-      });
-      if (e4) throw new Error(e4.message);
-
-      setAnalyses((prev) => ({
-        ...prev,
-        [hu.id]: { huId: hu.id, breakdown, confidence, loading: false, error: null },
+      setAnalyses((previous) => ({
+        ...previous,
+        [hu.id]: {
+          huId: hu.id,
+          breakdown,
+          confidence,
+          loading: false,
+          error: null,
+        },
       }));
 
-      setUserStories((prev) => prev.map((h) =>
-        h.id !== hu.id ? h : {
-          ...h,
-          function_points:    totalPf,
-          ai_fp_breakdown:    breakdown,
-          ai_fp_confidence:   confidence,
-          _sessionId:         sessionId,
-          _providerUsed:      aiResult.providerUsed ?? undefined,
-          _ragWasUsed:        aiResult.ragWasUsed ?? false,
-          _ragCaseCount:      aiResult.ragCaseCount ?? 0,
-          _promptVersionHash: aiResult.promptVersionHash ?? undefined,
-          _rawItems:          items,
-        }
+      setUserStories((previous) => previous.map((item) =>
+        item.id !== hu.id
+          ? item
+          : {
+              ...item,
+              function_points: totalPf,
+              ai_fp_breakdown: breakdown,
+              ai_fp_confidence: confidence,
+              _sessionId: data.analysis_id ?? undefined,
+              _providerUsed: data.providerUsed ?? undefined,
+              _ragWasUsed: false,
+              _ragCaseCount: data.few_shot_examples_used ?? 0,
+              _rawItems: [],
+            },
       ));
 
       toast.success(`PF calculado para ${hu.code}: ${totalPf} PF`);
-    } catch (err: any) {
-      setAnalyses((prev) => ({
-        ...prev,
-        [hu.id]: { ...prev[hu.id], loading: false, error: err?.message ?? "Erro ao calcular PF" },
+      return true;
+    } catch (error: any) {
+      const message = error?.message ?? "Erro ao calcular PF";
+      setAnalyses((previous) => ({
+        ...previous,
+        [hu.id]: {
+          huId: hu.id,
+          breakdown: previous[hu.id]?.breakdown ?? ({} as AiBreakdown),
+          confidence: previous[hu.id]?.confidence ?? 0,
+          loading: false,
+          error: message,
+        },
       }));
-      toast.error(`Erro ao calcular ${hu.code}: ${err?.message ?? "tente novamente"}`);
+      toast.error(`Erro ao calcular ${hu.code}: ${message}`);
+      return false;
     }
-  }, [teamId, selectedSprintId, teamContractId, teamProjectId, activeProviderId]);
+  }, [teamId, activeProviderId]);
 
-  // ── Abre diálogo de validação ───────────────────────────────────────────────
   const openValidationDialog = useCallback((hu: HuRow, fpValue: number) => {
-    const aiTotalPf    = hu.ai_fp_breakdown?.total ?? analyses[hu.id]?.breakdown?.total ?? fpValue;
+    const aiTotalPf = hu.ai_fp_breakdown?.total ?? analyses[hu.id]?.breakdown?.total ?? fpValue;
     const wasCorrected = fpValue !== aiTotalPf;
-    setDialog({ open: true, hu, fpValue, correctionReason: "", correctionNotes: "", wasCorrected });
+    setDialog({
+      open: true,
+      hu,
+      fpValue,
+      correctionReason: "",
+      correctionNotes: "",
+      wasCorrected,
+    });
   }, [analyses]);
 
-  // ── Confirma validação ─────────────────────────────────────────────────────
   const confirmValidation = useCallback(async () => {
     const { hu, fpValue, correctionReason, correctionNotes, wasCorrected } = dialog;
     if (!hu) return;
@@ -453,69 +452,91 @@ export function ApfFunctionPointTab() {
       toast.warning("Selecione o motivo da correção antes de validar.");
       return;
     }
+
     setValidating(true);
     try {
-      const { error: dbErr } = await supabase
+      const { error: databaseError } = await supabase
         .from("user_stories")
         .update({ function_points: fpValue, ai_fp_validated: true } as any)
         .eq("id", hu.id);
-      if (dbErr) throw new Error(dbErr.message);
+      if (databaseError) throw new Error(databaseError.message);
 
       const aiBreakdown = hu.ai_fp_breakdown ?? analyses[hu.id]?.breakdown;
-      const { error: fnErr } = await supabase.functions.invoke("apf-validate", {
+      const { error: validationError } = await supabase.functions.invoke("apf-validate", {
         body: {
-          session_id:                hu._sessionId ?? hu.id,
-          project_id:                teamProjectId ?? teamId,
-          team_id:                   teamId,
-          hu_text:                   buildStoryText(hu),
-          hu_title:                  hu.title,
-          ai_functional_type:        "mixed",
-          ai_complexity:             "mixed",
-          ai_pf_bruto:               aiBreakdown?.total ?? null,
-          ai_confidence_score:       hu.ai_fp_confidence ?? null,
-          ai_reasoning:              aiBreakdown?.reasoning ?? null,
-          provider_id:               hu._providerUsed ?? null,
-          prompt_version_hash:       hu._promptVersionHash ?? null,
-          rag_was_used:              hu._ragWasUsed ?? false,
-          rag_case_count:            hu._ragCaseCount ?? 0,
+          session_id: hu._sessionId ?? hu.id,
+          project_id: teamProjectId ?? teamId,
+          team_id: teamId,
+          hu_text: buildStoryText(hu),
+          hu_title: hu.title,
+          ai_functional_type: "mixed",
+          ai_complexity: "mixed",
+          ai_pf_bruto: aiBreakdown?.total ?? null,
+          ai_confidence_score: hu.ai_fp_confidence ?? analyses[hu.id]?.confidence ?? null,
+          ai_reasoning: aiBreakdown?.reasoning ?? null,
+          provider_id: null,
+          provider_name: hu._providerUsed ?? null,
+          prompt_version_hash: hu._promptVersionHash ?? null,
+          rag_was_used: hu._ragWasUsed ?? false,
+          rag_case_count: hu._ragCaseCount ?? 0,
           validated_functional_type: "mixed",
-          validated_complexity:      "mixed",
-          validated_pf_bruto:        fpValue,
-          correction_reason_code:    wasCorrected ? correctionReason : undefined,
-          correction_notes:          correctionNotes || undefined,
+          validated_complexity: "mixed",
+          validated_pf_bruto: fpValue,
+          correction_reason_code: wasCorrected ? correctionReason : undefined,
+          correction_notes: correctionNotes || undefined,
         },
       });
-      if (fnErr) console.warn("apf-validate não persistido:", fnErr.message);
+      if (validationError) console.warn("apf-validate não persistido:", validationError.message);
 
-      setUserStories((prev) => prev.map((h) =>
-        h.id === hu.id ? { ...h, function_points: fpValue, ai_fp_validated: true } : h
+      setUserStories((previous) => previous.map((item) =>
+        item.id === hu.id
+          ? { ...item, function_points: fpValue, ai_fp_validated: true }
+          : item,
       ));
-      setDialog((d) => ({ ...d, open: false }));
+      setDialog((current) => ({ ...current, open: false }));
       toast.success(`${hu.code} — ${fpValue} PF validado!`);
       insightsRefreshFn();
-    } catch (err: any) {
-      toast.error("Erro ao validar", { description: err?.message });
+    } catch (error: any) {
+      toast.error("Erro ao validar", { description: error?.message });
     } finally {
       setValidating(false);
     }
   }, [dialog, analyses, teamId, teamProjectId, insightsRefreshFn]);
 
-  // ── Contar todos pendentes ──────────────────────────────────────────────────
   const countAllPending = useCallback(async () => {
-    const pending = userStories.filter((h) => !h.function_points && !h.ai_fp_validated);
-    if (!pending.length) { toast.info("Todas as HUs já possuem PF calculado."); return; }
+    const pending = userStories.filter((hu) => !hu.function_points && !hu.ai_fp_validated);
+    if (!pending.length) {
+      toast.info("Todas as HUs já possuem PF calculado.");
+      return;
+    }
+
     setCountingAll(true);
-    for (const hu of pending) await countFpForHu(hu);
-    setCountingAll(false);
-    toast.success(`Contagem concluída para ${pending.length} HU(s)!`);
+    try {
+      let successCount = 0;
+      const failures: string[] = [];
+
+      for (const hu of pending) {
+        const success = await countFpForHu(hu);
+        if (success) successCount += 1;
+        else failures.push(hu.code);
+      }
+
+      if (failures.length === 0) {
+        toast.success(`Contagem concluída para ${successCount} HU(s)!`);
+      } else {
+        toast.warning(`Contagem finalizada: ${successCount} sucesso(s) e ${failures.length} falha(s).`, {
+          description: `Falharam: ${failures.join(", ")}`,
+        });
+      }
+    } finally {
+      setCountingAll(false);
+    }
   }, [userStories, countFpForHu]);
 
-  // ── Totais ──────────────────────────────────────────────────────────────────
-  const totalFp        = userStories.reduce((acc, h) => acc + (h.function_points ?? 0), 0);
-  const validatedCount = userStories.filter((h) => h.ai_fp_validated).length;
-  const pendingCount   = userStories.filter((h) => !h.function_points).length;
+  const totalFp = userStories.reduce((total, hu) => total + (hu.function_points ?? 0), 0);
+  const validatedCount = userStories.filter((hu) => hu.ai_fp_validated).length;
+  const pendingCount = userStories.filter((hu) => !hu.function_points).length;
 
-  // ── Render ──────────────────────────────────────────────────────────────────
   if (loadingSprints) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -526,7 +547,6 @@ export function ApfFunctionPointTab() {
 
   return (
     <div className="flex flex-col gap-5">
-
       <LearningInsightsPanel
         insights={insights}
         loading={insightsLoading}
@@ -534,7 +554,6 @@ export function ApfFunctionPointTab() {
         onRefresh={insightsRefreshFn}
       />
 
-      {/* Seletor de Sprint + ações */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <Select value={selectedSprintId} onValueChange={setSelectedSprintId}>
@@ -542,25 +561,31 @@ export function ApfFunctionPointTab() {
               <SelectValue placeholder="Selecione uma sprint..." />
             </SelectTrigger>
             <SelectContent>
-              {sprints.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
+              {sprints.map((sprint) => (
+                <SelectItem key={sprint.id} value={sprint.id}>
                   <span className="flex items-center gap-2">
-                    {s.is_active && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
-                    {s.name}
+                    {sprint.is_active && <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />}
+                    {sprint.name}
                   </span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           {selectedSprintId && (
-            <Button size="sm" variant="outline" onClick={() => {
-              setSelectedSprintId("");
-              setTimeout(() => setSelectedSprintId(selectedSprintId), 50);
-            }}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const sprintId = selectedSprintId;
+                setSelectedSprintId("");
+                setTimeout(() => setSelectedSprintId(sprintId), 50);
+              }}
+            >
               <RefreshCw className="h-4 w-4" />
             </Button>
           )}
         </div>
+
         {userStories.length > 0 && (
           <Button
             size="sm"
@@ -574,14 +599,13 @@ export function ApfFunctionPointTab() {
         )}
       </div>
 
-      {/* KPIs */}
       {userStories.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Total HUs", value: userStories.length,  color: "text-foreground" },
-            { label: "Total PF",  value: totalFp.toFixed(1),   color: "text-primary" },
-            { label: "Validados", value: validatedCount,        color: "text-emerald-600" },
-            { label: "Pendentes", value: pendingCount,          color: "text-amber-600" },
+            { label: "Total HUs", value: userStories.length, color: "text-foreground" },
+            { label: "Total PF", value: totalFp.toFixed(1), color: "text-primary" },
+            { label: "Validados", value: validatedCount, color: "text-emerald-600" },
+            { label: "Pendentes", value: pendingCount, color: "text-amber-600" },
           ].map((kpi) => (
             <Card key={kpi.label}>
               <CardContent className="pt-4 pb-3">
@@ -593,7 +617,6 @@ export function ApfFunctionPointTab() {
         </div>
       )}
 
-      {/* Tabela de HUs */}
       {loadingHUs ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -625,12 +648,12 @@ export function ApfFunctionPointTab() {
               </TableHeader>
               <TableBody>
                 {userStories.map((hu) => {
-                  const analysis   = analyses[hu.id];
-                  const fpValue    = hu.function_points ?? analysis?.breakdown?.total;
+                  const analysis = analyses[hu.id];
+                  const fpValue = hu.function_points ?? analysis?.breakdown?.total;
                   const confidence = hu.ai_fp_confidence ?? analysis?.confidence;
-                  const breakdown  = hu.ai_fp_breakdown ?? analysis?.breakdown;
-                  const isLoading  = analysis?.loading ?? false;
-                  const hasError   = !!analysis?.error;
+                  const breakdown = hu.ai_fp_breakdown ?? analysis?.breakdown;
+                  const isLoading = analysis?.loading ?? false;
+                  const hasError = Boolean(analysis?.error);
 
                   return (
                     <TableRow key={hu.id}>
@@ -649,14 +672,15 @@ export function ApfFunctionPointTab() {
                       <TableCell className="text-center font-semibold text-primary">
                         {isLoading
                           ? <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                          : fpValue ? fpValue : "—"}
+                          : fpValue ?? "—"}
                       </TableCell>
                       <TableCell className="text-center">
                         {breakdown ? (
                           <Badge variant="outline" className="text-xs">
                             {Object.entries(breakdown)
-                              .filter(([k, v]) => k !== "total" && k !== "reasoning" && (v as number) > 0)
-                              .map(([k, v]) => `${k}:${v}`).join(" ")}
+                              .filter(([key, value]) => key !== "total" && key !== "reasoning" && typeof value === "number" && value > 0)
+                              .map(([key, value]) => `${key}:${value}`)
+                              .join(" ")}
                           </Badge>
                         ) : "—"}
                       </TableCell>
@@ -678,9 +702,11 @@ export function ApfFunctionPointTab() {
                             <CheckCircle2 className="h-3 w-3" /> Validado
                           </Badge>
                         ) : hasError ? (
-                          <Badge variant="destructive" className="gap-1">
+                          <Badge variant="destructive" className="gap-1" title={analysis?.error ?? undefined}>
                             <AlertCircle className="h-3 w-3" /> Erro
                           </Badge>
+                        ) : fpValue != null ? (
+                          <Badge variant="outline" className="text-blue-600 border-blue-300">Calculado</Badge>
                         ) : (
                           <Badge variant="outline" className="text-muted-foreground">Não calculado</Badge>
                         )}
@@ -694,10 +720,10 @@ export function ApfFunctionPointTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => fpValue ? openValidationDialog(hu, fpValue) : countFpForHu(hu)}
+                            onClick={() => fpValue != null ? openValidationDialog(hu, fpValue) : countFpForHu(hu)}
                             disabled={isLoading}
                           >
-                            {fpValue
+                            {fpValue != null
                               ? <><CheckCircle2 className="h-3 w-3 mr-1" /> Validar</>
                               : <><Sparkles className="h-3 w-3 mr-1" /> Calcular</>}
                           </Button>
@@ -712,10 +738,9 @@ export function ApfFunctionPointTab() {
         </Card>
       )}
 
-      {/* Diálogo de validação */}
       <Dialog
         open={dialog.open}
-        onOpenChange={(open) => !validating && setDialog((d) => ({ ...d, open }))}
+        onOpenChange={(open) => !validating && setDialog((current) => ({ ...current, open }))}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -753,14 +778,17 @@ export function ApfFunctionPointTab() {
                   </Label>
                   <Select
                     value={dialog.correctionReason}
-                    onValueChange={(v) => setDialog((d) => ({ ...d, correctionReason: v as CorrectionReason }))}
+                    onValueChange={(value) => setDialog((current) => ({
+                      ...current,
+                      correctionReason: value as CorrectionReason,
+                    }))}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecione o motivo..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {CORRECTION_REASONS.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                      {CORRECTION_REASONS.map((reason) => (
+                        <SelectItem key={reason.value} value={reason.value}>{reason.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -771,7 +799,10 @@ export function ApfFunctionPointTab() {
                     placeholder="Descreva brevemente o que a IA errou..."
                     className="text-sm resize-none h-20"
                     value={dialog.correctionNotes}
-                    onChange={(e) => setDialog((d) => ({ ...d, correctionNotes: e.target.value }))}
+                    onChange={(event) => setDialog((current) => ({
+                      ...current,
+                      correctionNotes: event.target.value,
+                    }))}
                   />
                 </div>
               </>
@@ -781,7 +812,7 @@ export function ApfFunctionPointTab() {
           <DialogFooter className="gap-2">
             <Button
               variant="outline"
-              onClick={() => setDialog((d) => ({ ...d, open: false }))}
+              onClick={() => setDialog((current) => ({ ...current, open: false }))}
               disabled={validating}
             >
               Cancelar
@@ -799,7 +830,6 @@ export function ApfFunctionPointTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

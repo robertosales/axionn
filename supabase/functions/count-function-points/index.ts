@@ -223,7 +223,11 @@ async function callGemini(prompt: string, apiKey: string, model = "gemini-2.0-fl
   );
   const d = await r.json();
   if (!r.ok || d.error) throw new ProviderError("Gemini", r.status || 500, d.error?.message ?? `HTTP ${r.status}`);
-  return d.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const geminiText = d.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  if (geminiText && geminiText.trim().startsWith("```")) {
+    console.warn("[count-fp] Gemini retornou markdown apesar de response_mime_type:application/json");
+  }
+  return geminiText;
 }
 
 async function callAnthropic(prompt: string, apiKey: string, model = "claude-3-5-haiku-20241022"): Promise<string> {

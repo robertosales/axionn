@@ -7,10 +7,15 @@
  * Padrões seguidos:
  *   - Auth JWT obrigatória (ou service_role bypass para workers)
  *   - API key resolvida via Vault (get_ai_provider_key_by_id) — mesma lógica de apf-generate
- *   - Multi-provider com fallback automático: lovable → openai → gemini → anthropic
+ *   - Multi-provider com fallback automático (dinâmico via banco)
  *   - Few-shot learning: busca últimas contagens validadas do time e injeta no prompt
  *   - Resposta JSON estruturada: { EI, EO, EQ, ILF, EIF, total, confidence, reasoning }
  *   - Persiste resultado em user_stories + function_point_analyses
+ *
+ * CORREÇÃO 2026-06-24:
+ *   - Provider não é mais union hard-coded — suporta groq, perplexity e qualquer provider dinâmico
+ *   - callGeneric() para todos providers OpenAI-compatible (sem response_format forçado)
+ *   - parseFpResponse() mais robusto: extrai JSON mesmo em texto corrido
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -31,9 +36,18 @@ const corsHeaders = {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Provider = "openai" | "anthropic" | "gemini" | "lovable" | "perplexity" | "sakana.ai";
-
 // ─── Tipos ───────────────────────────────────────────────────
+type RequestFormat = "openai_compatible" | "gemini" | "anthropic";
+
+interface ProviderRow {
+  id: string;
+  name: string;
+  provider_type: string;
+  model: string | null;
+  api_base_url: string | null;
+  request_format: RequestFormat | null;
+}
+
 interface RequestBody {
   teamId: string;
   huId: string;
@@ -43,20 +57,19 @@ interface RequestBody {
     acceptanceCriteria?: string | null;
     storyType?: string | null;
   };
-  // Provedor: se omitido usa o provider recomendado do time / primeiro ativo
   providerId?: string;
-  // Força Lovable AI Gateway (grátis) ignorando ai_providers
   forceProvider?: "lovable";
 }
 
 interface FpBreakdown {
-  EI: number; // External Input
-  EO: number; // External Output
-  EQ: number; // External Inquiry
-  ILF: number; // Internal Logical File
-  EIF: number; // External Interface File
+  EI: number;
+  EO: number;
+  EQ: number;
+  ILF: number;
+  EIF: number;
   total: number;
   reasoning: string;
+  confidence?: number;
 }
 
 interface FewShotExample {
@@ -65,7 +78,7 @@ interface FewShotExample {
   breakdown: any;
 }
 
-// ─── Provider helpers (mesma lógica de apf-generate) ─────────
+// ─── Provider helpers ─────────────────────────────────────────
 class ProviderError extends Error {
   status: number;
   providerName: string;
@@ -76,75 +89,108 @@ class ProviderError extends Error {
   }
 }
 
-async function resolveRecommendedProvider(teamId: string, explicitProviderId?: string) {
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+const DEFAULT_MODELS: Record<string, string> = {
+  openai: "gpt-4o-mini",
+  lovable: "google/gemini-2.5-flash",
+  perplexity: "sonar",
+  sakana: "fugu",
+  groq: "llama-3.3-70b-versatile",
+};
 
-  let row: any = null;
+async function resolveRecommendedProvider(teamId: string, explicitProviderId?: string): Promise<ProviderRow> {
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+  const select = "id, name, provider_type, model, api_base_url, request_format";
+
+  let row: ProviderRow | null = null;
 
   if (explicitProviderId) {
     const { data } = await admin
       .from("ai_providers")
-      .select("id, name, provider_type, model, is_active")
+      .select(select)
       .eq("id", explicitProviderId)
       .eq("is_active", true)
       .maybeSingle();
-    row = data;
+    row = data as ProviderRow | null;
   }
 
   if (!row) {
-    // Usa o provider recomendado e ativo do time
     const { data } = await admin
       .from("ai_providers")
-      .select("id, name, provider_type, model")
+      .select(select)
       .eq("is_active", true)
       .order("is_recommended", { ascending: false })
       .order("name")
       .limit(1)
       .maybeSingle();
-    row = data;
+    row = data as ProviderRow | null;
   }
 
   if (!row) throw new Error("Nenhum provedor de IA ativo encontrado. Configure um provider no painel administrativo.");
-
-  return row as { id: string; name: string; provider_type: Provider; model: string | null };
+  return row;
 }
 
-async function getKeyForRow(row: { id: string; provider_type: Provider }): Promise<string | null> {
+async function getKeyForRow(row: ProviderRow): Promise<string | null> {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const { data } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id });
   let key = (data as string) ?? null;
-  if (!key && row.provider_type === "lovable") key = Deno.env.get("LOVABLE_API_KEY") ?? null;
+  // Fallback env vars por provider_type
+  if (!key) {
+    const envMap: Record<string, string> = {
+      lovable: "LOVABLE_API_KEY",
+      groq: "GROQ_API_KEY",
+      sakana: "SAKANA_API_KEY",
+    };
+    const envVar = envMap[row.provider_type];
+    if (envVar) key = Deno.env.get(envVar) ?? null;
+  }
   return key;
 }
 
-async function listFallbackProviders(excludeId: string) {
+async function listFallbackProviders(excludeId: string): Promise<ProviderRow[]> {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const { data } = await admin
     .from("ai_providers")
-    .select("id, name, provider_type, model")
+    .select("id, name, provider_type, model, api_base_url, request_format")
     .eq("is_active", true)
     .order("is_recommended", { ascending: false })
     .order("name");
-  return ((data ?? []) as any[]).filter((p) => p.id !== excludeId);
+  return ((data ?? []) as ProviderRow[]).filter((p) => p.id !== excludeId);
 }
 
-async function callLovable(prompt: string, apiKey: string, model = "google/gemini-2.5-flash"): Promise<string> {
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+// ─── Chamadas de IA ───────────────────────────────────────────
+
+/** Chamada genérica OpenAI-compatible — NÃO força response_format (groq não suporta json_object em todos os modelos) */
+async function callGeneric(
+  providerName: string,
+  apiBaseUrl: string,
+  prompt: string,
+  apiKey: string,
+  model: string,
+): Promise<string> {
+  const r = await fetch(apiBaseUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
     }),
   });
-  if (!r.ok) throw new ProviderError("Lovable AI", r.status, await r.text());
+  if (!r.ok) throw new ProviderError(providerName, r.status, await r.text());
   const d = await r.json();
-  return d.choices?.[0]?.message?.content ?? "";
+  const text = d.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error(`${providerName} retornou resposta inesperada: ${JSON.stringify(d).slice(0, 200)}`);
+  return text;
 }
 
-async function callOpenAI(prompt: string, apiKey: string, model = "gpt-4o"): Promise<string> {
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+/** OpenAI com response_format json_object (suportado pelo OpenAI e Lovable) */
+async function callOpenAIJsonMode(
+  providerName: string,
+  apiBaseUrl: string,
+  prompt: string,
+  apiKey: string,
+  model: string,
+): Promise<string> {
+  const r = await fetch(apiBaseUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -153,14 +199,13 @@ async function callOpenAI(prompt: string, apiKey: string, model = "gpt-4o"): Pro
       response_format: { type: "json_object" },
     }),
   });
-  if (!r.ok) throw new ProviderError("OpenAI", r.status, await r.text());
+  if (!r.ok) throw new ProviderError(providerName, r.status, await r.text());
   const d = await r.json();
   return d.choices?.[0]?.message?.content ?? "";
 }
 
 async function callGemini(prompt: string, apiKey: string, model = "gemini-2.0-flash"): Promise<string> {
   if (model.startsWith("google/")) model = model.replace("google/", "");
-  // Instrui o Gemini a retornar JSON
   const fullPrompt = prompt + "\n\nResposta SOMENTE em JSON válido, sem markdown ou blocos de código.";
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -193,24 +238,32 @@ async function callAnthropic(prompt: string, apiKey: string, model = "claude-3-5
   return d.content?.[0]?.text ?? "";
 }
 
-async function callProvider(type: Provider, prompt: string, apiKey: string, model?: string | null): Promise<string> {
-  switch (type) {
-    case "lovable":
-      return callLovable(prompt, apiKey, model ?? undefined);
-    case "openai":
-      return callOpenAI(prompt, apiKey, model ?? undefined);
-    case "gemini":
-      return callGemini(prompt, apiKey, model ?? undefined);
-    case "anthropic":
-      return callAnthropic(prompt, apiKey, model ?? undefined);
-    case "perplexity":
-      return callOpenAI(prompt, apiKey, model ?? "sonar"); // Perplexity é compatível OpenAI
-    default:
-      return callOpenAI(prompt, apiKey, model ?? undefined);
+/** Dispatcher dinâmico — usa request_format do banco */
+async function callProvider(row: ProviderRow, prompt: string, apiKey: string): Promise<string> {
+  const format = row.request_format ?? "openai_compatible";
+  const model = row.model ?? DEFAULT_MODELS[row.provider_type] ?? "";
+
+  if (format === "gemini") {
+    return callGemini(prompt, apiKey, model || "gemini-2.0-flash");
   }
+
+  if (format === "anthropic") {
+    return callAnthropic(prompt, apiKey, model || "claude-3-5-haiku-20241022");
+  }
+
+  // openai_compatible
+  const baseUrl = row.api_base_url ?? "https://api.openai.com/v1/chat/completions";
+  if (!model) throw new Error(`Provider "${row.name}" sem modelo configurado.`);
+
+  // OpenAI e Lovable suportam json_object; groq e outros usam chamada genérica
+  const supportsJsonMode = ["openai", "lovable"].includes(row.provider_type);
+  if (supportsJsonMode) {
+    return callOpenAIJsonMode(row.name, baseUrl, prompt, apiKey, model);
+  }
+  return callGeneric(row.name, baseUrl, prompt, apiKey, model);
 }
 
-// ─── Few-shot: busca exemplos validados do time ───────────────
+// ─── Few-shot ─────────────────────────────────────────────────
 async function fetchFewShotExamples(teamId: string): Promise<FewShotExample[]> {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   try {
@@ -227,12 +280,11 @@ async function fetchFewShotExamples(teamId: string): Promise<FewShotExample[]> {
       breakdown: r.ai_breakdown,
     }));
   } catch (_e) {
-    // Tabela ainda não existe — retorna vazio, sem quebrar
     return [];
   }
 }
 
-// ─── Monta prompt com few-shot ────────────────────────────────
+// ─── Prompt ───────────────────────────────────────────────────
 function buildFpPrompt(storyText: string, context: RequestBody["context"], examples: FewShotExample[]): string {
   const examplesBlock =
     examples.length > 0
@@ -283,7 +335,7 @@ ${examplesBlock}
 ${storyText}
 ${contextBlock ? "\n## Contexto adicional:\n" + contextBlock : ""}
 
-## Resposta obrigatória — JSON puro sem markdown:
+## IMPORTANTE — Responda SOMENTE com o JSON abaixo, sem explicações fora do JSON, sem markdown:
 {
   "EI": <número>,
   "EO": <número>,
@@ -291,46 +343,63 @@ ${contextBlock ? "\n## Contexto adicional:\n" + contextBlock : ""}
   "ILF": <número>,
   "EIF": <número>,
   "total": <soma dos pesos acima>,
-  "confidence": <0.0 a 1.0, quanta certeza você tem>,
+  "confidence": <0.0 a 1.0>,
   "reasoning": "<explicação concisa em português do que foi identificado>"
 }`;
 }
 
-// ─── Parseia resposta da IA → FpBreakdown ────────────────────
+// ─── Parser robusto JSON ──────────────────────────────────────
 function parseFpResponse(raw: string): FpBreakdown {
   let text = raw.trim();
-  // Remove blocos de código caso o provider ignore o response_format
-  text = text
-    .replace(/^```[\w]*\n?/, "")
-    .replace(/\n?```$/, "")
-    .trim();
 
+  // Remove blocos de código markdown
+  text = text.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "").trim();
+
+  // Tenta parse direto
   let parsed: any;
   try {
     parsed = JSON.parse(text);
   } catch (_e) {
-    // Extrai JSON da resposta se vier com texto ao redor
+    // Extrai o primeiro objeto JSON encontrado no texto (greedy)
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error(`IA não retornou JSON válido: ${text.slice(0, 200)}`);
-    parsed = JSON.parse(match[0]);
+    if (!match) {
+      // Último recurso: tenta extrair valores numéricos individualmente
+      console.warn("[count-fp] Resposta da IA não contém JSON, tentando extração manual:", text.slice(0, 300));
+      const extract = (key: string) => {
+        const m = new RegExp(`"?${key}"?\\s*:\\s*(\\d+)`, "i").exec(text);
+        return m ? parseInt(m[1], 10) : 0;
+      };
+      const EI = extract("EI"), EO = extract("EO"), EQ = extract("EQ");
+      const ILF = extract("ILF"), EIF = extract("EIF");
+      const total = EI * 3 + EO * 4 + EQ * 3 + ILF * 7 + EIF * 5;
+      const reasoningMatch = text.match(/"?reasoning"?\s*:\s*"([^"]+)"/);
+      return {
+        EI, EO, EQ, ILF, EIF,
+        total: total || extract("total"),
+        confidence: 0.5,
+        reasoning: reasoningMatch?.[1] ?? "Extraído de resposta não-JSON",
+      };
+    }
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch (_e2) {
+      throw new Error(`A IA não retornou JSON válido. Tente novamente. Resposta: ${text.slice(0, 200)}`);
+    }
   }
 
-  const EI = Math.max(0, parseInt(parsed.EI ?? 0, 10));
-  const EO = Math.max(0, parseInt(parsed.EO ?? 0, 10));
-  const EQ = Math.max(0, parseInt(parsed.EQ ?? 0, 10));
+  const EI  = Math.max(0, parseInt(parsed.EI  ?? 0, 10));
+  const EO  = Math.max(0, parseInt(parsed.EO  ?? 0, 10));
+  const EQ  = Math.max(0, parseInt(parsed.EQ  ?? 0, 10));
   const ILF = Math.max(0, parseInt(parsed.ILF ?? 0, 10));
   const EIF = Math.max(0, parseInt(parsed.EIF ?? 0, 10));
-
-  // Calcula PF bruto com pesos IFPUG (complexidade simples)
   const total = EI * 3 + EO * 4 + EQ * 3 + ILF * 7 + EIF * 5;
-
   const confidence = Math.min(1, Math.max(0, parseFloat(parsed.confidence ?? 0.7)));
   const reasoning = String(parsed.reasoning ?? "").slice(0, 1000);
 
   return { EI, EO, EQ, ILF, EIF, total, confidence, reasoning };
 }
 
-// ─── Persiste resultado no banco ─────────────────────────────
+// ─── Persiste resultado ───────────────────────────────────────
 async function persistResult(opts: {
   teamId: string;
   huId: string;
@@ -342,7 +411,6 @@ async function persistResult(opts: {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const { teamId, huId, storyText, breakdown, modelUsed, fewShotCount } = opts;
 
-  // 1. Atualiza user_stories (colunas podem não existir ainda — silent fail)
   try {
     await admin
       .from("user_stories")
@@ -353,10 +421,9 @@ async function persistResult(opts: {
       } as any)
       .eq("id", huId);
   } catch (_e) {
-    console.warn("[count-fp] user_stories update failed (colunas ai_fp_* talvez não existam ainda):", _e);
+    console.warn("[count-fp] user_stories update failed:", _e);
   }
 
-  // 2. Registra em function_point_analyses (tabela de aprendizado)
   try {
     await admin.from("function_point_analyses" as any).upsert(
       {
@@ -374,8 +441,7 @@ async function persistResult(opts: {
       { onConflict: "story_id", ignoreDuplicates: false },
     );
   } catch (_e) {
-    // Tabela ainda não criada — não quebra o fluxo
-    console.warn("[count-fp] function_point_analyses insert failed (migration pendente?):", _e);
+    console.warn("[count-fp] function_point_analyses insert failed:", _e);
   }
 }
 
@@ -390,7 +456,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // ── 1. Auth ───────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
@@ -406,10 +471,7 @@ Deno.serve(async (req: Request) => {
       const userClient = createClient(SUPABASE_URL, ANON_KEY, {
         global: { headers: { Authorization: authHeader } },
       });
-      const {
-        data: { user },
-        error: authErr,
-      } = await userClient.auth.getUser();
+      const { data: { user }, error: authErr } = await userClient.auth.getUser();
       if (authErr || !user) {
         return new Response(JSON.stringify({ error: "Token inválido" }), {
           status: 401,
@@ -418,36 +480,31 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ── 2. Parse body ─────────────────────────────────────────
     const body = (await req.json().catch(() => ({}))) as RequestBody;
     const { teamId, huId, storyText, context, providerId, forceProvider } = body;
 
     if (!teamId || !UUID_REGEX.test(teamId))
       return new Response(JSON.stringify({ error: "teamId (UUID) é obrigatório" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     if (!huId || !UUID_REGEX.test(huId))
       return new Response(JSON.stringify({ error: "huId (UUID) é obrigatório" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     if (!storyText?.trim())
       return new Response(JSON.stringify({ error: "storyText é obrigatório" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
-    // ── 3. Resolve provider + API key ─────────────────────────
-    let providerRow: { id: string; name: string; provider_type: Provider; model: string | null };
+    // Resolve provider + API key
+    let providerRow: ProviderRow;
     let apiKey: string | null;
 
     if (forceProvider === "lovable") {
-      // Atalho: Lovable AI Gateway (grátis) — usa LOVABLE_API_KEY do ambiente
       const lovableKey = Deno.env.get("LOVABLE_API_KEY") ?? null;
       if (!lovableKey) {
         return new Response(
-          JSON.stringify({ error: "Lovable AI não está disponível neste workspace (LOVABLE_API_KEY ausente)." }),
+          JSON.stringify({ error: "Lovable AI não está disponível (LOVABLE_API_KEY ausente)." }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -456,6 +513,8 @@ Deno.serve(async (req: Request) => {
         name: "Lovable AI (grátis)",
         provider_type: "lovable",
         model: "google/gemini-2.5-flash",
+        api_base_url: "https://ai.gateway.lovable.dev/v1/chat/completions",
+        request_format: "openai_compatible",
       };
       apiKey = lovableKey;
     } else {
@@ -465,24 +524,20 @@ Deno.serve(async (req: Request) => {
 
     if (!apiKey) {
       return new Response(
-        JSON.stringify({
-          error: `API key não configurada para "${providerRow.name}". Configure no painel administrativo.`,
-        }),
+        JSON.stringify({ error: `API key não configurada para "${providerRow.name}". Configure no painel administrativo.` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // ── 4. Busca exemplos validados (few-shot) ────────────────
     const examples = await fetchFewShotExamples(teamId);
-
-    // ── 5. Monta prompt e chama IA (com fallback) ─────────────
     const prompt = buildFpPrompt(storyText, context, examples);
+
     let rawResponse = "";
     let usedProviderName = providerRow.name;
     let usedModel = providerRow.model ?? providerRow.provider_type;
 
     try {
-      rawResponse = await callProvider(providerRow.provider_type, prompt, apiKey, providerRow.model);
+      rawResponse = await callProvider(providerRow, prompt, apiKey);
     } catch (primaryErr: any) {
       const primaryStatus = primaryErr instanceof ProviderError ? primaryErr.status : 500;
       console.warn(`[count-fp] Provider "${providerRow.name}" falhou (${primaryStatus}). Tentando fallback...`);
@@ -494,7 +549,7 @@ Deno.serve(async (req: Request) => {
         const candKey = await getKeyForRow(cand);
         if (!candKey) continue;
         try {
-          rawResponse = await callProvider(cand.provider_type, prompt, candKey, cand.model);
+          rawResponse = await callProvider(cand, prompt, candKey);
           usedProviderName = cand.name;
           usedModel = cand.model ?? cand.provider_type;
           succeeded = true;
@@ -505,27 +560,19 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      if (!succeeded) {
-        throw primaryErr;
-      }
+      if (!succeeded) throw primaryErr;
     }
 
     if (!rawResponse.trim()) throw new Error("IA retornou conteúdo vazio");
 
-    // ── 6. Parseia resposta ───────────────────────────────────
     const breakdown = parseFpResponse(rawResponse);
 
-    // ── 7. Persiste resultado ─────────────────────────────────
     await persistResult({
-      teamId,
-      huId,
-      storyText,
-      breakdown,
+      teamId, huId, storyText, breakdown,
       modelUsed: usedModel,
       fewShotCount: examples.length,
     });
 
-    // ── 8. Retorna ────────────────────────────────────────────
     return new Response(
       JSON.stringify({
         success: true,
@@ -546,7 +593,8 @@ Deno.serve(async (req: Request) => {
       friendly = "O provedor de IA está sem créditos. Configure outro provider no painel.";
     else if (/invalid.*api.key|incorrect api key/i.test(msg))
       friendly = "Chave de API inválida. Verifique no painel administrativo.";
-    else if (/rate limit|429/i.test(msg)) friendly = "Limite de requisições atingido. Aguarde alguns segundos.";
+    else if (/rate limit|429/i.test(msg))
+      friendly = "Limite de requisições atingido. Aguarde alguns segundos.";
 
     return new Response(JSON.stringify({ success: false, error: friendly, rawError: msg }), {
       status: 500,

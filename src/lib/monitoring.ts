@@ -40,17 +40,23 @@ export function initSentry(): void {
     return;
   }
 
+  // ⚡ Em desenvolvimento o Sentry fica completamente desligado para não
+  // consumir cota nem gerar ruído de 429 durante testes e hot-reload.
+  const isProduction = import.meta.env.PROD;
+
   Sentry.init({
     dsn,
+    enabled: isProduction,
     environment: import.meta.env.VITE_APP_ENV ?? 'development',
     release: import.meta.env.VITE_APP_VERSION ?? 'unknown',
 
-    // Performance tracing — captura 10% em produção, 100% em dev
-    tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+    // Performance tracing — 5% em produção (era 10%), 0% em dev
+    tracesSampleRate: isProduction ? 0.05 : 0,
 
-    // Replay de sessão — 10% normal, 100% em erros
-    replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
+    // Replay de sessão — 0% normal (era 10%), 50% só em erros (era 100%)
+    // O Replay é o maior consumidor de cota no plano free do Sentry.
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: isProduction ? 0.5 : 0,
 
     // Ignora erros de rede cancelados (AbortController) e chunks de lazy load
     ignoreErrors: [
@@ -72,10 +78,15 @@ export function initSentry(): void {
 
     integrations: [
       Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({
-        maskAllText: false,
-        blockAllMedia: false,
-      }),
+      // Replay só é registrado em produção para não desperdiçar cota
+      ...(isProduction
+        ? [
+            Sentry.replayIntegration({
+              maskAllText: false,
+              blockAllMedia: false,
+            }),
+          ]
+        : []),
     ],
   });
 

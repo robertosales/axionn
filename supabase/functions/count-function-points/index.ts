@@ -223,7 +223,11 @@ async function callGemini(prompt: string, apiKey: string, model = "gemini-2.0-fl
   );
   const d = await r.json();
   if (!r.ok || d.error) throw new ProviderError("Gemini", r.status || 500, d.error?.message ?? `HTTP ${r.status}`);
-  return d.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const geminiText = d.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  if (geminiText && geminiText.trim().startsWith("```")) {
+    console.warn("[count-fp] Gemini retornou markdown apesar de response_mime_type:application/json");
+  }
+  return geminiText;
 }
 
 async function callAnthropic(prompt: string, apiKey: string, model = "claude-3-5-haiku-20241022"): Promise<string> {
@@ -335,17 +339,20 @@ ${examplesBlock}
 ${storyText}
 ${contextBlock ? "\n## Contexto adicional:\n" + contextBlock : ""}
 
-## IMPORTANTE — Responda SOMENTE com o JSON abaixo, sem explicações fora do JSON, sem markdown:
-{
-  "EI": <número>,
-  "EO": <número>,
-  "EQ": <número>,
-  "ILF": <número>,
-  "EIF": <número>,
-  "total": <soma dos pesos acima>,
-  "confidence": <0.0 a 1.0>,
-  "reasoning": "<explicação concisa em português do que foi identificado>"
-}`;
+## REGRA ABSOLUTA — FORMATO DA RESPOSTA:
+Retorne APENAS o objeto JSON abaixo. Sem texto antes, sem texto depois,
+sem markdown, sem blocos de código, sem explicações fora do JSON.
+Se você incluir QUALQUER texto fora do JSON, sua resposta será rejeitada.
+
+CORRETO (exatamente assim):
+{"EI":2,"EO":1,"EQ":1,"ILF":1,"EIF":0,"total":17,"confidence":0.85,"reasoning":"Identificados: 2 EI de cadastro, 1 EO de relatório, 1 EQ de consulta, 1 ILF principal"}
+
+INCORRETO (não faça isso):
+"Aqui está minha análise: {...}"
+\`\`\`json {...} \`\`\`
+"Com base na HU: EI=2..."
+
+Responda AGORA com apenas o JSON:`;
 }
 
 // ─── Parser robusto JSON ──────────────────────────────────────
@@ -355,39 +362,75 @@ function calcComplexity(total: number): Complexity {
   return "alta";
 }
 
-function parseFpResponse(raw: string): FpBreakdown {
-  let text = raw.trim();
+function extractJsonFromText(text: string): string | null {
+  // Estratégia 1: JSON puro
+  try { JSON.parse(text); return text; } catch (_) { /* continua */ }
 
-  // Remove blocos de código markdown
-  text = text.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "").trim();
+  // Estratégia 2: bloco ```json ... ``` ou ``` ... ```
+  const codeBlock = text.match(/```(?:json|javascript|js)?\s*([\s\S]*?)```/);
+  if (codeBlock) {
+    const inner = codeBlock[1].trim();
+    try { JSON.parse(inner); return inner; } catch (_) { /* continua */ }
+  }
+
+  // Estratégia 3: primeiro { ... } balanceado
+  let depth = 0, start = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '{') { if (depth === 0) start = i; depth++; }
+    else if (text[i] === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        const candidate = text.slice(start, i + 1);
+        try { JSON.parse(candidate); return candidate; } catch (_) { /* continua */ }
+      }
+    }
+  }
+
+  // Estratégia 4: remove trailing commas e tenta de novo
+  if (start !== -1) {
+    try {
+      const cleaned = text.slice(start).replace(/,\s*([}\]])/g, '$1');
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) { JSON.parse(match[0]); return match[0]; }
+    } catch (_) { /* continua */ }
+  }
+
+  return null;
+}
+
+function parseFpResponse(raw: string): FpBreakdown {
+  const text = raw.trim();
+  const jsonStr = extractJsonFromText(text);
+
+  if (!jsonStr) {
+    // Última tentativa: extração por regex de campos individuais
+    console.warn("[count-fp] JSON não encontrado, extraindo campos via regex:", text.slice(0, 300));
+    const extract = (key: string) => {
+      const m = new RegExp(`"?${key}"?\\s*:\\s*(\\d+)`, "i").exec(text);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+    const EI = extract("EI"), EO = extract("EO"), EQ = extract("EQ");
+    const ILF = extract("ILF"), EIF = extract("EIF");
+    const total = EI * 3 + EO * 4 + EQ * 3 + ILF * 7 + EIF * 5;
+    const reasoningMatch = text.match(/"?reasoning"?\s*:\s*"([^"]+)"/);
+    const confidenceMatch = text.match(/"?confidence"?\s*:\s*([\d.]+)/);
+    return {
+      EI, EO, EQ, ILF, EIF,
+      total: total || extract("total"),
+      complexity: calcComplexity(total),
+      confidence: confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.5,
+      reasoning: reasoningMatch?.[1] ?? "Extraído de resposta não-JSON",
+    };
+  }
 
   let parsed: any;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(jsonStr);
   } catch (_e) {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) {
-      console.warn("[count-fp] Resposta da IA não contém JSON, tentando extração manual:", text.slice(0, 300));
-      const extract = (key: string) => {
-        const m = new RegExp(`"?${key}"?\\s*:\\s*(\\d+)`, "i").exec(text);
-        return m ? parseInt(m[1], 10) : 0;
-      };
-      const EI = extract("EI"), EO = extract("EO"), EQ = extract("EQ");
-      const ILF = extract("ILF"), EIF = extract("EIF");
-      const total = EI * 3 + EO * 4 + EQ * 3 + ILF * 7 + EIF * 5;
-      const reasoningMatch = text.match(/"?reasoning"?\s*:\s*"([^"]+)"/);
-      return {
-        EI, EO, EQ, ILF, EIF,
-        total: total || extract("total"),
-        complexity: calcComplexity(total),
-        confidence: 0.5,
-        reasoning: reasoningMatch?.[1] ?? "Extraído de resposta não-JSON",
-      };
-    }
     try {
-      parsed = JSON.parse(match[0]);
+      parsed = JSON.parse(jsonStr.replace(/,\s*([}\]])/g, '$1'));
     } catch (_e2) {
-      throw new Error(`A IA não retornou JSON válido. Tente novamente. Resposta: ${text.slice(0, 200)}`);
+      throw new Error(`A IA não retornou JSON válido após todas as tentativas. Tente novamente.`);
     }
   }
 
@@ -570,6 +613,7 @@ Deno.serve(async (req: Request) => {
 
     if (!rawResponse.trim()) throw new Error("IA retornou conteúdo vazio");
 
+    console.log(`[count-fp] Raw response (${usedProviderName}, ${rawResponse.length} chars):`, rawResponse.slice(0, 500));
     const breakdown = parseFpResponse(rawResponse);
 
     const analysisId = await persistResult({

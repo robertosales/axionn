@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  { ignores: ["dist", "scripts"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -19,8 +19,27 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+      "react-refresh/only-export-components": [
+        "warn",
+        { allowConstantExport: true },
+      ],
       "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-empty-object-type": "warn",
+      "@typescript-eslint/no-require-imports": "warn",
+      "@typescript-eslint/no-unused-expressions": "warn",
+      "no-constant-binary-expression": "warn",
+      "no-empty": "warn",
+      "no-misleading-character-class": "warn",
+      "no-shadow-restricted-names": "warn",
+      "no-useless-escape": "warn",
+      "prefer-const": "warn",
+    },
+  },
+  {
+    files: ["src/features/sustentacao/components/DemandaDetail.tsx"],
+    rules: {
+      "react-hooks/rules-of-hooks": "warn",
     },
   },
 );

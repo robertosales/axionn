@@ -1,12 +1,45 @@
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import type { HuRow } from "../types/apfItem.types";
-import type { ValidationDialogState, ValidationItemState } from "../types/apfRuntime.types";
-import { effectiveFactor, effectiveFunction, effectivePfBruto, effectivePfFs } from "../utils/contractualApf.helpers";
-import { countHuContractually } from "../services/contractualCounting.service";
+import type { ContractualItem, HuRow } from "../types/apfItem.types";
+import type {
+  ValidationDialogState,
+  ValidationItemState,
+} from "../types/apfRuntime.types";
+import {
+  effectiveFactor,
+  effectiveFunction,
+  effectivePfBruto,
+  effectivePfFs,
+} from "../utils/contractualApf.helpers";
 import { validateContractualItems } from "../services/contractualValidation.service";
 import { useApfCatalog } from "./useApfCatalog";
+
+interface CountResponse {
+  success?: boolean;
+  error?: string;
+  session_id: string;
+  story_pf_bruto: number;
+  story_pf_fs: number;
+  items: ContractualItem[];
+  provider_used?: string;
+  deterministic_match?: boolean;
+}
+
+async function readFunctionError(error: any, data?: CountResponse | null) {
+  if (data?.error) return data.error;
+  const response = error?.context;
+  if (response && typeof response.clone === "function") {
+    try {
+      const payload = await response.clone().json();
+      return payload?.error ?? payload?.message ?? error.message;
+    } catch {
+      // Usa a mensagem padrão abaixo.
+    }
+  }
+  return error?.message ?? "Falha ao executar a contagem APF.";
+}
 
 export function useContractualApfCounting() {
   const { currentTeam } = useAuth();
@@ -33,34 +66,52 @@ export function useContractualApfCounting() {
     ));
 
     try {
-      const result = await countHuContractually({
-        projectId: catalog.projectId,
-        sprintName: catalog.selectedSprint.name,
-        context: catalog.context,
-        hu,
-      });
-      const confidence = result.items.length
-        ? result.items.reduce((sum, item) => sum + Number(item.match_confidence ?? 0.5), 0) / result.items.length
+      const { data, error } = await supabase.functions.invoke<CountResponse>(
+        "apf-count",
+        {
+          body: {
+            project_id: catalog.projectId,
+            story_id: hu.id,
+            sprint_ref: catalog.selectedSprint.name,
+            baseline_id: catalog.context.baseline.id,
+          },
+        },
+      );
+
+      if (error || !data?.success) {
+        throw new Error(await readFunctionError(error, data));
+      }
+
+      const items = (data.items ?? []).map((item) => ({
+        ...item,
+        match_confidence: item.match_confidence ?? item.confidence ?? null,
+      }));
+      const confidence = items.length
+        ? items.reduce(
+          (sum, item) => sum + Number(item.match_confidence ?? 0.5),
+          0,
+        ) / items.length
         : 0.5;
+      const providerUsed = data.provider_used ?? "Motor APF";
 
       catalog.setStories((rows) => rows.map((row) => row.id === hu.id ? {
         ...row,
-        function_points: Number(result.summary.story_pf_fs),
-        apf_pf_bruto: Number(result.summary.story_pf_bruto),
-        apf_pf_fs: Number(result.summary.story_pf_fs),
+        function_points: Number(data.story_pf_fs),
+        apf_pf_bruto: Number(data.story_pf_bruto),
+        apf_pf_fs: Number(data.story_pf_fs),
         ai_fp_confidence: confidence,
         ai_fp_validated: false,
-        _items: result.items,
+        _items: items,
         _loading: false,
         _error: null,
-        _providerUsed: result.providerUsed,
-        _sessionId: String(result.summary.session_id),
+        _providerUsed: providerUsed,
+        _sessionId: String(data.session_id),
       } : row));
 
-      toast.success(`${hu.code}: ${Number(result.summary.story_pf_fs).toFixed(2)} PF FS`, {
-        description: result.deterministic
+      toast.success(`${hu.code}: ${Number(data.story_pf_fs).toFixed(2)} PF FS`, {
+        description: data.deterministic_match
           ? "Correspondência exata com a baseline, sem consumo de IA."
-          : result.providerUsed,
+          : providerUsed,
       });
       return true;
     } catch (error: any) {
@@ -79,12 +130,13 @@ export function useContractualApfCounting() {
     setCountingAll(true);
     let successes = 0;
     const failures: string[] = [];
+
     for (const story of pending) {
       if (await countForHu(story)) successes += 1;
       else failures.push(story.code);
     }
-    setCountingAll(false);
 
+    setCountingAll(false);
     if (failures.length) {
       toast.warning(`${successes} sucesso(s) e ${failures.length} falha(s)`, {
         description: failures.join(", "),
@@ -117,7 +169,10 @@ export function useContractualApfCounting() {
     || item.selectedFactor !== effectiveFactor(item),
   );
 
-  function updateValidationItem(index: number, changes: Partial<ValidationItemState>) {
+  function updateValidationItem(
+    index: number,
+    changes: Partial<ValidationItemState>,
+  ) {
     setDialog((current) => ({
       ...current,
       items: current.items.map((item, itemIndex) =>
@@ -126,14 +181,22 @@ export function useContractualApfCounting() {
     }));
   }
 
-  const getFunctionWeight = (sigla: string) => sigla === "N/A" ? 0
-    : Number(catalog.context?.function_types.find((item) => item.sigla === sigla)?.weight ?? 0);
-  const getFactorPct = (sigla: string) => sigla === "N/A" ? 0
-    : Number(catalog.context?.impact_factors.find((item) => item.sigla === sigla)?.contribution_pct ?? 0);
+  const getFunctionWeight = (sigla: string) => sigla === "N/A"
+    ? 0
+    : Number(catalog.context?.function_types.find(
+      (item) => item.sigla === sigla,
+    )?.weight ?? 0);
+
+  const getFactorPct = (sigla: string) => sigla === "N/A"
+    ? 0
+    : Number(catalog.context?.impact_factors.find(
+      (item) => item.sigla === sigla,
+    )?.contribution_pct ?? 0);
 
   async function confirmValidation() {
     if (!dialog.hu || !catalog.context) return;
     setValidating(true);
+
     try {
       const validated = await validateContractualItems({
         projectId: catalog.projectId,
@@ -144,8 +207,14 @@ export function useContractualApfCounting() {
         reason: dialog.correctionReason,
         notes: dialog.correctionNotes,
       });
-      const pfBruto = validated.reduce((sum, item) => sum + effectivePfBruto(item), 0);
-      const pfFs = validated.reduce((sum, item) => sum + effectivePfFs(item), 0);
+      const pfBruto = validated.reduce(
+        (sum, item) => sum + effectivePfBruto(item),
+        0,
+      );
+      const pfFs = validated.reduce(
+        (sum, item) => sum + effectivePfFs(item),
+        0,
+      );
 
       catalog.setStories((rows) => rows.map((row) => row.id === dialog.hu?.id ? {
         ...row,
@@ -165,8 +234,16 @@ export function useContractualApfCounting() {
   }
 
   const totals = useMemo(() => ({
-    pfBruto: catalog.stories.reduce((sum, story) => sum + Number(story.apf_pf_bruto ?? 0), 0),
-    pfFs: catalog.stories.reduce((sum, story) => sum + Number(story.apf_pf_fs ?? story.function_points ?? 0), 0),
+    pfBruto: catalog.stories.reduce(
+      (sum, story) => sum + Number(story.apf_pf_bruto ?? 0),
+      0,
+    ),
+    pfFs: catalog.stories.reduce(
+      (sum, story) => sum + Number(
+        story.apf_pf_fs ?? story.function_points ?? 0,
+      ),
+      0,
+    ),
     validated: catalog.stories.filter((story) => story.ai_fp_validated).length,
   }), [catalog.stories]);
 

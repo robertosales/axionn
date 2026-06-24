@@ -1,20 +1,29 @@
-## Resolver erro AI_PROVIDER_ERROR do Sakana AI (Fugu — APF)
+Aplicar parser robusto de JSON na edge function `count-function-points` para tolerar respostas malformadas de modelos de IA (Groq, Perplexity, Sakana, Gemini).
 
-### Diagnóstico
-Log da edge `apf-generate`: `API key não configurada para "Sakana AI (Fugu — APF)"`. O provider existe em `ai_providers`, mas não há key no Vault. Solução: salvar o token como secret e adicionar fallback no `resolveProvider`.
+## Arquivo único alterado
+`supabase/functions/count-function-points/index.ts`
 
-### Passos
+## Mudanças
 
-1. **Pedir o secret `SAKANA_API_KEY`** via formulário seguro (você cola o token que já compartilhou).
+1. **Novo helper `extractJsonFromText`** com 4 estratégias em cascata:
+   - Parse direto do texto
+   - Extração de bloco markdown ```` ```json ... ``` ````
+   - Primeiro `{...}` balanceado via varredura de chaves
+   - Limpeza de trailing commas (`,}` / `,]`)
 
-2. **Patch em `supabase/functions/apf-generate/index.ts` — função `resolveProvider` (após a tentativa do Vault, antes do erro):**
-   - Se `apiKey` segue nulo **e** `row.provider_type === "sakana"`, ler `Deno.env.get("SAKANA_API_KEY")` como fallback.
-   - Demais providers seguem o comportamento atual (Vault → chave inline → erro).
+2. **`parseFpResponse` reescrito**:
+   - Usa `extractJsonFromText` em vez de regex única
+   - Fallback final: extrai EI/EO/EQ/ILF/EIF/confidence/reasoning via regex e recalcula total
+   - Normaliza números com `parseInt`, clamp em `confidence` (0–1), trunca `reasoning` em 1000 chars
+   - Mantém a interface `FpBreakdown` intacta
 
-3. **Validar** chamando `apf-generate` (via curl autenticado) com o provider Sakana e conferindo nos logs que o erro sumiu.
+3. **`buildFpPrompt`**: substituir o bloco final `## IMPORTANTE` por instrução "REGRA ABSOLUTA" com exemplos CORRETO/INCORRETO explícitos.
 
-### Fora de escopo
-- Frontend, outros providers, schema do banco — nada muda.
+4. **`callGemini`**: após obter o texto, logar warning se começar com ```` ``` ```` (Gemini ignorando `response_mime_type`).
 
-### Importante (segurança)
-O token foi colado em chat. Trate-o como comprometido: gere um novo no painel da Sakana após o teste e me peça para atualizar o secret.
+5. **Handler principal**: adicionar `console.log` do `rawResponse` (provider, tamanho, primeiros 500 chars) imediatamente antes de `parseFpResponse`.
+
+## Fora do escopo
+- Nenhum outro arquivo é tocado.
+- Interface de resposta da função preservada.
+- Deploy ocorre automaticamente após a edição.

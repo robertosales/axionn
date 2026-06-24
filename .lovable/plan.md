@@ -1,29 +1,24 @@
-Aplicar parser robusto de JSON na edge function `count-function-points` para tolerar respostas malformadas de modelos de IA (Groq, Perplexity, Sakana, Gemini).
+O erro "A IA não retornou nenhum item de contagem" dispara no `ApfFunctionPointTab.tsx` quando o parser conseguiu extrair JSON da resposta do `apf-generate`, mas a lista de itens ficou vazia — geralmente porque a IA devolveu o objeto com outra chave (`componentes`, `componentes_funcionais`, `pontos_funcao`, `data.items`, etc.) ou um único objeto em vez de array.
+
+Hoje o código aceita apenas: array direto, `items`, `efs` ou `functions`. Sem log do raw, fica impossível diagnosticar HU a HU.
 
 ## Arquivo único alterado
-`supabase/functions/count-function-points/index.ts`
+`src/features/apf/components/ApfFunctionPointTab.tsx`
 
 ## Mudanças
 
-1. **Novo helper `extractJsonFromText`** com 4 estratégias em cascata:
-   - Parse direto do texto
-   - Extração de bloco markdown ```` ```json ... ``` ````
-   - Primeiro `{...}` balanceado via varredura de chaves
-   - Limpeza de trailing commas (`,}` / `,]`)
+1. **Normalização ampliada da lista de itens** (após `extractJsonFromAiResponse`):
+   - Aceitar também: `componentes`, `componentes_funcionais`, `funcoes`, `functionPoints`, `pontos_funcao`, `data.items`, `result.items`.
+   - Se o parsed for um objeto único com campo `type`/`tipo`, encapsular em array de 1 item.
+   - Varredura recursiva rasa (1 nível) procurando o primeiro array de objetos com `type`/`tipo`.
 
-2. **`parseFpResponse` reescrito**:
-   - Usa `extractJsonFromText` em vez de regex única
-   - Fallback final: extrai EI/EO/EQ/ILF/EIF/confidence/reasoning via regex e recalcula total
-   - Normaliza números com `parseInt`, clamp em `confidence` (0–1), trunca `reasoning` em 1000 chars
-   - Mantém a interface `FpBreakdown` intacta
+2. **Log + erro mais informativo**:
+   - `console.warn("[apf-count] raw markdown:", aiResult.markdown?.slice(0, 800))` antes do parse.
+   - Quando `items.length === 0`, lançar `Error("A IA não retornou nenhum item. Provedor: <X>. Verifique o console para a resposta crua.")` com snippet (primeiros 200 chars) anexado.
 
-3. **`buildFpPrompt`**: substituir o bloco final `## IMPORTANTE` por instrução "REGRA ABSOLUTA" com exemplos CORRETO/INCORRETO explícitos.
-
-4. **`callGemini`**: após obter o texto, logar warning se começar com ```` ``` ```` (Gemini ignorando `response_mime_type`).
-
-5. **Handler principal**: adicionar `console.log` do `rawResponse` (provider, tamanho, primeiros 500 chars) imediatamente antes de `parseFpResponse`.
+3. **Salvaguarda no breakdown**:
+   - Ignorar entries com `type` vazio para não inflar `total` com peso default.
 
 ## Fora do escopo
-- Nenhum outro arquivo é tocado.
-- Interface de resposta da função preservada.
-- Deploy ocorre automaticamente após a edição.
+- Não alterar `apf-generate` nem `build_apf_prompt` (RPC do banco).
+- Não mexer em outras telas ou no `count-function-points`.

@@ -12,14 +12,12 @@
  *   - Resposta JSON estruturada: { EI, EO, EQ, ILF, EIF, total, confidence, reasoning }
  *   - Persiste resultado em user_stories + function_point_analyses
  *
- * CORREÇÃO 2026-06-24 (v2):
- *   - parseFpResponse agora calcula e retorna 'complexity' (baixa/media/alta)
- *     exigido pelo tipo FPBreakdown do frontend
- *   - persistResult retorna o analysis_id do upsert para que o frontend
- *     possa chamar validateAnalysis corretamente
- *   - Resposta final inclui analysis_id, ai_raw_count, ai_breakdown (com complexity),
- *     ai_confidence, ai_reasoning, few_shot_examples_used, model_used — alinhado
- *     com FPCountResponse do frontend
+ * CORREÇÃO 2026-06-24 (v3):
+ *   - callGenericWithSystemPrompt: Groq/Perplexity/Sakana recebem system message
+ *     explícito obrigando JSON puro — resolve "nenhum item retornado" no Llama 3
+ *   - callProvider: roteamento distingue providers sem suporte a json_object
+ *   - Pós-parse: total===0 com HU preenchida lança erro descritivo em vez de silenciar
+ *   - Guard: storyText < 50 chars rejeitado antes de chamar IA
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -103,6 +101,9 @@ const DEFAULT_MODELS: Record<string, string> = {
   groq: "llama-3.3-70b-versatile",
 };
 
+// Providers que NÃO suportam response_format:json_object — precisam de system message
+const PROVIDERS_NO_JSON_MODE = ["groq", "perplexity", "sakana"];
+
 async function resolveRecommendedProvider(teamId: string, explicitProviderId?: string): Promise<ProviderRow> {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const select = "id, name, provider_type, model, api_base_url, request_format";
@@ -163,6 +164,44 @@ async function listFallbackProviders(excludeId: string): Promise<ProviderRow[]> 
 }
 
 // ─── Chamadas de IA ───────────────────────────────────────────
+
+/**
+ * callGenericWithSystemPrompt
+ * Para Groq/Perplexity/Sakana: envia system message explícito exigindo JSON puro.
+ * Esses providers ignoram response_format:json_object mas respeitam system message.
+ */
+async function callGenericWithSystemPrompt(
+  providerName: string,
+  apiBaseUrl: string,
+  prompt: string,
+  apiKey: string,
+  model: string,
+): Promise<string> {
+  const r = await fetch(apiBaseUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Você é um analisador de Pontos de Função IFPUG. " +
+            "REGRA ABSOLUTA: sua resposta deve ser APENAS um objeto JSON válido, " +
+            "sem nenhum texto antes ou depois, sem markdown, sem blocos de código. " +
+            'Formato obrigatório: {"EI":N,"EO":N,"EQ":N,"ILF":N,"EIF":N,' +
+            '"total":N,"confidence":0.N,"reasoning":"texto breve"}',
+        },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+  if (!r.ok) throw new ProviderError(providerName, r.status, await r.text());
+  const d = await r.json();
+  const text = d.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error(`${providerName} retornou resposta inesperada: ${JSON.stringify(d).slice(0, 200)}`);
+  return text;
+}
 
 async function callGeneric(
   providerName: string,
@@ -260,10 +299,19 @@ async function callProvider(row: ProviderRow, prompt: string, apiKey: string): P
   const baseUrl = row.api_base_url ?? "https://api.openai.com/v1/chat/completions";
   if (!model) throw new Error(`Provider "${row.name}" sem modelo configurado.`);
 
+  // Groq, Perplexity e Sakana NÃO suportam response_format:json_object
+  // Usam system message dedicado para forçar JSON puro
+  if (PROVIDERS_NO_JSON_MODE.includes(row.provider_type)) {
+    return callGenericWithSystemPrompt(row.name, baseUrl, prompt, apiKey, model);
+  }
+
+  // OpenAI e Lovable suportam json_object nativo
   const supportsJsonMode = ["openai", "lovable"].includes(row.provider_type);
   if (supportsJsonMode) {
     return callOpenAIJsonMode(row.name, baseUrl, prompt, apiKey, model);
   }
+
+  // Fallback genérico para qualquer outro provider
   return callGeneric(row.name, baseUrl, prompt, apiKey, model);
 }
 
@@ -329,7 +377,8 @@ ${examplesBlock}
 
 ## Tabela de peso (complexidade simples):
 | Tipo | PF |
-|------|----|\n| EI   | 3  |
+|------|----|
+| EI   | 3  |
 | EO   | 4  |
 | EQ   | 3  |
 | ILF  | 7  |
@@ -545,6 +594,17 @@ Deno.serve(async (req: Request) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
+    // Guard: HU muito curta não tem conteúdo suficiente para análise IFPUG
+    if (storyText.trim().length < 50) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "O texto da User Story está muito curto para análise de Pontos de Função. Preencha a HU com mais detalhes antes de calcular.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     let providerRow: ProviderRow;
     let apiKey: string | null;
 
@@ -615,6 +675,18 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[count-fp] Raw response (${usedProviderName}, ${rawResponse.length} chars):`, rawResponse.slice(0, 500));
     const breakdown = parseFpResponse(rawResponse);
+
+    // Guard: se todos os elementos são zero mas a HU tem conteúdo, a IA falhou silenciosamente
+    if (breakdown.total === 0 && storyText.trim().length > 100) {
+      console.error(
+        `[count-fp] total=0 com HU preenchida. Provider: ${usedProviderName}. ` +
+        `Raw (500 chars): ${rawResponse.slice(0, 500)}`
+      );
+      throw new Error(
+        `A IA (${usedProviderName}) não identificou elementos funcionais na HU. ` +
+        `Verifique se a HU está descrita corretamente e tente novamente.`
+      );
+    }
 
     const analysisId = await persistResult({
       teamId, huId, storyText, breakdown,

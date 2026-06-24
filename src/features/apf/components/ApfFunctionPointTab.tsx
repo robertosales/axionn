@@ -352,21 +352,56 @@ export function ApfFunctionPointTab() {
       let confidence: number;
 
       // Parser defensivo: suporta JSON puro, bloco ```...```, ou JSON embutido em texto
-      const parsed = extractJsonFromAiResponse(String(aiResult.markdown ?? ""));
-      const list: any[] = Array.isArray(parsed) ? parsed : ((parsed as any).items ?? (parsed as any).efs ?? (parsed as any).functions ?? []);
+      const rawMarkdown = String(aiResult.markdown ?? "");
+      console.warn(`[apf-count] raw markdown (${hu.code}, ${rawMarkdown.length} chars):`, rawMarkdown.slice(0, 800));
+      const parsed = extractJsonFromAiResponse(rawMarkdown);
+
+      // Normalização ampliada — aceita diversas chaves e formas
+      const ITEM_KEYS = ["items", "efs", "functions", "componentes", "componentes_funcionais", "funcoes", "functionPoints", "pontos_funcao"];
+      const looksLikeItem = (x: any) => x && typeof x === "object" && (x.type || x.tipo);
+      const pickList = (obj: any): any[] => {
+        if (!obj) return [];
+        if (Array.isArray(obj)) return obj.filter(looksLikeItem);
+        for (const k of ITEM_KEYS) {
+          if (Array.isArray(obj[k])) return obj[k].filter(looksLikeItem);
+        }
+        // 1 nível: data/result/payload/output
+        for (const k of ["data", "result", "payload", "output"]) {
+          if (obj[k]) {
+            const inner = pickList(obj[k]);
+            if (inner.length) return inner;
+          }
+        }
+        // Varredura: primeiro array de itens válidos
+        for (const v of Object.values(obj)) {
+          if (Array.isArray(v) && v.some(looksLikeItem)) return (v as any[]).filter(looksLikeItem);
+        }
+        // Objeto único é um item
+        if (looksLikeItem(obj)) return [obj];
+        return [];
+      };
+      const list: any[] = pickList(parsed);
+
       breakdown = { EI: 0, EO: 0, EQ: 0, ILF: 0, EIF: 0, total: 0 };
       for (const item of list) {
-        const type       = String(item.type ?? item.tipo ?? "").toUpperCase();
+        const type = String(item.type ?? item.tipo ?? "").toUpperCase();
+        if (!type) continue; // ignora entradas sem tipo
         const complexity = String(item.complexity ?? item.complexidade ?? "MEDIUM").toUpperCase();
-        const weight     = complexity === "SIMPLE" ? 3 : complexity === "COMPLEX" ? 6 : 4;
+        const weight = complexity === "SIMPLE" ? 3 : complexity === "COMPLEX" ? 6 : 4;
         if (type in breakdown) (breakdown as any)[type] += 1;
         breakdown.total += weight;
       }
-      items      = list;
-      totalPf    = breakdown.total;
-      confidence = typeof (parsed as any).confidence === "number" ? (parsed as any).confidence : 0.8;
+      items = list;
+      totalPf = breakdown.total;
+      confidence = typeof (parsed as any)?.confidence === "number" ? (parsed as any).confidence : 0.8;
 
-      if (!items.length) throw new Error("A IA não retornou nenhum item de contagem.");
+      if (!items.length) {
+        const snippet = rawMarkdown.slice(0, 200).replace(/\s+/g, " ");
+        throw new Error(
+          `A IA não retornou nenhum item. Provedor: ${aiResult.providerUsed ?? "?"}. ` +
+          `Verifique o console para a resposta crua. Trecho: "${snippet}"`
+        );
+      }
 
       const { error: e4 } = await supabase.rpc("save_counting_items" as any, {
         p_session_id: sessionId, p_items: items, p_ai_model: aiResult.providerUsed ?? null,

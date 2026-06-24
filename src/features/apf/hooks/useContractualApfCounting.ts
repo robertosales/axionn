@@ -4,41 +4,58 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ContractualItem, HuRow } from "../types/apfItem.types";
 import type {
+  BaselineCandidate,
+  GenerateResponse,
+  PersistSummary,
   ValidationDialogState,
   ValidationItemState,
 } from "../types/apfRuntime.types";
 import {
+  buildStoryText,
   effectiveFactor,
   effectiveFunction,
   effectivePfBruto,
   effectivePfFs,
+  extractHuRefs,
 } from "../utils/contractualApf.helpers";
+import {
+  normalizeClassifiedItems,
+  parseClassification,
+} from "../utils/contractualApf.parser";
 import { validateContractualItems } from "../services/contractualValidation.service";
 import { useApfCatalog } from "./useApfCatalog";
 
-interface CountResponse {
-  success?: boolean;
-  error?: string;
-  session_id: string;
-  story_pf_bruto: number;
-  story_pf_fs: number;
-  items: ContractualItem[];
-  provider_used?: string;
-  deterministic_match?: boolean;
+async function resolveActiveProviderId(): Promise<string> {
+  const { data, error } = await supabase
+    .from("ai_providers" as any)
+    .select("id")
+    .eq("is_active", true)
+    .order("is_recommended", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !(data as any)?.id) {
+    throw new Error("Nenhum provedor de IA ativo foi encontrado.");
+  }
+  return (data as any).id;
 }
 
-async function readFunctionError(error: any, data?: CountResponse | null) {
-  if (data?.error) return data.error;
+async function edgeError(error: any, data?: GenerateResponse | null) {
+  if ((data as any)?.error) return (data as any).error;
   const response = error?.context;
   if (response && typeof response.clone === "function") {
     try {
       const payload = await response.clone().json();
-      return payload?.error ?? payload?.message ?? error.message;
+      return payload?.error
+        ?? payload?.userMessage
+        ?? payload?.message
+        ?? error.message;
     } catch {
       // Usa a mensagem padrão abaixo.
     }
   }
-  return error?.message ?? "Falha ao executar a contagem APF.";
+  return error?.message ?? "Falha ao executar a classificação APF.";
 }
 
 export function useContractualApfCounting() {
@@ -66,23 +83,143 @@ export function useContractualApfCounting() {
     ));
 
     try {
-      const { data, error } = await supabase.functions.invoke<CountResponse>(
-        "apf-count",
-        {
-          body: {
-            project_id: catalog.projectId,
-            story_id: hu.id,
-            sprint_ref: catalog.selectedSprint.name,
-            baseline_id: catalog.context.baseline.id,
-          },
-        },
-      );
+      const storyText = buildStoryText(hu);
+      const huRefs = extractHuRefs(`${hu.title}\n${hu.description ?? ""}`);
+      const huRef = huRefs[0] ?? hu.code;
 
-      if (error || !data?.success) {
-        throw new Error(await readFunctionError(error, data));
+      const { data: sessionId, error: sessionError } = await supabase.rpc(
+        "open_counting_session" as any,
+        {
+          p_project_id: catalog.projectId,
+          p_sprint_ref: catalog.selectedSprint.name,
+          p_release_ref: null,
+          p_redmine_ref: null,
+          p_baseline_id: catalog.context.baseline.id,
+        } as any,
+      );
+      if (sessionError || !sessionId) {
+        throw new Error(
+          sessionError?.message ?? "Não foi possível abrir a sessão APF.",
+        );
       }
 
-      const items = (data.items ?? []).map((item) => ({
+      const { data: candidateRows, error: candidateError } = await supabase.rpc(
+        "get_apf_baseline_candidates" as any,
+        {
+          p_project_id: catalog.projectId,
+          p_story_text: storyText,
+          p_limit: 12,
+        } as any,
+      );
+      if (candidateError) throw new Error(candidateError.message);
+
+      const candidates = (candidateRows ?? []) as BaselineCandidate[];
+      const exact = candidates.filter((candidate) => {
+        const ref = String(candidate.item_ref ?? "")
+          .toUpperCase()
+          .replace(/\s+/g, "");
+        return huRefs.length
+          ? huRefs.includes(ref)
+          : Number(candidate.match_score) >= 0.999;
+      });
+
+      let classified: any[];
+      let providerUsed = "Baseline determinística";
+      let deterministic = false;
+
+      if (exact.length) {
+        deterministic = true;
+        classified = exact.map((candidate) => ({
+          baseline_item_id: candidate.id,
+          hu_ref: huRef,
+          ef_description: candidate.description,
+          function_sigla: candidate.is_measurable
+            ? candidate.function_sigla
+            : "N/A",
+          factor_sigla: candidate.is_measurable
+            ? candidate.factor_sigla
+            : "N/A",
+          match_type: "baseline_exact",
+          confidence: 1,
+          justification:
+            "Correspondência exata com item homologado na baseline ativa.",
+          evidence_literal: hu.title,
+          category_sigla: candidate.category_sigla,
+          complexity: candidate.complexity,
+        }));
+      } else {
+        const providerId = await resolveActiveProviderId();
+        const { data: prompt, error: promptError } = await supabase.rpc(
+          "build_apf_prompt" as any,
+          { p_session_id: sessionId } as any,
+        );
+        if (promptError || !(prompt as any)?.system_prompt) {
+          throw new Error(
+            promptError?.message
+            ?? "Não foi possível montar o prompt contratual.",
+          );
+        }
+
+        const candidateBlock = candidates.map((candidate, index) => ({
+          rank: index + 1,
+          baseline_item_id: candidate.id,
+          item_ref: candidate.item_ref,
+          description: candidate.description,
+          function_sigla: candidate.function_sigla,
+          factor_sigla: candidate.factor_sigla,
+          measurable: candidate.is_measurable,
+          similarity: candidate.match_score,
+        }));
+        const classificationPrompt = [
+          String((prompt as any).system_prompt),
+          "Classifique a HU usando a baseline e o modelo contratual. Não calcule PF.",
+          `HU:\n${storyText}`,
+          `CANDIDATOS DA BASELINE:\n${JSON.stringify(candidateBlock, null, 2)}`,
+          "Retorne somente o JSON solicitado. Prefira consolidar e não invente funções.",
+        ].join("\n\n");
+
+        const { data: generated, error: generationError } =
+          await supabase.functions.invoke<GenerateResponse>("apf-generate", {
+            body: {
+              prompt: classificationPrompt,
+              providerId,
+              skipDocx: true,
+            },
+          });
+
+        if (generationError) {
+          throw new Error(await edgeError(generationError, generated));
+        }
+        if (!generated?.success || !generated.markdown) {
+          throw new Error(
+            generated?.userMessage
+            ?? generated?.rawError
+            ?? "A IA não retornou a classificação.",
+          );
+        }
+
+        classified = normalizeClassifiedItems(
+          parseClassification(generated.markdown),
+          candidates,
+          catalog.context,
+          huRef,
+        );
+        providerUsed = generated.providerUsed ?? "IA";
+      }
+
+      const { data: saved, error: saveError } = await supabase.rpc(
+        "save_contractual_counting_items" as any,
+        {
+          p_session_id: sessionId,
+          p_story_id: hu.id,
+          p_items: classified,
+          p_ai_model: providerUsed,
+        } as any,
+      );
+      if (saveError) throw new Error(saveError.message);
+
+      const summary = saved as unknown as PersistSummary;
+      const items = (summary.items ?? []).map((item) => ({
         ...item,
         match_confidence: item.match_confidence ?? item.confidence ?? null,
       }));
@@ -92,24 +229,23 @@ export function useContractualApfCounting() {
           0,
         ) / items.length
         : 0.5;
-      const providerUsed = data.provider_used ?? "Motor APF";
 
       catalog.setStories((rows) => rows.map((row) => row.id === hu.id ? {
         ...row,
-        function_points: Number(data.story_pf_fs),
-        apf_pf_bruto: Number(data.story_pf_bruto),
-        apf_pf_fs: Number(data.story_pf_fs),
+        function_points: Number(summary.story_pf_fs),
+        apf_pf_bruto: Number(summary.story_pf_bruto),
+        apf_pf_fs: Number(summary.story_pf_fs),
         ai_fp_confidence: confidence,
         ai_fp_validated: false,
         _items: items,
         _loading: false,
         _error: null,
         _providerUsed: providerUsed,
-        _sessionId: String(data.session_id),
+        _sessionId: String(summary.session_id ?? sessionId),
       } : row));
 
-      toast.success(`${hu.code}: ${Number(data.story_pf_fs).toFixed(2)} PF FS`, {
-        description: data.deterministic_match
+      toast.success(`${hu.code}: ${Number(summary.story_pf_fs).toFixed(2)} PF FS`, {
+        description: deterministic
           ? "Correspondência exata com a baseline, sem consumo de IA."
           : providerUsed,
       });

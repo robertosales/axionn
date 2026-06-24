@@ -164,6 +164,7 @@ export type Database = {
       }
       ai_providers: {
         Row: {
+          api_base_url: string | null
           created_at: string
           created_by: string | null
           has_key: boolean
@@ -173,10 +174,12 @@ export type Database = {
           model: string | null
           name: string
           provider_type: string
+          request_format: string | null
           updated_at: string
           vault_secret_id: string | null
         }
         Insert: {
+          api_base_url?: string | null
           created_at?: string
           created_by?: string | null
           has_key?: boolean
@@ -186,10 +189,12 @@ export type Database = {
           model?: string | null
           name: string
           provider_type: string
+          request_format?: string | null
           updated_at?: string
           vault_secret_id?: string | null
         }
         Update: {
+          api_base_url?: string | null
           created_at?: string
           created_by?: string | null
           has_key?: boolean
@@ -199,6 +204,7 @@ export type Database = {
           model?: string | null
           name?: string
           provider_type?: string
+          request_format?: string | null
           updated_at?: string
           vault_secret_id?: string | null
         }
@@ -494,7 +500,7 @@ export type Database = {
           evidence_doc: string | null
           id: string
           model_id: string
-          project_id: string
+          project_id: string | null
           redmine_ref: string | null
           release_ref: string | null
           reviewer_id: string | null
@@ -515,7 +521,7 @@ export type Database = {
           evidence_doc?: string | null
           id?: string
           model_id: string
-          project_id: string
+          project_id?: string | null
           redmine_ref?: string | null
           release_ref?: string | null
           reviewer_id?: string | null
@@ -536,7 +542,7 @@ export type Database = {
           evidence_doc?: string | null
           id?: string
           model_id?: string
-          project_id?: string
+          project_id?: string | null
           redmine_ref?: string | null
           release_ref?: string | null
           reviewer_id?: string | null
@@ -5440,10 +5446,9 @@ export type Database = {
         Args: { p_contract_id: string }
         Returns: string
       }
-      build_apf_prompt: {
-        Args: { p_contract_id: string; p_hu_text?: string }
-        Returns: Json
-      }
+      build_apf_prompt:
+        | { Args: { p_contract_id: string; p_hu_text?: string }; Returns: Json }
+        | { Args: { p_session_id: string }; Returns: string }
       calc_horas_uteis: {
         Args: {
           p_fim: string

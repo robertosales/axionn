@@ -1,0 +1,25 @@
+name: ESLint diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Generate report
+        run: npm run lint > eslint-report.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eslint-report
+          path: eslint-report.txt
+          retention-days: 1

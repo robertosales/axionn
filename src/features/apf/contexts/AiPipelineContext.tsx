@@ -14,6 +14,8 @@ const INLINE_LOVABLE: AIProvider = {
   name: "Lovable AI (Gratuita) — recomendada",
   provider_type: "lovable",
   model: "google/gemini-2.0-flash",
+  api_base_url: "https://ai.gateway.lovable.dev/v1/chat/completions",
+  request_format: "openai_compatible",
   is_recommended: true,
   is_active: true,
   has_key: true,

@@ -10,10 +10,21 @@ export function useFunctionPointCounter() {
     setLoading(true)
     setError(null)
     try {
+      // Mapeia o contrato do frontend (snake_case / project_id) para o contrato
+      // da Edge Function count-function-points (camelCase / teamId / huId)
       const { data, error: fnError } = await supabase.functions.invoke('count-function-points', {
-        body: request,
+        body: {
+          teamId:    request.project_id,
+          huId:      request.story_id,
+          storyText: request.story_text,
+          context: {
+            acceptanceCriteria: request.story_context?.acceptance_criteria?.join('\n') ?? null,
+            storyType:          request.story_context?.story_type ?? null,
+          },
+        },
       })
       if (fnError) throw fnError
+      if (!data?.success) throw new Error(data?.error ?? 'Erro ao calcular pontos de função')
       return data as FPCountResponse
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro ao calcular pontos de função'

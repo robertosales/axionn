@@ -12,10 +12,14 @@
  *   - Resposta JSON estruturada: { EI, EO, EQ, ILF, EIF, total, confidence, reasoning }
  *   - Persiste resultado em user_stories + function_point_analyses
  *
- * CORREÇÃO 2026-06-24:
- *   - Provider não é mais union hard-coded — suporta groq, perplexity e qualquer provider dinâmico
- *   - callGeneric() para todos providers OpenAI-compatible (sem response_format forçado)
- *   - parseFpResponse() mais robusto: extrai JSON mesmo em texto corrido
+ * CORREÇÃO 2026-06-24 (v2):
+ *   - parseFpResponse agora calcula e retorna 'complexity' (baixa/media/alta)
+ *     exigido pelo tipo FPBreakdown do frontend
+ *   - persistResult retorna o analysis_id do upsert para que o frontend
+ *     possa chamar validateAnalysis corretamente
+ *   - Resposta final inclui analysis_id, ai_raw_count, ai_breakdown (com complexity),
+ *     ai_confidence, ai_reasoning, few_shot_examples_used, model_used — alinhado
+ *     com FPCountResponse do frontend
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -38,6 +42,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 // ─── Tipos ───────────────────────────────────────────────────
 type RequestFormat = "openai_compatible" | "gemini" | "anthropic";
+type Complexity = "baixa" | "media" | "alta";
 
 interface ProviderRow {
   id: string;
@@ -68,8 +73,9 @@ interface FpBreakdown {
   ILF: number;
   EIF: number;
   total: number;
+  complexity: Complexity;
   reasoning: string;
-  confidence?: number;
+  confidence: number;
 }
 
 interface FewShotExample {
@@ -133,7 +139,6 @@ async function getKeyForRow(row: ProviderRow): Promise<string | null> {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const { data } = await admin.rpc("get_ai_provider_key_by_id", { p_id: row.id });
   let key = (data as string) ?? null;
-  // Fallback env vars por provider_type
   if (!key) {
     const envMap: Record<string, string> = {
       lovable: "LOVABLE_API_KEY",
@@ -159,7 +164,6 @@ async function listFallbackProviders(excludeId: string): Promise<ProviderRow[]> 
 
 // ─── Chamadas de IA ───────────────────────────────────────────
 
-/** Chamada genérica OpenAI-compatible — NÃO força response_format (groq não suporta json_object em todos os modelos) */
 async function callGeneric(
   providerName: string,
   apiBaseUrl: string,
@@ -182,7 +186,6 @@ async function callGeneric(
   return text;
 }
 
-/** OpenAI com response_format json_object (suportado pelo OpenAI e Lovable) */
 async function callOpenAIJsonMode(
   providerName: string,
   apiBaseUrl: string,
@@ -238,7 +241,6 @@ async function callAnthropic(prompt: string, apiKey: string, model = "claude-3-5
   return d.content?.[0]?.text ?? "";
 }
 
-/** Dispatcher dinâmico — usa request_format do banco */
 async function callProvider(row: ProviderRow, prompt: string, apiKey: string): Promise<string> {
   const format = row.request_format ?? "openai_compatible";
   const model = row.model ?? DEFAULT_MODELS[row.provider_type] ?? "";
@@ -251,11 +253,9 @@ async function callProvider(row: ProviderRow, prompt: string, apiKey: string): P
     return callAnthropic(prompt, apiKey, model || "claude-3-5-haiku-20241022");
   }
 
-  // openai_compatible
   const baseUrl = row.api_base_url ?? "https://api.openai.com/v1/chat/completions";
   if (!model) throw new Error(`Provider "${row.name}" sem modelo configurado.`);
 
-  // OpenAI e Lovable suportam json_object; groq e outros usam chamada genérica
   const supportsJsonMode = ["openai", "lovable"].includes(row.provider_type);
   if (supportsJsonMode) {
     return callOpenAIJsonMode(row.name, baseUrl, prompt, apiKey, model);
@@ -349,21 +349,24 @@ ${contextBlock ? "\n## Contexto adicional:\n" + contextBlock : ""}
 }
 
 // ─── Parser robusto JSON ──────────────────────────────────────
+function calcComplexity(total: number): Complexity {
+  if (total <= 10) return "baixa";
+  if (total <= 25) return "media";
+  return "alta";
+}
+
 function parseFpResponse(raw: string): FpBreakdown {
   let text = raw.trim();
 
   // Remove blocos de código markdown
   text = text.replace(/^```[\w]*\n?/, "").replace(/\n?```$/, "").trim();
 
-  // Tenta parse direto
   let parsed: any;
   try {
     parsed = JSON.parse(text);
   } catch (_e) {
-    // Extrai o primeiro objeto JSON encontrado no texto (greedy)
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) {
-      // Último recurso: tenta extrair valores numéricos individualmente
       console.warn("[count-fp] Resposta da IA não contém JSON, tentando extração manual:", text.slice(0, 300));
       const extract = (key: string) => {
         const m = new RegExp(`"?${key}"?\\s*:\\s*(\\d+)`, "i").exec(text);
@@ -376,6 +379,7 @@ function parseFpResponse(raw: string): FpBreakdown {
       return {
         EI, EO, EQ, ILF, EIF,
         total: total || extract("total"),
+        complexity: calcComplexity(total),
         confidence: 0.5,
         reasoning: reasoningMatch?.[1] ?? "Extraído de resposta não-JSON",
       };
@@ -396,7 +400,7 @@ function parseFpResponse(raw: string): FpBreakdown {
   const confidence = Math.min(1, Math.max(0, parseFloat(parsed.confidence ?? 0.7)));
   const reasoning = String(parsed.reasoning ?? "").slice(0, 1000);
 
-  return { EI, EO, EQ, ILF, EIF, total, confidence, reasoning };
+  return { EI, EO, EQ, ILF, EIF, total, complexity: calcComplexity(total), confidence, reasoning };
 }
 
 // ─── Persiste resultado ───────────────────────────────────────
@@ -407,7 +411,7 @@ async function persistResult(opts: {
   breakdown: FpBreakdown;
   modelUsed: string;
   fewShotCount: number;
-}) {
+}): Promise<string | null> {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const { teamId, huId, storyText, breakdown, modelUsed, fewShotCount } = opts;
 
@@ -425,7 +429,7 @@ async function persistResult(opts: {
   }
 
   try {
-    await admin.from("function_point_analyses" as any).upsert(
+    const { data } = await admin.from("function_point_analyses" as any).upsert(
       {
         team_id: teamId,
         story_id: huId,
@@ -439,9 +443,11 @@ async function persistResult(opts: {
         is_validated: false,
       },
       { onConflict: "story_id", ignoreDuplicates: false },
-    );
+    ).select("id").maybeSingle();
+    return (data as any)?.id ?? null;
   } catch (_e) {
     console.warn("[count-fp] function_point_analyses insert failed:", _e);
+    return null;
   }
 }
 
@@ -496,7 +502,6 @@ Deno.serve(async (req: Request) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
-    // Resolve provider + API key
     let providerRow: ProviderRow;
     let apiKey: string | null;
 
@@ -567,21 +572,24 @@ Deno.serve(async (req: Request) => {
 
     const breakdown = parseFpResponse(rawResponse);
 
-    await persistResult({
+    const analysisId = await persistResult({
       teamId, huId, storyText, breakdown,
       modelUsed: usedModel,
       fewShotCount: examples.length,
     });
 
+    // Resposta alinhada com FPCountResponse do frontend
     return new Response(
       JSON.stringify({
         success: true,
-        breakdown,
-        total: breakdown.total,
-        confidence: breakdown.confidence,
-        reasoning: breakdown.reasoning,
-        providerUsed: usedProviderName,
-        fewShotExamples: examples.length,
+        analysis_id:           analysisId,
+        ai_raw_count:          breakdown.total,
+        ai_breakdown:          breakdown,
+        ai_confidence:         breakdown.confidence,
+        ai_reasoning:          breakdown.reasoning,
+        few_shot_examples_used: examples.length,
+        model_used:            usedModel,
+        providerUsed:          usedProviderName,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

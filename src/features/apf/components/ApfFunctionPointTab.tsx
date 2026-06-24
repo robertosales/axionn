@@ -104,12 +104,57 @@ interface ValidationDialog {
   wasCorrected: boolean;
 }
 
-// ── Helper ───────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function buildStoryText(hu: HuRow): string {
   const parts: string[] = [`Título: ${hu.title}`];
   if (hu.description?.trim()) parts.push(`\nDescrição:\n${hu.description.trim()}`);
   if (hu.acceptance_criteria?.trim()) parts.push(`\nCritérios de Aceite:\n${hu.acceptance_criteria.trim()}`);
   return parts.join("");
+}
+
+/**
+ * Parser JSON defensivo — lida com as variações comuns de resposta da IA:
+ *  1. JSON puro (caso ideal)
+ *  2. JSON dentro de bloco de código ```…``` (qualquer linguagem ou sem linguagem)
+ *  3. JSON embutido no meio de texto livre (extrai o primeiro [ ou { balanceado)
+ */
+function extractJsonFromAiResponse(raw: string): unknown {
+  const text = raw.trim();
+
+  // 1. Tenta parse direto
+  try { return JSON.parse(text); } catch { /* continua */ }
+
+  // 2. Extrai bloco de código ```...```
+  const fenceMatch = text.match(/```[\w]*\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()); } catch { /* continua */ }
+  }
+
+  // 3. Extrai o primeiro array [ ] ou objeto { } balanceado
+  const firstBracket = text.search(/[\[{]/);
+  if (firstBracket !== -1) {
+    const opener = text[firstBracket];
+    const closer = opener === "[" ? "]" : "}";
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = firstBracket; i < text.length; i++) {
+      const ch = text[i];
+      if (escape) { escape = false; continue; }
+      if (ch === "\\" && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === opener) depth++;
+      else if (ch === closer) {
+        depth--;
+        if (depth === 0) {
+          try { return JSON.parse(text.slice(firstBracket, i + 1)); } catch { break; }
+        }
+      }
+    }
+  }
+
+  throw new Error("A IA não retornou JSON válido. Tente novamente.");
 }
 
 /** Busca o UUID do provider recomendado/ativo para passar como providerId na Edge Function. */
@@ -306,25 +351,21 @@ export function ApfFunctionPointTab() {
       let totalPf: number;
       let confidence: number;
 
-      try {
-        const raw = String(aiResult.markdown ?? "").trim()
-          .replace(/^```json?\s*/i, "").replace(/\s*```$/, "");
-        const parsed = JSON.parse(raw);
-        const list: any[] = Array.isArray(parsed) ? parsed : (parsed.items ?? parsed.efs ?? parsed.functions ?? []);
-        breakdown = { EI: 0, EO: 0, EQ: 0, ILF: 0, EIF: 0, total: 0 };
-        for (const item of list) {
-          const type       = String(item.type ?? item.tipo ?? "").toUpperCase();
-          const complexity = String(item.complexity ?? item.complexidade ?? "MEDIUM").toUpperCase();
-          const weight     = complexity === "SIMPLE" ? 3 : complexity === "COMPLEX" ? 6 : 4;
-          if (type in breakdown) (breakdown as any)[type] += 1;
-          breakdown.total += weight;
-        }
-        items      = list;
-        totalPf    = breakdown.total;
-        confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.8;
-      } catch {
-        throw new Error("A IA não retornou JSON válido. Tente novamente.");
+      // Parser defensivo: suporta JSON puro, bloco ```...```, ou JSON embutido em texto
+      const parsed = extractJsonFromAiResponse(String(aiResult.markdown ?? ""));
+      const list: any[] = Array.isArray(parsed) ? parsed : ((parsed as any).items ?? (parsed as any).efs ?? (parsed as any).functions ?? []);
+      breakdown = { EI: 0, EO: 0, EQ: 0, ILF: 0, EIF: 0, total: 0 };
+      for (const item of list) {
+        const type       = String(item.type ?? item.tipo ?? "").toUpperCase();
+        const complexity = String(item.complexity ?? item.complexidade ?? "MEDIUM").toUpperCase();
+        const weight     = complexity === "SIMPLE" ? 3 : complexity === "COMPLEX" ? 6 : 4;
+        if (type in breakdown) (breakdown as any)[type] += 1;
+        breakdown.total += weight;
       }
+      items      = list;
+      totalPf    = breakdown.total;
+      confidence = typeof (parsed as any).confidence === "number" ? (parsed as any).confidence : 0.8;
+
       if (!items.length) throw new Error("A IA não retornou nenhum item de contagem.");
 
       const { error: e4 } = await supabase.rpc("save_counting_items" as any, {

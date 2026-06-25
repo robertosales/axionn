@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectBaselineProcessCandidate } from "../types/apfRuntime.types";
 import {
+  buildCompactProcessSelectionPrompt,
   buildProjectBaselineItems,
   hasDeterministicProcessMatch,
   inferImpactFactor,
+  isAiPromptTooLarge,
   parseProcessSelection,
 } from "./projectBaselineCounting.service";
 
@@ -106,6 +108,45 @@ describe("project baseline counting", () => {
       candidate({ match_score: 0.8 }),
       candidate({ process_ref: "EF200", match_score: 0.76 }),
     ])).toBe(false);
+  });
+
+  it("gera prompt compacto sem serializar toda a baseline", () => {
+    const candidates = Array.from({ length: 10 }, (_, index) => candidate({
+      process_ref: `EF${String(index + 1).padStart(3, "0")}`,
+      process_name: `Processo ${index + 1} ${"x".repeat(300)}`,
+      items: Array.from({ length: 20 }, (_, itemIndex) => ({
+        ...candidate().items[0],
+        id: `${index}-${itemIndex}`,
+        description: `Item ${itemIndex} ${"y".repeat(500)}`,
+      })),
+    }));
+
+    const prompt = buildCompactProcessSelectionPrompt({
+      storyText: "z".repeat(10000),
+      candidates,
+      allowedFactors: ["I", "A", "E"],
+      inferredFactor: "A",
+    });
+    const minimal = buildCompactProcessSelectionPrompt({
+      storyText: "z".repeat(10000),
+      candidates,
+      allowedFactors: ["I", "A", "E"],
+      inferredFactor: "A",
+      minimal: true,
+    });
+
+    expect(prompt.length).toBeLessThan(9000);
+    expect(minimal.length).toBeLessThan(3500);
+    expect(prompt).toContain('"ref":"EF001"');
+    expect(prompt).not.toContain('"ref":"EF010"');
+  });
+
+  it("identifica falha de limite de contexto ou TPM", () => {
+    expect(isAiPromptTooLarge(
+      "Request too large for model on tokens per minute: Limit 12000, Requested 14224",
+    )).toBe(true);
+    expect(isAiPromptTooLarge("context_length_exceeded")).toBe(true);
+    expect(isAiPromptTooLarge("invalid api key")).toBe(false);
   });
 
   it("seleciona somente a linha EE quando a HU descreve distribuição", () => {

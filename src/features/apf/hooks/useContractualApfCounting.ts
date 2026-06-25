@@ -4,9 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ContractualItem, HuRow } from "../types/apfItem.types";
 import type {
-  BaselineCandidate,
   GenerateResponse,
   PersistSummary,
+  ProjectBaselineProcessCandidate,
   ValidationDialogState,
   ValidationItemState,
 } from "../types/apfRuntime.types";
@@ -19,10 +19,11 @@ import {
   extractHuRefs,
 } from "../utils/contractualApf.helpers";
 import {
-  normalizeClassifiedItems,
-  parseClassification,
-} from "../utils/contractualApf.parser";
-import { normalizeElementaryProcessKey } from "../utils/elementaryProcess";
+  buildProjectBaselineItems,
+  hasDeterministicProcessMatch,
+  inferImpactFactor,
+  parseProcessSelection,
+} from "../services/projectBaselineCounting.service";
 import { validateContractualItems } from "../services/contractualValidation.service";
 import { useApfCatalog } from "./useApfCatalog";
 
@@ -104,73 +105,39 @@ export function useContractualApfCounting() {
         );
       }
 
-      let candidates: BaselineCandidate[] = [];
-      let exact: BaselineCandidate[] = [];
+      const { data: candidateRows, error: candidateError } = await supabase.rpc(
+        "get_apf_project_process_candidates" as any,
+        {
+          p_project_id: catalog.projectId,
+          p_story_text: storyText,
+          p_limit: 10,
+        } as any,
+      );
+      if (candidateError) throw new Error(candidateError.message);
 
-      if (huRefs.length) {
-        const { data: exactRows, error: exactError } = await supabase.rpc(
-          "get_apf_baseline_exact_items" as any,
-          {
-            p_project_id: catalog.projectId,
-            p_item_refs: huRefs,
-          } as any,
+      const candidates = (candidateRows ?? []) as ProjectBaselineProcessCandidate[];
+      if (!candidates.length) {
+        throw new Error(
+          "Nenhum processo funcional da baseline do projeto foi relacionado a esta HU. Revise a descrição da HU ou a baseline ativa.",
         );
-        if (exactError) throw new Error(exactError.message);
-        exact = (exactRows ?? []) as BaselineCandidate[];
-
-        if (!exact.length) {
-          throw new Error(
-            `A referência ${huRefs.join(", ")} foi encontrada na HU, mas não existe na baseline ativa. Reimporte ou corrija a baseline antes de contar.`,
-          );
-        }
-      } else {
-        const { data: candidateRows, error: candidateError } = await supabase.rpc(
-          "get_apf_baseline_candidates" as any,
-          {
-            p_project_id: catalog.projectId,
-            p_story_text: storyText,
-            p_limit: 12,
-          } as any,
-        );
-        if (candidateError) throw new Error(candidateError.message);
-        candidates = (candidateRows ?? []) as BaselineCandidate[];
       }
 
-      let classified: any[];
-      let providerUsed = "Baseline determinística";
-      let deterministic = false;
+      const allowedFactors = catalog.context.impact_factors.map((factor) => factor.sigla);
+      const inferredFactor = inferImpactFactor(storyText, allowedFactors);
+      let selectedProcessRefs: string[];
+      let factorSigla = inferredFactor;
+      let confidence: number;
+      let reasoning: string;
+      let providerUsed: string;
+      let matchType: "baseline_process_exact" | "baseline_process_ai";
 
-      if (exact.length) {
-        deterministic = true;
-        classified = exact.map((candidate) => ({
-          baseline_item_id: candidate.id,
-          hu_ref: huRef,
-          ef_description: candidate.description,
-          function_sigla: candidate.is_measurable
-            ? candidate.function_sigla
-            : "N/A",
-          factor_sigla: candidate.is_measurable
-            ? candidate.factor_sigla
-            : "N/A",
-          match_type: "baseline_exact",
-          confidence: 1,
-          justification:
-            "Correspondência exata com item homologado na baseline ativa.",
-          evidence_literal: hu.title,
-          category_sigla: candidate.category_sigla,
-          complexity: candidate.complexity,
-          elementary_process_key: normalizeElementaryProcessKey(
-            `${candidate.item_ref} ${candidate.description}`,
-          ),
-          elementary_process_name: candidate.description,
-          process_objective: candidate.description,
-          process_role: candidate.is_measurable ? "central" : "auxiliary",
-          process_is_complete: candidate.is_measurable,
-          process_is_independent: candidate.is_measurable,
-          process_reasoning:
-            "A baseline homologada reconhece esta EF como processo elementar oficial.",
-          separation_precedent_ref: candidate.item_ref,
-        }));
+      if (hasDeterministicProcessMatch(candidates)) {
+        const top = candidates[0];
+        selectedProcessRefs = [top.process_ref];
+        confidence = Number(top.match_score);
+        reasoning = `O processo ${top.process_ref} apresentou correspondência lexical dominante com a HU.`;
+        providerUsed = "Baseline do projeto";
+        matchType = "baseline_process_exact";
       } else {
         const providerId = await resolveActiveProviderId();
         const { data: prompt, error: promptError } = await supabase.rpc(
@@ -180,38 +147,41 @@ export function useContractualApfCounting() {
         if (promptError || !(prompt as any)?.system_prompt) {
           throw new Error(
             promptError?.message
-            ?? "Não foi possível montar o prompt contratual.",
+            ?? "Não foi possível montar o contexto contratual.",
           );
         }
 
         const candidateBlock = candidates.map((candidate, index) => ({
           rank: index + 1,
-          baseline_item_id: candidate.id,
-          item_ref: candidate.item_ref,
-          description: candidate.description,
-          function_sigla: candidate.function_sigla,
-          factor_sigla: candidate.factor_sigla,
-          pf_bruto: candidate.pf_bruto,
-          pf_simples: candidate.pf_fs,
-          measurable: candidate.is_measurable,
-          similarity: candidate.match_score,
+          process_ref: candidate.process_ref,
+          process_name: candidate.process_name,
+          item_count: candidate.item_count,
+          total_pf_bruto: candidate.total_pf_bruto,
+          score: candidate.match_score,
+          items: candidate.items.map((item) => ({
+            item_ref: item.item_ref,
+            description: item.description,
+            type: item.function_sigla,
+            complexity: item.complexity,
+            pf_bruto: item.pf_bruto,
+          })),
         }));
-        const classificationPrompt = [
+        const selectionPrompt = [
           String((prompt as any).system_prompt),
-          "Classifique a HU usando a baseline e o modelo contratual. Não calcule PF.",
-          "A HU é apenas gatilho de impacto; a unidade avaliada é a EF da baseline.",
-          "Para cada item informe elementary_process_key, elementary_process_name, process_objective, process_role, process_is_complete, process_is_independent, separation_precedent_ref e process_reasoning.",
-          "Itens que pertencem ao mesmo processo central devem usar a mesma elementary_process_key.",
-          "Histórico, preview, validação, consulta, visualização, mensagens e carregamentos devem ser process_role=auxiliary, salvo quando a baseline ou um precedente oficial comprovar processo completo e independente.",
+          "A baseline é do projeto, não da sprint. A HU é apenas gatilho de impacto.",
+          "Selecione somente processos existentes na lista de candidatos que sejam impactados pela HU.",
+          "Quando a função já existe na baseline, o fator padrão é A (alteração), salvo evidência clara de exclusão, correção, migração ou outro fator contratual.",
+          "Retorne somente JSON no formato:",
+          '{"process_refs":["EF000"],"factor_sigla":"A","confidence":0.0,"reasoning":"..."}',
           `HU:\n${storyText}`,
-          `CANDIDATOS DA BASELINE:\n${JSON.stringify(candidateBlock, null, 2)}`,
-          "Retorne somente JSON válido. Prefira consolidar e não invente funções.",
+          `PROCESSOS CANDIDATOS:\n${JSON.stringify(candidateBlock, null, 2)}`,
+          `FATORES PERMITIDOS: ${allowedFactors.join(", ")}`,
         ].join("\n\n");
 
         const { data: generated, error: generationError } =
           await supabase.functions.invoke<GenerateResponse>("apf-generate", {
             body: {
-              prompt: classificationPrompt,
+              prompt: selectionPrompt,
               providerId,
               skipDocx: true,
             },
@@ -224,18 +194,35 @@ export function useContractualApfCounting() {
           throw new Error(
             generated?.userMessage
             ?? generated?.rawError
-            ?? "A IA não retornou a classificação.",
+            ?? "A IA não retornou os processos impactados.",
           );
         }
 
-        classified = normalizeClassifiedItems(
-          parseClassification(generated.markdown),
-          candidates,
-          catalog.context,
-          huRef,
-        );
+        const selection = parseProcessSelection(generated.markdown);
+        const candidateRefs = new Set(candidates.map((candidate) => candidate.process_ref.toUpperCase()));
+        selectedProcessRefs = selection.processRefs.filter((ref) => candidateRefs.has(ref));
+        if (!selectedProcessRefs.length) {
+          throw new Error("A IA selecionou processos que não pertencem à baseline ativa.");
+        }
+        factorSigla = selection.factorSigla && allowedFactors.includes(selection.factorSigla)
+          ? selection.factorSigla
+          : inferredFactor;
+        confidence = selection.confidence;
+        reasoning = selection.reasoning;
         providerUsed = generated.providerUsed ?? "IA";
+        matchType = "baseline_process_ai";
       }
+
+      const classified = buildProjectBaselineItems({
+        candidates,
+        selectedProcessRefs,
+        factorSigla,
+        huRef,
+        evidence: storyText,
+        confidence,
+        reasoning,
+        matchType,
+      });
 
       const { data: saved, error: saveError } = await supabase.rpc(
         "save_contractual_counting_items" as any,
@@ -253,19 +240,19 @@ export function useContractualApfCounting() {
         ...item,
         match_confidence: item.match_confidence ?? item.confidence ?? null,
       }));
-      const confidence = items.length
+      const averageConfidence = items.length
         ? items.reduce(
-          (sum, item) => sum + Number(item.match_confidence ?? 0.5),
+          (sum, item) => sum + Number(item.match_confidence ?? confidence),
           0,
         ) / items.length
-        : 0.5;
+        : confidence;
 
       catalog.setStories((rows) => rows.map((row) => row.id === hu.id ? {
         ...row,
         function_points: Number(summary.story_pf_fs),
         apf_pf_bruto: Number(summary.story_pf_bruto),
         apf_pf_fs: Number(summary.story_pf_fs),
-        ai_fp_confidence: confidence,
+        ai_fp_confidence: averageConfidence,
         ai_fp_validated: false,
         _items: items,
         _loading: false,
@@ -274,19 +261,8 @@ export function useContractualApfCounting() {
         _sessionId: String(summary.session_id ?? sessionId),
       } : row));
 
-      const processNotes = [
-        summary.absorbed_items
-          ? `${summary.absorbed_items} ação(ões) auxiliar(es) absorvida(s)`
-          : "",
-        summary.review_required_items
-          ? `${summary.review_required_items} processo(s) aguardando revisão`
-          : "",
-      ].filter(Boolean).join(" · ");
-
       toast.success(`${hu.code}: ${Number(summary.story_pf_fs).toFixed(2)} PF Simples`, {
-        description: processNotes || (deterministic
-          ? "Correspondência exata com a baseline, sem consumo de IA."
-          : providerUsed),
+        description: `${selectedProcessRefs.join(", ")} · fator ${factorSigla} · ${providerUsed}`,
       });
       return true;
     } catch (error: any) {
@@ -298,8 +274,37 @@ export function useContractualApfCounting() {
     }
   }, [catalog.projectId, catalog.selectedSprint, catalog.context]);
 
+  const recalculateHu = useCallback(async (hu: HuRow) => {
+    try {
+      if (hu._sessionId) {
+        const { error } = await supabase.rpc("reset_apf_story_counting" as any, {
+          p_session_id: hu._sessionId,
+          p_story_id: hu.id,
+          p_reason: "Recálculo solicitado pelo usuário na interface.",
+        } as any);
+        if (error) throw error;
+      }
+
+      catalog.setStories((rows) => rows.map((row) => row.id === hu.id ? {
+        ...row,
+        function_points: null,
+        apf_pf_bruto: null,
+        apf_pf_fs: null,
+        ai_fp_confidence: null,
+        ai_fp_validated: false,
+        _items: [],
+        _sessionId: null,
+        _error: null,
+      } : row));
+
+      await countForHu({ ...hu, _items: [], _sessionId: null });
+    } catch (error: any) {
+      toast.error(`Falha ao recalcular ${hu.code}`, { description: error?.message });
+    }
+  }, [countForHu]);
+
   const countAll = useCallback(async () => {
-    const pending = catalog.stories.filter((story) => !story.ai_fp_validated);
+    const pending = catalog.stories.filter((story) => story._items.length === 0);
     if (!pending.length) return;
 
     setCountingAll(true);
@@ -441,6 +446,7 @@ export function useContractualApfCounting() {
     dialogWasCorrected,
     updateValidationItem,
     countForHu,
+    recalculateHu,
     countAll,
     openValidation,
     confirmValidation,

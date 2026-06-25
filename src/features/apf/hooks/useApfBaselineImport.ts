@@ -17,6 +17,7 @@ export interface BaselineRow {
   version: string;
   label: string | null;
   status: string;
+  scope_type?: string | null;
   source_file_name?: string | null;
   source_summary?: Record<string, unknown> | null;
   imported_at: string | null;
@@ -44,6 +45,7 @@ export function useApfBaselineImport() {
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!teamId) return;
@@ -60,8 +62,10 @@ export function useApfBaselineImport() {
     if (!targetProjectId) return void setBaselines([]);
     setLoading(true);
     const { data, error } = await supabase.from("apf_project_baselines" as any)
-      .select("id,version,label,status,source_file_name,source_summary,imported_at,created_at")
-      .eq("project_id", targetProjectId).order("created_at", { ascending: false });
+      .select("id,version,label,status,scope_type,source_file_name,source_summary,imported_at,created_at")
+      .eq("project_id", targetProjectId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar baselines", { description: error.message });
     setBaselines((data ?? []) as BaselineRow[]);
     setLoading(false);
@@ -81,21 +85,21 @@ export function useApfBaselineImport() {
       setIntegrity(report);
       setFileName(file.name);
       setFileChecksum(checksum);
-      const suggestion = file.name.match(/Sprint\s*\d+.*Release\s*\d+/i)?.[0]
-        ?? new Date().toISOString().slice(0, 10);
-      setVersion(suggestion.replace(/\s+/g, "-"));
-      setLabel(result.measurementTitle ?? `${result.systemName ?? "Sistema"} — ${suggestion}`);
+      const date = new Date().toISOString().slice(0, 10);
+      const system = result.systemName?.replace(/\s+/g, "-") ?? "projeto";
+      setVersion(`${system}-${date}`);
+      setLabel(result.measurementTitle ?? `Baseline do projeto ${result.systemName ?? "Sistema"}`);
 
       if (report.errors.length) {
         toast.error("Baseline reprovada na validação", {
           description: report.errors.join(" "),
         });
       } else if (report.warnings.length) {
-        toast.warning("Planilha válida com observações", {
+        toast.warning("Baseline de projeto válida com observações", {
           description: report.warnings.join(" "),
         });
       } else {
-        toast.success("Planilha validada e pronta para importação");
+        toast.success("Baseline de projeto validada e pronta para importação");
       }
     } catch (error: any) {
       setParsed(null);
@@ -116,7 +120,7 @@ export function useApfBaselineImport() {
 
     setImporting(true);
     try {
-      const { data, error } = await supabase.rpc("apf_import_baseline" as any, {
+      const { data, error } = await supabase.rpc("apf_import_project_baseline" as any, {
         p_project_id: projectId,
         p_version: version.trim(),
         p_label: label.trim() || null,
@@ -125,6 +129,7 @@ export function useApfBaselineImport() {
         p_function_types: parsed.functionTypes,
         p_impact_factors: parsed.impactFactors,
         p_source_summary: {
+          scope_type: "project",
           system_name: parsed.systemName,
           measurement_title: parsed.measurementTitle,
           reference_date: parsed.referenceDate,
@@ -133,6 +138,7 @@ export function useApfBaselineImport() {
           calculated_pf_bruto: integrity.calculatedPfBruto,
           calculated_pf_simples: integrity.calculatedPfSimples,
           item_count: integrity.itemCount,
+          process_count: integrity.processCount,
           measurable_count: integrity.measurableCount,
           non_measurable_count: integrity.nonMeasurableCount,
           source_checksum: fileChecksum,
@@ -146,14 +152,15 @@ export function useApfBaselineImport() {
       const imported = data as any;
       if (
         Number(imported?.inserted_items) !== integrity.itemCount
+        || Number(imported?.process_count) !== integrity.processCount
         || Math.abs(Number(imported?.total_pf_bruto) - integrity.calculatedPfBruto) > 0.02
         || Math.abs(Number(imported?.total_pf_fs) - integrity.calculatedPfSimples) > 0.02
       ) {
-        throw new Error("A conferência pós-importação retornou totais diferentes da prévia.");
+        throw new Error("A conferência pós-importação retornou dados diferentes da prévia.");
       }
 
-      toast.success("Baseline validada, importada e ativada", {
-        description: `${imported.inserted_items} itens — PF Bruto ${Number(imported.total_pf_bruto).toFixed(2)} — PF Simples ${Number(imported.total_pf_fs).toFixed(2)}.`,
+      toast.success("Baseline do projeto importada e ativada", {
+        description: `${imported.process_count} processos · ${imported.inserted_items} itens · PF Bruto ${Number(imported.total_pf_bruto).toFixed(2)}.`,
       });
       setParsed(null);
       setIntegrity(null);
@@ -167,7 +174,30 @@ export function useApfBaselineImport() {
     }
   }
 
+  async function deleteBaseline(row: BaselineRow) {
+    setDeletingId(row.id);
+    try {
+      const { data, error } = await supabase.rpc("delete_apf_project_baseline" as any, {
+        p_baseline_id: row.id,
+      } as any);
+      if (error) throw error;
+
+      const result = data as any;
+      toast.success("Baseline removida", {
+        description: result?.mode === "archived_for_audit"
+          ? "A baseline foi retirada da operação e preservada para auditoria das contagens anteriores."
+          : "A baseline e seus itens foram excluídos.",
+      });
+      await refreshBaselines();
+    } catch (error: any) {
+      toast.error("Falha ao excluir a baseline", { description: error?.message });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const totals = useMemo(() => parsed ? {
+    processes: parsed.processCount,
     measurable: parsed.items.filter((item) => item.is_measurable).length,
     nonMeasurable: parsed.items.filter((item) => !item.is_measurable).length,
     pfBruto: parsed.items.reduce((sum, item) => sum + item.pf_bruto, 0),
@@ -176,7 +206,7 @@ export function useApfBaselineImport() {
 
   return {
     projects, projectId, setProjectId, baselines, parsed, integrity, fileName,
-    version, setVersion, label, setLabel, loading, importing,
-    handleFile, importBaseline, totals,
+    version, setVersion, label, setLabel, loading, importing, deletingId,
+    handleFile, importBaseline, deleteBaseline, totals,
   };
 }

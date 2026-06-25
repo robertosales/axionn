@@ -76,7 +76,7 @@ export function ApfFunctionPointTab() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="HUs" value={counting.stories.length} />
         <Kpi label="PF Bruto" value={counting.totals.pfBruto.toFixed(2)} />
-        <Kpi label="PF FS" value={counting.totals.pfFs.toFixed(2)} primary />
+        <Kpi label="PF Simples (PF FS)" value={counting.totals.pfFs.toFixed(2)} primary />
         <Kpi label="Validadas" value={counting.totals.validated} success />
       </div>
 
@@ -112,7 +112,7 @@ export function ApfFunctionPointTab() {
                   <TableHead className="text-center">SP</TableHead>
                   <TableHead className="text-center">Tipo / Impacto</TableHead>
                   <TableHead className="text-right">PF Bruto</TableHead>
-                  <TableHead className="text-right">PF FS</TableHead>
+                  <TableHead className="text-right">PF Simples</TableHead>
                   <TableHead className="text-center">Confiança</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Ação</TableHead>
@@ -212,7 +212,7 @@ export function ApfFunctionPointTab() {
                         ]}
                       />
                       <Metric label="PF Bruto" value={weight.toFixed(2)} />
-                      <Metric label="PF FS" value={pfFs.toFixed(2)} primary />
+                      <Metric label="PF Simples" value={pfFs.toFixed(2)} primary />
                     </div>
                   </CardContent>
                 </Card>

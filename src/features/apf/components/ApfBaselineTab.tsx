@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertCircle,
   AlertTriangle,
   CheckCircle2,
   Database,
@@ -30,6 +31,7 @@ import { useApfBaselineImport } from "../hooks/useApfBaselineImport";
 
 export function ApfBaselineTab() {
   const baseline = useApfBaselineImport();
+  const hasErrors = Boolean(baseline.integrity?.errors.length);
 
   return (
     <div className="space-y-5">
@@ -71,23 +73,54 @@ export function ApfBaselineTab() {
                 <Badge variant="outline">
                   {baseline.parsed.systemName ?? "Sistema não identificado"}
                 </Badge>
+                {baseline.integrity && (
+                  hasErrors ? (
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertCircle className="h-3 w-3" /> Reprovada
+                    </Badge>
+                  ) : (
+                    <Badge className="gap-1 bg-emerald-100 text-emerald-700">
+                      <CheckCircle2 className="h-3 w-3" /> Validada
+                    </Badge>
+                  )
+                )}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-4">
                 <Metric label="Itens mensuráveis" value={baseline.totals.measurable} />
                 <Metric label="Não mensuráveis" value={baseline.totals.nonMeasurable} />
                 <Metric label="PF Bruto" value={baseline.totals.pfBruto.toFixed(2)} />
-                <Metric label="PF FS" value={baseline.totals.pfFs.toFixed(2)} primary />
+                <Metric label="PF Simples (PF FS)" value={baseline.totals.pfFs.toFixed(2)} primary />
               </div>
 
-              {baseline.parsed.warnings.length > 0 && (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                  <div className="flex gap-2">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>{baseline.parsed.warnings.join(" ")}</span>
+              {baseline.integrity?.errors.length ? (
+                <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="font-medium">A baseline não pode ser ativada.</p>
+                      <ul className="mt-1 list-disc space-y-1 pl-5">
+                        {baseline.integrity.errors.map((error) => (
+                          <li key={error}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
-              )}
+              ) : null}
+
+              {baseline.integrity?.warnings.length ? (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <ul className="list-disc space-y-1 pl-5">
+                      {baseline.integrity.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
@@ -108,7 +141,7 @@ export function ApfBaselineTab() {
                       <TableHead>Tipo</TableHead>
                       <TableHead>Impacto</TableHead>
                       <TableHead className="text-right">PF Bruto</TableHead>
-                      <TableHead className="text-right">PF FS</TableHead>
+                      <TableHead className="text-right">PF Simples</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -129,13 +162,13 @@ export function ApfBaselineTab() {
 
               <Button
                 onClick={baseline.importBaseline}
-                disabled={baseline.importing || !baseline.version.trim()}
+                disabled={baseline.importing || !baseline.version.trim() || hasErrors}
                 className="gap-2"
               >
                 {baseline.importing
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <Upload className="h-4 w-4" />}
-                Importar e ativar baseline
+                Validar, importar e ativar baseline
               </Button>
             </div>
           )}

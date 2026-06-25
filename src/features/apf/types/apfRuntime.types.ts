@@ -39,6 +39,7 @@ export interface ProjectBaselineProcessItem {
   product_reference: string | null;
   project_reference: string | null;
   measurement_reference: string | null;
+  match_score?: number;
 }
 
 export interface ProjectBaselineProcessCandidate {

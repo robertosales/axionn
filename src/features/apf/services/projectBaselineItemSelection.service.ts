@@ -6,7 +6,8 @@ import { normalizeElementaryProcessKey } from "../utils/elementaryProcess";
 
 const STOP_WORDS = new Set([
   "para", "com", "dos", "das", "uma", "por", "que", "sistema",
-  "funcionalidade", "processo", "gesp", "gesp3", "usuario",
+  "funcionalidade", "processo", "processos", "gesp", "gesp3", "usuario",
+  "usuarios", "modulo", "projeto", "historia", "intranet", "internet",
 ]);
 
 function normalize(value: string) {
@@ -23,6 +24,12 @@ function stem(token: string) {
   return token;
 }
 
+function primaryStoryText(value: string) {
+  return value
+    .split(/(?:critérios? de aceite|criterios? de aceite)/i)[0]
+    .slice(0, 2500);
+}
+
 function tokens(value: string) {
   return new Set(
     normalize(value)
@@ -33,11 +40,9 @@ function tokens(value: string) {
 }
 
 function lexicalScore(storyText: string, item: ProjectBaselineProcessItem) {
-  const storyTokens = tokens(storyText);
+  const storyTokens = tokens(primaryStoryText(storyText));
   if (!storyTokens.size) return 0;
 
-  // process_name é comum a todas as linhas do grupo e não participa da
-  // distinção entre EE/CE/SE. A seleção usa a descrição específica da linha.
   const itemTokens = tokens([
     item.process_ref,
     item.description,
@@ -46,32 +51,58 @@ function lexicalScore(storyText: string, item: ProjectBaselineProcessItem) {
     item.measurement_reference,
   ].filter(Boolean).join(" "));
   const overlap = [...storyTokens].filter((token) => itemTokens.has(token)).length;
-  return overlap / storyTokens.size;
+  return Math.min(1, overlap / Math.min(storyTokens.size, 8));
+}
+
+function scoreItem(storyText: string, item: ProjectBaselineProcessItem) {
+  return Math.max(
+    Number(item.match_score ?? 0),
+    lexicalScore(storyText, item),
+  );
+}
+
+function rankedMeasurableItems(
+  storyText: string,
+  candidate: ProjectBaselineProcessCandidate,
+) {
+  return candidate.items
+    .filter((item) => item.is_measurable)
+    .map((item) => ({ item, score: scoreItem(storyText, item) }))
+    .sort((a, b) => b.score - a.score);
 }
 
 export function selectDeterministicBaselineItems(
   storyText: string,
   candidate: ProjectBaselineProcessCandidate,
 ) {
-  const scored = candidate.items
-    .filter((item) => item.is_measurable)
-    .map((item) => ({ item, score: lexicalScore(storyText, item) }))
-    .sort((a, b) => b.score - a.score);
+  const scored = rankedMeasurableItems(storyText, candidate);
   const first = scored[0];
   const second = scored[1];
 
-  if (!first || first.score < 0.4) return null;
-  if (second && first.score - second.score < 0.08) return null;
+  if (!first || first.score < 0.32) return null;
+  if (second && first.score - second.score < 0.07) return null;
 
   const selected = scored.filter(({ score }) =>
-    score >= 0.4 && score >= first.score - 0.08
+    score >= 0.32 && score >= first.score - 0.07
   );
 
   return {
     itemIds: selected.map(({ item }) => item.id),
     confidence: Math.min(1, first.score),
-    reasoning: `${selected.length} item(ns) do processo ${candidate.process_ref} apresentaram evidência lexical dominante na HU.`,
+    reasoning: `${selected.length} item(ns) do processo ${candidate.process_ref} apresentaram evidência dominante na HU.`,
   };
+}
+
+export function selectBaselineItemsForReview(
+  storyText: string,
+  candidate: ProjectBaselineProcessCandidate,
+  limit = 3,
+) {
+  const ranked = rankedMeasurableItems(storyText, candidate);
+  const positive = ranked.filter(({ score }) => score >= 0.08);
+  const source = positive.length ? positive : ranked.slice(0, 1);
+
+  return source.slice(0, Math.max(1, limit)).map(({ item }) => item.id);
 }
 
 export function parseBaselineItemSelection(raw: string) {

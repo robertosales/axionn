@@ -1,6 +1,7 @@
 import type { ProjectBaselineProcessCandidate } from "../types/apfRuntime.types";
 import {
   buildSelectedBaselineItems,
+  selectBaselineItemsForReview,
   selectDeterministicBaselineItems,
 } from "./projectBaselineItemSelection.service";
 
@@ -106,8 +107,8 @@ export function hasDeterministicProcessMatch(
   const first = candidates[0];
   const second = candidates[1];
   if (!first) return false;
-  return Number(first.match_score) >= 0.72
-    && (!second || Number(first.match_score) - Number(second.match_score) >= 0.1);
+  return Number(first.match_score) >= 0.32
+    && (!second || Number(first.match_score) - Number(second.match_score) >= 0.07);
 }
 
 export function buildCompactProcessSelectionPrompt(args: {
@@ -132,6 +133,7 @@ export function buildCompactProcessSelectionPrompt(args: {
         t: item.function_sigla,
         c: item.complexity,
         pf: Number(item.pf_bruto),
+        score: Number(item.match_score ?? 0),
       })),
     }));
 
@@ -139,6 +141,7 @@ export function buildCompactProcessSelectionPrompt(args: {
     "Tarefa: selecionar processos funcionais impactados por uma HU.",
     "A baseline pertence ao projeto. Selecione apenas refs presentes em CANDIDATOS.",
     "Não invente processo, tipo, peso ou item. A HU é gatilho, não unidade de contagem.",
+    "Selecione no máximo 2 processos. Não repita a lista de candidatos.",
     `Fator inicial sugerido: ${args.inferredFactor}. Use somente: ${args.allowedFactors.join(",")}.`,
     'Responda apenas JSON: {"process_refs":["EF000"],"factor_sigla":"A","confidence":0.0,"reasoning":"curto"}',
     `HU:${truncate(args.storyText, storyLimit)}`,
@@ -177,8 +180,15 @@ export function parseProcessSelection(raw: string): {
         ?? (selection?.process_ref ? [selection.process_ref] : []);
       if (!Array.isArray(refs) || refs.length === 0) continue;
 
+      const processRefs = [...new Set(
+        refs.map((ref: unknown) => normalizeEfRef(String(ref))),
+      )];
+      if (processRefs.length > 2) {
+        throw new Error("A resposta selecionou processos demais para uma decisão automática.");
+      }
+
       return {
-        processRefs: refs.map((ref: unknown) => normalizeEfRef(String(ref))),
+        processRefs,
         factorSigla: selection.factor_sigla
           ? String(selection.factor_sigla).toUpperCase()
           : selection.factorSigla
@@ -192,23 +202,27 @@ export function parseProcessSelection(raw: string): {
     }
   }
 
-  // Compatibilidade defensiva para provedores que ignoram a instrução JSON e
-  // devolvem texto ou relatório. A validação contra os candidatos ocorre no hook.
+  // Respostas textuais só são aceitas quando indicam explicitamente a escolha.
+  // Referências repetidas na explicação/lista de candidatos são rejeitadas.
+  const explicitSelection = raw.match(
+    /(?:processos?\s+selecionad[oa]s?|process_refs?|processo\s+escolhido)\s*[:=]\s*([^\n]+)/i,
+  )?.[1] ?? "";
   const processRefs = [...new Set(
-    [...raw.matchAll(/\bEF\s*0*(\d+)\b/gi)]
+    [...explicitSelection.matchAll(/\bEF\s*0*(\d+)\b/gi)]
       .map((match) => `EF${String(Number(match[1])).padStart(3, "0")}`),
   )];
-  if (processRefs.length) {
+
+  if (processRefs.length > 0 && processRefs.length <= 2) {
     const factorMatch = raw.match(/(?:factor_sigla|fator(?:\s+de\s+impacto)?)\s*[:=]\s*["'`]?([A-Z][A-Z0-9/]*)/i);
     return {
       processRefs,
       factorSigla: factorMatch?.[1]?.toUpperCase() ?? null,
       confidence: 0.5,
-      reasoning: "Referências recuperadas de resposta textual do provedor; validação contra a baseline obrigatória.",
+      reasoning: "Referências recuperadas de uma seleção textual explícita; validação contra a baseline obrigatória.",
     };
   }
 
-  throw new Error("A IA não retornou uma seleção válida.");
+  throw new Error("A IA não retornou uma seleção restrita e válida.");
 }
 
 export function buildProjectBaselineItems(args: {
@@ -244,10 +258,9 @@ export function buildProjectBaselineItems(args: {
       selectedItemIds.push(candidate.items[0].id);
       if (args.requiresHumanReview) reviewItemIds.add(candidate.items[0].id);
     } else {
-      for (const item of candidate.items) {
-        selectedItemIds.push(item.id);
-        reviewItemIds.add(item.id);
-      }
+      const reviewIds = selectBaselineItemsForReview(args.evidence, candidate, 3);
+      selectedItemIds.push(...reviewIds);
+      reviewIds.forEach((id) => reviewItemIds.add(id));
     }
   }
 
@@ -266,8 +279,8 @@ export function buildProjectBaselineItems(args: {
       process_is_complete: false,
       process_is_independent: false,
       process_reasoning: args.requiresHumanReview
-        ? "A resposta do provedor de IA não pôde ser utilizada. O candidato da baseline foi preservado para revisão humana, sem geração automática de PF."
-        : "O processo foi relacionado, mas a HU não diferencia quais linhas funcionais foram impactadas. Revisão humana obrigatória.",
+        ? "A resposta do provedor não sustentou uma decisão automática. Apenas os itens mais aderentes foram preservados para revisão, sem geração de PF."
+        : "O processo foi relacionado, mas a HU não diferencia completamente as funções impactadas. Revisão humana restrita aos itens mais aderentes.",
     }
     : item);
 }

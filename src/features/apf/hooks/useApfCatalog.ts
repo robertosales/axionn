@@ -74,10 +74,15 @@ export function useApfCatalog(teamId: string) {
       _items: [],
     })) as HuRow[];
 
-    if (projectId && selectedSprint?.name) {
+    if (projectId && selectedSprint?.name && context?.baseline?.id) {
       const { data: session } = await supabase.from("apf_counting_sessions" as any)
-        .select("id").eq("project_id", projectId).eq("sprint_ref", selectedSprint.name)
-        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("sprint_ref", selectedSprint.name)
+        .eq("baseline_id", context.baseline.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if ((session as any)?.id) {
         const { data: items } = await supabase.from("apf_counting_items" as any)
           .select("id,baseline_item_id,story_id,story_ids,hu_ref,ef_description,function_sigla,factor_sigla,pf_bruto,contribution_pct,pf_fs,match_type,match_confidence,ai_confidence_score,justification,evidence_literal,is_validated,corrected_function_sigla,corrected_factor_sigla,corrected_pf_bruto,corrected_pf_fs")
@@ -96,7 +101,7 @@ export function useApfCatalog(teamId: string) {
     }
     setStories(rows);
     setLoading(false);
-  }, [teamId, selectedSprintId, projectId, selectedSprint?.name]);
+  }, [teamId, selectedSprintId, projectId, selectedSprint?.name, context?.baseline?.id]);
 
   useEffect(() => { loadStories(); }, [loadStories]);
 

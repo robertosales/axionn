@@ -7,6 +7,7 @@ export interface ApfBaselineIntegrityReport {
   errors: string[];
   warnings: string[];
   itemCount: number;
+  processCount: number;
   measurableCount: number;
   nonMeasurableCount: number;
   calculatedPfBruto: number;
@@ -45,24 +46,28 @@ export function validateApfBaselineIntegrity(
   const calculatedPfSimples = round2(
     baseline.items.reduce((sum, item) => sum + item.pf_fs, 0),
   );
+  const processCount = new Set(baseline.items.map((item) => item.process_ref)).size;
 
   if (measurable.length === 0) {
     errors.push("A baseline não possui itens mensuráveis.");
   }
 
-  const typeWeights = groupValues(
+  // Em IFPUG o peso varia por complexidade. A inconsistência ocorre somente
+  // quando o mesmo tipo e a mesma complexidade possuem pesos diferentes.
+  const complexityWeights = groupValues(
     measurable,
-    (item) => item.function_sigla,
+    (item) => `${item.function_sigla}|${item.complexity}`,
     (item) => item.pf_bruto,
   );
-  for (const [sigla, weights] of typeWeights) {
+  for (const [key, weights] of complexityWeights) {
+    const [sigla, complexity] = key.split("|");
     if (weights.size > 1) {
       errors.push(
-        `O tipo ${sigla} possui pesos divergentes: ${[...weights].join(", ")}.`,
+        `${sigla}/${complexity} possui pesos divergentes: ${[...weights].join(", ")}.`,
       );
     }
     if ([...weights].some((weight) => weight <= 0)) {
-      errors.push(`O tipo ${sigla} possui peso contratual inválido.`);
+      errors.push(`${sigla}/${complexity} possui peso inválido.`);
     }
   }
 
@@ -82,7 +87,19 @@ export function validateApfBaselineIntegrity(
     }
   }
 
-  for (const item of measurable) {
+  const itemRefs = new Set<string>();
+  for (const item of baseline.items) {
+    if (itemRefs.has(item.item_ref)) {
+      errors.push(`Referência interna duplicada: ${item.item_ref}.`);
+    }
+    itemRefs.add(item.item_ref);
+
+    if (!item.process_ref || !item.process_name) {
+      errors.push(`${item.item_ref}: processo funcional não identificado.`);
+    }
+
+    if (!item.is_measurable) continue;
+
     const expectedPfSimples = round2(
       item.pf_bruto * item.contribution_pct / 100,
     );
@@ -124,12 +141,12 @@ export function validateApfBaselineIntegrity(
     warnings.push("A planilha não informa o total esperado de PF Simples/PF FS.");
   }
 
-  const rowsWithoutHuRef = baseline.items.filter(
-    (item) => item.item_ref.startsWith("ROW-"),
+  const itemsWithoutEf = baseline.items.filter(
+    (item) => item.process_ref.startsWith("ITEM:"),
   );
-  if (rowsWithoutHuRef.length) {
+  if (itemsWithoutEf.length) {
     warnings.push(
-      `${rowsWithoutHuRef.length} item(ns) não possuem referência explícita de HU.`,
+      `${itemsWithoutEf.length} item(ns) não possuem código EF e serão pesquisados pelo nome funcional.`,
     );
   }
 
@@ -137,6 +154,7 @@ export function validateApfBaselineIntegrity(
     errors: [...new Set(errors)],
     warnings: [...new Set(warnings)],
     itemCount: baseline.items.length,
+    processCount,
     measurableCount: measurable.length,
     nonMeasurableCount: nonMeasurable.length,
     calculatedPfBruto,

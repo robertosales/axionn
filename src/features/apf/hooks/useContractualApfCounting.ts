@@ -103,25 +103,37 @@ export function useContractualApfCounting() {
         );
       }
 
-      const { data: candidateRows, error: candidateError } = await supabase.rpc(
-        "get_apf_baseline_candidates" as any,
-        {
-          p_project_id: catalog.projectId,
-          p_story_text: storyText,
-          p_limit: 12,
-        } as any,
-      );
-      if (candidateError) throw new Error(candidateError.message);
+      let candidates: BaselineCandidate[] = [];
+      let exact: BaselineCandidate[] = [];
 
-      const candidates = (candidateRows ?? []) as BaselineCandidate[];
-      const exact = candidates.filter((candidate) => {
-        const ref = String(candidate.item_ref ?? "")
-          .toUpperCase()
-          .replace(/\s+/g, "");
-        return huRefs.length
-          ? huRefs.includes(ref)
-          : Number(candidate.match_score) >= 0.999;
-      });
+      if (huRefs.length) {
+        const { data: exactRows, error: exactError } = await supabase.rpc(
+          "get_apf_baseline_exact_items" as any,
+          {
+            p_project_id: catalog.projectId,
+            p_item_refs: huRefs,
+          } as any,
+        );
+        if (exactError) throw new Error(exactError.message);
+        exact = (exactRows ?? []) as BaselineCandidate[];
+
+        if (!exact.length) {
+          throw new Error(
+            `A referência ${huRefs.join(", ")} foi encontrada na HU, mas não existe na baseline ativa. Reimporte ou corrija a baseline antes de contar.`,
+          );
+        }
+      } else {
+        const { data: candidateRows, error: candidateError } = await supabase.rpc(
+          "get_apf_baseline_candidates" as any,
+          {
+            p_project_id: catalog.projectId,
+            p_story_text: storyText,
+            p_limit: 12,
+          } as any,
+        );
+        if (candidateError) throw new Error(candidateError.message);
+        candidates = (candidateRows ?? []) as BaselineCandidate[];
+      }
 
       let classified: any[];
       let providerUsed = "Baseline determinística";
@@ -167,12 +179,15 @@ export function useContractualApfCounting() {
           description: candidate.description,
           function_sigla: candidate.function_sigla,
           factor_sigla: candidate.factor_sigla,
+          pf_bruto: candidate.pf_bruto,
+          pf_simples: candidate.pf_fs,
           measurable: candidate.is_measurable,
           similarity: candidate.match_score,
         }));
         const classificationPrompt = [
           String((prompt as any).system_prompt),
           "Classifique a HU usando a baseline e o modelo contratual. Não calcule PF.",
+          "Identifique o processo central e não separe histórico, preview, validações ou ações auxiliares sem precedente explícito.",
           `HU:\n${storyText}`,
           `CANDIDATOS DA BASELINE:\n${JSON.stringify(candidateBlock, null, 2)}`,
           "Retorne somente o JSON solicitado. Prefira consolidar e não invente funções.",
@@ -244,7 +259,7 @@ export function useContractualApfCounting() {
         _sessionId: String(summary.session_id ?? sessionId),
       } : row));
 
-      toast.success(`${hu.code}: ${Number(summary.story_pf_fs).toFixed(2)} PF FS`, {
+      toast.success(`${hu.code}: ${Number(summary.story_pf_fs).toFixed(2)} PF Simples`, {
         description: deterministic
           ? "Correspondência exata com a baseline, sem consumo de IA."
           : providerUsed,
@@ -361,7 +376,7 @@ export function useContractualApfCounting() {
         ai_fp_validated: true,
       } : row));
       setDialog((current) => ({ ...current, open: false }));
-      toast.success(`${dialog.hu.code} validada em ${pfFs.toFixed(2)} PF FS.`);
+      toast.success(`${dialog.hu.code} validada em ${pfFs.toFixed(2)} PF Simples.`);
     } catch (error: any) {
       toast.error("Falha ao validar", { description: error?.message });
     } finally {

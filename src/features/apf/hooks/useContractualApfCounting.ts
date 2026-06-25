@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import type { ContractualItem, HuRow } from "../types/apfItem.types";
+import type { HuRow } from "../types/apfItem.types";
 import type {
   GenerateResponse,
   PersistSummary,
@@ -19,9 +19,11 @@ import {
   extractHuRefs,
 } from "../utils/contractualApf.helpers";
 import {
+  buildCompactProcessSelectionPrompt,
   buildProjectBaselineItems,
   hasDeterministicProcessMatch,
   inferImpactFactor,
+  isAiPromptTooLarge,
   parseProcessSelection,
 } from "../services/projectBaselineCounting.service";
 import { validateContractualItems } from "../services/contractualValidation.service";
@@ -50,6 +52,7 @@ async function edgeError(error: any, data?: GenerateResponse | null) {
     try {
       const payload = await response.clone().json();
       return payload?.error
+        ?? payload?.rawError
         ?? payload?.userMessage
         ?? payload?.message
         ?? error.message;
@@ -110,7 +113,7 @@ export function useContractualApfCounting() {
         {
           p_project_id: catalog.projectId,
           p_story_text: storyText,
-          p_limit: 10,
+          p_limit: 6,
         } as any,
       );
       if (candidateError) throw new Error(candidateError.message);
@@ -140,57 +143,50 @@ export function useContractualApfCounting() {
         matchType = "baseline_process_exact";
       } else {
         const providerId = await resolveActiveProviderId();
-        const { data: prompt, error: promptError } = await supabase.rpc(
-          "build_apf_prompt" as any,
-          { p_session_id: sessionId } as any,
-        );
-        if (promptError || !(prompt as any)?.system_prompt) {
-          throw new Error(
-            promptError?.message
-            ?? "Não foi possível montar o contexto contratual.",
-          );
-        }
 
-        const candidateBlock = candidates.map((candidate, index) => ({
-          rank: index + 1,
-          process_ref: candidate.process_ref,
-          process_name: candidate.process_name,
-          item_count: candidate.item_count,
-          total_pf_bruto: candidate.total_pf_bruto,
-          score: candidate.match_score,
-          items: candidate.items.map((item) => ({
-            item_ref: item.item_ref,
-            description: item.description,
-            type: item.function_sigla,
-            complexity: item.complexity,
-            pf_bruto: item.pf_bruto,
-          })),
-        }));
-        const selectionPrompt = [
-          String((prompt as any).system_prompt),
-          "A baseline é do projeto, não da sprint. A HU é apenas gatilho de impacto.",
-          "Selecione somente processos existentes na lista de candidatos que sejam impactados pela HU.",
-          "Quando a função já existe na baseline, o fator padrão é A (alteração), salvo evidência clara de exclusão, correção, migração ou outro fator contratual.",
-          "Retorne somente JSON no formato:",
-          '{"process_refs":["EF000"],"factor_sigla":"A","confidence":0.0,"reasoning":"..."}',
-          `HU:\n${storyText}`,
-          `PROCESSOS CANDIDATOS:\n${JSON.stringify(candidateBlock, null, 2)}`,
-          `FATORES PERMITIDOS: ${allowedFactors.join(", ")}`,
-        ].join("\n\n");
-
-        const { data: generated, error: generationError } =
-          await supabase.functions.invoke<GenerateResponse>("apf-generate", {
+        const invokeSelection = async (minimal: boolean) => {
+          const prompt = buildCompactProcessSelectionPrompt({
+            storyText,
+            candidates,
+            allowedFactors,
+            inferredFactor,
+            minimal,
+          });
+          return supabase.functions.invoke<GenerateResponse>("apf-generate", {
             body: {
-              prompt: selectionPrompt,
+              prompt,
               providerId,
               skipDocx: true,
             },
           });
+        };
+
+        let { data: generated, error: generationError } = await invokeSelection(false);
+        let providerFailure = generationError
+          ? await edgeError(generationError, generated)
+          : generated?.rawError ?? generated?.userMessage ?? "";
+
+        if (
+          (generationError || !generated?.success || !generated.markdown)
+          && isAiPromptTooLarge(providerFailure)
+        ) {
+          const retry = await invokeSelection(true);
+          generated = retry.data;
+          generationError = retry.error;
+          providerFailure = generationError
+            ? await edgeError(generationError, generated)
+            : generated?.rawError ?? generated?.userMessage ?? "";
+        }
 
         if (generationError) {
           throw new Error(await edgeError(generationError, generated));
         }
         if (!generated?.success || !generated.markdown) {
+          if (isAiPromptTooLarge(providerFailure)) {
+            throw new Error(
+              "O provedor de IA recusou o contexto por limite de tokens. O sistema já reduziu o conteúdo e tentou novamente; aguarde a liberação da cota ou selecione outro provedor.",
+            );
+          }
           throw new Error(
             generated?.userMessage
             ?? generated?.rawError
@@ -199,12 +195,17 @@ export function useContractualApfCounting() {
         }
 
         const selection = parseProcessSelection(generated.markdown);
-        const candidateRefs = new Set(candidates.map((candidate) => candidate.process_ref.toUpperCase()));
-        selectedProcessRefs = selection.processRefs.filter((ref) => candidateRefs.has(ref));
+        const candidateRefs = new Set(
+          candidates.map((candidate) => candidate.process_ref.toUpperCase()),
+        );
+        selectedProcessRefs = selection.processRefs.filter(
+          (ref) => candidateRefs.has(ref),
+        );
         if (!selectedProcessRefs.length) {
           throw new Error("A IA selecionou processos que não pertencem à baseline ativa.");
         }
-        factorSigla = selection.factorSigla && allowedFactors.includes(selection.factorSigla)
+        factorSigla = selection.factorSigla
+          && allowedFactors.includes(selection.factorSigla)
           ? selection.factorSigla
           : inferredFactor;
         confidence = selection.confidence;

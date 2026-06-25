@@ -24,6 +24,58 @@ function primaryScope(storyText: string) {
   );
 }
 
+function normalizeEfRef(value: string) {
+  const match = value.match(/EF\s*0*(\d+)/i);
+  return match ? `EF${String(Number(match[1])).padStart(3, "0")}` : value.toUpperCase();
+}
+
+function balancedJsonObjects(value: string) {
+  const objects: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\" && inString) {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+    } else if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        objects.push(value.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return objects;
+}
+
+function parseJsonCandidate(value: string) {
+  const normalized = value
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/,\s*([}\]])/g, "$1")
+    .trim();
+  return JSON.parse(normalized);
+}
+
 export function inferImpactFactor(
   storyText: string,
   availableFactors: string[],
@@ -31,8 +83,6 @@ export function inferImpactFactor(
   const scope = primaryScope(storyText);
   const has = (sigla: string) => availableFactors.includes(sigla);
 
-  // O fator descreve o objetivo principal da demanda. Palavras incidentais em
-  // critérios de aceite (ex.: remover uma seleção) não caracterizam exclusão.
   const explicitExclusion = /\b(excluir|exclusao|remover|retirar|desativar)\b.{0,80}\b(funcionalidade|processo|campo|opcao|acao|tela|servico|arquivo)\b/.test(scope)
     || /\b(exclusao|desativacao)\s+(da|do|de)\b/.test(scope);
   if (explicitExclusion && has("E")) return "E";
@@ -45,8 +95,6 @@ export function inferImpactFactor(
     if (has("COR")) return "COR";
   }
 
-  // Um item localizado na baseline já existe no projeto; portanto o impacto
-  // inicial é alteração, salvo evidência explícita de outro fator contratual.
   if (has("A")) return "A";
   if (has("I")) return "I";
   return availableFactors[0] ?? "N/A";
@@ -116,31 +164,51 @@ export function parseProcessSelection(raw: string): {
   const clean = raw.trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
-  let parsed: any;
+  const fenced = [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)]
+    .map((match) => match[1]);
+  const candidates = [clean, ...fenced, ...balancedJsonObjects(clean)];
 
-  try {
-    parsed = JSON.parse(clean);
-  } catch {
-    const candidate = clean.match(/\{[\s\S]*\}/)?.[0];
-    if (!candidate) throw new Error("A IA não retornou uma seleção válida.");
-    parsed = JSON.parse(candidate.replace(/,\s*([}\]])/g, "$1"));
+  for (const candidate of candidates) {
+    try {
+      const parsed = parseJsonCandidate(candidate);
+      const selection = parsed?.selection ?? parsed?.result ?? parsed;
+      const refs = selection?.process_refs
+        ?? selection?.processRefs
+        ?? (selection?.process_ref ? [selection.process_ref] : []);
+      if (!Array.isArray(refs) || refs.length === 0) continue;
+
+      return {
+        processRefs: refs.map((ref: unknown) => normalizeEfRef(String(ref))),
+        factorSigla: selection.factor_sigla
+          ? String(selection.factor_sigla).toUpperCase()
+          : selection.factorSigla
+            ? String(selection.factorSigla).toUpperCase()
+            : null,
+        confidence: Math.max(0, Math.min(1, Number(selection.confidence ?? 0.6))),
+        reasoning: String(selection.reasoning ?? selection.justification ?? ""),
+      };
+    } catch {
+      // Tenta o próximo objeto ou o fallback textual abaixo.
+    }
   }
 
-  const refs = parsed.process_refs
-    ?? parsed.processRefs
-    ?? (parsed.process_ref ? [parsed.process_ref] : []);
-  if (!Array.isArray(refs) || refs.length === 0) {
-    throw new Error("A IA não selecionou nenhum processo da baseline.");
+  // Compatibilidade defensiva para provedores que ignoram a instrução JSON e
+  // devolvem texto ou relatório. A validação contra os candidatos ocorre no hook.
+  const processRefs = [...new Set(
+    [...raw.matchAll(/\bEF\s*0*(\d+)\b/gi)]
+      .map((match) => `EF${String(Number(match[1])).padStart(3, "0")}`),
+  )];
+  if (processRefs.length) {
+    const factorMatch = raw.match(/(?:factor_sigla|fator(?:\s+de\s+impacto)?)\s*[:=]\s*["'`]?([A-Z][A-Z0-9/]*)/i);
+    return {
+      processRefs,
+      factorSigla: factorMatch?.[1]?.toUpperCase() ?? null,
+      confidence: 0.5,
+      reasoning: "Referências recuperadas de resposta textual do provedor; validação contra a baseline obrigatória.",
+    };
   }
 
-  return {
-    processRefs: refs.map((ref: unknown) => String(ref).toUpperCase()),
-    factorSigla: parsed.factor_sigla
-      ? String(parsed.factor_sigla).toUpperCase()
-      : null,
-    confidence: Math.max(0, Math.min(1, Number(parsed.confidence ?? 0.6))),
-    reasoning: String(parsed.reasoning ?? parsed.justification ?? ""),
-  };
+  throw new Error("A IA não retornou uma seleção válida.");
 }
 
 export function buildProjectBaselineItems(args: {
@@ -176,8 +244,6 @@ export function buildProjectBaselineItems(args: {
       selectedItemIds.push(candidate.items[0].id);
       if (args.requiresHumanReview) reviewItemIds.add(candidate.items[0].id);
     } else {
-      // O processo foi relacionado, mas a HU não diferencia as funções que o
-      // compõem. Nenhuma delas deve virar PF automaticamente.
       for (const item of candidate.items) {
         selectedItemIds.push(item.id);
         reviewItemIds.add(item.id);

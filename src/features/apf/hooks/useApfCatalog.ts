@@ -85,7 +85,7 @@ export function useApfCatalog(teamId: string) {
         .maybeSingle();
       if ((session as any)?.id) {
         const { data: items } = await supabase.from("apf_counting_items" as any)
-          .select("id,baseline_item_id,story_id,story_ids,hu_ref,ef_description,function_sigla,factor_sigla,pf_bruto,contribution_pct,pf_fs,match_type,match_confidence,ai_confidence_score,justification,evidence_literal,is_validated,corrected_function_sigla,corrected_factor_sigla,corrected_pf_bruto,corrected_pf_fs")
+          .select("id,baseline_item_id,story_id,story_ids,hu_ref,ef_description,function_sigla,factor_sigla,pf_bruto,contribution_pct,pf_fs,match_type,match_confidence,ai_confidence_score,justification,evidence_literal,is_validated,corrected_function_sigla,corrected_factor_sigla,corrected_pf_bruto,corrected_pf_fs,elementary_process_id,elementary_process_key,elementary_process_name,process_role,process_is_complete,process_is_independent,counting_decision,process_reasoning,separation_precedent_ref,absorbed_by_item_id")
           .eq("session_id", (session as any).id).order("sort_order");
         for (const item of (items ?? []) as ContractualItem[]) {
           const ids = item.story_ids?.length ? item.story_ids : item.story_id ? [item.story_id] : [];

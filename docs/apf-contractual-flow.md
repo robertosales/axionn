@@ -74,9 +74,12 @@ Aplicar as migrations na ordem:
 
 1. `20260624000002_apf_contractual_schema.sql`
 2. `20260624000003_apf_baseline_rpc.sql`
-3. `20260624000004_apf_counting_rpc.sql`
-4. `20260624000005_apf_contractual_invariants.sql`
-5. `20260624000006_apf_atomic_validation.sql`
+3. `202606240000035_drop_legacy_build_apf_prompt.sql`
+4. `20260624000004_apf_counting_rpc.sql`
+5. `20260624000005_apf_contractual_invariants.sql`
+6. `20260624000006_apf_atomic_validation.sql`
+
+A migration de compatibilidade remove apenas a assinatura legada `build_apf_prompt(UUID)`, necessária quando o ambiente já contém essa função com tipo de retorno diferente. A sobrecarga `build_apf_prompt(UUID, TEXT)` não é removida.
 
 A Edge Function já utilizada pelo fluxo é `apf-generate`. Não existe dependência de uma Edge Function específica para contar ou validar: essas operações usam RPCs autenticados e atômicos.
 

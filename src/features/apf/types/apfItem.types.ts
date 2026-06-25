@@ -1,3 +1,8 @@
+import type {
+  CountingDecision,
+  ElementaryProcessRole,
+} from "../utils/elementaryProcess";
+
 export interface ContractualItem {
   id: string;
   baseline_item_id: string | null;
@@ -20,6 +25,17 @@ export interface ContractualItem {
   corrected_factor_sigla?: string | null;
   corrected_pf_bruto?: number | null;
   corrected_pf_fs?: number | null;
+  elementary_process_id?: string | null;
+  elementary_process_key?: string | null;
+  elementary_process_name?: string | null;
+  process_objective?: string | null;
+  process_role?: ElementaryProcessRole | null;
+  process_is_complete?: boolean | null;
+  process_is_independent?: boolean | null;
+  counting_decision?: CountingDecision | null;
+  process_reasoning?: string | null;
+  separation_precedent_ref?: string | null;
+  absorbed_by_item_id?: string | null;
 }
 
 export interface HuRow {

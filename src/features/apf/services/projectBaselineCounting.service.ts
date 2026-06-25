@@ -16,24 +16,37 @@ function truncate(value: string, limit: number) {
   return compact.length <= limit ? compact : `${compact.slice(0, limit)}…`;
 }
 
+function primaryScope(storyText: string) {
+  return normalize(
+    storyText
+      .split(/(?:critérios? de aceite|criterios? de aceite)/i)[0]
+      .slice(0, 1800),
+  );
+}
+
 export function inferImpactFactor(
   storyText: string,
   availableFactors: string[],
 ): string {
-  const text = normalize(storyText);
+  const scope = primaryScope(storyText);
   const has = (sigla: string) => availableFactors.includes(sigla);
 
-  if (/\b(excluir|exclusao|remover|retirar|desativar)\b/.test(text) && has("E")) {
-    return "E";
-  }
-  if (/\b(migrar|migracao|carga de dados)\b/.test(text) && has("PMD")) {
+  // O fator descreve o objetivo principal da demanda. Palavras incidentais em
+  // critérios de aceite (ex.: remover uma seleção) não caracterizam exclusão.
+  const explicitExclusion = /\b(excluir|exclusao|remover|retirar|desativar)\b.{0,80}\b(funcionalidade|processo|campo|opcao|acao|tela|servico|arquivo)\b/.test(scope)
+    || /\b(exclusao|desativacao)\s+(da|do|de)\b/.test(scope);
+  if (explicitExclusion && has("E")) return "E";
+
+  if (/\b(migrar|migracao|carga de dados)\b/.test(scope) && has("PMD")) {
     return "PMD";
   }
-  if (/\b(corrigir|correcao|erro|bug|defeito)\b/.test(text)) {
+  if (/\b(corrigir|correcao|erro|bug|defeito)\b/.test(scope)) {
     if (has("COR50")) return "COR50";
     if (has("COR")) return "COR";
   }
 
+  // Um item localizado na baseline já existe no projeto; portanto o impacto
+  // inicial é alteração, salvo evidência explícita de outro fator contratual.
   if (has("A")) return "A";
   if (has("I")) return "I";
   return availableFactors[0] ?? "N/A";
@@ -139,11 +152,13 @@ export function buildProjectBaselineItems(args: {
   confidence: number;
   reasoning: string;
   matchType: "baseline_process_exact" | "baseline_process_ai";
+  requiresHumanReview?: boolean;
 }) {
   const selectedRefs = new Set(
     args.selectedProcessRefs.map((ref) => ref.toUpperCase()),
   );
   const selectedItemIds: string[] = [];
+  const reviewItemIds = new Set<string>();
 
   for (const candidate of args.candidates) {
     if (!selectedRefs.has(candidate.process_ref.toUpperCase())) continue;
@@ -154,10 +169,19 @@ export function buildProjectBaselineItems(args: {
 
     if (deterministic) {
       selectedItemIds.push(...deterministic.itemIds);
+      if (args.requiresHumanReview) {
+        deterministic.itemIds.forEach((id) => reviewItemIds.add(id));
+      }
     } else if (candidate.items.length === 1) {
       selectedItemIds.push(candidate.items[0].id);
+      if (args.requiresHumanReview) reviewItemIds.add(candidate.items[0].id);
     } else {
-      selectedItemIds.push(...candidate.items.map((item) => item.id));
+      // O processo foi relacionado, mas a HU não diferencia as funções que o
+      // compõem. Nenhuma delas deve virar PF automaticamente.
+      for (const item of candidate.items) {
+        selectedItemIds.push(item.id);
+        reviewItemIds.add(item.id);
+      }
     }
   }
 
@@ -170,5 +194,14 @@ export function buildProjectBaselineItems(args: {
     confidence: args.confidence,
     reasoning: args.reasoning,
     matchType: args.matchType,
-  });
+  }).map((item) => reviewItemIds.has(item.baseline_item_id)
+    ? {
+      ...item,
+      process_is_complete: false,
+      process_is_independent: false,
+      process_reasoning: args.requiresHumanReview
+        ? "A resposta do provedor de IA não pôde ser utilizada. O candidato da baseline foi preservado para revisão humana, sem geração automática de PF."
+        : "O processo foi relacionado, mas a HU não diferencia quais linhas funcionais foram impactadas. Revisão humana obrigatória.",
+    }
+    : item);
 }

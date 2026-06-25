@@ -81,14 +81,14 @@ function candidate(
 }
 
 describe("project baseline counting", () => {
-  it("usa alteração como fator padrão para função já existente na baseline", () => {
+  it("usa alteração como fator padrão para função existente", () => {
     expect(inferImpactFactor(
       "Distribuir processos bancários para um analista",
       ["I", "A", "E"],
     )).toBe("A");
   });
 
-  it("reconhece exclusão, migração e correção quando há fator disponível", () => {
+  it("reconhece exclusão, migração e correção", () => {
     expect(inferImpactFactor("Excluir processo bancário", ["A", "E"]))
       .toBe("E");
     expect(inferImpactFactor("Migrar os processos legados", ["A", "PMD"]))
@@ -97,19 +97,18 @@ describe("project baseline counting", () => {
       .toBe("COR50");
   });
 
-  it("aceita correspondência determinística somente quando o candidato domina", () => {
+  it("aceita correspondência determinística somente com candidato dominante", () => {
     expect(hasDeterministicProcessMatch([
       candidate({ match_score: 0.86 }),
       candidate({ process_ref: "EF200", match_score: 0.52 }),
     ])).toBe(true);
-
     expect(hasDeterministicProcessMatch([
       candidate({ match_score: 0.8 }),
       candidate({ process_ref: "EF200", match_score: 0.76 }),
     ])).toBe(false);
   });
 
-  it("expande um processo selecionado para todos os itens oficiais da baseline", () => {
+  it("seleciona somente a linha EE quando a HU descreve distribuição", () => {
     const items = buildProjectBaselineItems({
       candidates: [candidate()],
       selectedProcessRefs: ["EF172"],
@@ -121,18 +120,32 @@ describe("project baseline counting", () => {
       matchType: "baseline_process_exact",
     });
 
-    expect(items).toHaveLength(3);
-    expect(items.map((item) => item.baseline_item_id)).toEqual([
-      "item-ee",
-      "item-ce-medium",
-      "item-ce-low",
-    ]);
-    expect(items.every((item) => item.factor_sigla === "A")).toBe(true);
-    expect(items.map((item) => item.function_sigla)).toEqual(["EE", "CE", "CE"]);
-    expect(new Set(items.map((item) => item.elementary_process_key)).size).toBe(3);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      baseline_item_id: "item-ee",
+      function_sigla: "EE",
+      factor_sigla: "A",
+      complexity: "Baixa",
+    });
   });
 
-  it("recusa seleção de processos que não pertencem aos candidatos", () => {
+  it("preserva todas as linhas para revisão quando a HU não as diferencia", () => {
+    const items = buildProjectBaselineItems({
+      candidates: [candidate()],
+      selectedProcessRefs: ["EF172"],
+      factorSigla: "A",
+      huRef: "HU-031",
+      evidence: "Manutenção no processo bancário",
+      confidence: 0.6,
+      reasoning: "Processo identificado, itens ambíguos",
+      matchType: "baseline_process_ai",
+    });
+
+    expect(items).toHaveLength(3);
+    expect(items.every((item) => item.factor_sigla === "A")).toBe(true);
+  });
+
+  it("recusa processos que não pertencem aos candidatos", () => {
     expect(() => buildProjectBaselineItems({
       candidates: [candidate()],
       selectedProcessRefs: ["EF999"],
@@ -142,10 +155,10 @@ describe("project baseline counting", () => {
       confidence: 0.5,
       reasoning: "",
       matchType: "baseline_process_ai",
-    })).toThrow("Os processos selecionados não possuem itens na baseline ativa.");
+    })).toThrow("Os itens selecionados não pertencem à baseline ativa.");
   });
 
-  it("interpreta somente referências de processo e fator do JSON da IA", () => {
+  it("interpreta referências de processo e fator do JSON da IA", () => {
     expect(parseProcessSelection(`
       \`\`\`json
       {

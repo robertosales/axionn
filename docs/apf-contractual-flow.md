@@ -2,85 +2,128 @@
 
 ## Objetivo
 
-A contagem APF usa a planilha oficial da equipe de métricas como fonte de verdade. A IA não define pesos, percentuais ou valores de PF.
+A baseline APF pertence ao projeto e representa seu catálogo funcional oficial. Ela não pertence à sprint. Cada sprint contém HUs que funcionam como gatilhos de impacto sobre esse catálogo.
 
-A HU é somente o gatilho de impacto. A unidade funcional avaliada é a EF da baseline, e uma transação só gera PF separado quando representa processo elementar único, completo e independente.
+A IA não define pesos, tipos ou processos inexistentes. Ela pode auxiliar na seleção dos processos da baseline que foram impactados pela HU. O banco usa os itens oficiais, o PF Bruto registrado na baseline e o fator de impacto aplicável à HU.
 
 ## Fluxo operacional
 
 ```text
-Planilha oficial XLSX
-  -> validação e importação versionada da baseline
-  -> HU identifica impactos
-  -> referência exata da baseline ou classificação assistida
-  -> identificação do processo central
-  -> consolidação de ações auxiliares
-  -> revisão dos casos ambíguos
-  -> banco resolve peso e percentual
-  -> PF Simples = PF Bruto x percentual / 100
-  -> deduplicação por processo elementar
+Baseline oficial XLSX do projeto
+  -> validação e importação versionada
+  -> catálogo de EFs/processos e itens funcionais
+  -> sprint seleciona as HUs da medição
+  -> clique em Calcular na HU
+  -> recuperação dos processos candidatos da baseline
+  -> seleção determinística ou assistida por IA
+  -> aplicação do fator de impacto da HU
+  -> PF Simples = PF Bruto da baseline x percentual do fator
+  -> persistência e deduplicação por item funcional
   -> validação humana
-  -> evento de aprendizado e auditoria
+  -> auditoria e aprendizado
 ```
 
 ## Princípio fundamental
 
 1. A HU nunca é a unidade de contagem.
 2. A HU apenas dispara a análise de impacto.
-3. Cada EF impactada da baseline deve ser avaliada.
-4. Transações só são contadas separadamente quando o processo é completo e independente.
-5. Histórico, preview, validações, consultas, visualizações, mensagens e carregamentos são auxiliares por padrão.
-6. Uma ação auxiliar só pode ser separada quando a baseline ou um precedente oficial da equipe comprovar sua independência.
-7. EFs transacionais com a mesma chave de processo elementar são contadas uma única vez por sessão e fator.
-8. EFs de dados continuam sendo deduplicadas pela função da baseline.
+3. A baseline é vinculada ao projeto e reutilizada entre as sprints.
+4. Cada EF/processo impactado é recuperado do catálogo oficial do projeto.
+5. Cada linha funcional oficialmente separada na baseline preserva tipo, complexidade e PF Bruto próprios.
+6. Consultas, entradas, saídas e arquivos só são separados quando a própria baseline os registra como funções oficiais distintas.
+7. A mesma linha da baseline não é contada duas vezes na mesma sessão e fator, mesmo quando impactada por mais de uma HU.
+8. O fator da baseline representa seu estado de origem; o fator aplicado à HU representa o tipo de impacto da demanda atual.
 
-## Decisões do motor
+## Exemplo GESP3
 
-| Decisão | Efeito |
+O grupo `EF172` contém itens funcionais oficiais distintos:
+
+```text
+EE / Baixa = 3 PF Bruto
+CE / Média = 4 PF Bruto
+CE / Baixa = 3 PF Bruto
+Total do grupo = 10 PF Bruto
+```
+
+Se uma HU de manutenção impactar o grupo e o fator contratual for `A = 60%`:
+
+```text
+PF Simples = 3 x 60% + 4 x 60% + 3 x 60%
+PF Simples = 1,80 + 2,40 + 1,80
+PF Simples = 6,00
+```
+
+O sistema não converte `EE`, `CE`, `SE`, `ALI` ou `AIE` em `TRN`. O PF Bruto vem diretamente da linha oficial da baseline, considerando sua complexidade.
+
+## Fatores de impacto
+
+O fator é inferido a partir da HU e pode ser corrigido na validação. A regra inicial é:
+
+| Evidência na HU | Fator preferencial |
 |---|---|
-| `counted` | Gera PF Bruto e PF Simples |
-| `absorbed` | Ação absorvida pelo processo central; gera 0 PF |
-| `review_required` | Não gera PF até decisão humana |
-| `not_countable` | Item não mensurável; gera 0 PF |
+| Função existente alterada | `A` |
+| Exclusão/remoção | `E` |
+| Migração/carga | `PMD` |
+| Correção de erro | `COR`, `COR50` ou fator contratual disponível |
+| Nova função fora da baseline | fluxo específico de inclusão |
+
+O sistema aceita somente fatores cadastrados pela planilha/modelo do projeto.
+
+## Baseline do projeto
+
+A importação registra:
+
+- projeto proprietário;
+- versão e arquivo de origem;
+- checksum;
+- itens funcionais;
+- código e nome do processo/EF;
+- tipo funcional;
+- complexidade;
+- PF Bruto;
+- fatores de impacto;
+- referências de produto, projeto e medição.
+
+A baseline ativa pode ser substituída por uma versão nova. As versões anteriores permanecem arquivadas para auditoria.
+
+### Exclusão
+
+- baseline nunca utilizada: exclusão física;
+- baseline com sessões de contagem: retirada da operação e arquivamento auditável;
+- baseline ativa excluída: o projeto fica sem baseline ativa até nova importação.
+
+## Recálculo de HU
+
+A ação **Recalcular**:
+
+1. grava um snapshot da contagem atual;
+2. remove apenas os vínculos da HU selecionada;
+3. preserva itens compartilhados com outras HUs;
+4. recalcula os totais da sessão;
+5. executa novamente a identificação na baseline ativa.
+
+O recálculo é explícito. O botão de cálculo em lote processa somente HUs pendentes.
 
 ## Revisão humana
 
-Na validação, o analista informa:
+Na validação, o analista pode:
 
-- papel: processo central, independente ou ação auxiliar;
-- se o processo é completo;
-- se o processo é independente;
-- precedente oficial para separação, quando aplicável;
-- motivo e justificativa da decisão.
+- confirmar os itens recuperados da baseline;
+- corrigir o fator de impacto;
+- decidir se um item deve ser absorvido ou contado;
+- informar precedente e justificativa;
+- homologar PF Bruto e PF Simples.
 
-O banco impede a validação final de itens que permanecem em `review_required`.
-
-## Fórmula
-
-```text
-PF Simples = PF Bruto x contribuição percentual / 100
-```
-
-Exemplo homologado:
-
-```text
-HU200
-Tipo: TRN
-PF Bruto: 4,60
-Fator: A
-Contribuição: 60%
-PF Simples: 4,60 x 60 / 100 = 2,76
-```
+O tipo e o PF Bruto de um item vinculado à baseline não são alterados livremente pela interface; eles são atributos do catálogo oficial.
 
 ## Componentes principais
 
-- `ApfBaselineTab`: validação, upload, versionamento e ativação da baseline.
-- `ApfFunctionPointTab`: impactos por HU, processos elementares, PF e validação.
-- `useContractualApfCounting`: orquestra matching, processo elementar, persistência e revisão.
-- `elementaryProcess.ts`: normalização e classificação conservadora de ações auxiliares.
-- `apf_elementary_processes`: catálogo de processos da sessão.
-- `save_contractual_counting_items`: aplica unicidade, absorção, deduplicação e cálculo.
-- `resolve_apf_elementary_process_item`: registra a decisão do analista.
+- `ApfBaselineTab`: importação, validação, histórico e exclusão da baseline do projeto.
+- `apfBaselineParser`: interpreta processos, itens, tipos, complexidades e fatores da planilha.
+- `get_apf_project_process_candidates`: recupera grupos funcionais candidatos para uma HU.
+- `projectBaselineCounting.service`: decide fator inicial e expande processos para itens oficiais.
+- `useContractualApfCounting`: executa cálculo individual, cálculo de pendentes e recálculo.
+- `reset_apf_story_counting`: preserva snapshot e limpa a HU para nova execução.
 
 ## Ordem de implantação
 
@@ -96,27 +139,32 @@ Aplicar as migrations na ordem:
 8. `20260625000008_apf_elementary_process_engine.sql`
 9. `20260625000009_apf_elementary_process_review.sql`
 10. `20260625000010_apf_elementary_process_runtime_patch.sql`
+11. `20260625000011_apf_project_baseline_catalog.sql`
+12. `20260625000012_apf_project_counting_runtime.sql`
 
 ## Verificação mínima
 
-Após aplicar as migrations:
-
-1. Reimporte e ative a baseline oficial.
-2. Calcule uma HU com referência exata e confirme `baseline_exact`.
-3. Confirme que a HU200 resulta em `TRN/A`, PF Bruto `4,60` e PF Simples `2,76`.
-4. Teste uma HU contendo processo central, preview e validação.
-5. Confirme que preview e validação ficam como `absorbed` ou `review_required`, nunca como PF automático.
-6. Na tela de validação, marque uma ação como independente sem precedente e confirme que o banco rejeita.
-7. Informe um precedente oficial e confirme que a separação passa a ser permitida.
-8. Confirme que duas HUs ligadas ao mesmo processo transacional não duplicam o PF da sessão.
+1. Importar `APF-GESP 3-Baseline.xlsx` no projeto GESP3.
+2. Confirmar escopo **Projeto** e aproximadamente 480 itens funcionais.
+3. Confirmar os tipos `EE`, `CE`, `SE`, `ALI`, `AIE` e `TRN`.
+4. Confirmar que `EF172` reúne três linhas funcionais com PF Bruto total 10.
+5. Calcular a HU de distribuição de processos bancários.
+6. Confirmar que o sistema recupera `EF172` e seus itens oficiais.
+7. Confirmar que o fator da HU é `A`, salvo evidência de outro impacto.
+8. Confirmar PF Bruto 10 e PF Simples 6 para `A = 60%`.
+9. Clicar em **Recalcular** e verificar nova execução com histórico preservado.
+10. Excluir uma baseline de teste e verificar exclusão física ou arquivamento conforme seu uso.
 
 ## Testes automatizados
 
 Os testes cobrem:
 
-- cálculo de PF Bruto e PF Simples da baseline;
-- integridade de pesos e fatores;
-- identificação de preview, histórico e validação como ações auxiliares;
-- absorção de ação auxiliar sem precedente;
-- aceitação de processo independente com precedente oficial;
-- normalização da chave de processo elementar.
+- agrupamento de itens por código EF;
+- preservação de tipo, complexidade e PF Bruto;
+- pesos por tipo e complexidade;
+- fatores de impacto;
+- seleção determinística de processo;
+- inferência inicial do fator;
+- expansão de processo para itens oficiais;
+- rejeição de processos inexistentes;
+- integridade e totais da baseline.

@@ -6,6 +6,10 @@ import {
   ParsedApfBaselineWorkbook,
   parseApfBaselineArrayBuffer,
 } from "../services/apfBaselineParser";
+import {
+  ApfBaselineIntegrityReport,
+  validateApfBaselineIntegrity,
+} from "../services/apfBaselineIntegrity";
 
 export interface BaselineProject { id: string; name: string; contract_id: string | null }
 export interface BaselineRow {
@@ -19,6 +23,13 @@ export interface BaselineRow {
   created_at: string;
 }
 
+async function sha256(buffer: ArrayBuffer) {
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export function useApfBaselineImport() {
   const { currentTeam } = useAuth();
   const teamId = currentTeam?.id ?? "";
@@ -26,7 +37,9 @@ export function useApfBaselineImport() {
   const [projectId, setProjectId] = useState("");
   const [baselines, setBaselines] = useState<BaselineRow[]>([]);
   const [parsed, setParsed] = useState<ParsedApfBaselineWorkbook | null>(null);
+  const [integrity, setIntegrity] = useState<ApfBaselineIntegrityReport | null>(null);
   const [fileName, setFileName] = useState("");
+  const [fileChecksum, setFileChecksum] = useState("");
   const [version, setVersion] = useState("");
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,23 +72,48 @@ export function useApfBaselineImport() {
   async function handleFile(file: File | null) {
     if (!file) return;
     try {
-      const result = parseApfBaselineArrayBuffer(await file.arrayBuffer());
+      const buffer = await file.arrayBuffer();
+      const result = parseApfBaselineArrayBuffer(buffer);
+      const report = validateApfBaselineIntegrity(result);
+      const checksum = await sha256(buffer);
+
       setParsed(result);
+      setIntegrity(report);
       setFileName(file.name);
+      setFileChecksum(checksum);
       const suggestion = file.name.match(/Sprint\s*\d+.*Release\s*\d+/i)?.[0]
         ?? new Date().toISOString().slice(0, 10);
       setVersion(suggestion.replace(/\s+/g, "-"));
       setLabel(result.measurementTitle ?? `${result.systemName ?? "Sistema"} — ${suggestion}`);
-      if (result.warnings.length) toast.warning("Planilha carregada com alertas", { description: result.warnings.join(" ") });
-      else toast.success("Planilha validada e pronta para importação");
+
+      if (report.errors.length) {
+        toast.error("Baseline reprovada na validação", {
+          description: report.errors.join(" "),
+        });
+      } else if (report.warnings.length) {
+        toast.warning("Planilha válida com observações", {
+          description: report.warnings.join(" "),
+        });
+      } else {
+        toast.success("Planilha validada e pronta para importação");
+      }
     } catch (error: any) {
       setParsed(null);
+      setIntegrity(null);
+      setFileChecksum("");
       toast.error("Planilha incompatível", { description: error?.message });
     }
   }
 
   async function importBaseline() {
-    if (!projectId || !parsed || !version.trim()) return;
+    if (!projectId || !parsed || !integrity || !version.trim()) return;
+    if (integrity.errors.length) {
+      toast.error("A baseline não pode ser ativada", {
+        description: "Corrija as divergências da planilha antes de importar.",
+      });
+      return;
+    }
+
     setImporting(true);
     try {
       const { data, error } = await supabase.rpc("apf_import_baseline" as any, {
@@ -92,16 +130,35 @@ export function useApfBaselineImport() {
           reference_date: parsed.referenceDate,
           expected_pf_bruto: parsed.expectedPfBruto,
           expected_pf_fs: parsed.expectedPfFs,
-          warnings: parsed.warnings,
+          calculated_pf_bruto: integrity.calculatedPfBruto,
+          calculated_pf_simples: integrity.calculatedPfSimples,
+          item_count: integrity.itemCount,
+          measurable_count: integrity.measurableCount,
+          non_measurable_count: integrity.nonMeasurableCount,
+          source_checksum: fileChecksum,
+          warnings: integrity.warnings,
+          validation_errors: integrity.errors,
         },
         p_activate: true,
       } as any);
       if (error) throw error;
-      toast.success("Baseline importada e ativada", {
-        description: `${(data as any)?.inserted_items ?? parsed.items.length} itens processados.`,
+
+      const imported = data as any;
+      if (
+        Number(imported?.inserted_items) !== integrity.itemCount
+        || Math.abs(Number(imported?.total_pf_bruto) - integrity.calculatedPfBruto) > 0.02
+        || Math.abs(Number(imported?.total_pf_fs) - integrity.calculatedPfSimples) > 0.02
+      ) {
+        throw new Error("A conferência pós-importação retornou totais diferentes da prévia.");
+      }
+
+      toast.success("Baseline validada, importada e ativada", {
+        description: `${imported.inserted_items} itens — PF Bruto ${Number(imported.total_pf_bruto).toFixed(2)} — PF Simples ${Number(imported.total_pf_fs).toFixed(2)}.`,
       });
       setParsed(null);
+      setIntegrity(null);
       setFileName("");
+      setFileChecksum("");
       await refreshBaselines();
     } catch (error: any) {
       toast.error("Falha ao importar a baseline", { description: error?.message });
@@ -118,7 +175,7 @@ export function useApfBaselineImport() {
   } : null, [parsed]);
 
   return {
-    projects, projectId, setProjectId, baselines, parsed, fileName,
+    projects, projectId, setProjectId, baselines, parsed, integrity, fileName,
     version, setVersion, label, setLabel, loading, importing,
     handleFile, importBaseline, totals,
   };

@@ -2,41 +2,63 @@
 
 ## Objetivo
 
-A contagem APF usa a planilha oficial da equipe de métricas como fonte de verdade. A IA não define pesos, percentuais ou valores de PF. Ela somente classifica uma HU quando não existe correspondência determinística na baseline.
+A contagem APF usa a planilha oficial da equipe de métricas como fonte de verdade. A IA não define pesos, percentuais ou valores de PF.
+
+A HU é somente o gatilho de impacto. A unidade funcional avaliada é a EF da baseline, e uma transação só gera PF separado quando representa processo elementar único, completo e independente.
 
 ## Fluxo operacional
 
 ```text
 Planilha oficial XLSX
-  -> parser e validação local
-  -> importação versionada da baseline
-  -> modelo contratual ativo
-  -> seleção de projeto e sprint
-  -> busca de correspondência na baseline
-      -> correspondência exata: sem IA
-      -> correspondência não exata: IA classifica tipo/fator
+  -> validação e importação versionada da baseline
+  -> HU identifica impactos
+  -> referência exata da baseline ou classificação assistida
+  -> identificação do processo central
+  -> consolidação de ações auxiliares
+  -> revisão dos casos ambíguos
   -> banco resolve peso e percentual
-  -> PF FS = PF Bruto x percentual / 100
-  -> deduplicação por baseline/sessão
-  -> validação humana por item
+  -> PF Simples = PF Bruto x percentual / 100
+  -> deduplicação por processo elementar
+  -> validação humana
   -> evento de aprendizado e auditoria
 ```
 
-## Regras centrais
+## Princípio fundamental
 
-1. A baseline ativa pertence a um projeto e ao modelo APF ativo do contrato.
-2. Correspondência exata por referência de HU ou descrição homologada não consome IA.
-3. A IA retorna somente `function_sigla`, `factor_sigla`, correspondência, confiança e justificativa.
-4. Pesos e percentuais são consultados no banco.
-5. Itens `N/A` produzem `0` PF.
-6. Uma função da baseline é contada uma única vez por sessão e fator, mesmo quando referenciada por mais de uma HU.
-7. Toda correção humana exige motivo e gera evento de aprendizado na mesma transação.
-8. Totais da sessão são recalculados a partir dos itens persistidos.
+1. A HU nunca é a unidade de contagem.
+2. A HU apenas dispara a análise de impacto.
+3. Cada EF impactada da baseline deve ser avaliada.
+4. Transações só são contadas separadamente quando o processo é completo e independente.
+5. Histórico, preview, validações, consultas, visualizações, mensagens e carregamentos são auxiliares por padrão.
+6. Uma ação auxiliar só pode ser separada quando a baseline ou um precedente oficial da equipe comprovar sua independência.
+7. EFs transacionais com a mesma chave de processo elementar são contadas uma única vez por sessão e fator.
+8. EFs de dados continuam sendo deduplicadas pela função da baseline.
+
+## Decisões do motor
+
+| Decisão | Efeito |
+|---|---|
+| `counted` | Gera PF Bruto e PF Simples |
+| `absorbed` | Ação absorvida pelo processo central; gera 0 PF |
+| `review_required` | Não gera PF até decisão humana |
+| `not_countable` | Item não mensurável; gera 0 PF |
+
+## Revisão humana
+
+Na validação, o analista informa:
+
+- papel: processo central, independente ou ação auxiliar;
+- se o processo é completo;
+- se o processo é independente;
+- precedente oficial para separação, quando aplicável;
+- motivo e justificativa da decisão.
+
+O banco impede a validação final de itens que permanecem em `review_required`.
 
 ## Fórmula
 
 ```text
-PF FS = PF Bruto x contribuição percentual / 100
+PF Simples = PF Bruto x contribuição percentual / 100
 ```
 
 Exemplo homologado:
@@ -47,26 +69,18 @@ Tipo: TRN
 PF Bruto: 4,60
 Fator: A
 Contribuição: 60%
-PF FS: 4,60 x 60 / 100 = 2,76
+PF Simples: 4,60 x 60 / 100 = 2,76
 ```
 
-## Componentes frontend
+## Componentes principais
 
-- `ApfBaselineTab`: upload, pré-visualização, versionamento e ativação da baseline.
-- `ApfFunctionPointTab`: contagem por HU, totais, confiança e validação.
-- `useApfBaselineImport`: importação da planilha e histórico de versões.
-- `useContractualApfCounting`: orquestra sessão, matching, classificação, persistência e validação.
-- `apfBaselineParser`: normaliza a planilha oficial em itens, tipos funcionais e fatores.
-
-## RPCs de banco
-
-- `apf_import_baseline`
-- `get_active_apf_context`
-- `get_apf_baseline_candidates`
-- `open_counting_session`
-- `build_apf_prompt`
-- `save_contractual_counting_items`
-- `validate_apf_counting_item`
+- `ApfBaselineTab`: validação, upload, versionamento e ativação da baseline.
+- `ApfFunctionPointTab`: impactos por HU, processos elementares, PF e validação.
+- `useContractualApfCounting`: orquestra matching, processo elementar, persistência e revisão.
+- `elementaryProcess.ts`: normalização e classificação conservadora de ações auxiliares.
+- `apf_elementary_processes`: catálogo de processos da sessão.
+- `save_contractual_counting_items`: aplica unicidade, absorção, deduplicação e cálculo.
+- `resolve_apf_elementary_process_item`: registra a decisão do analista.
 
 ## Ordem de implantação
 
@@ -78,32 +92,31 @@ Aplicar as migrations na ordem:
 4. `20260624000004_apf_counting_rpc.sql`
 5. `20260624000005_apf_contractual_invariants.sql`
 6. `20260624000006_apf_atomic_validation.sql`
-
-A migration de compatibilidade remove apenas a assinatura legada `build_apf_prompt(UUID)`, necessária quando o ambiente já contém essa função com tipo de retorno diferente. A sobrecarga `build_apf_prompt(UUID, TEXT)` não é removida.
-
-Caso `20260624000004_apf_counting_rpc.sql` já tenha falhado no SQL Editor, execute primeiro o arquivo de compatibilidade e, em seguida, execute novamente o arquivo completo `20260624000004_apf_counting_rpc.sql`.
-
-A Edge Function já utilizada pelo fluxo é `apf-generate`. Não existe dependência de uma Edge Function específica para contar ou validar: essas operações usam RPCs autenticados e atômicos.
+7. `20260625000007_apf_contractual_integrity.sql`
+8. `20260625000008_apf_elementary_process_engine.sql`
+9. `20260625000009_apf_elementary_process_review.sql`
+10. `20260625000010_apf_elementary_process_runtime_patch.sql`
 
 ## Verificação mínima
 
 Após aplicar as migrations:
 
-1. Abrir **APF > Baseline**.
-2. Selecionar um projeto com contrato.
-3. Importar a planilha oficial e confirmar os totais da prévia.
-4. Ativar a baseline.
-5. Abrir **APF > Contar PF**.
-6. Selecionar a mesma combinação de projeto e sprint.
-7. Calcular uma HU que exista na baseline e verificar `deterministic_match` visualmente pela mensagem sem consumo de IA.
-8. Validar o item e verificar a criação do evento em `apf_validation_events`.
-9. Corrigir tipo ou fator, informar o motivo e confirmar a atualização do PF FS e dos totais.
+1. Reimporte e ative a baseline oficial.
+2. Calcule uma HU com referência exata e confirme `baseline_exact`.
+3. Confirme que a HU200 resulta em `TRN/A`, PF Bruto `4,60` e PF Simples `2,76`.
+4. Teste uma HU contendo processo central, preview e validação.
+5. Confirme que preview e validação ficam como `absorbed` ou `review_required`, nunca como PF automático.
+6. Na tela de validação, marque uma ação como independente sem precedente e confirme que o banco rejeita.
+7. Informe um precedente oficial e confirme que a separação passa a ser permitida.
+8. Confirme que duas HUs ligadas ao mesmo processo transacional não duplicam o PF da sessão.
 
 ## Testes automatizados
 
-`src/features/apf/services/apfBaselineParser.test.ts` cobre:
+Os testes cobrem:
 
-- normalização de contribuição `0,60` para `60%`;
-- cálculo de `4,60 x 60% = 2,76`;
-- preservação de itens não mensuráveis;
-- derivação de pesos e fatores da planilha.
+- cálculo de PF Bruto e PF Simples da baseline;
+- integridade de pesos e fatores;
+- identificação de preview, histórico e validação como ações auxiliares;
+- absorção de ação auxiliar sem precedente;
+- aceitação de processo independente com precedente oficial;
+- normalização da chave de processo elementar.

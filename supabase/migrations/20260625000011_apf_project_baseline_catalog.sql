@@ -278,7 +278,7 @@ AS $$
     round(greatest(
       scored.token_score,
       scored.token_score * 0.75 + scored.trigram_score * 0.25
-    ), 4) AS match_score
+    )::numeric, 4) AS match_score
   FROM scored
   WHERE scored.token_score > 0 OR scored.trigram_score > 0.05
   ORDER BY match_score DESC, item_count DESC, process_ref

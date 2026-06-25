@@ -4,7 +4,7 @@
 
 A baseline APF pertence ao projeto e representa seu catálogo funcional oficial. Ela não pertence à sprint. Cada sprint contém HUs que funcionam como gatilhos de impacto sobre esse catálogo.
 
-A IA não define pesos, tipos ou processos inexistentes. Ela pode auxiliar na seleção dos processos da baseline que foram impactados pela HU. O banco usa os itens oficiais, o PF Bruto registrado na baseline e o fator de impacto aplicável à HU.
+A IA não define pesos, tipos ou processos inexistentes. Ela pode auxiliar na seleção dos processos e itens da baseline que foram impactados pela HU. O banco usa os itens oficiais, o PF Bruto registrado na baseline e o fator de impacto aplicável à HU.
 
 ## Fluxo operacional
 
@@ -14,8 +14,8 @@ Baseline oficial XLSX do projeto
   -> catálogo de EFs/processos e itens funcionais
   -> sprint seleciona as HUs da medição
   -> clique em Calcular na HU
-  -> recuperação dos processos candidatos da baseline
-  -> seleção determinística ou assistida por IA
+  -> recuperação dos processos candidatos
+  -> seleção dos itens funcionais efetivamente impactados
   -> aplicação do fator de impacto da HU
   -> PF Simples = PF Bruto da baseline x percentual do fator
   -> persistência e deduplicação por item funcional
@@ -29,35 +29,44 @@ Baseline oficial XLSX do projeto
 2. A HU apenas dispara a análise de impacto.
 3. A baseline é vinculada ao projeto e reutilizada entre as sprints.
 4. Cada EF/processo impactado é recuperado do catálogo oficial do projeto.
-5. Cada linha funcional oficialmente separada na baseline preserva tipo, complexidade e PF Bruto próprios.
-6. Consultas, entradas, saídas e arquivos só são separados quando a própria baseline os registra como funções oficiais distintas.
-7. A mesma linha da baseline não é contada duas vezes na mesma sessão e fator, mesmo quando impactada por mais de uma HU.
-8. O fator da baseline representa seu estado de origem; o fator aplicado à HU representa o tipo de impacto da demanda atual.
+5. Dentro do processo, somente as linhas funcionais sustentadas pelo texto e pelas evidências da HU são selecionadas automaticamente.
+6. Cada linha oficialmente separada na baseline preserva tipo, complexidade e PF Bruto próprios.
+7. Consultas, entradas, saídas e arquivos só são separados quando a própria baseline os registra como funções oficiais distintas e a HU os impacta.
+8. A mesma linha da baseline não é contada duas vezes na mesma sessão e fator, mesmo quando impactada por mais de uma HU.
+9. O fator da baseline representa seu estado de origem; o fator aplicado à HU representa o impacto da demanda atual.
 
 ## Exemplo GESP3
 
-O grupo `EF172` contém itens funcionais oficiais distintos:
+O grupo `EF172` contém três linhas funcionais oficiais:
 
 ```text
-EE / Baixa = 3 PF Bruto
-CE / Média = 4 PF Bruto
-CE / Baixa = 3 PF Bruto
-Total do grupo = 10 PF Bruto
+Distribuir Processo: EE / Baixa = 3 PF Bruto
+Listar Processos: CE / Média = 4 PF Bruto
+Selecionar Analista: CE / Baixa = 3 PF Bruto
 ```
 
-Se uma HU de manutenção impactar o grupo e o fator contratual for `A = 60%`:
+Uma HU cujo título e critérios mencionem apenas **distribuir processos bancários** seleciona inicialmente somente a linha EE:
 
 ```text
-PF Simples = 3 x 60% + 4 x 60% + 3 x 60%
-PF Simples = 1,80 + 2,40 + 1,80
-PF Simples = 6,00
+PF Bruto = 3,00
+Fator A = 60%
+PF Simples = 1,80
 ```
+
+Se os critérios da mesma HU também alterarem explicitamente **listar processos** e **selecionar analista**, essas linhas são adicionadas:
+
+```text
+PF Bruto total = 3 + 4 + 3 = 10
+PF Simples com A = 1,80 + 2,40 + 1,80 = 6,00
+```
+
+Quando o texto não diferencia as linhas do grupo, o sistema preserva os candidatos para decisão do analista em vez de inventar uma função.
 
 O sistema não converte `EE`, `CE`, `SE`, `ALI` ou `AIE` em `TRN`. O PF Bruto vem diretamente da linha oficial da baseline, considerando sua complexidade.
 
 ## Fatores de impacto
 
-O fator é inferido a partir da HU e pode ser corrigido na validação. A regra inicial é:
+O fator é inferido a partir da HU e pode ser corrigido na validação:
 
 | Evidência na HU | Fator preferencial |
 |---|---|
@@ -119,10 +128,11 @@ O tipo e o PF Bruto de um item vinculado à baseline não são alterados livreme
 ## Componentes principais
 
 - `ApfBaselineTab`: importação, validação, histórico e exclusão da baseline do projeto.
-- `apfBaselineParser`: interpreta processos, itens, tipos, complexidades e fatores da planilha.
-- `get_apf_project_process_candidates`: recupera grupos funcionais candidatos para uma HU.
-- `projectBaselineCounting.service`: decide fator inicial e expande processos para itens oficiais.
-- `useContractualApfCounting`: executa cálculo individual, cálculo de pendentes e recálculo.
+- `apfBaselineParser`: interpreta processos, itens, tipos, complexidades e fatores.
+- `get_apf_project_process_candidates`: recupera grupos candidatos para uma HU.
+- `projectBaselineItemSelection.service`: diferencia as linhas impactadas dentro do grupo.
+- `projectBaselineCounting.service`: decide o fator inicial e monta os itens oficiais.
+- `useContractualApfCounting`: executa cálculo individual, pendentes e recálculo.
 - `reset_apf_story_counting`: preserva snapshot e limpa a HU para nova execução.
 
 ## Ordem de implantação
@@ -147,11 +157,11 @@ Aplicar as migrations na ordem:
 1. Importar `APF-GESP 3-Baseline.xlsx` no projeto GESP3.
 2. Confirmar escopo **Projeto** e aproximadamente 480 itens funcionais.
 3. Confirmar os tipos `EE`, `CE`, `SE`, `ALI`, `AIE` e `TRN`.
-4. Confirmar que `EF172` reúne três linhas funcionais com PF Bruto total 10.
+4. Confirmar que `EF172` reúne três linhas com PF Bruto `3`, `4` e `3`.
 5. Calcular a HU de distribuição de processos bancários.
-6. Confirmar que o sistema recupera `EF172` e seus itens oficiais.
-7. Confirmar que o fator da HU é `A`, salvo evidência de outro impacto.
-8. Confirmar PF Bruto 10 e PF Simples 6 para `A = 60%`.
+6. Confirmar seleção inicial da linha `EE / Baixa / 3 PF Bruto`.
+7. Confirmar fator `A` e PF Simples `1,80`, salvo evidência de outro impacto.
+8. Adicionar critérios explícitos de listagem/seleção e confirmar inclusão das CEs.
 9. Clicar em **Recalcular** e verificar nova execução com histórico preservado.
 10. Excluir uma baseline de teste e verificar exclusão física ou arquivamento conforme seu uso.
 
@@ -164,7 +174,7 @@ Os testes cobrem:
 - pesos por tipo e complexidade;
 - fatores de impacto;
 - seleção determinística de processo;
+- seleção de linhas impactadas dentro do processo;
 - inferência inicial do fator;
-- expansão de processo para itens oficiais;
-- rejeição de processos inexistentes;
+- rejeição de itens fora da baseline;
 - integridade e totais da baseline.

@@ -38,6 +38,7 @@ function candidate(
         product_reference: "GESP3",
         project_reference: "Projeto GESP3",
         measurement_reference: "Baseline inicial",
+        match_score: 0.82,
       },
       {
         id: "item-ce-medium",
@@ -57,6 +58,7 @@ function candidate(
         product_reference: "GESP3",
         project_reference: "Projeto GESP3",
         measurement_reference: "Baseline inicial",
+        match_score: 0.25,
       },
       {
         id: "item-ce-low",
@@ -76,6 +78,7 @@ function candidate(
         product_reference: "GESP3",
         project_reference: "Projeto GESP3",
         measurement_reference: "Baseline inicial",
+        match_score: 0.2,
       },
     ],
     ...overrides,
@@ -108,12 +111,12 @@ describe("project baseline counting", () => {
 
   it("aceita correspondência determinística somente com candidato dominante", () => {
     expect(hasDeterministicProcessMatch([
-      candidate({ match_score: 0.86 }),
-      candidate({ process_ref: "EF200", match_score: 0.52 }),
+      candidate({ match_score: 0.52 }),
+      candidate({ process_ref: "EF200", match_score: 0.28 }),
     ])).toBe(true);
     expect(hasDeterministicProcessMatch([
-      candidate({ match_score: 0.8 }),
-      candidate({ process_ref: "EF200", match_score: 0.76 }),
+      candidate({ match_score: 0.4 }),
+      candidate({ process_ref: "EF200", match_score: 0.36 }),
     ])).toBe(false);
   });
 
@@ -179,20 +182,32 @@ describe("project baseline counting", () => {
     });
   });
 
-  it("envia funções ambíguas para revisão sem gerar PF automaticamente", () => {
+  it("limita revisão ambígua aos três itens mais aderentes", () => {
+    const largeCandidate = candidate({
+      item_count: 35,
+      items: Array.from({ length: 35 }, (_, index) => ({
+        ...candidate().items[index % 3],
+        id: `item-${index}`,
+        item_ref: `EF172:${index}`,
+        description: index < 3
+          ? `Distribuir processo bancário opção ${index}`
+          : `Função sem aderência ${index}`,
+        match_score: index < 3 ? 0.3 - index * 0.02 : 0.01,
+      })),
+    });
+
     const items = buildProjectBaselineItems({
-      candidates: [candidate()],
+      candidates: [largeCandidate],
       selectedProcessRefs: ["EF172"],
       factorSigla: "A",
       huRef: "HU-031",
-      evidence: "Manutenção no processo bancário",
-      confidence: 0.6,
-      reasoning: "Processo identificado, itens ambíguos",
+      evidence: "Manutenção genérica no processo bancário",
+      confidence: 0.5,
+      reasoning: "Ambíguo",
       matchType: "baseline_process_ai",
     });
 
     expect(items).toHaveLength(3);
-    expect(items.every((item) => item.factor_sigla === "A")).toBe(true);
     expect(items.every((item) => item.process_is_complete === false)).toBe(true);
     expect(items.every((item) => item.process_is_independent === false)).toBe(true);
   });
@@ -249,14 +264,20 @@ describe("project baseline counting", () => {
     });
   });
 
-  it("recupera referências quando o provedor responde em texto", () => {
+  it("recupera seleção textual explícita com no máximo dois processos", () => {
     expect(parseProcessSelection(
       "Processo selecionado: EF172. Fator de impacto: A. A HU distribui processos bancários.",
     )).toEqual({
       processRefs: ["EF172"],
       factorSigla: "A",
       confidence: 0.5,
-      reasoning: "Referências recuperadas de resposta textual do provedor; validação contra a baseline obrigatória.",
+      reasoning: "Referências recuperadas de uma seleção textual explícita; validação contra a baseline obrigatória.",
     });
+  });
+
+  it("rejeita resposta que apenas repete todos os candidatos", () => {
+    expect(() => parseProcessSelection(
+      "Candidatos analisados: EF175, EF179, EF176, EF174, EF178 e EF071.",
+    )).toThrow("A IA não retornou uma seleção restrita e válida.");
   });
 });

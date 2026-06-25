@@ -13,8 +13,8 @@ export function AdminTimesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing,    setEditing]    = useState<TeamAdmin | null>(null);
 
-  const handleSave = async (data: { name: string; module: string }) =>
-    editing ? update(editing.id, data) : create(data);
+  const handleSave = async (data: { name: string; module: string; company_id?: string | null }) =>
+    editing ? update(editing.id, data as any) : create(data as any);
 
   const openNew  = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (team: TeamAdmin) => { setEditing(team); setDialogOpen(true); };

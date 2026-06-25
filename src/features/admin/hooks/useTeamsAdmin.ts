@@ -8,8 +8,15 @@ export interface TeamAdmin {
   id: string;
   name: string;
   module: string;
+  company_id: string | null;
   created_at: string;
   memberCount?: number;
+}
+
+export interface TeamFormValues {
+  name: string;
+  module: string;
+  company_id: string | null;
 }
 
 /**
@@ -25,7 +32,6 @@ export function useTeamsAdmin(contractId?: string | null) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Times do contrato: união entre teams.contract_id e projects.contract_id
       const teamIds = await resolveContractTeamIds(contractId);
       if (teamIds !== null && teamIds.length === 0) {
         setTeams([]); setLoading(false); return;
@@ -33,7 +39,7 @@ export function useTeamsAdmin(contractId?: string | null) {
 
       let query = supabase
         .from("teams")
-        .select("id, name, module, created_at")
+        .select("id, name, module, company_id, created_at")
         .order("name", { ascending: true });
 
       if (teamIds) query = query.in("id", teamIds);
@@ -60,15 +66,25 @@ export function useTeamsAdmin(contractId?: string | null) {
 
   useEffect(() => { load(); }, [load]);
 
-  const create = async (data: { name: string; module: string }) => {
-    const { error } = await supabase.from("teams").insert(data);
+  const create = async (data: TeamFormValues) => {
+    const payload = {
+      name: data.name,
+      module: data.module,
+      ...(data.company_id ? { company_id: data.company_id } : {}),
+    };
+    const { error } = await supabase.from("teams").insert(payload);
     if (error) { toast.error("Erro ao criar time"); return false; }
     toast.success("Time criado com sucesso");
     await load(); await refreshTeams(); return true;
   };
 
-  const update = async (id: string, data: { name?: string; module?: string }) => {
-    const { error } = await supabase.from("teams").update(data).eq("id", id);
+  const update = async (id: string, data: Partial<TeamFormValues>) => {
+    const payload: Record<string, unknown> = {};
+    if (data.name   !== undefined) payload.name      = data.name;
+    if (data.module !== undefined) payload.module    = data.module;
+    // company_id: null desvincula, string vincula
+    if ("company_id" in data)       payload.company_id = data.company_id ?? null;
+    const { error } = await supabase.from("teams").update(payload).eq("id", id);
     if (error) { toast.error("Erro ao atualizar time"); return false; }
     toast.success("Time atualizado");
     await load(); await refreshTeams(); return true;

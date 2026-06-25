@@ -15,6 +15,7 @@ import { AdminHistoricoPage } from "@/features/admin/pages/AdminHistoricoPage";
 import { AdminCapacidadePage } from "@/features/admin/pages/AdminCapacidadePage";
 import { AdminIAsPage } from "@/features/admin/pages/AdminIAsPage";
 import { AdminContratosPage } from "@/features/admin/pages/AdminContratosPage";
+import { AdminEmpresasPage } from "@/features/admin/pages/AdminEmpresasPage";
 import { ProjetosAdminPanel } from "@/features/admin/components/ProjetosAdminPanel";
 import { NotificationBell } from "@/features/admin/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -39,17 +40,19 @@ import {
   FileText,
   FolderKanban,
   RefreshCw,
+  Building2,
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { key: "visao-geral", label: "Visão Geral", icon: BarChart3 },
-  { key: "historico", label: "Histórico", icon: History },
-  { key: "capacidade", label: "Capacidade", icon: Gauge },
-  { key: "times", label: "Times", icon: UsersRound },
-  { key: "usuarios", label: "Usuários", icon: Users },
-  { key: "projetos", label: "Projetos", icon: FolderKanban },
-  { key: "ias", label: "IA", icon: Sparkles },
-  { key: "contratos", label: "Contratos", icon: FileText },
+  { key: "visao-geral", label: "Visão Geral",  icon: BarChart3  },
+  { key: "historico",   label: "Histórico",    icon: History    },
+  { key: "capacidade",  label: "Capacidade",   icon: Gauge      },
+  { key: "times",       label: "Times",        icon: UsersRound },
+  { key: "usuarios",    label: "Usuários",     icon: Users      },
+  { key: "projetos",    label: "Projetos",     icon: FolderKanban },
+  { key: "ias",         label: "IA",           icon: Sparkles   },
+  { key: "contratos",   label: "Contratos",    icon: FileText   },
+  { key: "empresas",    label: "Empresas",     icon: Building2  },
 ] as const;
 
 type PageKey = (typeof NAV_ITEMS)[number]["key"];
@@ -225,7 +228,7 @@ function VisaoGeralPage({
         />
       </section>
 
-      {/* 4. RESUMO POR TIME — lista vertical compacta, sem scroll horizontal */}
+      {/* 4. RESUMO POR TIME */}
       <section aria-label="Resumo por time">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
           Resumo por Time
@@ -491,6 +494,8 @@ function AdminDashboardInner() {
         return <AdminIAsPage />;
       case "contratos":
         return <AdminContratosPage />;
+      case "empresas":
+        return <AdminEmpresasPage />;
       default:
         return null;
     }
@@ -512,7 +517,6 @@ function AdminDashboardInner() {
       )}
 
       <div className="flex-1 flex flex-col min-h-screen lg:ml-60">
-        {/* ── TOP BAR ─────────────────────────────────────────────── */}
         <header
           className="sticky top-0 z-20 flex items-center gap-3 h-14 px-4 lg:px-6 shrink-0"
           style={{
@@ -521,7 +525,6 @@ function AdminDashboardInner() {
             isolation: "isolate",
           }}
         >
-          {/* Hamburger mobile */}
           <button
             className="lg:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors shrink-0"
             onClick={() => setSidebarOpen(true)}
@@ -530,7 +533,6 @@ function AdminDashboardInner() {
             <Menu className="h-4 w-4" />
           </button>
 
-          {/* Título + subtítulo — alinhados à esquerda */}
           <div className="flex flex-col items-start justify-center min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className="text-[15px] font-bold leading-none tracking-tight truncate">
@@ -555,7 +557,6 @@ function AdminDashboardInner() {
             )}
           </div>
 
-          {/* Data/hora — lado direito */}
           <div className="hidden lg:flex flex-col items-end shrink-0">
             <span className="text-[11px] text-muted-foreground capitalize leading-none">
               {dataLabel}
@@ -565,7 +566,6 @@ function AdminDashboardInner() {
             </span>
           </div>
 
-          {/* Ações */}
           <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle />
             <NotificationBell

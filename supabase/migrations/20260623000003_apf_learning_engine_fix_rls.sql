@@ -1,0 +1,4 @@
+-- Este arquivo foi intencionalmente deixado vazio.
+-- As correções de RLS foram incorporadas diretamente nas migrations
+-- 20260623000001 e 20260623000002 em commit anterior.
+-- Mantido apenas para não quebrar o histórico de migrations já aplicadas.

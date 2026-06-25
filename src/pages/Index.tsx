@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 
-// ─── Componentes leves — importados estaticamente─────────────────────────────
+// ─── Componentes leves — importados estaticamente ─────────────────────────────
 import { SprintManager } from "@/components/SprintManager";
 import { DeveloperManager } from "@/components/DeveloperManager";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DashboardHome } from "@/components/DashboardHome";
 import { DemandasPorTimeSection } from "@/features/contracts/DemandasPorTimeSection";
 
-// ─── Componentes pesados — lazy loaded ───────────────────────────────────────
+// ─── Componentes pesados — lazy loaded  ───────────────────────────────────────
 const AgileHistory = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
 const UserRolesManager = lazy(() =>
   import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })),

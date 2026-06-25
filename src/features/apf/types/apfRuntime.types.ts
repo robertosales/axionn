@@ -1,5 +1,6 @@
 import type { ContractualItem, HuRow } from "./apfItem.types";
 import type { CorrectionReason } from "./contractualApf.constants";
+import type { ElementaryProcessRole } from "../utils/elementaryProcess";
 
 export interface BaselineCandidate {
   id: string;
@@ -25,6 +26,8 @@ export interface PersistSummary {
   items: ContractualItem[];
   inserted_items: number;
   deduplicated_items: number;
+  absorbed_items?: number;
+  review_required_items?: number;
 }
 
 export interface GenerateResponse {
@@ -38,6 +41,10 @@ export interface GenerateResponse {
 export interface ValidationItemState extends ContractualItem {
   selectedFunction: string;
   selectedFactor: string;
+  selectedProcessRole: ElementaryProcessRole;
+  selectedProcessComplete: boolean;
+  selectedProcessIndependent: boolean;
+  selectedProcessPrecedent: string;
 }
 
 export interface ValidationDialogState {

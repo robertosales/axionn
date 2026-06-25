@@ -25,6 +25,7 @@ import {
   Database,
   FileSpreadsheet,
   Loader2,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { useApfBaselineImport } from "../hooks/useApfBaselineImport";
@@ -38,10 +39,14 @@ export function ApfBaselineTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Database className="h-4 w-4" /> Baseline contratual do sistema
+            <Database className="h-4 w-4" /> Baseline funcional do projeto
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            A baseline pertence ao projeto e é reutilizada nas contagens de todas as sprints. A sprint define apenas o escopo da medição.
+          </p>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Projeto</Label>
@@ -55,7 +60,7 @@ export function ApfBaselineTab() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Planilha oficial de medição/baseline</Label>
+              <Label>Planilha oficial da baseline do projeto</Label>
               <Input
                 type="file"
                 accept=".xlsx,.xls"
@@ -73,6 +78,7 @@ export function ApfBaselineTab() {
                 <Badge variant="outline">
                   {baseline.parsed.systemName ?? "Sistema não identificado"}
                 </Badge>
+                <Badge variant="outline">Escopo: projeto</Badge>
                 {baseline.integrity && (
                   hasErrors ? (
                     <Badge variant="destructive" className="gap-1">
@@ -86,11 +92,12 @@ export function ApfBaselineTab() {
                 )}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-5">
+                <Metric label="Processos/EFs" value={baseline.totals.processes} />
                 <Metric label="Itens mensuráveis" value={baseline.totals.measurable} />
                 <Metric label="Não mensuráveis" value={baseline.totals.nonMeasurable} />
                 <Metric label="PF Bruto" value={baseline.totals.pfBruto.toFixed(2)} />
-                <Metric label="PF Simples (PF FS)" value={baseline.totals.pfFs.toFixed(2)} primary />
+                <Metric label="PF Baseline" value={baseline.totals.pfFs.toFixed(2)} primary />
               </div>
 
               {baseline.integrity?.errors.length ? (
@@ -124,7 +131,7 @@ export function ApfBaselineTab() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>Versão</Label>
+                  <Label>Versão da baseline do projeto</Label>
                   <Input value={baseline.version} onChange={(event) => baseline.setVersion(event.target.value)} />
                 </div>
                 <div className="space-y-1.5">
@@ -137,23 +144,25 @@ export function ApfBaselineTab() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Item</TableHead>
+                      <TableHead>Processo</TableHead>
+                      <TableHead>Item funcional</TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Impacto</TableHead>
+                      <TableHead>Impacto baseline</TableHead>
+                      <TableHead>Complexidade</TableHead>
                       <TableHead className="text-right">PF Bruto</TableHead>
-                      <TableHead className="text-right">PF Simples</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {baseline.parsed.items.slice(0, 40).map((item, index) => (
-                      <TableRow key={`${item.item_ref}-${index}`}>
+                    {baseline.parsed.items.slice(0, 60).map((item) => (
+                      <TableRow key={item.item_ref}>
+                        <TableCell className="font-mono text-xs">{item.process_ref}</TableCell>
                         <TableCell className="max-w-[420px] truncate" title={item.description}>
                           {item.description}
                         </TableCell>
                         <TableCell>{item.function_sigla}</TableCell>
                         <TableCell>{item.factor_sigla}</TableCell>
-                        <TableCell className="text-right">{item.pf_bruto.toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-medium">{item.pf_fs.toFixed(2)}</TableCell>
+                        <TableCell>{item.complexity}</TableCell>
+                        <TableCell className="text-right font-medium">{item.pf_bruto.toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -168,7 +177,7 @@ export function ApfBaselineTab() {
                 {baseline.importing
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <Upload className="h-4 w-4" />}
-                Validar, importar e ativar baseline
+                Validar, importar e ativar baseline do projeto
               </Button>
             </div>
           )}
@@ -176,7 +185,7 @@ export function ApfBaselineTab() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Histórico de baselines</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Baselines importadas do projeto</CardTitle></CardHeader>
         <CardContent>
           {baseline.loading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
@@ -191,8 +200,10 @@ export function ApfBaselineTab() {
                   <TableHead>Versão</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead>Arquivo</TableHead>
+                  <TableHead>Escopo</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Importação</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -201,6 +212,7 @@ export function ApfBaselineTab() {
                     <TableCell className="font-medium">{item.version}</TableCell>
                     <TableCell>{item.label ?? "—"}</TableCell>
                     <TableCell>{item.source_file_name ?? "—"}</TableCell>
+                    <TableCell><Badge variant="outline">Projeto</Badge></TableCell>
                     <TableCell>
                       {item.status === "active" ? (
                         <Badge className="gap-1 bg-emerald-100 text-emerald-700">
@@ -212,6 +224,26 @@ export function ApfBaselineTab() {
                     </TableCell>
                     <TableCell>
                       {item.imported_at ? new Date(item.imported_at).toLocaleString("pt-BR") : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        disabled={baseline.deletingId === item.id}
+                        onClick={() => {
+                          const confirmed = window.confirm(
+                            item.status === "active"
+                              ? "Excluir a baseline ativa? O projeto ficará sem baseline até que outra seja importada ou ativada. Contagens anteriores serão preservadas para auditoria."
+                              : "Excluir esta baseline importada?",
+                          );
+                          if (confirmed) baseline.deleteBaseline(item);
+                        }}
+                      >
+                        {baseline.deletingId === item.id
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <Trash2 className="h-4 w-4" />}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -90,7 +90,14 @@ describe("project baseline counting", () => {
     )).toBe("A");
   });
 
-  it("reconhece exclusão, migração e correção", () => {
+  it("não interpreta palavra incidental de critério como exclusão funcional", () => {
+    expect(inferImpactFactor(
+      "Título: Distribuir Processos Bancários. Objetivo: atribuir analistas. Critérios de Aceite: permitir remover uma seleção antes de confirmar.",
+      ["I", "A", "E"],
+    )).toBe("A");
+  });
+
+  it("reconhece exclusão, migração e correção quando são o objetivo principal", () => {
     expect(inferImpactFactor("Excluir processo bancário", ["A", "E"]))
       .toBe("E");
     expect(inferImpactFactor("Migrar os processos legados", ["A", "PMD"]))
@@ -167,10 +174,12 @@ describe("project baseline counting", () => {
       function_sigla: "EE",
       factor_sigla: "A",
       complexity: "Baixa",
+      process_is_complete: true,
+      process_is_independent: true,
     });
   });
 
-  it("preserva todas as linhas para revisão quando a HU não as diferencia", () => {
+  it("envia funções ambíguas para revisão sem gerar PF automaticamente", () => {
     const items = buildProjectBaselineItems({
       candidates: [candidate()],
       selectedProcessRefs: ["EF172"],
@@ -184,6 +193,29 @@ describe("project baseline counting", () => {
 
     expect(items).toHaveLength(3);
     expect(items.every((item) => item.factor_sigla === "A")).toBe(true);
+    expect(items.every((item) => item.process_is_complete === false)).toBe(true);
+    expect(items.every((item) => item.process_is_independent === false)).toBe(true);
+  });
+
+  it("preserva o melhor candidato para revisão quando a IA falha", () => {
+    const items = buildProjectBaselineItems({
+      candidates: [candidate()],
+      selectedProcessRefs: ["EF172"],
+      factorSigla: "A",
+      huRef: "HU-031",
+      evidence: "Distribuir processos bancários",
+      confidence: 0.5,
+      reasoning: "Resposta inválida",
+      matchType: "baseline_process_ai",
+      requiresHumanReview: true,
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      baseline_item_id: "item-ee",
+      process_is_complete: false,
+      process_is_independent: false,
+    });
   });
 
   it("recusa processos que não pertencem aos candidatos", () => {
@@ -199,7 +231,7 @@ describe("project baseline counting", () => {
     })).toThrow("Os itens selecionados não pertencem à baseline ativa.");
   });
 
-  it("interpreta referências de processo e fator do JSON da IA", () => {
+  it("interpreta JSON válido retornado pelo provedor", () => {
     expect(parseProcessSelection(`
       \`\`\`json
       {
@@ -214,6 +246,17 @@ describe("project baseline counting", () => {
       factorSigla: "A",
       confidence: 0.81,
       reasoning: "Processo bancário",
+    });
+  });
+
+  it("recupera referências quando o provedor responde em texto", () => {
+    expect(parseProcessSelection(
+      "Processo selecionado: EF172. Fator de impacto: A. A HU distribui processos bancários.",
+    )).toEqual({
+      processRefs: ["EF172"],
+      factorSigla: "A",
+      confidence: 0.5,
+      reasoning: "Referências recuperadas de resposta textual do provedor; validação contra a baseline obrigatória.",
     });
   });
 });

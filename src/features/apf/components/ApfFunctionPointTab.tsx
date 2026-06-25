@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  AlertCircle, AlertTriangle, CheckCircle2, Database, Loader2, RefreshCw, Sparkles,
+  AlertCircle, AlertTriangle, CheckCircle2, Database, Loader2,
+  RefreshCw, RotateCcw, Sparkles,
 } from "lucide-react";
 import { LearningInsightsPanel } from "./learning/LearningInsightsPanel";
 import { useLearningInsights } from "../hooks/useLearningInsights";
@@ -48,7 +49,7 @@ export function ApfFunctionPointTab() {
               </SelectContent>
             </Select>
             <Select value={counting.selectedSprintId} onValueChange={counting.setSelectedSprintId}>
-              <SelectTrigger><SelectValue placeholder="Sprint" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Sprint da medição" /></SelectTrigger>
               <SelectContent>
                 {counting.sprints.map((sprint) => (
                   <SelectItem key={sprint.id} value={sprint.id}>{sprint.name}</SelectItem>
@@ -60,11 +61,11 @@ export function ApfFunctionPointTab() {
           {counting.context ? (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
               <Database className="h-4 w-4" />
-              <strong>Baseline ativa:</strong>
+              <strong>Baseline do projeto:</strong>
               {counting.context.baseline.version} — {counting.context.baseline.label
                 ?? counting.context.baseline.source_file_name ?? "sem descrição"}
               <Badge variant="outline">{counting.context.baseline_item_count} itens</Badge>
-              <Badge variant="outline">{counting.context.model.standard}</Badge>
+              <Badge variant="outline">Reutilizada entre sprints</Badge>
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
@@ -85,9 +86,9 @@ export function ApfFunctionPointTab() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base">Impactos por HU e processos elementares</CardTitle>
+            <CardTitle className="text-base">Processos da baseline impactados pelas HUs</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              A HU é o gatilho. O PF é atribuído somente às EFs que representam processo elementar único, completo e independente.
+              A HU define o impacto da sprint; os itens funcionais e seus PF Brutos são recuperados da baseline do projeto.
             </p>
           </div>
           <div className="flex gap-2">
@@ -103,7 +104,7 @@ export function ApfFunctionPointTab() {
               {counting.countingAll
                 ? <Loader2 className="h-4 w-4 animate-spin" />
                 : <Sparkles className="h-4 w-4" />}
-              Calcular sprint
+              Calcular pendentes
             </Button>
           </div>
         </CardHeader>
@@ -116,12 +117,12 @@ export function ApfFunctionPointTab() {
                 <TableRow>
                   <TableHead className="w-24">Código</TableHead>
                   <TableHead>Título</TableHead>
-                  <TableHead>Processo elementar</TableHead>
+                  <TableHead>Itens/processos identificados</TableHead>
                   <TableHead className="text-center">Tipo / Impacto</TableHead>
                   <TableHead className="text-right">PF Bruto</TableHead>
                   <TableHead className="text-right">PF Simples</TableHead>
                   <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-right">Ação</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -136,11 +137,12 @@ export function ApfFunctionPointTab() {
                     ])).values()]
                     : [];
                   const hasReview = story._items.some((item) => item.counting_decision === "review_required");
+
                   return (
                     <TableRow key={story.id}>
                       <TableCell className="font-mono text-xs">{story.code}</TableCell>
                       <TableCell className="max-w-[280px] text-sm">{story.title}</TableCell>
-                      <TableCell className="max-w-[300px]">
+                      <TableCell className="max-w-[320px]">
                         {processes.length ? (
                           <div className="space-y-1">
                             {processes.map((item) => (
@@ -181,10 +183,31 @@ export function ApfFunctionPointTab() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {story._loading ? <Loader2 className="ml-auto h-4 w-4 animate-spin" /> : story._items.length ? (
-                          <Button size="sm" variant={hasReview ? "default" : "ghost"} onClick={() => counting.openValidation(story)}>
-                            {hasReview ? "Resolver" : "Validar"}
-                          </Button>
+                        {story._loading ? (
+                          <Loader2 className="ml-auto h-4 w-4 animate-spin" />
+                        ) : story._items.length ? (
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant={hasReview ? "default" : "ghost"}
+                              onClick={() => counting.openValidation(story)}
+                            >
+                              {hasReview ? "Resolver" : "Validar"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Descartar a contagem atual e identificar novamente os processos da baseline"
+                              onClick={() => {
+                                const confirmed = window.confirm(
+                                  `Recalcular ${story.code}? A contagem atual será preservada no histórico de recálculos.`,
+                                );
+                                if (confirmed) counting.recalculateHu(story);
+                              }}
+                            >
+                              <RotateCcw className="mr-1 h-3 w-3" />Recalcular
+                            </Button>
+                          </div>
                         ) : (
                           <Button size="sm" variant="ghost" onClick={() => counting.countForHu(story)} disabled={!counting.context}>
                             <Sparkles className="mr-1 h-3 w-3" />Calcular
@@ -212,12 +235,15 @@ export function ApfFunctionPointTab() {
                 && item.selectedProcessComplete
                 && item.selectedProcessIndependent;
               const weight = processCountable
-                ? counting.getFunctionWeight(item.selectedFunction)
+                ? item.baseline_item_id
+                  ? Number(item.pf_bruto)
+                  : counting.getFunctionWeight(item.selectedFunction)
                 : 0;
               const pct = processCountable
                 ? counting.getFactorPct(item.selectedFactor)
                 : 0;
               const pfFs = calculatePfFs(weight, pct);
+
               return (
                 <Card key={item.id} className={item.counting_decision === "review_required" ? "border-amber-400" : ""}>
                   <CardContent className="space-y-4 pt-4">
@@ -291,9 +317,10 @@ export function ApfFunctionPointTab() {
 
                     <div className="grid gap-3 sm:grid-cols-4">
                       <Selector
-                        label="Tipo"
+                        label={item.baseline_item_id ? "Tipo da baseline" : "Tipo"}
                         value={item.selectedFunction}
                         onChange={(value) => counting.updateValidationItem(index, { selectedFunction: value })}
+                        disabled={Boolean(item.baseline_item_id)}
                         options={[
                           { value: "N/A", label: "N/A" },
                           ...(counting.context?.function_types.map((type) => ({
@@ -302,7 +329,7 @@ export function ApfFunctionPointTab() {
                         ]}
                       />
                       <Selector
-                        label="Impacto"
+                        label="Fator de impacto da HU"
                         value={item.selectedFactor}
                         onChange={(value) => counting.updateValidationItem(index, { selectedFactor: value })}
                         options={[
@@ -312,8 +339,8 @@ export function ApfFunctionPointTab() {
                           })) ?? []),
                         ]}
                       />
-                      <Metric label="PF Bruto" value={weight.toFixed(2)} />
-                      <Metric label="PF Simples" value={pfFs.toFixed(2)} primary />
+                      <Metric label="PF Bruto da baseline" value={weight.toFixed(2)} />
+                      <Metric label="PF Simples da HU" value={pfFs.toFixed(2)} primary />
                     </div>
                   </CardContent>
                 </Card>
@@ -338,7 +365,7 @@ export function ApfFunctionPointTab() {
                     onChange={(event) => counting.setDialog((current) => ({
                       ...current, correctionNotes: event.target.value,
                     }))}
-                    placeholder="Explique por que o processo é independente ou por que a ação foi absorvida."
+                    placeholder="Explique o fator aplicado ou a decisão sobre o processo."
                   />
                 </div>
               </div>
@@ -387,18 +414,19 @@ function Metric({ label, value, primary }: { label: string; value: string; prima
 }
 
 function Selector({
-  label, value, onChange, options, placeholder,
+  label, value, onChange, options, placeholder, disabled,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
-      <Select value={value} onValueChange={onChange}>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
         <SelectContent>{options.map((option) => (
           <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>

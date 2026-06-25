@@ -81,6 +81,8 @@ Aplicar as migrations na ordem:
 
 A migration de compatibilidade remove apenas a assinatura legada `build_apf_prompt(UUID)`, necessária quando o ambiente já contém essa função com tipo de retorno diferente. A sobrecarga `build_apf_prompt(UUID, TEXT)` não é removida.
 
+Caso `20260624000004_apf_counting_rpc.sql` já tenha falhado no SQL Editor, execute primeiro o arquivo de compatibilidade e, em seguida, execute novamente o arquivo completo `20260624000004_apf_counting_rpc.sql`.
+
 A Edge Function já utilizada pelo fluxo é `apf-generate`. Não existe dependência de uma Edge Function específica para contar ou validar: essas operações usam RPCs autenticados e atômicos.
 
 ## Verificação mínima

@@ -2,8 +2,13 @@ import * as XLSX from "xlsx";
 
 export interface ParsedBaselineItem {
   item_ref: string;
+  process_ref: string;
+  process_name: string;
   description: string;
   module: string | null;
+  product_reference: string | null;
+  project_reference: string | null;
+  measurement_reference: string | null;
   function_sigla: string;
   factor_sigla: string;
   category_sigla: string | null;
@@ -22,6 +27,7 @@ export interface ParsedFunctionType {
   name: string;
   func_class: "transactional" | "data";
   weight: number;
+  weights_by_complexity: Record<string, number>;
   sort_order: number;
 }
 
@@ -37,11 +43,13 @@ export interface ParsedImpactFactor {
 }
 
 export interface ParsedApfBaselineWorkbook {
+  scope: "project";
   systemName: string | null;
   measurementTitle: string | null;
   referenceDate: string | null;
   expectedPfBruto: number | null;
   expectedPfFs: number | null;
+  processCount: number;
   items: ParsedBaselineItem[];
   functionTypes: ParsedFunctionType[];
   impactFactors: ParsedImpactFactor[];
@@ -64,6 +72,10 @@ function normalized(value: CellValue): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function slug(value: string): string {
+  return normalized(value).replace(/\s+/g, "-").slice(0, 120) || "item";
 }
 
 function numberValue(value: CellValue): number | null {
@@ -119,9 +131,33 @@ function cell(row: CellValue[], index: number): CellValue {
   return index >= 0 ? row[index] : null;
 }
 
-function extractHuRef(description: string, fallback: string): string {
-  const match = description.match(/\bHU\s*[-:]?\s*(\d+(?:\.\d+)?)\b/i);
-  return match ? `HU${match[1]}` : fallback;
+function extractProcessRefs(...values: string[]): string[] {
+  const refs = new Set<string>();
+  for (const value of values) {
+    for (const match of value.matchAll(/\bEF\s*0*(\d+)\b/gi)) {
+      refs.add(`EF${String(Number(match[1])).padStart(3, "0")}`);
+    }
+  }
+  return [...refs];
+}
+
+function cleanProcessName(description: string): string {
+  return description
+    .replace(/\b(?:INTERNET|INTRANET)\b/gi, " ")
+    .replace(/\bEF\s*0*\d+(?:\s*\/\s*EF\s*0*\d+)*\b/gi, " ")
+    .replace(/^\s*\d+(?:\.\d+)*\.?\s*/g, "")
+    .replace(/\s*-\s*$/g, "")
+    .replace(/^\s*-\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function complexityKey(value: string): string {
+  const key = normalized(value);
+  if (key.includes("baixa")) return "Baixa";
+  if (key.includes("media")) return "Média";
+  if (key.includes("alta")) return "Alta";
+  return "Padrão";
 }
 
 function parseItems(rows: SheetMatrix, warnings: string[]): ParsedBaselineItem[] {
@@ -132,17 +168,22 @@ function parseItems(rows: SheetMatrix, warnings: string[]): ParsedBaselineItem[]
     ["PF FS", "PF-FS"],
   ]);
   if (headerIndex < 0) throw new Error("A aba Itens não contém o cabeçalho esperado.");
+
   const columns = columnMap(rows[headerIndex]);
   const descriptionIndex = column(columns, ["Item", "Funcionalidade", "Funcionalidade / EF"]);
   const moduleIndex = column(columns, ["Módulo", "Modulo", "Subprocesso"]);
   const typeIndex = column(columns, ["Tipo", "Tipo de Função"]);
+  const inmIndex = column(columns, ["INM", "Item Não Mensurável"]);
   const factorIndex = column(columns, ["Impacto", "Fator", "Fator de Impacto"]);
   const categoryIndex = column(columns, ["Categoria", "Categoria Funcional"]);
-  const complexityIndex = column(columns, ["Complexidade"]);
+  const complexityIndex = column(columns, ["Complexidade", "Complex."]);
   const pfBrutoIndex = column(columns, ["PF Bruto"]);
-  const contributionIndex = column(columns, ["Contribuição", "Contribuição FS", "% FS", "Percentual"]);
+  const contributionIndex = column(columns, ["Contribuição", "Contribuição FS", "% FS", "Percentual", "FA FS"]);
   const pfFsIndex = column(columns, ["PF FS", "PF-FS"]);
-  const notesIndex = column(columns, ["Observação", "Observações", "Justificativa", "Notas"]);
+  const productReferenceIndex = column(columns, ["Referência do Produto", "Referencia do Produto"]);
+  const projectReferenceIndex = column(columns, ["Referência do Projeto", "Referencia do Projeto"]);
+  const measurementReferenceIndex = column(columns, ["Medição de Referência", "Medicao de Referencia"]);
+  const notesIndex = column(columns, ["Comentário do Item", "Observação", "Observações", "Justificativa", "Notas"]);
 
   const parsed: ParsedBaselineItem[] = [];
   for (let rowIndex = headerIndex + 1; rowIndex < rows.length; rowIndex += 1) {
@@ -151,6 +192,7 @@ function parseItems(rows: SheetMatrix, warnings: string[]): ParsedBaselineItem[]
     if (!description) continue;
 
     const rawType = text(cell(row, typeIndex)).toUpperCase();
+    const rawInm = text(cell(row, inmIndex)).toUpperCase();
     const rawFactor = text(cell(row, factorIndex)).toUpperCase();
     const pfBruto = numberValue(cell(row, pfBrutoIndex)) ?? 0;
     const pfFsFromSheet = numberValue(cell(row, pfFsIndex));
@@ -160,48 +202,108 @@ function parseItems(rows: SheetMatrix, warnings: string[]): ParsedBaselineItem[]
     }
     contributionPct ??= rawType && rawType !== "N/A" ? 100 : 0;
     const pfFs = pfFsFromSheet ?? Math.round(pfBruto * contributionPct) / 100;
-    const measurable = Boolean(rawType && rawType !== "N/A" && pfBruto > 0 && contributionPct > 0);
-    const itemRef = extractHuRef(description, `ROW-${rowIndex + 1}`);
+    const measurable = Boolean(
+      rawType
+      && rawType !== "N/A"
+      && !rawInm
+      && pfBruto > 0
+      && contributionPct > 0,
+    );
+
+    const productReference = text(cell(row, productReferenceIndex)) || null;
+    const projectReference = text(cell(row, projectReferenceIndex)) || null;
+    const measurementReference = text(cell(row, measurementReferenceIndex)) || null;
+    const refs = extractProcessRefs(
+      description,
+      productReference ?? "",
+      projectReference ?? "",
+      measurementReference ?? "",
+    );
+    const processRef = refs.length
+      ? refs.join("+")
+      : `${measurable && ["ALI", "AIE"].includes(rawType) ? "DATA" : "ITEM"}:${slug(description)}`;
+    const processName = cleanProcessName(description) || description;
+    const uniqueItemRef = `${processRef}:${measurable ? rawType : rawInm || "N-A"}:${rowIndex + 1}`;
 
     parsed.push({
-      item_ref: itemRef,
+      item_ref: uniqueItemRef,
+      process_ref: processRef,
+      process_name: processName,
       description,
       module: text(cell(row, moduleIndex)) || null,
+      product_reference: productReference,
+      project_reference: projectReference,
+      measurement_reference: measurementReference,
       function_sigla: measurable ? rawType : "N/A",
       factor_sigla: measurable ? (rawFactor || "I") : "N/A",
-      category_sigla: text(cell(row, categoryIndex)).toUpperCase() || null,
-      complexity: text(cell(row, complexityIndex)) || "Padrão",
+      category_sigla: measurable ? null : (rawInm || null),
+      complexity: complexityKey(text(cell(row, complexityIndex)) || "Padrão"),
       pf_bruto: Math.round(pfBruto * 100) / 100,
       contribution_pct: Math.round(contributionPct * 100) / 100,
       pf_fs: Math.round(pfFs * 100) / 100,
       is_measurable: measurable,
       notes: text(cell(row, notesIndex)) || null,
       source_row: rowIndex + 1,
-      source_payload: Object.fromEntries(row.map((value, index) => [text(rows[headerIndex][index]) || `col_${index + 1}`, value])),
+      source_payload: Object.fromEntries(
+        row.map((value, index) => [text(rows[headerIndex][index]) || `col_${index + 1}`, value]),
+      ),
     });
   }
 
-  const duplicatedRefs = [...new Set(parsed.map((item) => item.item_ref).filter((ref, index, refs) => refs.indexOf(ref) !== index))];
-  if (duplicatedRefs.length) warnings.push(`Referências repetidas preservadas: ${duplicatedRefs.join(", ")}.`);
+  const processNames = new Map<string, string>();
+  for (const item of parsed) {
+    const current = processNames.get(item.process_ref);
+    if (!current || item.process_name.length < current.length) {
+      processNames.set(item.process_ref, item.process_name);
+    }
+  }
+  for (const item of parsed) {
+    item.process_name = processNames.get(item.process_ref) ?? item.process_name;
+  }
+
+  const rowRefs = parsed.filter((item) => item.process_ref.startsWith("ITEM:"));
+  if (rowRefs.length) {
+    warnings.push(`${rowRefs.length} item(ns) não possuem código EF e serão localizados pelo nome funcional.`);
+  }
   return parsed;
 }
 
 function deriveFunctionTypes(items: ParsedBaselineItem[]): ParsedFunctionType[] {
-  const grouped = new Map<string, { weights: number[]; first: ParsedBaselineItem }>();
+  const grouped = new Map<string, Map<string, number[]>>();
   items.filter((item) => item.is_measurable).forEach((item) => {
-    const current = grouped.get(item.function_sigla) ?? { weights: [], first: item };
-    current.weights.push(item.pf_bruto);
-    grouped.set(item.function_sigla, current);
+    const complexities = grouped.get(item.function_sigla) ?? new Map<string, number[]>();
+    const values = complexities.get(item.complexity) ?? [];
+    values.push(item.pf_bruto);
+    complexities.set(item.complexity, values);
+    grouped.set(item.function_sigla, complexities);
   });
-  return [...grouped.entries()].map(([sigla, group], index) => {
-    const frequencies = new Map<number, number>();
-    group.weights.forEach((weight) => frequencies.set(weight, (frequencies.get(weight) ?? 0) + 1));
-    const weight = [...frequencies.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
+
+  return [...grouped.entries()].map(([sigla, complexities], index) => {
+    const weightsByComplexity: Record<string, number> = {};
+    const allWeights: number[] = [];
+    for (const [complexity, values] of complexities) {
+      const frequencies = new Map<number, number>();
+      values.forEach((weight) => {
+        allWeights.push(weight);
+        frequencies.set(weight, (frequencies.get(weight) ?? 0) + 1);
+      });
+      weightsByComplexity[complexity] = [...frequencies.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
+    }
+
+    const defaultWeight = weightsByComplexity.Padrão
+      ?? [...new Map(allWeights.map((weight) => [
+        weight,
+        allWeights.filter((value) => value === weight).length,
+      ])).entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0]
+      ?? 0;
+
     return {
       sigla,
-      name: sigla === "TRN" ? "Transação (Processo Elementar)" : sigla === "ARQ" ? "Arquivo" : sigla,
-      func_class: sigla === "ARQ" ? "data" : "transactional",
-      weight,
+      name: sigla,
+      func_class: ["ALI", "AIE"].includes(sigla) ? "data" : "transactional",
+      weight: defaultWeight,
+      weights_by_complexity: weightsByComplexity,
       sort_order: index + 1,
     };
   });
@@ -214,8 +316,8 @@ function parseImpactFactors(rows: SheetMatrix, items: ParsedBaselineItem[]): Par
     const columns = columnMap(rows[headerIndex]);
     const nameIndex = column(columns, ["Fator", "Nome", "Descrição"]);
     const siglaIndex = column(columns, ["Sigla"]);
-    const pctIndex = column(columns, ["Contribuição", "Contribuição FS", "Percentual"]);
-    const actionIndex = column(columns, ["Ação Baseline", "Ação na Baseline"]);
+    const pctIndex = column(columns, ["Contribuição", "Contribuição FS", "Percentual", "Contribuição (FS)"]);
+    const actionIndex = column(columns, ["Ação Baseline", "Ação na Baseline", "Ação Sobre o Baseline"]);
     const originIndex = column(columns, ["Origem", "Fonte"]);
     const notesIndex = column(columns, ["Observação", "Notas"]);
     for (let index = headerIndex + 1; index < rows.length; index += 1) {
@@ -284,6 +386,7 @@ export function parseApfBaselineArrayBuffer(buffer: ArrayBuffer): ParsedApfBasel
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   const itemsSheet = findSheet(workbook, ["Itens"]);
   if (!itemsSheet) throw new Error("A planilha não possui a aba obrigatória 'Itens'.");
+
   const warnings: string[] = [];
   const itemRows = matrix(workbook, itemsSheet);
   const items = parseItems(itemRows, warnings);
@@ -309,12 +412,14 @@ export function parseApfBaselineArrayBuffer(buffer: ArrayBuffer): ParsedApfBasel
   }
 
   return {
+    scope: "project",
     systemName: findLabeledText(measurementRows, ["Sistema", "Projeto"])
       ?? findLabeledText(summaryRows, ["Sistema", "Projeto"]),
-    measurementTitle: findLabeledText(measurementRows, ["Medição", "Medicao", "Descrição", "Descricao"]),
-    referenceDate: findLabeledText(measurementRows, ["Data", "Referência", "Referencia"]),
+    measurementTitle: findLabeledText(measurementRows, ["Título da Medição", "Medição", "Medicao", "Descrição", "Descricao"]),
+    referenceDate: findLabeledText(measurementRows, ["Data de Referência", "Data", "Referência", "Referencia"]),
     expectedPfBruto,
     expectedPfFs,
+    processCount: new Set(items.map((item) => item.process_ref)).size,
     items,
     functionTypes: deriveFunctionTypes(items),
     impactFactors: parseImpactFactors(factorSheet ? matrix(workbook, factorSheet) : [], items),

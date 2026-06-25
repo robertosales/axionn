@@ -86,7 +86,7 @@ export function normalizeClassifiedItems(
           ? "baseline_similar"
           : functionSigla === "N/A"
             ? "non_measurable"
-            : "new_function"
+            : "ai_new_function"
       )),
       confidence: Math.max(0, Math.min(1, Number(raw.confidence ?? 0.5))),
       justification: String(raw.justification ?? ""),

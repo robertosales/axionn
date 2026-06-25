@@ -6,7 +6,7 @@ import { normalizeElementaryProcessKey } from "../utils/elementaryProcess";
 
 const STOP_WORDS = new Set([
   "para", "com", "dos", "das", "uma", "por", "que", "sistema",
-  "funcionalidade", "processo", "processos", "gesp", "gesp3", "usuario",
+  "funcionalidade", "processo", "gesp", "gesp3", "usuario",
 ]);
 
 function normalize(value: string) {
@@ -18,10 +18,16 @@ function normalize(value: string) {
     .trim();
 }
 
+function stem(token: string) {
+  if (token.length > 4 && token.endsWith("s")) return token.slice(0, -1);
+  return token;
+}
+
 function tokens(value: string) {
   return new Set(
     normalize(value)
       .split(/\s+/)
+      .map(stem)
       .filter((token) => token.length > 2 && !STOP_WORDS.has(token)),
   );
 }
@@ -29,9 +35,11 @@ function tokens(value: string) {
 function lexicalScore(storyText: string, item: ProjectBaselineProcessItem) {
   const storyTokens = tokens(storyText);
   if (!storyTokens.size) return 0;
+
+  // process_name é comum a todas as linhas do grupo e não participa da
+  // distinção entre EE/CE/SE. A seleção usa a descrição específica da linha.
   const itemTokens = tokens([
     item.process_ref,
-    item.process_name,
     item.description,
     item.product_reference,
     item.project_reference,

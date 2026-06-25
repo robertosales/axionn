@@ -1,5 +1,6 @@
 import type { ApfContext } from "../types/apfContext.types";
 import type { BaselineCandidate } from "../types/apfRuntime.types";
+import { deriveElementaryProcessSemantics } from "./elementaryProcess";
 
 export function parseClassification(raw: string): any[] {
   const text = raw.trim()
@@ -72,13 +73,19 @@ export function normalizeClassifiedItems(
     const candidate = baselineItemId
       ? candidateMap.get(baselineItemId)
       : undefined;
+    const description = String(
+      raw.ef_description ?? candidate?.description ?? "Elemento funcional",
+    );
+    const process = deriveElementaryProcessSemantics(
+      raw,
+      description,
+      candidate?.item_ref ?? null,
+    );
 
     return {
       baseline_item_id: baselineItemId,
       hu_ref: String(raw.hu_ref ?? huRef),
-      ef_description: String(
-        raw.ef_description ?? candidate?.description ?? "Elemento funcional",
-      ),
+      ef_description: description,
       function_sigla: functionSigla,
       factor_sigla: factorSigla,
       match_type: String(raw.match_type ?? (
@@ -93,6 +100,7 @@ export function normalizeClassifiedItems(
       evidence_literal: String(raw.evidence_literal ?? ""),
       category_sigla: raw.category_sigla ?? candidate?.category_sigla ?? null,
       complexity: String(raw.complexity ?? candidate?.complexity ?? "Padrão"),
+      ...process,
     };
   });
 }

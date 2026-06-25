@@ -22,6 +22,7 @@ import {
   normalizeClassifiedItems,
   parseClassification,
 } from "../utils/contractualApf.parser";
+import { normalizeElementaryProcessKey } from "../utils/elementaryProcess";
 import { validateContractualItems } from "../services/contractualValidation.service";
 import { useApfCatalog } from "./useApfCatalog";
 
@@ -158,6 +159,17 @@ export function useContractualApfCounting() {
           evidence_literal: hu.title,
           category_sigla: candidate.category_sigla,
           complexity: candidate.complexity,
+          elementary_process_key: normalizeElementaryProcessKey(
+            `${candidate.item_ref} ${candidate.description}`,
+          ),
+          elementary_process_name: candidate.description,
+          process_objective: candidate.description,
+          process_role: candidate.is_measurable ? "central" : "auxiliary",
+          process_is_complete: candidate.is_measurable,
+          process_is_independent: candidate.is_measurable,
+          process_reasoning:
+            "A baseline homologada reconhece esta EF como processo elementar oficial.",
+          separation_precedent_ref: candidate.item_ref,
         }));
       } else {
         const providerId = await resolveActiveProviderId();
@@ -187,10 +199,13 @@ export function useContractualApfCounting() {
         const classificationPrompt = [
           String((prompt as any).system_prompt),
           "Classifique a HU usando a baseline e o modelo contratual. Não calcule PF.",
-          "Identifique o processo central e não separe histórico, preview, validações ou ações auxiliares sem precedente explícito.",
+          "A HU é apenas gatilho de impacto; a unidade avaliada é a EF da baseline.",
+          "Para cada item informe elementary_process_key, elementary_process_name, process_objective, process_role, process_is_complete, process_is_independent, separation_precedent_ref e process_reasoning.",
+          "Itens que pertencem ao mesmo processo central devem usar a mesma elementary_process_key.",
+          "Histórico, preview, validação, consulta, visualização, mensagens e carregamentos devem ser process_role=auxiliary, salvo quando a baseline ou um precedente oficial comprovar processo completo e independente.",
           `HU:\n${storyText}`,
           `CANDIDATOS DA BASELINE:\n${JSON.stringify(candidateBlock, null, 2)}`,
-          "Retorne somente o JSON solicitado. Prefira consolidar e não invente funções.",
+          "Retorne somente JSON válido. Prefira consolidar e não invente funções.",
         ].join("\n\n");
 
         const { data: generated, error: generationError } =
@@ -259,10 +274,19 @@ export function useContractualApfCounting() {
         _sessionId: String(summary.session_id ?? sessionId),
       } : row));
 
+      const processNotes = [
+        summary.absorbed_items
+          ? `${summary.absorbed_items} ação(ões) auxiliar(es) absorvida(s)`
+          : "",
+        summary.review_required_items
+          ? `${summary.review_required_items} processo(s) aguardando revisão`
+          : "",
+      ].filter(Boolean).join(" · ");
+
       toast.success(`${hu.code}: ${Number(summary.story_pf_fs).toFixed(2)} PF Simples`, {
-        description: deterministic
+        description: processNotes || (deterministic
           ? "Correspondência exata com a baseline, sem consumo de IA."
-          : providerUsed,
+          : providerUsed),
       });
       return true;
     } catch (error: any) {
@@ -309,6 +333,10 @@ export function useContractualApfCounting() {
         ...item,
         selectedFunction: effectiveFunction(item),
         selectedFactor: effectiveFactor(item),
+        selectedProcessRole: item.process_role ?? "central",
+        selectedProcessComplete: item.process_is_complete ?? true,
+        selectedProcessIndependent: item.process_is_independent ?? true,
+        selectedProcessPrecedent: item.separation_precedent_ref ?? "",
       })),
       correctionReason: "",
       correctionNotes: "",
@@ -317,7 +345,12 @@ export function useContractualApfCounting() {
 
   const dialogWasCorrected = dialog.items.some((item) =>
     item.selectedFunction !== effectiveFunction(item)
-    || item.selectedFactor !== effectiveFactor(item),
+    || item.selectedFactor !== effectiveFactor(item)
+    || item.selectedProcessRole !== (item.process_role ?? "central")
+    || item.selectedProcessComplete !== (item.process_is_complete ?? true)
+    || item.selectedProcessIndependent !== (item.process_is_independent ?? true)
+    || item.selectedProcessPrecedent !== (item.separation_precedent_ref ?? "")
+    || item.counting_decision === "review_required",
   );
 
   function updateValidationItem(

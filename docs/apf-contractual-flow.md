@@ -60,7 +60,7 @@ PF Bruto total = 3 + 4 + 3 = 10
 PF Simples com A = 1,80 + 2,40 + 1,80 = 6,00
 ```
 
-Quando o texto não diferencia as linhas do grupo, o sistema preserva os candidatos para decisão do analista em vez de inventar uma função.
+Quando o texto não diferencia as linhas do grupo, o sistema preserva somente uma lista curta dos itens mais aderentes para decisão do analista. Grupos grandes não são mais expandidos integralmente na coluna de revisão.
 
 O sistema não converte `EE`, `CE`, `SE`, `ALI` ou `AIE` em `TRN`. O PF Bruto vem diretamente da linha oficial da baseline, considerando sua complexidade.
 
@@ -129,9 +129,9 @@ O tipo e o PF Bruto de um item vinculado à baseline não são alterados livreme
 
 - `ApfBaselineTab`: importação, validação, histórico e exclusão da baseline do projeto.
 - `apfBaselineParser`: interpreta processos, itens, tipos, complexidades e fatores.
-- `get_apf_project_process_candidates`: recupera grupos candidatos para uma HU.
-- `projectBaselineItemSelection.service`: diferencia as linhas impactadas dentro do grupo.
-- `projectBaselineCounting.service`: decide o fator inicial e monta os itens oficiais.
+- `get_apf_project_process_candidates`: ranqueia grupos e devolve apenas os itens mais aderentes de cada processo.
+- `projectBaselineItemSelection.service`: diferencia as linhas impactadas dentro do grupo e limita a revisão ambígua.
+- `projectBaselineCounting.service`: decide o fator inicial, valida a resposta da IA e monta os itens oficiais.
 - `useContractualApfCounting`: executa cálculo individual, pendentes e recálculo.
 - `reset_apf_story_counting`: preserva snapshot e limpa a HU para nova execução.
 
@@ -151,6 +151,8 @@ Aplicar as migrations na ordem:
 10. `20260625000010_apf_elementary_process_runtime_patch.sql`
 11. `20260625000011_apf_project_baseline_catalog.sql`
 12. `20260625000012_apf_project_counting_runtime.sql`
+13. `20260625000013_apf_project_baseline_security.sql`
+14. `20260625000014_apf_candidate_ranking.sql`
 
 ## Verificação mínima
 
@@ -159,9 +161,9 @@ Aplicar as migrations na ordem:
 3. Confirmar os tipos `EE`, `CE`, `SE`, `ALI`, `AIE` e `TRN`.
 4. Confirmar que `EF172` reúne três linhas com PF Bruto `3`, `4` e `3`.
 5. Calcular a HU de distribuição de processos bancários.
-6. Confirmar seleção inicial da linha `EE / Baixa / 3 PF Bruto`.
-7. Confirmar fator `A` e PF Simples `1,80`, salvo evidência de outro impacto.
-8. Adicionar critérios explícitos de listagem/seleção e confirmar inclusão das CEs.
+6. Confirmar que a revisão não apresenta mais dezenas de itens de processos sem relação direta.
+7. Confirmar seleção inicial da linha `EE / Baixa / 3 PF Bruto` ou, em caso ambíguo, no máximo três itens aderentes para revisão.
+8. Confirmar fator `A` e PF Simples `1,80`, salvo evidência de outro impacto.
 9. Clicar em **Recalcular** e verificar nova execução com histórico preservado.
 10. Excluir uma baseline de teste e verificar exclusão física ou arquivamento conforme seu uso.
 
@@ -175,6 +177,8 @@ Os testes cobrem:
 - fatores de impacto;
 - seleção determinística de processo;
 - seleção de linhas impactadas dentro do processo;
+- limitação da revisão ambígua;
+- rejeição de respostas que apenas repetem todos os candidatos;
 - inferência inicial do fator;
 - rejeição de itens fora da baseline;
 - integridade e totais da baseline.

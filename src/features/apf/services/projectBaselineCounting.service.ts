@@ -11,6 +11,11 @@ function normalize(value: string) {
     .toLowerCase();
 }
 
+function truncate(value: string, limit: number) {
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length <= limit ? compact : `${compact.slice(0, limit)}…`;
+}
+
 export function inferImpactFactor(
   storyText: string,
   availableFactors: string[],
@@ -42,6 +47,51 @@ export function hasDeterministicProcessMatch(
   if (!first) return false;
   return Number(first.match_score) >= 0.72
     && (!second || Number(first.match_score) - Number(second.match_score) >= 0.1);
+}
+
+export function buildCompactProcessSelectionPrompt(args: {
+  storyText: string;
+  candidates: ProjectBaselineProcessCandidate[];
+  allowedFactors: string[];
+  inferredFactor: string;
+  minimal?: boolean;
+}) {
+  const processLimit = args.minimal ? 3 : 6;
+  const itemLimit = args.minimal ? 1 : 3;
+  const storyLimit = args.minimal ? 1600 : 3200;
+
+  const candidateBlock = args.candidates
+    .slice(0, processLimit)
+    .map((candidate) => ({
+      ref: candidate.process_ref,
+      name: truncate(candidate.process_name, 140),
+      score: Number(candidate.match_score),
+      items: candidate.items.slice(0, itemLimit).map((item) => ({
+        d: truncate(item.description, args.minimal ? 100 : 180),
+        t: item.function_sigla,
+        c: item.complexity,
+        pf: Number(item.pf_bruto),
+      })),
+    }));
+
+  return [
+    "Tarefa: selecionar processos funcionais impactados por uma HU.",
+    "A baseline pertence ao projeto. Selecione apenas refs presentes em CANDIDATOS.",
+    "Não invente processo, tipo, peso ou item. A HU é gatilho, não unidade de contagem.",
+    `Fator inicial sugerido: ${args.inferredFactor}. Use somente: ${args.allowedFactors.join(",")}.`,
+    'Responda apenas JSON: {"process_refs":["EF000"],"factor_sigla":"A","confidence":0.0,"reasoning":"curto"}',
+    `HU:${truncate(args.storyText, storyLimit)}`,
+    `CANDIDATOS:${JSON.stringify(candidateBlock)}`,
+  ].join("\n");
+}
+
+export function isAiPromptTooLarge(raw: unknown) {
+  const message = String(raw ?? "").toLowerCase();
+  return message.includes("request too large")
+    || message.includes("tokens per minute")
+    || message.includes("requested") && message.includes("limit")
+    || message.includes("context_length")
+    || message.includes("context length");
 }
 
 export function parseProcessSelection(raw: string): {
@@ -107,8 +157,6 @@ export function buildProjectBaselineItems(args: {
     } else if (candidate.items.length === 1) {
       selectedItemIds.push(candidate.items[0].id);
     } else {
-      // Sem evidência suficiente para distinguir as linhas, preserva os itens
-      // oficiais para decisão do analista em vez de inventar uma função.
       selectedItemIds.push(...candidate.items.map((item) => item.id));
     }
   }

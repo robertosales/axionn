@@ -133,6 +133,7 @@ export function useContractualApfCounting() {
       let reasoning: string;
       let providerUsed: string;
       let matchType: "baseline_process_exact" | "baseline_process_ai";
+      let requiresHumanReview = false;
 
       if (hasDeterministicProcessMatch(candidates)) {
         const top = candidates[0];
@@ -142,76 +143,88 @@ export function useContractualApfCounting() {
         providerUsed = "Baseline do projeto";
         matchType = "baseline_process_exact";
       } else {
-        const providerId = await resolveActiveProviderId();
+        const top = candidates[0];
 
-        const invokeSelection = async (minimal: boolean) => {
-          const prompt = buildCompactProcessSelectionPrompt({
-            storyText,
-            candidates,
-            allowedFactors,
-            inferredFactor,
-            minimal,
-          });
-          return supabase.functions.invoke<GenerateResponse>("apf-generate", {
-            body: {
-              prompt,
-              providerId,
-              skipDocx: true,
-            },
-          });
-        };
+        try {
+          const providerId = await resolveActiveProviderId();
 
-        let { data: generated, error: generationError } = await invokeSelection(false);
-        let providerFailure = generationError
-          ? await edgeError(generationError, generated)
-          : generated?.rawError ?? generated?.userMessage ?? "";
+          const invokeSelection = async (minimal: boolean) => {
+            const prompt = buildCompactProcessSelectionPrompt({
+              storyText,
+              candidates,
+              allowedFactors,
+              inferredFactor,
+              minimal,
+            });
+            return supabase.functions.invoke<GenerateResponse>("apf-generate", {
+              body: {
+                prompt,
+                providerId,
+                skipDocx: true,
+              },
+            });
+          };
 
-        if (
-          (generationError || !generated?.success || !generated.markdown)
-          && isAiPromptTooLarge(providerFailure)
-        ) {
-          const retry = await invokeSelection(true);
-          generated = retry.data;
-          generationError = retry.error;
-          providerFailure = generationError
+          let { data: generated, error: generationError } = await invokeSelection(false);
+          let providerFailure = generationError
             ? await edgeError(generationError, generated)
             : generated?.rawError ?? generated?.userMessage ?? "";
-        }
 
-        if (generationError) {
-          throw new Error(await edgeError(generationError, generated));
-        }
-        if (!generated?.success || !generated.markdown) {
-          if (isAiPromptTooLarge(providerFailure)) {
+          if (
+            (generationError || !generated?.success || !generated.markdown)
+            && isAiPromptTooLarge(providerFailure)
+          ) {
+            const retry = await invokeSelection(true);
+            generated = retry.data;
+            generationError = retry.error;
+            providerFailure = generationError
+              ? await edgeError(generationError, generated)
+              : generated?.rawError ?? generated?.userMessage ?? "";
+          }
+
+          if (generationError) {
+            throw new Error(await edgeError(generationError, generated));
+          }
+          if (!generated?.success || !generated.markdown) {
             throw new Error(
-              "O provedor de IA recusou o contexto por limite de tokens. O sistema já reduziu o conteúdo e tentou novamente; aguarde a liberação da cota ou selecione outro provedor.",
+              generated?.userMessage
+              ?? generated?.rawError
+              ?? "A IA não retornou os processos impactados.",
             );
           }
-          throw new Error(
-            generated?.userMessage
-            ?? generated?.rawError
-            ?? "A IA não retornou os processos impactados.",
-          );
-        }
 
-        const selection = parseProcessSelection(generated.markdown);
-        const candidateRefs = new Set(
-          candidates.map((candidate) => candidate.process_ref.toUpperCase()),
-        );
-        selectedProcessRefs = selection.processRefs.filter(
-          (ref) => candidateRefs.has(ref),
-        );
-        if (!selectedProcessRefs.length) {
-          throw new Error("A IA selecionou processos que não pertencem à baseline ativa.");
+          const selection = parseProcessSelection(generated.markdown);
+          const candidateRefs = new Set(
+            candidates.map((candidate) => candidate.process_ref.toUpperCase()),
+          );
+          selectedProcessRefs = selection.processRefs.filter(
+            (ref) => candidateRefs.has(ref),
+          );
+          if (!selectedProcessRefs.length) {
+            throw new Error("A IA selecionou processos que não pertencem à baseline ativa.");
+          }
+          factorSigla = selection.factorSigla
+            && allowedFactors.includes(selection.factorSigla)
+            ? selection.factorSigla
+            : inferredFactor;
+          confidence = selection.confidence;
+          reasoning = selection.reasoning;
+          providerUsed = generated.providerUsed ?? "IA";
+          matchType = "baseline_process_ai";
+        } catch (aiError: any) {
+          // A IA é mecanismo auxiliar. Uma resposta inválida não interrompe a
+          // contagem: preservamos o melhor candidato da baseline sem gerar PF
+          // até o analista confirmar a decisão.
+          selectedProcessRefs = [top.process_ref];
+          confidence = Math.min(Number(top.match_score) || 0.5, 0.69);
+          reasoning = `Candidato ${top.process_ref} preservado para revisão. Motivo: ${aiError?.message ?? "resposta de IA inválida"}`;
+          providerUsed = "Baseline do projeto — revisão";
+          matchType = "baseline_process_ai";
+          requiresHumanReview = true;
+          toast.warning(`${hu.code}: revisão humana necessária`, {
+            description: "O provedor não retornou JSON utilizável. O melhor candidato da baseline foi preservado sem geração automática de PF.",
+          });
         }
-        factorSigla = selection.factorSigla
-          && allowedFactors.includes(selection.factorSigla)
-          ? selection.factorSigla
-          : inferredFactor;
-        confidence = selection.confidence;
-        reasoning = selection.reasoning;
-        providerUsed = generated.providerUsed ?? "IA";
-        matchType = "baseline_process_ai";
       }
 
       const classified = buildProjectBaselineItems({
@@ -223,6 +236,7 @@ export function useContractualApfCounting() {
         confidence,
         reasoning,
         matchType,
+        requiresHumanReview,
       });
 
       const { data: saved, error: saveError } = await supabase.rpc(
@@ -262,9 +276,11 @@ export function useContractualApfCounting() {
         _sessionId: String(summary.session_id ?? sessionId),
       } : row));
 
-      toast.success(`${hu.code}: ${Number(summary.story_pf_fs).toFixed(2)} PF Simples`, {
-        description: `${selectedProcessRefs.join(", ")} · fator ${factorSigla} · ${providerUsed}`,
-      });
+      if (!requiresHumanReview) {
+        toast.success(`${hu.code}: ${Number(summary.story_pf_fs).toFixed(2)} PF Simples`, {
+          description: `${selectedProcessRefs.join(", ")} · fator ${factorSigla} · ${providerUsed}`,
+        });
+      }
       return true;
     } catch (error: any) {
       catalog.setStories((rows) => rows.map((row) => row.id === hu.id

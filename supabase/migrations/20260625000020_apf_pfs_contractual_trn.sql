@@ -61,8 +61,7 @@ BEGIN
       sort_order = 1;
 
     UPDATE public.apf_function_types
-    SET is_active = false,
-        updated_at = now()
+    SET is_active = false
     WHERE model_id = NEW.model_id
       AND sigla IN ('EE', 'CE', 'SE');
 
@@ -110,8 +109,7 @@ ON CONFLICT (model_id, sigla) DO UPDATE SET
   sort_order = 1;
 
 UPDATE public.apf_function_types type
-SET is_active = false,
-    updated_at = now()
+SET is_active = false
 FROM public.apf_counting_models model
 WHERE model.id = type.model_id
   AND model.standard = 'pfs_dpf'

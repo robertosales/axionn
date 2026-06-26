@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  AlertCircle, AlertTriangle, CheckCircle2, Database, Loader2,
+  AlertCircle, AlertTriangle, CheckCircle2, Database, ListChecks, Loader2,
   RefreshCw, RotateCcw, Sparkles,
 } from "lucide-react";
 import { LearningInsightsPanel } from "./learning/LearningInsightsPanel";
@@ -86,9 +86,9 @@ export function ApfFunctionPointTab() {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-base">Processos da baseline impactados pelas HUs</CardTitle>
+            <CardTitle className="text-base">Análise de processos → contador APF</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              A HU define o impacto da sprint; os itens funcionais e seus PF Brutos são recuperados da baseline do projeto.
+              Primeiro o sistema separa e valida os processos elementares. Somente os aprovados chegam ao motor de PF/PFS.
             </p>
           </div>
           <div className="flex gap-2">
@@ -104,7 +104,7 @@ export function ApfFunctionPointTab() {
               {counting.countingAll
                 ? <Loader2 className="h-4 w-4 animate-spin" />
                 : <Sparkles className="h-4 w-4" />}
-              Calcular pendentes
+              Analisar pendentes
             </Button>
           </div>
         </CardHeader>
@@ -117,7 +117,7 @@ export function ApfFunctionPointTab() {
                 <TableRow>
                   <TableHead className="w-24">Código</TableHead>
                   <TableHead>Título</TableHead>
-                  <TableHead>Itens/processos identificados</TableHead>
+                  <TableHead>Processos identificados</TableHead>
                   <TableHead className="text-center">Tipo / Impacto</TableHead>
                   <TableHead className="text-right">PF Bruto</TableHead>
                   <TableHead className="text-right">PF Simples</TableHead>
@@ -127,29 +127,58 @@ export function ApfFunctionPointTab() {
               </TableHeader>
               <TableBody>
                 {counting.stories.map((story) => {
-                  const typeSummary = story._items.length
-                    ? story._items.map((item) => `${effectiveFunction(item)}/${effectiveFactor(item)}`).join(" · ")
-                    : "—";
-                  const processes = story._items.length
+                  const analysisProcesses = story._analysis?.processos ?? [];
+                  const countedProcesses = story._items.length
                     ? [...new Map(story._items.map((item) => [
                       item.elementary_process_key ?? item.id,
                       item,
                     ])).values()]
                     : [];
-                  const hasReview = story._items.some((item) => item.counting_decision === "review_required");
+                  const hasMetricReview = story._items.some(
+                    (item) => item.counting_decision === "review_required",
+                  );
+                  const hasAnalysisReview = story._analysis?.status === "review_required";
+                  const typeSummary = story._items.length
+                    ? story._items.map((item) => `${effectiveFunction(item)}/${effectiveFactor(item)}`).join(" · ")
+                    : analysisProcesses.length
+                      ? analysisProcesses.map((process) => process.tipo_funcional_candidato).join(" · ")
+                      : "—";
 
                   return (
                     <TableRow key={story.id}>
                       <TableCell className="font-mono text-xs">{story.code}</TableCell>
                       <TableCell className="max-w-[280px] text-sm">{story.title}</TableCell>
-                      <TableCell className="max-w-[320px]">
-                        {processes.length ? (
+                      <TableCell className="max-w-[340px]">
+                        {countedProcesses.length ? (
                           <div className="space-y-1">
-                            {processes.map((item) => (
+                            {countedProcesses.map((item) => (
                               <div key={item.elementary_process_key ?? item.id} className="flex items-center gap-1 text-xs">
                                 <ProcessDecisionBadge decision={item.counting_decision ?? "counted"} />
                                 <span className="truncate" title={item.elementary_process_name ?? item.ef_description}>
                                   {item.elementary_process_name ?? item.ef_description}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : analysisProcesses.length ? (
+                          <div className="space-y-1">
+                            {analysisProcesses.map((process) => (
+                              <div key={process.id} className="flex items-center gap-1 text-xs">
+                                {process.central && <Badge variant="outline">Central</Badge>}
+                                <Badge className={process.requer_validacao_humana
+                                  ? "bg-amber-100 text-amber-800"
+                                  : process.recomendacao_para_contador_existente === "enviar"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-slate-100 text-slate-700"}
+                                >
+                                  {process.requer_validacao_humana
+                                    ? "Revisar"
+                                    : process.recomendacao_para_contador_existente === "enviar"
+                                      ? "Elegível"
+                                      : "Não enviar"}
+                                </Badge>
+                                <span className="truncate" title={process.nome_processo}>
+                                  {process.nome_processo}
                                 </span>
                               </div>
                             ))}
@@ -164,9 +193,13 @@ export function ApfFunctionPointTab() {
                         {story.apf_pf_fs == null ? "—" : Number(story.apf_pf_fs).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-center">
-                        {hasReview ? (
+                        {hasAnalysisReview ? (
                           <Badge className="bg-amber-100 text-amber-800">
-                            <AlertTriangle className="mr-1 h-3 w-3" />Revisar processo
+                            <ListChecks className="mr-1 h-3 w-3" />Revisar análise
+                          </Badge>
+                        ) : hasMetricReview ? (
+                          <Badge className="bg-amber-100 text-amber-800">
+                            <AlertTriangle className="mr-1 h-3 w-3" />Revisar contagem
                           </Badge>
                         ) : story.ai_fp_validated ? (
                           <Badge className="bg-emerald-100 text-emerald-700">
@@ -177,7 +210,9 @@ export function ApfFunctionPointTab() {
                             <AlertCircle className="mr-1 h-3 w-3" />Erro
                           </Badge>
                         ) : story._items.length ? (
-                          <Badge variant="outline">Calculado</Badge>
+                          <Badge variant="outline">Contado</Badge>
+                        ) : story._analysis ? (
+                          <Badge variant="outline">Analisado</Badge>
                         ) : (
                           <Badge variant="outline" className="text-muted-foreground">Pendente</Badge>
                         )}
@@ -185,32 +220,34 @@ export function ApfFunctionPointTab() {
                       <TableCell className="text-right">
                         {story._loading ? (
                           <Loader2 className="ml-auto h-4 w-4 animate-spin" />
+                        ) : hasAnalysisReview ? (
+                          <div className="flex justify-end gap-1">
+                            <Button size="sm" onClick={() => counting.openAnalysisReview(story)}>
+                              Revisar análise
+                            </Button>
+                            <RecalculateButton story={story} onRecalculate={counting.recalculateHu} />
+                          </div>
                         ) : story._items.length ? (
                           <div className="flex justify-end gap-1">
                             <Button
                               size="sm"
-                              variant={hasReview ? "default" : "ghost"}
+                              variant={hasMetricReview ? "default" : "ghost"}
                               onClick={() => counting.openValidation(story)}
                             >
-                              {hasReview ? "Resolver" : "Validar"}
+                              {hasMetricReview ? "Resolver contagem" : "Validar PF"}
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              title="Descartar a contagem atual e identificar novamente os processos da baseline"
-                              onClick={() => {
-                                const confirmed = window.confirm(
-                                  `Recalcular ${story.code}? A contagem atual será preservada no histórico de recálculos.`,
-                                );
-                                if (confirmed) counting.recalculateHu(story);
-                              }}
-                            >
-                              <RotateCcw className="mr-1 h-3 w-3" />Recalcular
+                            <RecalculateButton story={story} onRecalculate={counting.recalculateHu} />
+                          </div>
+                        ) : story._analysis ? (
+                          <div className="flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => counting.countForHu(story)}>
+                              Continuar
                             </Button>
+                            <RecalculateButton story={story} onRecalculate={counting.recalculateHu} />
                           </div>
                         ) : (
                           <Button size="sm" variant="ghost" onClick={() => counting.countForHu(story)} disabled={!counting.context}>
-                            <Sparkles className="mr-1 h-3 w-3" />Calcular
+                            <Sparkles className="mr-1 h-3 w-3" />Analisar
                           </Button>
                         )}
                       </TableCell>
@@ -222,6 +259,142 @@ export function ApfFunctionPointTab() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={counting.analysisDialog.open}
+        onOpenChange={(open) => !counting.resolvingAnalysis
+          && counting.setAnalysisDialog((current) => ({ ...current, open }))}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Revisar separação de processos — {counting.analysisDialog.hu?.code}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[68vh] space-y-4 overflow-y-auto pr-1">
+            {counting.analysisDialog.analysis && (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                <p><strong>Processo central:</strong> {counting.analysisDialog.analysis.processo_central.nome}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {counting.analysisDialog.analysis.processo_central.justificativa}
+                </p>
+                <p className="mt-2"><strong>Fator da HU:</strong> {counting.analysisDialog.analysis.inferred_factor_sigla}</p>
+              </div>
+            )}
+
+            {counting.analysisDialog.analysis?.processos.map((process, index) => {
+              const decision = counting.analysisDialog.decisions[index];
+              const transactionalAnalogs = process.baseline_analogas.filter(
+                (analog) => ["EE", "CE", "SE", "TRN"].includes(analog.tipo)
+                  && Boolean(analog.baseline_item_id),
+              );
+              return (
+                <Card key={process.id} className={process.requer_validacao_humana ? "border-amber-400" : ""}>
+                  <CardContent className="space-y-4 pt-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {process.central && <Badge variant="outline">Processo central</Badge>}
+                          <Badge variant="outline">{process.tipo_funcional_candidato}</Badge>
+                        </div>
+                        <p className="mt-2 font-medium">{process.nome_processo}</p>
+                        <p className="text-xs text-muted-foreground">{process.justificativa_separacao}</p>
+                      </div>
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <input
+                          type="checkbox"
+                          checked={decision?.send ?? false}
+                          onChange={(event) => counting.updateAnalysisDecision(index, {
+                            send: event.target.checked,
+                          })}
+                        />
+                        Enviar ao contador
+                      </label>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <Label>Ação / objeto de negócio</Label>
+                        <p className="mt-1 text-sm">{process.acao_negocio} · {process.objeto_negocio}</p>
+                      </div>
+                      <div>
+                        <Label>Resultado funcional</Label>
+                        <p className="mt-1 text-sm">{process.resultado_funcional_entregue || "Não informado"}</p>
+                      </div>
+                    </div>
+
+                    <Selector
+                      label="Item homologado da baseline"
+                      value={decision?.baseline_item_id ?? ""}
+                      placeholder="Selecione o precedente que será contado"
+                      disabled={!decision?.send}
+                      onChange={(value) => counting.updateAnalysisDecision(index, {
+                        baseline_item_id: value,
+                      })}
+                      options={transactionalAnalogs.map((analog) => ({
+                        value: analog.baseline_item_id as string,
+                        label: `${analog.tipo} — ${analog.item_baseline} (${analog.aderencia})`,
+                      }))}
+                    />
+
+                    {process.arquivos_logicos_referenciados.length > 0 && (
+                      <div className="rounded-md border p-3">
+                        <Label>ALI/AIE referenciados — não são processos</Label>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {process.arquivos_logicos_referenciados.map((file, fileIndex) => (
+                            <Badge key={`${file.nome}-${fileIndex}`} variant="outline">
+                              {file.tipo} · {file.nome} · {file.papel_no_processo}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {process.duvidas_ou_riscos.length > 0 && (
+                      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                        <strong>Dúvidas ou riscos</strong>
+                        <ul className="mt-1 list-disc pl-5">
+                          {process.duvidas_ou_riscos.map((risk, riskIndex) => (
+                            <li key={`${risk}-${riskIndex}`}>{risk}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {counting.analysisDialog.analysis?.itens_absorvidos_no_processo_central.length ? (
+              <div className="rounded-md border p-3 text-sm">
+                <strong>Itens absorvidos no processo central</strong>
+                <ul className="mt-1 list-disc pl-5">
+                  {counting.analysisDialog.analysis.itens_absorvidos_no_processo_central.map((item, index) => (
+                    <li key={`${item.descricao}-${index}`}>
+                      {item.descricao}: {item.motivo_absorcao}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => counting.setAnalysisDialog((current) => ({ ...current, open: false }))}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={counting.confirmAnalysisReview}
+              disabled={counting.resolvingAnalysis || counting.analysisDialog.decisions.some(
+                (decision) => decision.send && !decision.baseline_item_id,
+              )}
+            >
+              {counting.resolvingAnalysis && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmar e enviar elegíveis ao contador
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={counting.dialog.open}
@@ -239,9 +412,7 @@ export function ApfFunctionPointTab() {
                   ? Number(item.pf_bruto)
                   : counting.getFunctionWeight(item.selectedFunction)
                 : 0;
-              const pct = processCountable
-                ? counting.getFactorPct(item.selectedFactor)
-                : 0;
+              const pct = processCountable ? counting.getFactorPct(item.selectedFactor) : 0;
               const pfFs = calculatePfFs(weight, pct);
 
               return (
@@ -386,6 +557,30 @@ export function ApfFunctionPointTab() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function RecalculateButton({
+  story,
+  onRecalculate,
+}: {
+  story: { code: string };
+  onRecalculate: (story: any) => void;
+}) {
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      title="Gerar nova análise de processos e preservar o histórico anterior"
+      onClick={() => {
+        const confirmed = window.confirm(
+          `Reanalisar ${story.code}? A análise e a contagem atuais serão preservadas no histórico.`,
+        );
+        if (confirmed) onRecalculate(story);
+      }}
+    >
+      <RotateCcw className="mr-1 h-3 w-3" />Reanalisar
+    </Button>
   );
 }
 

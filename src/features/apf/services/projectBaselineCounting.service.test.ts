@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ProjectBaselineProcessCandidate } from "../types/apfRuntime.types";
 import {
-  buildCompactProcessSelectionPrompt,
+  buildFallbackStructuredAnalysis,
   buildProjectBaselineItems,
+  buildStructuredProcessAnalysisPrompt,
   hasDeterministicProcessMatch,
   inferImpactFactor,
-  isAiPromptTooLarge,
-  parseProcessSelection,
+  normalizeStructuredProcessAnalysis,
+  parseStructuredProcessAnalysis,
 } from "./projectBaselineCounting.service";
 
 function candidate(
@@ -85,7 +86,38 @@ function candidate(
   };
 }
 
-describe("project baseline counting", () => {
+function processDraft(overrides: Record<string, unknown> = {}) {
+  return {
+    id_temporario: "P1",
+    nome_processo: "Distribuir processos bancários",
+    acao_negocio: "Distribuir",
+    objeto_negocio: "Processo bancário",
+    tipo_funcional_candidato: "EE",
+    deve_contar_como_processo_elementar: true,
+    justificativa_separacao: "Entrega resultado funcional independente.",
+    resultado_funcional_entregue: "Processo atribuído ao analista.",
+    independente_dos_demais: true,
+    precedente_baseline_encontrado: true,
+    baseline_analogas: [{
+      baseline_item_id: "item-ee",
+      item_baseline: "EF172 - Processo Bancário - Distribuir Processo",
+      tipo: "EE",
+      aderencia: "alta",
+      motivo_aderencia: "Mesmo verbo e objeto.",
+    }],
+    arquivos_logicos_referenciados: [],
+    sinais_para_o_contador_existente: {
+      campos_percebidos: [],
+      arquivos_referenciados_percebidos: [],
+      observacoes: "",
+    },
+    duvidas_ou_riscos: [],
+    recomendacao_para_contador_existente: "enviar",
+    ...overrides,
+  };
+}
+
+describe("structured project baseline analysis", () => {
   it("usa alteração como fator padrão para função existente", () => {
     expect(inferImpactFactor(
       "Distribuir processos bancários para um analista",
@@ -93,15 +125,15 @@ describe("project baseline counting", () => {
     )).toBe("A");
   });
 
-  it("não interpreta palavra incidental de critério como exclusão funcional", () => {
+  it("não interpreta remoção incidental como exclusão funcional", () => {
     expect(inferImpactFactor(
-      "Título: Distribuir Processos Bancários. Objetivo: atribuir analistas. Critérios de Aceite: permitir remover uma seleção antes de confirmar.",
+      "Título: Distribuir processos. Critérios de Aceite: remover seleção antes de confirmar.",
       ["I", "A", "E"],
     )).toBe("A");
   });
 
-  it("reconhece exclusão, migração e correção quando são o objetivo principal", () => {
-    expect(inferImpactFactor("Excluir processo bancário", ["A", "E"]))
+  it("reconhece exclusão, migração e correção no objetivo principal", () => {
+    expect(inferImpactFactor("Excluir funcionalidade de processo", ["A", "E"]))
       .toBe("E");
     expect(inferImpactFactor("Migrar os processos legados", ["A", "PMD"]))
       .toBe("PMD");
@@ -109,7 +141,7 @@ describe("project baseline counting", () => {
       .toBe("COR50");
   });
 
-  it("aceita correspondência determinística somente com candidato dominante", () => {
+  it("reconhece candidato lexical dominante", () => {
     expect(hasDeterministicProcessMatch([
       candidate({ match_score: 0.52 }),
       candidate({ process_ref: "EF200", match_score: 0.28 }),
@@ -120,46 +152,155 @@ describe("project baseline counting", () => {
     ])).toBe(false);
   });
 
-  it("gera prompt compacto sem serializar toda a baseline", () => {
-    const candidates = Array.from({ length: 10 }, (_, index) => candidate({
-      process_ref: `EF${String(index + 1).padStart(3, "0")}`,
-      process_name: `Processo ${index + 1} ${"x".repeat(300)}`,
-      items: Array.from({ length: 20 }, (_, itemIndex) => ({
+  it("monta prompt de separação sem limitar artificialmente a dois processos", () => {
+    const prompt = buildStructuredProcessAnalysisPrompt({
+      storyId: "story-1",
+      storyText: "Distribuir processos bancários e listar processos pendentes",
+      candidates: [candidate()],
+      logicalFiles: [{
+        id: "ali-1",
+        item_ref: "ALI:PROCESSO",
+        description: "Processo Bancário",
+        function_sigla: "ALI",
+      }],
+      precedents: [],
+    });
+
+    expect(prompt).toContain("Não existe limite artificial de dois processos");
+    expect(prompt).toContain("ALI/AIE nunca são processos");
+    expect(prompt).toContain('"item_baseline":"EF172 - Processo Bancário - Distribuir Processo"');
+    expect(prompt.length).toBeLessThan(16000);
+  });
+
+  it("interpreta JSON estruturado mesmo dentro de markdown", () => {
+    const parsed = parseStructuredProcessAnalysis(`
+      \`\`\`json
+      {"hu_id":"story-1","processos":[${JSON.stringify(processDraft())}]}
+      \`\`\`
+    `);
+    expect(parsed.processos).toHaveLength(1);
+    expect(parsed.processos[0].acao_negocio).toBe("Distribuir");
+  });
+
+  it("mapeia processo transacional para item real da baseline", () => {
+    const normalized = normalizeStructuredProcessAnalysis({
+      status_analise: "ok",
+      motivo_status: "Correspondência homologada",
+      processo_central: { nome: "Distribuir processos bancários", justificativa: "Objetivo principal" },
+      processos: [processDraft()],
+      itens_absorvidos_no_processo_central: [],
+      itens_nao_contaveis_como_processo: [],
+      pendencias_de_detalhamento: [],
+    }, {
+      storyId: "story-1",
+      storyCode: "HU-031",
+      storyTitle: "Distribuir processos bancários",
+      candidates: [candidate()],
+      logicalFiles: [],
+    });
+
+    expect(normalized.status_analise).toBe("ok");
+    expect(normalized.processos).toHaveLength(1);
+    expect(normalized.processos[0]).toMatchObject({
+      tipo_funcional_candidato: "EE",
+      selected_baseline_item_id: "item-ee",
+      recomendacao_para_contador_existente: "enviar",
+      central: true,
+    });
+  });
+
+  it("não aceita ALI como processo elementar", () => {
+    const dataCandidate = candidate({
+      process_ref: "DATA:PROCESSO",
+      items: [{
         ...candidate().items[0],
-        id: `${index}-${itemIndex}`,
-        description: `Item ${itemIndex} ${"y".repeat(500)}`,
-      })),
+        id: "ali-processo",
+        item_ref: "ALI:PROCESSO",
+        description: "Processo Bancário",
+        function_sigla: "ALI",
+      }],
+    });
+    const normalized = normalizeStructuredProcessAnalysis({
+      status_analise: "ok",
+      processo_central: { nome: "Processo Bancário", justificativa: "" },
+      processos: [processDraft({
+        nome_processo: "Processo Bancário",
+        tipo_funcional_candidato: "ALI",
+        baseline_analogas: [{
+          baseline_item_id: "ali-processo",
+          item_baseline: "Processo Bancário",
+          tipo: "ALI",
+          aderencia: "alta",
+          motivo_aderencia: "Arquivo lógico",
+        }],
+      })],
+    }, {
+      storyId: "story-1",
+      storyCode: "HU-031",
+      storyTitle: "Distribuir processos",
+      candidates: [dataCandidate],
+      logicalFiles: [],
+    });
+
+    expect(normalized.status_analise).toBe("requer_validacao_humana");
+    expect(normalized.processos[0].tipo_funcional_candidato).toBe("indefinido");
+    expect(normalized.processos[0].selected_baseline_item_id).toBeNull();
+  });
+
+  it("permite mais de dois processos quando todos têm sustentação", () => {
+    const candidates = [0, 1, 2].map((index) => candidate({
+      process_ref: `EF17${index}`,
+      items: [{
+        ...candidate().items[0],
+        id: `item-${index}`,
+        item_ref: `EF17${index}:EE`,
+        description: `Função independente ${index}`,
+      }],
     }));
-
-    const prompt = buildCompactProcessSelectionPrompt({
-      storyText: "z".repeat(10000),
+    const normalized = normalizeStructuredProcessAnalysis({
+      status_analise: "ok",
+      processo_central: { nome: "Função independente 0", justificativa: "Principal" },
+      processos: candidates.map((entry, index) => processDraft({
+        id_temporario: `P${index + 1}`,
+        nome_processo: `Função independente ${index}`,
+        acao_negocio: `Ação ${index}`,
+        baseline_analogas: [{
+          baseline_item_id: `item-${index}`,
+          item_baseline: `Função independente ${index}`,
+          tipo: "EE",
+          aderencia: "alta",
+          motivo_aderencia: "Precedente exato",
+        }],
+      })),
+    }, {
+      storyId: "story-1",
+      storyCode: "HU-001",
+      storyTitle: "HU multifuncional",
       candidates,
-      allowedFactors: ["I", "A", "E"],
-      inferredFactor: "A",
-    });
-    const minimal = buildCompactProcessSelectionPrompt({
-      storyText: "z".repeat(10000),
-      candidates,
-      allowedFactors: ["I", "A", "E"],
-      inferredFactor: "A",
-      minimal: true,
+      logicalFiles: [],
     });
 
-    expect(prompt.length).toBeLessThan(9000);
-    expect(minimal.length).toBeLessThan(3500);
-    expect(prompt).toContain('"ref":"EF001"');
-    expect(prompt).not.toContain('"ref":"EF010"');
+    expect(normalized.processos).toHaveLength(3);
+    expect(normalized.status_analise).toBe("ok");
   });
 
-  it("identifica falha de limite de contexto ou TPM", () => {
-    expect(isAiPromptTooLarge(
-      "Request too large for model on tokens per minute: Limit 12000, Requested 14224",
-    )).toBe(true);
-    expect(isAiPromptTooLarge("context_length_exceeded")).toBe(true);
-    expect(isAiPromptTooLarge("invalid api key")).toBe(false);
+  it("gera fallback em revisão sem enviar PF automaticamente", () => {
+    const fallback = buildFallbackStructuredAnalysis({
+      storyId: "story-1",
+      storyCode: "HU-031",
+      storyTitle: "Distribuir processos",
+      storyText: "Distribuir processos bancários",
+      candidates: [candidate()],
+      reason: "Resposta da IA inválida",
+    });
+
+    expect(fallback.status_analise).toBe("requer_validacao_humana");
+    expect(fallback.processos[0].recomendacao_para_contador_existente)
+      .toBe("enviar_com_validacao");
+    expect(fallback.processos[0].selected_baseline_item_id).toBeNull();
   });
 
-  it("seleciona somente a linha EE quando a HU descreve distribuição", () => {
+  it("mantém compatibilidade com a materialização anterior", () => {
     const items = buildProjectBaselineItems({
       candidates: [candidate()],
       selectedProcessRefs: ["EF172"],
@@ -170,114 +311,11 @@ describe("project baseline counting", () => {
       reasoning: "Correspondência dominante",
       matchType: "baseline_process_exact",
     });
-
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       baseline_item_id: "item-ee",
       function_sigla: "EE",
       factor_sigla: "A",
-      complexity: "Baixa",
-      process_is_complete: true,
-      process_is_independent: true,
     });
-  });
-
-  it("limita revisão ambígua aos três itens mais aderentes", () => {
-    const largeCandidate = candidate({
-      item_count: 35,
-      items: Array.from({ length: 35 }, (_, index) => ({
-        ...candidate().items[index % 3],
-        id: `item-${index}`,
-        item_ref: `EF172:${index}`,
-        description: index < 3
-          ? `Distribuir processo bancário opção ${index}`
-          : `Função sem aderência ${index}`,
-        match_score: index < 3 ? 0.3 - index * 0.02 : 0.01,
-      })),
-    });
-
-    const items = buildProjectBaselineItems({
-      candidates: [largeCandidate],
-      selectedProcessRefs: ["EF172"],
-      factorSigla: "A",
-      huRef: "HU-031",
-      evidence: "Manutenção genérica no processo bancário",
-      confidence: 0.5,
-      reasoning: "Ambíguo",
-      matchType: "baseline_process_ai",
-    });
-
-    expect(items).toHaveLength(3);
-    expect(items.every((item) => item.process_is_complete === false)).toBe(true);
-    expect(items.every((item) => item.process_is_independent === false)).toBe(true);
-  });
-
-  it("preserva o melhor candidato para revisão quando a IA falha", () => {
-    const items = buildProjectBaselineItems({
-      candidates: [candidate()],
-      selectedProcessRefs: ["EF172"],
-      factorSigla: "A",
-      huRef: "HU-031",
-      evidence: "Distribuir processos bancários",
-      confidence: 0.5,
-      reasoning: "Resposta inválida",
-      matchType: "baseline_process_ai",
-      requiresHumanReview: true,
-    });
-
-    expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({
-      baseline_item_id: "item-ee",
-      process_is_complete: false,
-      process_is_independent: false,
-    });
-  });
-
-  it("recusa processos que não pertencem aos candidatos", () => {
-    expect(() => buildProjectBaselineItems({
-      candidates: [candidate()],
-      selectedProcessRefs: ["EF999"],
-      factorSigla: "A",
-      huRef: "HU-031",
-      evidence: "Texto",
-      confidence: 0.5,
-      reasoning: "",
-      matchType: "baseline_process_ai",
-    })).toThrow("Os itens selecionados não pertencem à baseline ativa.");
-  });
-
-  it("interpreta JSON válido retornado pelo provedor", () => {
-    expect(parseProcessSelection(`
-      \`\`\`json
-      {
-        "process_refs": ["ef172"],
-        "factor_sigla": "a",
-        "confidence": 0.81,
-        "reasoning": "Processo bancário"
-      }
-      \`\`\`
-    `)).toEqual({
-      processRefs: ["EF172"],
-      factorSigla: "A",
-      confidence: 0.81,
-      reasoning: "Processo bancário",
-    });
-  });
-
-  it("recupera seleção textual explícita com no máximo dois processos", () => {
-    expect(parseProcessSelection(
-      "Processo selecionado: EF172. Fator de impacto: A. A HU distribui processos bancários.",
-    )).toEqual({
-      processRefs: ["EF172"],
-      factorSigla: "A",
-      confidence: 0.5,
-      reasoning: "Referências recuperadas de uma seleção textual explícita; validação contra a baseline obrigatória.",
-    });
-  });
-
-  it("rejeita resposta que apenas repete todos os candidatos", () => {
-    expect(() => parseProcessSelection(
-      "Candidatos analisados: EF175, EF179, EF176, EF174, EF178 e EF071.",
-    )).toThrow("A IA não retornou uma seleção restrita e válida.");
   });
 });

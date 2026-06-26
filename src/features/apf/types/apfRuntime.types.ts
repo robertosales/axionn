@@ -52,6 +52,23 @@ export interface ProjectBaselineProcessCandidate {
   match_score: number;
 }
 
+export interface LogicalFileCandidate {
+  id: string;
+  item_ref: string;
+  description: string;
+  function_sigla: "ALI" | "AIE";
+  match_score?: number;
+}
+
+export interface ValidationPrecedentCandidate {
+  hu_title: string | null;
+  validated_functional_type: string | null;
+  validated_factor_sigla: string | null;
+  correction_notes: string | null;
+  ai_reasoning: string | null;
+  baseline_item_id: string | null;
+}
+
 export interface PersistSummary {
   session_id: string;
   story_pf_bruto: number;

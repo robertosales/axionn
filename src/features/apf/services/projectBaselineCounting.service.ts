@@ -362,13 +362,10 @@ export function normalizeStructuredProcessAnalysis(raw: any, args: {
       .map((file: any) => {
         const requestedId = String(file?.baseline_item_id ?? "");
         const byId = args.logicalFiles.find((candidate) => candidate.id === requestedId);
-        const matched = byId ?? args.logicalFiles
+        const rankedFiles = args.logicalFiles
           .map((candidate) => ({ candidate, score: lexicalScore(file?.nome, candidate.description) }))
-          .sort((left, right) => right.score - left.score)[0]?.score >= 0.25
-          ? args.logicalFiles
-            .map((candidate) => ({ candidate, score: lexicalScore(file?.nome, candidate.description) }))
-            .sort((left, right) => right.score - left.score)[0]?.candidate
-          : undefined;
+          .sort((left, right) => right.score - left.score);
+        const matched = byId ?? (rankedFiles[0]?.score >= 0.25 ? rankedFiles[0].candidate : undefined);
         const requestedType = String(file?.tipo ?? "").toUpperCase();
         return {
           baseline_item_id: matched?.id ?? null,
@@ -438,7 +435,7 @@ export function normalizeStructuredProcessAnalysis(raw: any, args: {
       justificativa: truncate(raw?.processo_central?.justificativa, 1000),
     },
     quantidade_processos_identificados: processes.length,
-    processos,
+    processos: processes,
     itens_absorvidos_no_processo_central: asArray(raw?.itens_absorvidos_no_processo_central)
       .slice(0, 30).map((item: any) => ({
         descricao: truncate(item?.descricao, 500),
@@ -489,9 +486,9 @@ export function buildFallbackStructuredAnalysis(args: {
       }],
       arquivos_logicos_referenciados: [],
       sinais_para_o_contador_existente: {
-        campos_percebidos: [], arquivos_referenciados_percebidos: [], observacoes: reason,
+        campos_percebidos: [], arquivos_referenciados_percebidos: [], observacoes: args.reason,
       },
-      duvidas_ou_riscos: [reason],
+      duvidas_ou_riscos: [args.reason],
       recomendacao_para_contador_existente: "enviar_com_validacao",
       selected_baseline_item_id: null,
       review_required: true,
@@ -502,16 +499,16 @@ export function buildFallbackStructuredAnalysis(args: {
     hu_id: args.storyId,
     hu_resumo: `${args.storyCode} — ${args.storyTitle}`,
     status_analise: "requer_validacao_humana",
-    motivo_status: reason,
+    motivo_status: args.reason,
     processo_central: {
       nome: processes[0]?.nome_processo ?? args.storyTitle,
       justificativa: "O processo central precisa ser confirmado pelo analista.",
     },
     quantidade_processos_identificados: processes.length,
-    processos,
+    processos: processes,
     itens_absorvidos_no_processo_central: [],
     itens_nao_contaveis_como_processo: [],
-    pendencias_de_detalhamento: [reason],
+    pendencias_de_detalhamento: [args.reason],
   };
 }
 
@@ -536,7 +533,6 @@ export async function computeProcessAnalysisHash(args: {
     .map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
-// Compatibilidade temporária com testes e consumidores do fluxo anterior.
 export function buildProjectBaselineItems(args: {
   candidates: ProjectBaselineProcessCandidate[];
   selectedProcessRefs: string[];

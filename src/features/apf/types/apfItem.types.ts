@@ -2,6 +2,7 @@ import type {
   CountingDecision,
   ElementaryProcessRole,
 } from "../utils/elementaryProcess";
+import type { ApfProcessAnalysis } from "./apfRuntime.types";
 
 export interface ContractualItem {
   id: string;
@@ -51,6 +52,7 @@ export interface HuRow {
   ai_fp_confidence: number | null;
   ai_fp_validated: boolean;
   _items: ContractualItem[];
+  _analysis?: ApfProcessAnalysis | null;
   _loading?: boolean;
   _error?: string | null;
   _providerUsed?: string | null;

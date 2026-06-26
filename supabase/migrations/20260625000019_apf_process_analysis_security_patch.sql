@@ -36,3 +36,21 @@ REVOKE ALL ON FUNCTION public.resolve_apf_process_analysis(UUID, UUID, JSONB)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.resolve_apf_process_analysis(UUID, UUID, JSONB)
   TO authenticated, service_role;
+
+REVOKE ALL ON TABLE public.apf_process_analysis_runs,
+  public.apf_process_analysis_items,
+  public.apf_process_analysis_analogs,
+  public.apf_process_analysis_logical_files,
+  public.apf_process_analysis_absorbed_items,
+  public.apf_process_analysis_non_countable_items,
+  public.apf_process_analysis_pending_details
+FROM anon;
+
+GRANT SELECT ON TABLE public.apf_process_analysis_runs,
+  public.apf_process_analysis_items,
+  public.apf_process_analysis_analogs,
+  public.apf_process_analysis_logical_files,
+  public.apf_process_analysis_absorbed_items,
+  public.apf_process_analysis_non_countable_items,
+  public.apf_process_analysis_pending_details
+TO authenticated, service_role;

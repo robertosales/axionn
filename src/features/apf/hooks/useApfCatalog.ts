@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ApfContext, ProjectOption, SprintOption } from "../types/apfContext.types";
 import type { ContractualItem, HuRow } from "../types/apfItem.types";
+import type { ApfProcessAnalysis } from "../types/apfRuntime.types";
 
 export function useApfCatalog(teamId: string) {
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -72,6 +73,7 @@ export function useApfCatalog(teamId: string) {
       ai_fp_confidence: row.ai_fp_confidence ?? null,
       ai_fp_validated: row.ai_fp_validated ?? false,
       _items: [],
+      _analysis: null,
     })) as HuRow[];
 
     if (projectId && selectedSprint?.name && context?.baseline?.id) {
@@ -97,6 +99,31 @@ export function useApfCatalog(teamId: string) {
             }
           });
         }
+      }
+
+      const storyIds = rows.map((story) => story.id);
+      if (storyIds.length) {
+        const { data: analysisRows } = await supabase
+          .from("apf_process_analysis_runs" as any)
+          .select("id,story_id,status,created_at")
+          .eq("project_id", projectId)
+          .eq("baseline_id", context.baseline.id)
+          .in("story_id", storyIds)
+          .in("status", ["ok", "review_required", "counted"])
+          .order("created_at", { ascending: false });
+
+        const latestByStory = new Map<string, string>();
+        for (const run of (analysisRows ?? []) as any[]) {
+          if (!latestByStory.has(run.story_id)) latestByStory.set(run.story_id, run.id);
+        }
+        await Promise.all([...latestByStory.entries()].map(async ([storyId, analysisId]) => {
+          const { data: analysis } = await supabase.rpc(
+            "get_apf_process_analysis" as any,
+            { p_analysis_id: analysisId } as any,
+          );
+          const story = rows.find((entry) => entry.id === storyId);
+          if (story && analysis) story._analysis = analysis as unknown as ApfProcessAnalysis;
+        }));
       }
     }
     setStories(rows);

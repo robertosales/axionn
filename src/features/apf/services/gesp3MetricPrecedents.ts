@@ -1,0 +1,1 @@
+export const GESP3_METRIC_PRECEDENTS_VERSION = "release-05-20260608";

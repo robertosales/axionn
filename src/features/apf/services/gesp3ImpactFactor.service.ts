@@ -1,0 +1,1 @@
+export const GESP3_IMPACT_FACTOR_VERSION = "v1";

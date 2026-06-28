@@ -9,8 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertCircle, AlertTriangle, CheckCircle2, Eye, ListChecks, Loader2,
-  RotateCcw, Search, Sparkles,
+  AlertCircle, CheckCircle2, Eye, ListChecks, Loader2, RotateCcw, Search, Sparkles,
 } from "lucide-react";
 import type { useContractualApfCounting } from "../hooks/useContractualApfCounting";
 import type { HuRow } from "../types/apfItem.types";
@@ -120,24 +119,19 @@ export function ApfStoryList({ counting }: ApfStoryListProps) {
         </div>
       </div>
 
-      <div className="border-t">
-        <div className="hidden border-b bg-muted/30 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:grid-cols-[80px_minmax(0,1.7fr)_minmax(150px,1fr)_100px_90px_210px] lg:gap-4">
-          <span>Código</span>
-          <span>Referência funcional</span>
-          <span>Processo principal</span>
-          <span>Tipo / impacto</span>
-          <span className="text-right">PF simples</span>
-          <span className="text-right">Status e ações</span>
-        </div>
-
-        {filteredStories.length ? filteredStories.map((story) => (
-          <StoryRow
-            key={story.id}
-            story={story}
-            counting={counting}
-            onDetails={() => setSelectedStoryId(story.id)}
-          />
-        )) : (
+      <div className="border-t bg-muted/20 p-3 sm:p-4">
+        {filteredStories.length ? (
+          <div className="space-y-3">
+            {filteredStories.map((story) => (
+              <StoryCard
+                key={story.id}
+                story={story}
+                counting={counting}
+                onDetails={() => setSelectedStoryId(story.id)}
+              />
+            ))}
+          </div>
+        ) : (
           <div className="px-6 py-14 text-center">
             <p className="font-medium">Nenhuma HU encontrada</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -157,7 +151,7 @@ export function ApfStoryList({ counting }: ApfStoryListProps) {
   );
 }
 
-function StoryRow({
+function StoryCard({
   story,
   counting,
   onDetails,
@@ -169,63 +163,56 @@ function StoryRow({
   const presentation = getStoryPresentation(story);
 
   return (
-    <article className="grid min-w-0 gap-3 border-b px-4 py-4 transition-colors last:border-b-0 hover:bg-muted/20 lg:grid-cols-[80px_minmax(0,1.7fr)_minmax(150px,1fr)_100px_90px_210px] lg:items-center lg:gap-4">
-      <div className="flex items-center justify-between gap-2 lg:block">
-        <span className="font-mono text-xs font-medium">{story.code}</span>
-        <div className="lg:hidden">
-          <StatusBadge presentation={presentation} />
+    <article className="min-w-0 rounded-xl border bg-background p-4 shadow-sm transition-colors hover:border-primary/30 hover:bg-background/95">
+      <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs font-medium">
+              {story.code}
+            </span>
+            <StatusBadge presentation={presentation} />
+            {presentation.processCount > 1 && (
+              <Badge variant="outline">{presentation.processCount} processos</Badge>
+            )}
+          </div>
+          <h3 className="break-words text-sm font-semibold leading-relaxed text-foreground">
+            {story.title}
+          </h3>
+        </div>
+
+        <div className="grid min-w-0 gap-2 sm:grid-cols-3 xl:w-[420px]">
+          <CompactMetric label="Tipo / impacto" value={presentation.typeSummary} />
+          <CompactMetric
+            label="PF simples"
+            value={presentation.pfFs == null ? "—" : presentation.pfFs.toFixed(2)}
+            primary
+          />
+          <CompactMetric
+            label="PF bruto"
+            value={presentation.pfBruto == null ? "—" : presentation.pfBruto.toFixed(2)}
+          />
         </div>
       </div>
 
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium" title={story.title}>{story.title}</p>
-        <button
-          type="button"
-          className="mt-1 text-xs font-medium text-primary hover:underline lg:hidden"
-          onClick={onDetails}
-        >
-          Ver detalhes da contagem
-        </button>
-      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <div className="min-w-0 rounded-lg border bg-muted/20 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Processo principal
+          </p>
+          <p className="mt-1 break-words text-sm">
+            {presentation.processName}
+          </p>
+        </div>
 
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:hidden">
-          Processo principal
-        </p>
-        <p className="truncate text-sm" title={presentation.processName}>
-          {presentation.processName}
-        </p>
-        {presentation.processCount > 1 && (
-          <span className="text-xs text-muted-foreground">+{presentation.processCount - 1} processo(s)</span>
-        )}
-      </div>
-
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:hidden">
-          Tipo / impacto
-        </p>
-        <Badge variant="outline" className="mt-1 max-w-full lg:mt-0">
-          <span className="truncate">{presentation.typeSummary}</span>
-        </Badge>
-      </div>
-
-      <div className="flex items-end justify-between gap-3 lg:block lg:text-right">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:hidden">
-          PF simples
-        </p>
-        <p className="font-semibold text-primary">
-          {presentation.pfFs == null ? "—" : presentation.pfFs.toFixed(2)}
-        </p>
-      </div>
-
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 lg:justify-end">
-        <div className="hidden lg:block"><StatusBadge presentation={presentation} /></div>
-        <div className="flex flex-wrap justify-end gap-1">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" variant="outline" onClick={onDetails} className="gap-1">
             <Eye className="h-3.5 w-3.5" />
             Detalhes
           </Button>
           <PrimaryStoryAction story={story} counting={counting} />
+          {(story._analysis || story._items.length > 0) && (
+            <RecalculateStoryButton story={story} onRecalculate={counting.recalculateHu} />
+          )}
         </div>
       </div>
     </article>
@@ -242,7 +229,7 @@ function PrimaryStoryAction({
   const presentation = getStoryPresentation(story);
   if (story._loading) return <Loader2 className="h-4 w-4 animate-spin" />;
   if (presentation.hasAnalysisReview) {
-    return <Button size="sm" onClick={() => counting.openAnalysisReview(story)}>Revisar</Button>;
+    return <Button size="sm" onClick={() => counting.openAnalysisReview(story)}>Revisar análise</Button>;
   }
   if (story._items.length) {
     return (
@@ -251,7 +238,7 @@ function PrimaryStoryAction({
         variant={presentation.hasMetricReview ? "default" : "ghost"}
         onClick={() => counting.openValidation(story)}
       >
-        {presentation.hasMetricReview ? "Resolver" : "Validar PF"}
+        {presentation.hasMetricReview ? "Resolver contagem" : "Validar PF"}
       </Button>
     );
   }
@@ -520,6 +507,27 @@ function RecalculateStoryButton({
   );
 }
 
+function CompactMetric({
+  label,
+  value,
+  primary,
+}: {
+  label: string;
+  value: string;
+  primary?: boolean;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border bg-muted/20 p-3">
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className={`mt-1 truncate text-sm font-semibold ${primary ? "text-primary" : ""}`} title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function DetailMetric({
   label,
   value,
@@ -558,6 +566,5 @@ function normalize(value: string) {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+    .toLowerCase();
 }

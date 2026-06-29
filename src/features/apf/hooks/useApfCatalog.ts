@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { ApfContext, ProjectOption, SprintOption } from "../types/apfContext.types";
 import type { ContractualItem, HuRow } from "../types/apfItem.types";
+import type { ApfProcessAnalysis } from "../types/apfRuntime.types";
 
 export function useApfCatalog(teamId: string) {
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -72,15 +73,21 @@ export function useApfCatalog(teamId: string) {
       ai_fp_confidence: row.ai_fp_confidence ?? null,
       ai_fp_validated: row.ai_fp_validated ?? false,
       _items: [],
+      _analysis: null,
     })) as HuRow[];
 
-    if (projectId && selectedSprint?.name) {
+    if (projectId && selectedSprint?.name && context?.baseline?.id) {
       const { data: session } = await supabase.from("apf_counting_sessions" as any)
-        .select("id").eq("project_id", projectId).eq("sprint_ref", selectedSprint.name)
-        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("sprint_ref", selectedSprint.name)
+        .eq("baseline_id", context.baseline.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if ((session as any)?.id) {
         const { data: items } = await supabase.from("apf_counting_items" as any)
-          .select("id,baseline_item_id,story_id,story_ids,hu_ref,ef_description,function_sigla,factor_sigla,pf_bruto,contribution_pct,pf_fs,match_type,match_confidence,ai_confidence_score,justification,evidence_literal,is_validated,corrected_function_sigla,corrected_factor_sigla,corrected_pf_bruto,corrected_pf_fs")
+          .select("id,baseline_item_id,story_id,story_ids,hu_ref,ef_description,function_sigla,factor_sigla,pf_bruto,contribution_pct,pf_fs,match_type,match_confidence,ai_confidence_score,justification,evidence_literal,is_validated,corrected_function_sigla,corrected_factor_sigla,corrected_pf_bruto,corrected_pf_fs,elementary_process_id,elementary_process_key,elementary_process_name,process_role,process_is_complete,process_is_independent,counting_decision,process_reasoning,separation_precedent_ref,absorbed_by_item_id")
           .eq("session_id", (session as any).id).order("sort_order");
         for (const item of (items ?? []) as ContractualItem[]) {
           const ids = item.story_ids?.length ? item.story_ids : item.story_id ? [item.story_id] : [];
@@ -93,10 +100,35 @@ export function useApfCatalog(teamId: string) {
           });
         }
       }
+
+      const storyIds = rows.map((story) => story.id);
+      if (storyIds.length) {
+        const { data: analysisRows } = await supabase
+          .from("apf_process_analysis_runs" as any)
+          .select("id,story_id,status,created_at")
+          .eq("project_id", projectId)
+          .eq("baseline_id", context.baseline.id)
+          .in("story_id", storyIds)
+          .in("status", ["ok", "review_required", "counted"])
+          .order("created_at", { ascending: false });
+
+        const latestByStory = new Map<string, string>();
+        for (const run of (analysisRows ?? []) as any[]) {
+          if (!latestByStory.has(run.story_id)) latestByStory.set(run.story_id, run.id);
+        }
+        await Promise.all([...latestByStory.entries()].map(async ([storyId, analysisId]) => {
+          const { data: analysis } = await supabase.rpc(
+            "get_apf_process_analysis" as any,
+            { p_analysis_id: analysisId } as any,
+          );
+          const story = rows.find((entry) => entry.id === storyId);
+          if (story && analysis) story._analysis = analysis as unknown as ApfProcessAnalysis;
+        }));
+      }
     }
     setStories(rows);
     setLoading(false);
-  }, [teamId, selectedSprintId, projectId, selectedSprint?.name]);
+  }, [teamId, selectedSprintId, projectId, selectedSprint?.name, context?.baseline?.id]);
 
   useEffect(() => { loadStories(); }, [loadStories]);
 

@@ -1,8 +1,6 @@
 # .github/workflows/ci.yml
 # CI rodado em todo PR aberto ou atualizado contra develop ou main.
-# Jobs: lint (ESLint) e test (Vitest).
-# Se qualquer job falhar, o merge é bloqueado (configure branch protection
-# em Settings → Branches → Require status checks: ci/lint e ci/test).
+# Jobs: lint (ESLint), test (Vitest) e build.
 
 name: ✅ CI
 
@@ -13,14 +11,13 @@ on:
       - main
   push:
     branches:
-      - develop   # roda também em push direto para capturar commits do Lovable
+      - develop
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true  # cancela runs antigas do mesmo branch/PR
+  cancel-in-progress: true
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────────
   lint:
     name: 🔍 ESLint
     runs-on: ubuntu-latest
@@ -40,7 +37,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-  # ─────────────────────────────────────────────────────────────────────
   test:
     name: 🧪 Vitest
     runs-on: ubuntu-latest
@@ -58,13 +54,37 @@ jobs:
         run: npm ci
 
       - name: Testes unitários
-        run: npm test
+        id: vitest
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          npm test > vitest.log 2>&1
+          code=$?
+          echo "$code" > vitest.exit
+          tail -n 160 vitest.log
+          exit "$code"
 
-  # ─────────────────────────────────────────────────────────────────────
+      - name: Publica log do Vitest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-log
+          path: |
+            vitest.log
+            vitest.exit
+          retention-days: 3
+
+      - name: Falha quando os testes falharem
+        if: always()
+        shell: bash
+        run: |
+          code=$(cat vitest.exit 2>/dev/null || echo 1)
+          exit "$code"
+
   build-check:
     name: 📦 Vite build check
     runs-on: ubuntu-latest
-    # Variáveis mínimas para o build não quebrar na injetada de env
     env:
       VITE_SUPABASE_URL:      ${{ secrets.VITE_SUPABASE_URL      || 'https://placeholder.supabase.co' }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}

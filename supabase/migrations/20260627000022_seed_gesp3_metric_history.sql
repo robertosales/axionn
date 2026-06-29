@@ -1,0 +1,37 @@
+INSERT INTO public.apf_metric_factor_history (
+  system_key, reference_code, description, function_sigla, factor_sigla,
+  pf_bruto, pf_fs, is_measurable, notes, source_measurement
+) VALUES
+('GESP3','HU211.3','Avaliar Relatório de Vistoria','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU049.1','Criar e Preencher Relatório de Vistoria','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU049.2','Avaliar Relatório de Vistoria','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU049.3','Baixar Modelo de Relatório de Vistoria','N/A','N/A',0,0,false,'Impressão de template em branco.','#25044 - Sprint 01 - Release 05'),
+('GESP3','HU049.4','Gerar Documento de Relatório de Vistoria Preenchido','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU049.5','Realizar Upload de Documento de Relatório de Vistoria','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU050','Controlar Estado e Decisão do Subprocesso','N/A','N/A',0,0,false,'Descreve comportamentos de diversas funcionalidades.','#25044 - Sprint 01 - Release 05'),
+('GESP3','HU051','Controlar Estado do Processo com base nos Subprocessos','N/A','N/A',0,0,false,'Descreve comportamentos de diversas funcionalidades.','#25044 - Sprint 01 - Release 05'),
+('GESP3','HU052','Gerar e Registrar Decisão Administrativa','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU053','Listar Processos em Aguardando Subprocessos','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU054','Controlar Prazos de Notificação','N/A','N/A',0,0,false,'Descreve comportamentos de diversas funcionalidades.','#25044 - Sprint 01 - Release 05'),
+('GESP3','HU055','Emitir Parecer do Processo Autorizativo','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU055.1','Gerar e Encaminhar Parecer de Deferimento','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU055.2','Gerar e Encaminhar Parecer de Indeferimento','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU056','Encaminhar Parecer Técnico no Fluxo','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU057','Listar Processos para Aprovação de Parecer de Deferimento DPSP','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU058','Aprovar Parecer de Deferimento DPSP','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU059','Listar Processos para Aprovação de Parecer de Deferimento CGCSP','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU060','Aprovar Parecer de Deferimento CGCSP','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU211','Exibir Relatórios de Vistoria','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU211.1','Criar e Preencher Relatório de Vistoria','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU212','Disponibilizar Ações de Decisão Administrativa','N/A','N/A',0,0,false,'Detalha funcionalidades nas HUs 213, 214 e 215.','#25044 - Sprint 01 - Release 05'),
+('GESP3','HU213','Gerar e Encaminhar Parecer de Deferimento','TRN','I',4.60,4.60,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU200','Distribuir Processo Bancário','TRN','A',4.60,2.76,true,null,'#25044 - Sprint 01 - Release 05'),
+('GESP3','HU201','Redistribuir Processo Bancário','TRN','A',4.60,2.76,true,null,'#25044 - Sprint 01 - Release 05')
+ON CONFLICT (system_key, reference_code, description) DO UPDATE SET
+  function_sigla = excluded.function_sigla,
+  factor_sigla = excluded.factor_sigla,
+  pf_bruto = excluded.pf_bruto,
+  pf_fs = excluded.pf_fs,
+  is_measurable = excluded.is_measurable,
+  notes = excluded.notes,
+  source_measurement = excluded.source_measurement;

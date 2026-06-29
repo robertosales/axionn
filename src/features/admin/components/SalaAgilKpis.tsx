@@ -31,20 +31,29 @@ const TONES = {
 
 function Metric({ label, value, sub, icon: Icon, tone }: MetricProps) {
   const [textClass, bgClass] = TONES[tone].split(" ");
+
   return (
-    <div className="rounded-xl border border-border/70 bg-background/70 p-3.5">
-      <div className="flex items-center gap-2">
-        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${bgClass} ${textClass}`}>
+    <div className="flex h-full min-w-0 flex-col rounded-xl border border-border/70 bg-background/70 p-3.5">
+      <div className="flex min-w-0 items-start gap-2">
+        <div
+          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${bgClass} ${textClass}`}
+        >
           <Icon className="h-4 w-4" />
         </div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+        <p className="min-w-0 break-words text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">
           {label}
         </p>
       </div>
+
       <p className={`mt-3 text-2xl font-bold leading-none tabular-nums ${textClass}`}>
         {value}
       </p>
-      {sub && <p className="mt-1.5 truncate text-[10px] text-muted-foreground">{sub}</p>}
+
+      {sub && (
+        <p className="mt-1.5 min-h-[28px] break-words text-[10px] leading-4 text-muted-foreground">
+          {sub}
+        </p>
+      )}
     </div>
   );
 }
@@ -76,7 +85,7 @@ export function SalaAgilKpis({ kpis, sprintAtivo }: Props) {
         </Badge>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+      <div className="grid grid-cols-2 items-stretch gap-3 2xl:grid-cols-4">
         <Metric
           label="HUs ativas"
           value={kpis.totalHUs}

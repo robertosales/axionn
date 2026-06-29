@@ -56,7 +56,7 @@ export function SalaAgilKpis({ kpis, sprintAtivo }: Props) {
       : 0;
 
   return (
-    <div className="border-l-2 border-l-teal-500 p-4 sm:p-5">
+    <div className="-m-4 border-l-2 border-l-teal-500 p-4">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600">
           <Zap className="h-4 w-4" />

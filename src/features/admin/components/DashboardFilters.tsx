@@ -32,17 +32,17 @@ interface DashboardFiltersProps {
 }
 
 const PERIOD_LABELS: Record<PeriodOption, string> = {
-  "sprint-atual":     "Sprint Atual",
-  "ultimo-mes":       "Último Mês",
-  "ultimo-trimestre": "Último Trimestre",
-  "custom":           "Personalizado",
+  "sprint-atual": "Sprint atual",
+  "ultimo-mes": "Último mês",
+  "ultimo-trimestre": "Último trimestre",
+  custom: "Personalizado",
 };
 
 const MODULE_LABELS: Record<ModuleOption, string> = {
-  todos:        "Todos os módulos",
-  "sala-agil":  "Sala Ágil",
-  sustentacao:  "Sustentação",
-  rdm:          "RDM",
+  todos: "Todos os módulos",
+  "sala-agil": "Sala Ágil",
+  sustentacao: "Sustentação",
+  rdm: "RDM",
 };
 
 export function DashboardFilters({
@@ -58,72 +58,73 @@ export function DashboardFilters({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {/* Período */}
-      <Select
-        value={filters.period}
-        onValueChange={(v) => onChange({ ...filters, period: v as PeriodOption })}
-        disabled={loading}
-      >
-        <SelectTrigger className="h-8 w-[155px] text-xs">
-          <SelectValue placeholder="Período" />
-        </SelectTrigger>
-        <SelectContent>
-          {(Object.keys(PERIOD_LABELS) as PeriodOption[]).map((k) => (
-            <SelectItem key={k} value={k} className="text-xs">
-              {PERIOD_LABELS[k]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className="rounded-2xl border border-border/70 bg-card/90 p-3 shadow-sm">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[180px_230px_230px_auto] xl:items-center">
+        <Select
+          value={filters.period}
+          onValueChange={(value) =>
+            onChange({ ...filters, period: value as PeriodOption })
+          }
+          disabled={loading}
+        >
+          <SelectTrigger className="h-10 w-full rounded-xl border-border/80 bg-background px-3 text-sm shadow-none">
+            <SelectValue placeholder="Período" />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(PERIOD_LABELS) as PeriodOption[]).map((key) => (
+              <SelectItem key={key} value={key} className="text-sm">
+                {PERIOD_LABELS[key]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      {/* Time */}
-      <Select
-        value={filters.teamId}
-        onValueChange={(v) => onChange({ ...filters, teamId: v })}
-        disabled={loading}
-      >
-        <SelectTrigger className="h-8 w-[160px] text-xs">
-          <SelectValue placeholder="Time" />
-        </SelectTrigger>
-        <SelectContent>
-          {teamOptions.map((t) => (
-            <SelectItem key={t.id} value={t.id} className="text-xs">
-              {t.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <Select
+          value={filters.teamId}
+          onValueChange={(value) => onChange({ ...filters, teamId: value })}
+          disabled={loading}
+        >
+          <SelectTrigger className="h-10 w-full rounded-xl border-border/80 bg-background px-3 text-sm shadow-none">
+            <SelectValue placeholder="Time" />
+          </SelectTrigger>
+          <SelectContent>
+            {teamOptions.map((team) => (
+              <SelectItem key={team.id} value={team.id} className="text-sm">
+                {team.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      {/* Módulo */}
-      <Select
-        value={filters.module}
-        onValueChange={(v) => onChange({ ...filters, module: v as ModuleOption })}
-        disabled={loading}
-      >
-        <SelectTrigger className="h-8 w-[170px] text-xs">
-          <SelectValue placeholder="Módulo" />
-        </SelectTrigger>
-        <SelectContent>
-          {(Object.keys(MODULE_LABELS) as ModuleOption[]).map((k) => (
-            <SelectItem key={k} value={k} className="text-xs">
-              {MODULE_LABELS[k]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <Select
+          value={filters.module}
+          onValueChange={(value) =>
+            onChange({ ...filters, module: value as ModuleOption })
+          }
+          disabled={loading}
+        >
+          <SelectTrigger className="h-10 w-full rounded-xl border-border/80 bg-background px-3 text-sm shadow-none">
+            <SelectValue placeholder="Módulo" />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(MODULE_LABELS) as ModuleOption[]).map((key) => (
+              <SelectItem key={key} value={key} className="text-sm">
+                {MODULE_LABELS[key]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      {/* Aplicar — variant outline para seguir o padrão do design system */}
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-8 gap-1.5 text-xs"
-        onClick={onApply}
-        disabled={loading}
-      >
-        <Filter className="h-3.5 w-3.5" />
-        Aplicar filtros
-      </Button>
+        <Button
+          variant="outline"
+          className="h-10 rounded-xl border-primary/40 px-4 text-sm font-semibold text-primary hover:bg-primary/5 hover:text-primary xl:justify-self-start"
+          onClick={onApply}
+          disabled={loading}
+        >
+          <Filter className="mr-2 h-4 w-4" />
+          Aplicar filtros
+        </Button>
+      </div>
     </div>
   );
 }

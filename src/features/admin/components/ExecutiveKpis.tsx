@@ -1,4 +1,11 @@
-import { UsersRound, Zap, LayoutList, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ClipboardList,
+  LayoutGrid,
+  UsersRound,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface ExecutiveKpisProps {
@@ -13,45 +20,70 @@ interface ExecutiveKpisProps {
 }
 
 interface KpiCardProps {
-  icon: React.ReactNode;
+  icon: LucideIcon;
   label: string;
   value: React.ReactNode;
   sub?: React.ReactNode;
-  critical?: boolean;
+  tone?: "teal" | "orange" | "danger";
 }
 
-function KpiCard({ icon, label, value, sub, critical }: KpiCardProps) {
+const TONES = {
+  teal: {
+    icon: "bg-teal-500/10 text-teal-600",
+    value: "text-foreground",
+  },
+  orange: {
+    icon: "bg-orange-500/10 text-orange-600",
+    value: "text-foreground",
+  },
+  danger: {
+    icon: "bg-destructive/10 text-destructive",
+    value: "text-destructive",
+  },
+} as const;
+
+function KpiCard({ icon: Icon, label, value, sub, tone = "teal" }: KpiCardProps) {
+  const styles = TONES[tone];
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl bg-card p-4 shadow-sm border border-border/40">
-      <div className="flex items-center gap-1.5">
-        <span className="text-muted-foreground [&>svg]:h-3.5 [&>svg]:w-3.5">{icon}</span>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {label}
-        </p>
+    <div className="flex min-h-[112px] items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${styles.icon}`}>
+        <Icon className="h-5 w-5" />
       </div>
-      <p
-        className={[
-          "text-2xl font-bold leading-none tabular-nums",
-          critical ? "text-destructive" : "text-foreground",
-        ].join(" ")}
-      >
-        {value}
-      </p>
-      {sub && (
-        <p className="text-[10px] text-muted-foreground/70 leading-none">{sub}</p>
-      )}
+
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+        <p className={`mt-1 text-[26px] font-bold leading-none tracking-tight tabular-nums ${styles.value}`}>
+          {value}
+        </p>
+        {sub && (
+          <p className="mt-1.5 truncate text-[11px] leading-none text-muted-foreground">
+            {sub}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
 function KpiSkeleton() {
   return (
-    <div className="flex flex-col gap-2 rounded-xl bg-card p-4 shadow-sm border border-border/40">
-      <Skeleton className="h-3.5 w-16" />
-      <Skeleton className="h-6 w-12 mt-1" />
-      <Skeleton className="h-3 w-20" />
+    <div className="flex min-h-[112px] items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+      <Skeleton className="h-11 w-11 rounded-xl" />
+      <div className="space-y-2">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-7 w-14" />
+        <Skeleton className="h-3 w-24" />
+      </div>
     </div>
   );
+}
+
+function splitSprintLabel(value: string | null) {
+  if (!value) return { value: "—", sub: "Nenhuma sprint ativa" };
+  const match = value.match(/^(\d+)\s+(.+)$/);
+  if (!match) return { value, sub: undefined };
+  return { value: match[1], sub: match[2] };
 }
 
 export function ExecutiveKpis({
@@ -66,41 +98,38 @@ export function ExecutiveKpis({
 }: ExecutiveKpisProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {Array.from({ length: 5 }).map((_, i) => <KpiSkeleton key={i} />)}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <KpiSkeleton key={index} />
+        ))}
       </div>
     );
   }
 
+  const sprint = splitSprintLabel(sprintAtiva);
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <KpiCard icon={UsersRound} label="Times ativos" value={timesAtivos} />
+      <KpiCard icon={Zap} label="Sprints ativas" value={sprint.value} sub={sprint.sub} />
       <KpiCard
-        icon={<UsersRound />}
-        label="Times Ativos"
-        value={timesAtivos}
-      />
-      <KpiCard
-        icon={<Zap />}
-        label="Sprints Ativas"
-        value={sprintAtiva ?? "—"}
-      />
-      <KpiCard
-        icon={<LayoutList />}
-        label="HUs Ativas"
+        icon={LayoutGrid}
+        label="HUs ativas"
         value={husAtivas}
         sub={`${husConcluidasPct}% concluído`}
       />
       <KpiCard
-        icon={<CheckCircle2 />}
-        label="Demandas Abertas"
+        icon={ClipboardList}
+        label="Demandas abertas"
         value={demandasAbertas}
+        tone="orange"
       />
       <KpiCard
-        icon={<AlertTriangle />}
-        label="SLA em Risco"
+        icon={AlertTriangle}
+        label="SLA em risco"
         value={slaEmRisco}
         sub={slaDescricao}
-        critical={slaEmRisco > 0}
+        tone={slaEmRisco > 0 ? "danger" : "teal"}
       />
     </div>
   );

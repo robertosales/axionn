@@ -11,12 +11,15 @@ import { LearningInsightsPanel } from "./learning/LearningInsightsPanel";
 import { useLearningInsights } from "../hooks/useLearningInsights";
 import { useContractualApfCounting } from "../hooks/useContractualApfCounting";
 import { ApfAnalysisReviewDialog } from "./ApfAnalysisReviewDialog";
-import { ApfStoryList } from "./ApfStoryList";
+import { PaginatedApfStoryList } from "./PaginatedApfStoryList";
 import { ApfValidationDialog } from "./ApfValidationDialog";
 
 export function ApfFunctionPointTab() {
   const counting = useContractualApfCounting();
   const { insights, loading: insightsLoading, lastRefresh, refresh } = useLearningInsights();
+  const pendingCount = counting.stories.filter(
+    (story) => story._items.length === 0 && !story._analysis,
+  ).length;
 
   return (
     <div className="min-w-0 space-y-5">
@@ -80,8 +83,8 @@ export function ApfFunctionPointTab() {
           <div className="min-w-0">
             <CardTitle className="text-base">Análise de processos → contador APF</CardTitle>
             <p className="mt-1 max-w-3xl text-xs text-muted-foreground">
-              Lista compacta sem rolagem horizontal. Abra os detalhes para consultar o cálculo,
-              a origem do fator e todos os processos identificados.
+              Use busca, filtros, ordenação e paginação para revisar a sprint. A ação global
+              continua considerando todas as HUs pendentes, não apenas a página visível.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -97,18 +100,20 @@ export function ApfFunctionPointTab() {
             <Button
               size="sm"
               onClick={counting.countAll}
-              disabled={!counting.context || counting.countingAll || !counting.stories.length}
+              disabled={!counting.context || counting.countingAll || pendingCount === 0}
               className="gap-2"
             >
               {counting.countingAll
                 ? <Loader2 className="h-4 w-4 animate-spin" />
                 : <Sparkles className="h-4 w-4" />}
-              Analisar pendentes
+              {counting.countingAll
+                ? "Analisando pendentes..."
+                : `Analisar ${pendingCount} pendente${pendingCount !== 1 ? "s" : ""}`}
             </Button>
           </div>
         </CardHeader>
         <CardContent className="min-w-0 p-0">
-          <ApfStoryList counting={counting} />
+          <PaginatedApfStoryList counting={counting} />
         </CardContent>
       </Card>
 

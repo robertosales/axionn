@@ -23,6 +23,7 @@ Esta fase não declara o Axion pronto para self-service. A saída esperada é um
 - limite de prompt, arquivos, tamanho total, timeout e quantidade de fallbacks;
 - teste de provider e chave inline restritos a administradores;
 - sucesso e falha das chamadas registrados no banco;
+- limites de rajada por usuário, por empresa e de chamadas concorrentes;
 - CI ampliado para validar Edge Functions, frontend e contrato de segurança;
 - configuração Deno e shim ESM adicionados para checagem tipada reproduzível da Edge Function.
 
@@ -37,26 +38,29 @@ Esta fase não declara o Axion pronto para self-service. A saída esperada é um
 
 ## Governança de IA
 
-A migration `20260630010000_ai_usage_governance.sql` introduz:
+As migrations de governança introduzem:
 
 - `ai_usage_events`;
+- `ai_usage_rate_limits`;
 - `reserve_ai_usage`;
 - `finalize_ai_usage`;
 - incremento atômico de `licenses.ai_calls_used`;
 - reset mensal de quota;
 - validação de licença ativa e não expirada;
 - validação transitória de membership por time, contrato, organização ou administrador da plataforma;
+- limites padrão de 10 chamadas por usuário/minuto, 60 por empresa/minuto e 5 reservas concorrentes;
+- possibilidade de configurar limites diferentes por empresa;
 - revogação de acesso cliente a RPCs sensíveis.
 
 A Edge Function aceita dois modos:
 
 ### `audit`
 
-É o modo inicial. A função tenta reservar quota e registra o erro, mas continua a execução quando a estrutura de licença ainda não estiver completa. Ele serve apenas para implantação e saneamento dos dados existentes.
+É o modo inicial de staging. A função tenta reservar quota e registra o erro, mas continua a execução quando a estrutura de licença ainda não estiver completa. Não deve ser utilizado em produção.
 
 ### `enforce`
 
-Bloqueia chamadas sem empresa, licença ativa, vínculo do usuário ou quota disponível. Este é o modo obrigatório antes de pilotos pagos.
+Bloqueia chamadas sem empresa, licença ativa, vínculo do usuário ou quota disponível. Este é o modo obrigatório antes de pilotos pagos e em produção.
 
 Configuração:
 
@@ -69,14 +73,14 @@ supabase secrets set AI_USAGE_ENFORCEMENT_MODE=enforce
 ## Ordem de implantação em staging
 
 1. criar ou atualizar o projeto Supabase de staging;
-2. aplicar todas as migrations, incluindo `20260630010000_ai_usage_governance.sql`;
+2. aplicar todas as migrations de governança de IA;
 3. cadastrar uma licença para cada empresa que utilizará APF/IA;
 4. implantar a função `apf-generate`;
 5. configurar os secrets documentados em `.env.example`;
 6. iniciar com `AI_USAGE_ENFORCEMENT_MODE=audit`;
 7. executar chamadas com usuário autorizado e não autorizado;
 8. conferir `ai_usage_events` e `licenses.ai_calls_used`;
-9. testar quota esgotada, licença expirada e usuário fora do time;
+9. testar quota esgotada, licença expirada, usuário fora do time, rajada e concorrência;
 10. mudar para `AI_USAGE_ENFORCEMENT_MODE=enforce`;
 11. repetir todos os cenários antes de promover para produção.
 
@@ -116,10 +120,11 @@ supabase secrets set AI_USAGE_ENFORCEMENT_MODE=enforce
 - [x] validar licença ativa e não expirada;
 - [x] reservar quota atomicamente;
 - [x] limitar tamanho de prompt e arquivos;
+- [x] aplicar limites de rajada por usuário e empresa;
+- [x] limitar chamadas concorrentes;
 - [x] limitar timeout e quantidade de fallbacks;
 - [x] registrar provider, duração, resultado e contexto operacional;
 - [ ] registrar tokens e custo monetário retornados por cada provider;
-- [ ] aplicar rate limit de curta duração por usuário e organização;
 - [ ] impedir fallback para faixa de custo superior sem política de orçamento;
 - [ ] criar alerta de anomalia de consumo.
 
@@ -143,7 +148,7 @@ A Fase 0 termina somente quando:
 2. nenhuma chave privilegiada pode ser obtida por `anon` ou `authenticated`;
 3. uma restauração de backup foi executada com sucesso;
 4. staging funciona de forma independente da produção;
-5. chamadas de IA estão em modo `enforce` e bloqueiam licença ou quota inválida;
+5. chamadas de IA estão em modo `enforce` e bloqueiam licença, quota, rajada ou acesso inválido;
 6. o relatório de auditoria possui responsável, evidência e decisão para cada achado crítico.
 
 ## Próxima fase

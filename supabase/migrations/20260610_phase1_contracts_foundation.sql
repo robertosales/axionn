@@ -10,30 +10,14 @@
 --   4. Popula teams.contract_id e teams.team_type
 --   5. Popula contract_slas com os valores hardcoded do frontend
 --   6. Popula contract_room_teams a partir dos times reais
---
--- GARANTIAS:
---   ✅ Todas as operações são ON CONFLICT DO NOTHING ou idempotentes
---   ✅ Nenhuma coluna existente é alterada
---   ✅ Sistema legado continua funcionando durante e após a migration
---   ✅ Seguro para rodar múltiplas vezes sem efeitos colaterais
 -- ============================================================
 
--- ============================================================
--- BLOCO 1: LIMPEZA — Remove RPCs nunca usadas pelo frontend
--- ============================================================
 DROP FUNCTION IF EXISTS public.fn_check_sla_status(UUID, UUID, VARCHAR, TIMESTAMPTZ, TIMESTAMPTZ);
 DROP FUNCTION IF EXISTS public.fn_get_team_contract(UUID);
 
--- ============================================================
--- BLOCO 2: RECRIAR contract_room_teams (estrutura limpa)
--- CASCADE remove policies dependentes em projects, contracts
--- e contract_slas que referenciam esta tabela — todas são
--- recriadas logo abaixo com implementação correta.
--- ============================================================
 DO $$
 BEGIN
   IF (SELECT COUNT(*) FROM public.contract_room_teams) = 0 THEN
-
     DROP POLICY IF EXISTS "projects_insert"                   ON public.projects;
     DROP POLICY IF EXISTS "contracts_select"                  ON public.contracts;
     DROP POLICY IF EXISTS "contract_slas_select_team_members" ON public.contract_slas;
@@ -72,11 +56,6 @@ BEGIN
       BEFORE UPDATE ON public.contract_room_teams
       FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
-    COMMENT ON TABLE public.contract_room_teams IS
-      'Vínculo N:N entre contratos, times e tipos de sala (agil/sustentacao). '
-      'Permite que o mesmo time opere em múltiplas modalidades de um contrato (híbrido).';
-
-    -- Recriar policies removidas pelo CASCADE
     DROP POLICY IF EXISTS "projects_insert" ON public.projects;
     CREATE POLICY "projects_insert"
       ON public.projects FOR INSERT
@@ -103,15 +82,10 @@ BEGIN
           )
         )
       );
-
   END IF;
 END;
 $$;
 
--- ============================================================
--- BLOCO 3: CRIAR CONTRATOS a partir dos times existentes
--- 1 contrato por time ainda sem contract_id
--- ============================================================
 DROP TABLE IF EXISTS _phase1_team_contract_map;
 
 CREATE TEMP TABLE _phase1_team_contract_map (
@@ -127,9 +101,9 @@ WITH teams_sem_contrato AS (
     CASE
       WHEN COALESCE(t.module::TEXT, '') = 'agil' THEN 'agil'
       ELSE 'sustentacao'
-    END    AS room_type
+    END AS room_type
   FROM public.teams t
-  WHERE t.contract_id IS NULL        -- só times ainda sem contrato
+  WHERE t.contract_id IS NULL
 ),
 contratos_inseridos AS (
   INSERT INTO public.contracts (name, description, status, room_mode)
@@ -150,9 +124,6 @@ SELECT
 FROM teams_sem_contrato ts
 JOIN contratos_inseridos ci ON ci.name = ts.team_name;
 
--- ============================================================
--- BLOCO 4: ATUALIZAR teams.contract_id e teams.team_type
--- ============================================================
 UPDATE public.teams t
 SET
   contract_id = m.contract_id,
@@ -165,14 +136,6 @@ FROM _phase1_team_contract_map m
 WHERE t.id = m.team_id
   AND t.contract_id IS NULL;
 
--- ============================================================
--- BLOCO 5: POPULAR contract_slas
--- Valores hardcoded extraídos do frontend:
---   urgent : 60 min resposta  | 240 min resolução
---   high   : 120 min          | 480 min
---   medium : 240 min          | 1440 min (1 dia útil)
---   low    : 480 min          | 2880 min (2 dias úteis)
--- ============================================================
 INSERT INTO public.contract_slas
   (contract_id, priority, response_time_minutes, resolution_time_minutes, business_hours_only)
 SELECT
@@ -194,11 +157,8 @@ WHERE NOT EXISTS (
   WHERE cs.contract_id = c.id
     AND cs.priority    = sla.priority
 )
-ON CONFLICT ON CONSTRAINT unique_contract_priority DO NOTHING;
+ON CONFLICT DO NOTHING;
 
--- ============================================================
--- BLOCO 6: POPULAR contract_room_teams
--- ============================================================
 INSERT INTO public.contract_room_teams (contract_id, team_id, room_type)
 SELECT
   t.contract_id,
@@ -212,24 +172,4 @@ FROM public.teams t
 WHERE t.contract_id IS NOT NULL
 ON CONFLICT (contract_id, team_id, room_type) DO NOTHING;
 
--- ============================================================
--- BLOCO 7: LIMPEZA
--- ============================================================
 DROP TABLE IF EXISTS _phase1_team_contract_map;
-
--- ============================================================
--- VERIFICAÇÃO (rode manualmente no SQL Editor para confirmar)
--- ============================================================
--- SELECT c.name, c.room_mode, c.status,
---        COUNT(DISTINCT cs.id) AS sla_rules,
---        COUNT(DISTINCT crt.id) AS team_links
--- FROM public.contracts c
--- LEFT JOIN public.contract_slas cs ON cs.contract_id = c.id
--- LEFT JOIN public.contract_room_teams crt ON crt.contract_id = c.id
--- GROUP BY c.id, c.name, c.room_mode, c.status
--- ORDER BY c.name;
-
--- ============================================================
--- FIM DA MIGRATION — Fase 1 concluída
--- Próximo: 20260610_phase2_projects_contract_link.sql
--- ============================================================

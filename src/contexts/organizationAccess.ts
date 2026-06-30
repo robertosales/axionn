@@ -21,7 +21,7 @@ export function resolveOrganizationAccess(options: {
 }): OrganizationAccessDecision {
   const { status, isPlatformAdmin } = options;
 
-  if (isPlatformAdmin && status) {
+  if (isPlatformAdmin) {
     return { mode: "operational", canOperate: true, reason: null };
   }
 

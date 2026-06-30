@@ -63,6 +63,7 @@ jobs:
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+      VITE_ORG_TENANCY_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -110,28 +111,43 @@ jobs:
         run: exit "$(cat deno-check.exit 2>/dev/null || echo 1)"
 
   security-contract:
-    name: 🔐 Security contract
+    name: 🔐 SaaS security contract
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Valida controles críticos da Fase 0
+      - name: Valida controles críticos das Fases 0 e 1
         shell: bash
         run: |
           set -euo pipefail
           governance="supabase/migrations/20260630010000_ai_usage_governance.sql"
           rate_limits="supabase/migrations/20260630011000_ai_rate_limits.sql"
+          multitenant="supabase/migrations/20260630020000_multitenant_foundation.sql"
           edge="supabase/functions/apf-generate/index.ts"
+          org_context="src/contexts/OrganizationContext.tsx"
+
           test -f "$governance"
           test -f "$rate_limits"
+          test -f "$multitenant"
           test -f "$edge"
+          test -f "$org_context"
+
           grep -q "create table if not exists public.ai_usage_events" "$governance"
           grep -q "create or replace function public.reserve_ai_usage" "$governance"
           grep -q "revoke all on function public.reserve_ai_usage" "$governance"
           grep -q "get_service_role_key" "$governance"
           grep -q "create table if not exists public.ai_usage_rate_limits" "$rate_limits"
           grep -q "create trigger trg_ai_usage_rate_limit" "$rate_limits"
+
+          grep -q "create table if not exists public.platform_user_roles" "$multitenant"
+          grep -q "add column if not exists org_id" "$multitenant"
+          grep -q "create or replace function public.is_platform_admin" "$multitenant"
+          grep -q "create or replace function public.get_my_organizations_v2" "$multitenant"
+          grep -q "create or replace function public.get_accessible_teams_v2" "$multitenant"
+          grep -q "VITE_ORG_TENANCY_ENABLED" "$org_context"
+
           grep -q "AI_USAGE_ENFORCEMENT_MODE" "$edge"
           grep -q "reserve_ai_usage" "$edge"
           grep -q "finalize_ai_usage" "$edge"
           grep -q "AI_MAX_PROMPT_CHARS" "$edge"
+
           ! grep -q "signUp" src/pages/Auth.tsx

@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.contract_slas (
   sla_type text NOT NULL DEFAULT 'resolution',
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
-  UNIQUE (contract_id, priority)
+  CONSTRAINT unique_contract_priority UNIQUE (contract_id, priority)
 );
 
 CREATE INDEX IF NOT EXISTS idx_contracts_company_id

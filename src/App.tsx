@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { SprintProvider } from "@/contexts/SprintContext";
@@ -67,8 +68,8 @@ function resolveHomePath(options: {
   const { isAdmin, moduleAccess, hasModuleAccess, moduleRolesCount, roles } =
     options;
 
-  if (isAdmin || moduleAccess === "admin") return "/dashboard-admin";
-  if (roles.includes("admin_contrato") && !isAdmin) return "/meu-contrato";
+  if (isAdmin) return "/dashboard-admin";
+  if (roles.includes("admin_contrato")) return "/meu-contrato";
 
   const agil = hasModuleAccess("sala_agil");
   const sustentacao = hasModuleAccess("sustentacao");
@@ -84,6 +85,7 @@ function resolveHomePath(options: {
     if (moduleAccess === "sustentacao") return "/sustentacao";
     if (moduleAccess === "sala_agil") return "/sala-agil/dashboard";
     if (moduleAccess === "rdm") return "/rdm";
+    if (moduleAccess === "admin") return "/modulos";
   }
 
   return "/modulos";
@@ -197,6 +199,7 @@ function AppRoutes() {
     <SprintProvider>
       <Toaster />
       <Sonner />
+      <OrganizationSwitcher />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />

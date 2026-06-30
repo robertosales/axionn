@@ -129,23 +129,52 @@ VITE_ORG_TENANCY_ENABLED=true
 
 O padrão permanece `false`, evitando chamadas às novas RPCs antes da aplicação das migrations no ambiente.
 
+### 11. Validação executável de isolamento
+
+A Fase 1.4 adiciona testes pgTAP em `supabase/tests/database` que recriam organizações A, B e suspensa dentro de transações isoladas.
+
+Os testes comprovam:
+
+- existência das colunas, funções, policies e triggers multi-tenant;
+- impossibilidade de usuário A listar recursos da organização B;
+- impossibilidade de combinar contrato, time e projeto de organizações diferentes;
+- obrigatoriedade de `org_id` após ativação do enforcement;
+- bloqueio de escrita para organizações suspensas;
+- acesso de suporte do `platform_admin`;
+- restrição das funções administrativas ao `service_role`.
+
+O workflow `.github/workflows/database-tests.yml` recria o banco local a partir de todas as migrations e executa os testes automaticamente.
+
+O workflow manual `.github/workflows/staging-tenancy-validation.yml`:
+
+- utiliza o environment protegido `staging`;
+- apresenta o dry-run das migrations;
+- pode aplicar migrations somente com confirmação `APPLY-STAGING`;
+- executa os testes de isolamento no banco remoto;
+- executa o gate de prontidão pré-enforcement;
+- não ativa automaticamente o enforcement.
+
+O procedimento completo está em `docs/staging-tenancy-validation.md`.
+
 ## Implantação em staging
 
-1. aplicar `20260630020000_multitenant_foundation.sql`;
-2. aplicar `20260630021000_org_access_wrappers.sql`;
-3. aplicar `20260630022000_org_resource_isolation.sql`;
-4. aplicar `20260630023000_org_resource_isolation_hardening.sql`;
-5. executar a auditoria da Fase 0;
-6. executar `get_tenancy_readiness_report()` com `service_role`;
-7. eliminar registros sem `org_id` e vínculos divergentes;
-8. confirmar os registros de `platform_user_roles`;
-9. testar as RPCs com usuários de duas organizações distintas;
-10. ativar `VITE_ORG_TENANCY_ENABLED=true` somente no staging;
-11. validar troca de organização, time e contrato;
-12. validar bloqueio de organizações suspensas e canceladas;
-13. executar `set_tenancy_enforcement(true)` somente após o relatório retornar zero em todos os problemas;
-14. repetir testes de leitura, criação, atualização e exclusão cruzadas;
-15. manter produção com a flag e o enforcement desligados até aprovação formal.
+1. configurar um projeto Supabase exclusivo de staging;
+2. criar o environment GitHub `staging` com aprovação manual;
+3. cadastrar os secrets descritos no runbook;
+4. executar o workflow de staging sem aplicar migrations;
+5. revisar o dry-run e a migration history;
+6. executar novamente com `apply_migrations=true` e confirmação `APPLY-STAGING`;
+7. executar a auditoria da Fase 0;
+8. executar `get_tenancy_readiness_report()` com `service_role`;
+9. eliminar registros sem `org_id` e vínculos divergentes;
+10. confirmar os registros de `platform_user_roles`;
+11. repetir o workflow até o gate de prontidão passar;
+12. ativar `VITE_ORG_TENANCY_ENABLED=true` somente no staging;
+13. validar troca de organização, time e contrato;
+14. validar bloqueio de organizações suspensas e canceladas;
+15. executar `set_tenancy_enforcement(true)` somente após aprovação formal;
+16. repetir testes de leitura, criação, atualização e exclusão cruzadas;
+17. manter produção com a flag e o enforcement desligados até aprovação do rollout.
 
 ## Consultas de verificação
 
@@ -170,9 +199,9 @@ select set_tenancy_enforcement(false);
 
 ## Próximos lotes da Fase 1
 
-1. criar painéis próprios para owner e admin da organização;
-2. migrar permissões de módulos para memberships organizacionais;
-3. criar testes pgTAP executáveis no pipeline de staging;
+1. executar e sanear o staging real até o gate de prontidão ficar verde;
+2. criar painéis próprios para owner e admin da organização;
+3. migrar permissões de módulos para memberships organizacionais;
 4. consolidar memberships duplicadas;
 5. tornar `org_id` obrigatório após o saneamento;
 6. descontinuar o papel global legado `admin`.

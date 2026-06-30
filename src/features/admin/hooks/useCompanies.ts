@@ -125,14 +125,14 @@ export function useCompanies() {
     void load();
   }, [load]);
 
-  const assertWritableOrganization = () => {
+  const assertWritableOrganization = useCallback(() => {
     if (!enabled) return true;
     if (!currentOrganizationId || !canOperate) {
       toast.error("A organização atual não permite alterações");
       return false;
     }
     return true;
-  };
+  }, [canOperate, currentOrganizationId, enabled]);
 
   const create = useCallback(
     async (form: CompanyFormData): Promise<boolean> => {
@@ -160,7 +160,7 @@ export function useCompanies() {
         return false;
       }
     },
-    [canOperate, currentOrganizationId, enabled, load],
+    [assertWritableOrganization, currentOrganizationId, enabled, load],
   );
 
   const update = useCallback(
@@ -195,7 +195,7 @@ export function useCompanies() {
         return false;
       }
     },
-    [canOperate, currentOrganizationId, enabled, load],
+    [assertWritableOrganization, currentOrganizationId, enabled, load],
   );
 
   const remove = useCallback(
@@ -217,7 +217,7 @@ export function useCompanies() {
         toast.error(message || "Erro ao excluir empresa");
       }
     },
-    [canOperate, currentOrganizationId, enabled, load],
+    [assertWritableOrganization, currentOrganizationId, enabled, load],
   );
 
   return { companies, loading, kpis, create, update, remove, reload: load };

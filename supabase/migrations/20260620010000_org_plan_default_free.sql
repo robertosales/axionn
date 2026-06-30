@@ -1,8 +1,2 @@
--- Normaliza o plano transitório usado pela migration legada.
-
-UPDATE public.organizations
-   SET plan = 'free'::public.org_plan
- WHERE plan::text = 'trial';
-
-ALTER TABLE public.organizations
-  ALTER COLUMN plan SET DEFAULT 'free'::public.org_plan;
+-- Normalização adiada para 20260621000000_org_plan_default_free.sql,
+-- após a migration legada 20260620_001 criar public.organizations.

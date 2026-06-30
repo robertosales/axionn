@@ -116,7 +116,33 @@ jobs:
           deno-version: v2.x
 
       - name: Verifica função APF
-        run: deno check supabase/functions/apf-generate/index.ts
+        id: deno-check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          deno check supabase/functions/apf-generate/index.ts > deno-check.log 2>&1
+          code=$?
+          echo "$code" > deno-check.exit
+          tail -n 200 deno-check.log
+          exit "$code"
+
+      - name: Publica diagnóstico do Deno
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deno-check-log
+          path: |
+            deno-check.log
+            deno-check.exit
+          retention-days: 3
+
+      - name: Falha quando o Deno check falhar
+        if: always()
+        shell: bash
+        run: |
+          code=$(cat deno-check.exit 2>/dev/null || echo 1)
+          exit "$code"
 
   security-contract:
     name: 🔐 Security contract

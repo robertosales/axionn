@@ -1,6 +1,5 @@
--- Compatibilidade de replay: garante companies, contracts e o helper de
--- timestamp antes da entidade projects. Instalações históricas já possuíam
--- estes objetos fora da cadeia versionada.
+-- Compatibilidade de replay: garante companies, contracts, contract_slas e o
+-- helper de timestamp antes das entidades projects e do SLA engine.
 
 CREATE OR REPLACE FUNCTION public.fn_set_updated_at()
 RETURNS trigger
@@ -44,14 +43,29 @@ CREATE TABLE IF NOT EXISTS public.contracts (
   org_id uuid
 );
 
+CREATE TABLE IF NOT EXISTS public.contract_slas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  contract_id uuid NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
+  priority text NOT NULL,
+  response_time_minutes integer NOT NULL DEFAULT 0,
+  resolution_time_minutes integer NOT NULL DEFAULT 0,
+  business_hours_only boolean NOT NULL DEFAULT true,
+  sla_type text NOT NULL DEFAULT 'resolution',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE (contract_id, priority)
+);
+
 CREATE INDEX IF NOT EXISTS idx_contracts_company_id
   ON public.contracts(company_id);
-
 CREATE INDEX IF NOT EXISTS idx_contracts_status
   ON public.contracts(status);
+CREATE INDEX IF NOT EXISTS idx_contract_slas_contract_id
+  ON public.contract_slas(contract_id);
 
 ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contracts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.contract_slas ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS companies_admin_all ON public.companies;
 DROP POLICY IF EXISTS companies_authenticated_select ON public.companies;
@@ -70,5 +84,15 @@ ON public.contracts FOR SELECT TO authenticated
 USING (auth.uid() IS NOT NULL);
 CREATE POLICY contracts_admin_all
 ON public.contracts FOR ALL TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS contract_slas_admin_all ON public.contract_slas;
+DROP POLICY IF EXISTS contract_slas_authenticated_select ON public.contract_slas;
+CREATE POLICY contract_slas_authenticated_select
+ON public.contract_slas FOR SELECT TO authenticated
+USING (auth.uid() IS NOT NULL);
+CREATE POLICY contract_slas_admin_all
+ON public.contract_slas FOR ALL TO authenticated
 USING (public.is_admin())
 WITH CHECK (public.is_admin());

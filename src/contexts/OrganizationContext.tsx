@@ -9,11 +9,9 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
 
 const STORAGE_KEY = "selectedOrganizationId";
-
-export const ORGANIZATION_TENANCY_ENABLED =
-  import.meta.env.VITE_ORG_TENANCY_ENABLED === "true";
 
 export interface OrganizationOption {
   id: string;
@@ -57,7 +55,7 @@ export function chooseCurrentOrganizationId(
 }
 
 export function OrganizationProvider({ children }: { children: ReactNode }) {
-  const { user, session } = useAuth();
+  const { user, session, refreshTeams, setCurrentTeamId } = useAuth();
   const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
   const [currentOrganizationId, setCurrentOrganizationIdState] = useState<
     string | null
@@ -67,17 +65,44 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
   const setCurrentOrganizationId = useCallback(
     (organizationId: string | null) => {
-      setCurrentOrganizationIdState(organizationId);
+      if (
+        organizationId &&
+        !organizations.some((organization) => organization.id === organizationId)
+      ) {
+        console.warn(
+          "[OrganizationContext] Tentativa de selecionar organização sem acesso:",
+          organizationId,
+        );
+        return;
+      }
+
+      setCurrentOrganizationIdState((current) => {
+        if (current !== organizationId) {
+          localStorage.removeItem("selectedTeamId");
+          setCurrentTeamId(null);
+        }
+        return organizationId;
+      });
+
       if (organizationId) localStorage.setItem(STORAGE_KEY, organizationId);
       else localStorage.removeItem(STORAGE_KEY);
     },
-    [],
+    [organizations, setCurrentTeamId],
   );
 
   const refreshOrganizations = useCallback(async () => {
-    if (!ORGANIZATION_TENANCY_ENABLED || !user?.id || !session) {
+    if (!ORGANIZATION_TENANCY_ENABLED) {
       setOrganizations([]);
-      setCurrentOrganizationId(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    if (!user?.id || !session) {
+      setOrganizations([]);
+      setCurrentOrganizationIdState(null);
+      setCurrentTeamId(null);
+      localStorage.removeItem(STORAGE_KEY);
       setError(null);
       setLoading(false);
       return;
@@ -93,7 +118,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     if (queryError) {
       console.error("[OrganizationContext] get_my_organizations_v2:", queryError);
       setOrganizations([]);
-      setCurrentOrganizationId(null);
+      setCurrentOrganizationIdState(null);
+      setCurrentTeamId(null);
       setError(
         "Não foi possível carregar as organizações disponíveis para esta conta.",
       );
@@ -116,23 +142,47 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     );
 
     const unique = Array.from(
-      new Map(normalized.map((organization) => [organization.id, organization])).values(),
+      new Map(
+        normalized.map((organization) => [organization.id, organization]),
+      ).values(),
     );
 
     setOrganizations(unique);
     setCurrentOrganizationIdState((current) => {
       const requested = current ?? localStorage.getItem(STORAGE_KEY);
       const selected = chooseCurrentOrganizationId(unique, requested);
+
       if (selected) localStorage.setItem(STORAGE_KEY, selected);
-      else localStorage.removeItem(STORAGE_KEY);
+      else {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem("selectedTeamId");
+        setCurrentTeamId(null);
+      }
+
       return selected;
     });
+    setError(
+      unique.length === 0
+        ? "Esta conta ainda não está vinculada a uma organização."
+        : null,
+    );
     setLoading(false);
-  }, [session, setCurrentOrganizationId, user?.id]);
+  }, [session, setCurrentTeamId, user?.id]);
 
   useEffect(() => {
     void refreshOrganizations();
   }, [refreshOrganizations]);
+
+  useEffect(() => {
+    if (!ORGANIZATION_TENANCY_ENABLED || !session) return;
+
+    if (!currentOrganizationId) {
+      setCurrentTeamId(null);
+      return;
+    }
+
+    void refreshTeams(undefined, currentOrganizationId);
+  }, [currentOrganizationId, refreshTeams, session, setCurrentTeamId]);
 
   const currentOrganization = useMemo(
     () =>

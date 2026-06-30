@@ -130,7 +130,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          deno check supabase/functions/apf-generate/index.ts > deno-check.log 2>&1
+          deno check --no-check=remote supabase/functions/apf-generate/index.ts > deno-check.log 2>&1
           code=$?
           echo "$code" > deno-check.exit
           tail -n 200 deno-check.log

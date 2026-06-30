@@ -131,44 +131,49 @@ O padrão permanece `false`, evitando chamadas às novas RPCs antes da aplicaç�
 
 ### 11. Validação executável de isolamento
 
-A Fase 1.4 adiciona testes pgTAP em `supabase/tests/database` que recriam organizações A, B e suspensa dentro de transações isoladas.
+A Fase 1.4 adiciona uma suíte pgTAP em `supabase/tests/tenant_isolation.sql`.
+
+A suíte roda dentro de transação e cria dados temporários para:
+
+- organização A ativa;
+- organização B ativa;
+- organização suspensa;
+- usuário administrador da organização A;
+- usuário administrador da organização B;
+- usuário da organização suspensa;
+- usuário `platform_admin`.
 
 Os testes comprovam:
 
-- existência das colunas, funções, policies e triggers multi-tenant;
-- impossibilidade de usuário A listar recursos da organização B;
-- impossibilidade de combinar contrato, time e projeto de organizações diferentes;
-- obrigatoriedade de `org_id` após ativação do enforcement;
-- bloqueio de escrita para organizações suspensas;
-- acesso de suporte do `platform_admin`;
-- restrição das funções administrativas ao `service_role`.
+- usuário A não lê nem opera organização B;
+- usuário B não lê organização A;
+- contratos, projetos e times acessíveis são filtrados por organização;
+- organização suspensa permite leitura, mas bloqueia operação para usuário comum;
+- `platform_admin` mantém capacidade operacional para suporte;
+- vínculos cruzados entre contrato, time e projeto de organizações diferentes disparam exceções;
+- o enforcement pode ser ligado durante o teste e desligado antes do rollback.
 
-O workflow `.github/workflows/database-tests.yml` recria o banco local a partir de todas as migrations e executa os testes automaticamente.
+A execução manual em staging/local usa:
 
-O workflow manual `.github/workflows/staging-tenancy-validation.yml`:
+```bash
+SUPABASE_DB_URL="postgresql://..." bash scripts/run-tenant-isolation-tests.sh
+```
 
-- utiliza o environment protegido `staging`;
-- apresenta o dry-run das migrations;
-- pode aplicar migrations somente com confirmação `APPLY-STAGING`;
-- executa os testes de isolamento no banco remoto;
-- executa o gate de prontidão pré-enforcement;
-- não ativa automaticamente o enforcement.
-
-O procedimento completo está em `docs/staging-tenancy-validation.md`.
+O CI executa um teste Vitest de contrato que garante a presença da suíte SQL e do runner. A execução real contra banco depende de um `SUPABASE_DB_URL` de staging e deve ser feita fora do CI público até o environment protegido estar configurado.
 
 ## Implantação em staging
 
 1. configurar um projeto Supabase exclusivo de staging;
-2. criar o environment GitHub `staging` com aprovação manual;
-3. cadastrar os secrets descritos no runbook;
-4. executar o workflow de staging sem aplicar migrations;
-5. revisar o dry-run e a migration history;
-6. executar novamente com `apply_migrations=true` e confirmação `APPLY-STAGING`;
-7. executar a auditoria da Fase 0;
-8. executar `get_tenancy_readiness_report()` com `service_role`;
-9. eliminar registros sem `org_id` e vínculos divergentes;
-10. confirmar os registros de `platform_user_roles`;
-11. repetir o workflow até o gate de prontidão passar;
+2. aplicar `20260630020000_multitenant_foundation.sql`;
+3. aplicar `20260630021000_org_access_wrappers.sql`;
+4. aplicar `20260630022000_org_resource_isolation.sql`;
+5. aplicar `20260630023000_org_resource_isolation_hardening.sql`;
+6. executar a auditoria da Fase 0;
+7. executar `get_tenancy_readiness_report()` com `service_role`;
+8. eliminar registros sem `org_id` e vínculos divergentes;
+9. confirmar os registros de `platform_user_roles`;
+10. executar `SUPABASE_DB_URL="..." bash scripts/run-tenant-isolation-tests.sh`;
+11. repetir o teste até a suíte pgTAP passar;
 12. ativar `VITE_ORG_TENANCY_ENABLED=true` somente no staging;
 13. validar troca de organização, time e contrato;
 14. validar bloqueio de organizações suspensas e canceladas;

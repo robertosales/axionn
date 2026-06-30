@@ -1,73 +1,70 @@
 -- ============================================================
--- apf_jobs — Automação: cron de limpeza + safety net
---
--- Dependência: extensão pg_cron habilitada no Supabase
--- (Dashboard > Database > Extensions > pg_cron)
---
--- Jobs criados:
---
---   1. apf-jobs-cleanup (diário às 03:00 UTC)
---      Remove jobs done/dead com mais de 7 dias.
---      Mantém a tabela enxuta sem crescimento indefinido.
---
---   2. apf-jobs-safety-net (a cada 60s)
---      Processa jobs pending que ficaram presos
---      (ex: webhook falhou, worker travou).
---      Usa pg_net para chamar a Edge Function.
---
--- Nota: O webhook primário (INSERT → process-apf-job) deve ser
--- configurado no Dashboard do Supabase — não é possível via SQL.
--- Ver: docs/apf-jobs-webhook-setup.md
+-- apf_jobs — cron de limpeza e safety net
 -- ============================================================
 
--- Garante que pg_cron está disponível
--- (no Supabase já vem habilitado em projetos pagos)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- ── 1. Limpeza diária de jobs antigos ─────────────────────────────────
-SELECT cron.unschedule('apf-jobs-cleanup');
+-- O pg_cron depende de configuração do servidor e pode estar indisponível no
+-- banco efêmero do CI. A migration preserva as tabelas e funções mesmo quando
+-- o agendamento precisa ser concluído posteriormente no ambiente hospedado.
+DO $do$
+BEGIN
+  IF to_regclass('cron.job') IS NULL THEN
+    RAISE WARNING 'apf_cron_deferred: cron.job unavailable';
+    RETURN;
+  END IF;
 
-SELECT cron.schedule(
-  'apf-jobs-cleanup',
-  '0 3 * * *',   -- 03:00 UTC todos os dias
-  $$
-    DELETE FROM public.apf_jobs
-    WHERE status IN ('done', 'dead')
-      AND finished_at < now() - INTERVAL '7 days';
-  $$
-);
+  -- Remove jobs anteriores pelo jobid. Isso evita a exceção produzida por
+  -- cron.unschedule(text) quando o nome ainda não existe no catálogo local.
+  PERFORM cron.unschedule(job.jobid)
+    FROM cron.job job
+   WHERE job.jobname IN ('apf-jobs-cleanup', 'apf-jobs-safety-net');
+
+  BEGIN
+    PERFORM cron.schedule(
+      'apf-jobs-cleanup',
+      '0 3 * * *',
+      $command$
+        DELETE FROM public.apf_jobs
+        WHERE status IN ('done', 'dead')
+          AND finished_at < now() - INTERVAL '7 days';
+      $command$
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'apf_cleanup_cron_deferred: %', SQLERRM;
+  END;
+
+  BEGIN
+    PERFORM cron.schedule(
+      'apf-jobs-safety-net',
+      '* * * * *',
+      $command$
+        SELECT net.http_post(
+          url := public.get_project_api_url() || '/functions/v1/process-apf-job',
+          headers := jsonb_build_object(
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || public.get_service_role_key()
+          ),
+          body := '{}'::jsonb
+        )
+        WHERE EXISTS (
+          SELECT 1
+          FROM public.apf_jobs
+          WHERE status = 'pending'
+            AND next_attempt_at <= now()
+          LIMIT 1
+        );
+      $command$
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'apf_safety_net_cron_deferred: %', SQLERRM;
+  END;
+END;
+$do$;
 
 COMMENT ON EXTENSION pg_cron IS
-  'apf-jobs-cleanup: deleta apf_jobs done/dead com mais de 7 dias. '
-  'Roda diáriamente às 03:00 UTC.';
-
--- ── 2. Safety net: reprocessa pending presos a cada 60s ─────────────────
-SELECT cron.unschedule('apf-jobs-safety-net');
-
-SELECT cron.schedule(
-  'apf-jobs-safety-net',
-  '* * * * *',   -- a cada minuto (pg_cron mínimo = 1 min)
-  $$
-    SELECT net.http_post(
-      url        := current_setting('app.supabase_url') || '/functions/v1/process-apf-job',
-      headers    := jsonb_build_object(
-        'Content-Type',  'application/json',
-        'Authorization', 'Bearer ' || current_setting('app.service_role_key')
-      ),
-      body       := '{}'
-    )
-    WHERE EXISTS (
-      SELECT 1 FROM public.apf_jobs
-      WHERE status = 'pending'
-        AND next_attempt_at <= now()
-      LIMIT 1
-    );
-  $$
-);
+  'Agenda limpeza e safety net de apf_jobs quando o ambiente suporta pg_cron.';
 
 COMMENT ON EXTENSION pg_net IS
-  'apf-jobs-safety-net: dispara process-apf-job a cada 1 min '
-  'quando há jobs pending presos (webhook falhou). '
-  'Requer app.supabase_url e app.service_role_key configurados '
-  'em Database > Settings > Configuration > Custom config.';
+  'Utilizado pelo safety net APF para acionar a Edge Function process-apf-job.';

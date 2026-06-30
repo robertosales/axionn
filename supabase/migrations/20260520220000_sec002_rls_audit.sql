@@ -117,9 +117,15 @@ for select to authenticated using (user_id = auth.uid());
 create policy umr_admin_all on public.user_module_roles
 for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
-alter table public.user_management_audit_log enable row level security;
-drop policy if exists audit_admin_select on public.user_management_audit_log;
-create policy audit_admin_select on public.user_management_audit_log
-for select to authenticated using (public.is_admin());
+-- The audit relation was introduced only in some installations.
+do $$
+begin
+  if to_regclass('public.user_management_audit_log') is not null then
+    execute 'alter table public.user_management_audit_log enable row level security';
+    execute 'drop policy if exists audit_admin_select on public.user_management_audit_log';
+    execute 'create policy audit_admin_select on public.user_management_audit_log for select to authenticated using (public.is_admin())';
+  end if;
+end;
+$$;
 
 commit;

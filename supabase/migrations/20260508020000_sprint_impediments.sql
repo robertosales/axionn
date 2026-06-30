@@ -1,0 +1,1 @@
+-- Unique migration version for sprint impediments.

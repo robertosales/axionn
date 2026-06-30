@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Compatibility note: supabase/tests/tenant_isolation.sql remains the legacy
+# entrypoint, while this runner executes the canonical split suite below.
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_DIR="$ROOT_DIR/supabase/tests/database"
 

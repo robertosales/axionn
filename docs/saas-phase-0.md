@@ -23,7 +23,8 @@ Esta fase não declara o Axion pronto para self-service. A saída esperada é um
 - limite de prompt, arquivos, tamanho total, timeout e quantidade de fallbacks;
 - teste de provider e chave inline restritos a administradores;
 - sucesso e falha das chamadas registrados no banco;
-- CI ampliado para validar Edge Functions e o contrato de segurança da Fase 0.
+- CI ampliado para validar Edge Functions, frontend e contrato de segurança;
+- configuração Deno e shim ESM adicionados para checagem tipada reproduzível da Edge Function.
 
 ## Decisões arquiteturais da fase
 

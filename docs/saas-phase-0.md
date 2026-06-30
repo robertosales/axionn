@@ -6,6 +6,8 @@ Preparar o Axion para pilotos empresariais controlados sem expor o sistema a cad
 
 Esta fase não declara o Axion pronto para self-service. A saída esperada é uma base auditável para iniciar a consolidação multi-tenant.
 
+> As migrations e Edge Functions descritas aqui estão versionadas no repositório. Elas só passam a valer em um ambiente após aplicação explícita no projeto Supabase correspondente.
+
 ## Alterações implementadas no código
 
 - cadastro público removido da tela de autenticação;

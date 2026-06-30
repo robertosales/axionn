@@ -6,7 +6,7 @@ Preparar o Axion para pilotos empresariais controlados sem expor o sistema a cad
 
 Esta fase não declara o Axion pronto para self-service. A saída esperada é uma base auditável para iniciar a consolidação multi-tenant.
 
-## Alterações iniciadas no código
+## Alterações implementadas no código
 
 - cadastro público removido da tela de autenticação;
 - OAuth público desligado por padrão;
@@ -14,7 +14,16 @@ Esta fase não declara o Axion pronto para self-service. A saída esperada é um
 - fallback de contrato fixo removido da administração de usuários;
 - Sentry Replay configurado para mascarar texto, inputs e mídia;
 - configuração Supabase preparada para ambientes distintos;
-- script de auditoria de RLS, grants e funções sensíveis adicionado ao repositório.
+- script de auditoria de RLS, grants e funções sensíveis adicionado ao repositório;
+- tabela de eventos de consumo de IA criada;
+- reserva de quota implementada de forma transacional por empresa e time;
+- validação de vínculo do usuário ao time, contrato ou organização;
+- funções que retornam chaves privilegiadas revogadas para `anon` e `authenticated`;
+- Edge Function APF integrada ao controle de licença e quota;
+- limite de prompt, arquivos, tamanho total, timeout e quantidade de fallbacks;
+- teste de provider e chave inline restritos a administradores;
+- sucesso e falha das chamadas registrados no banco;
+- CI ampliado para validar Edge Functions e o contrato de segurança da Fase 0.
 
 ## Decisões arquiteturais da fase
 
@@ -24,6 +33,51 @@ Esta fase não declara o Axion pronto para self-service. A saída esperada é um
 4. nenhuma função de IA poderá executar sem organização, entitlement e reserva de quota;
 5. migrations e testes de isolamento serão obrigatórios antes do self-service;
 6. produção, staging e desenvolvimento usarão projetos Supabase separados.
+
+## Governança de IA
+
+A migration `20260630010000_ai_usage_governance.sql` introduz:
+
+- `ai_usage_events`;
+- `reserve_ai_usage`;
+- `finalize_ai_usage`;
+- incremento atômico de `licenses.ai_calls_used`;
+- reset mensal de quota;
+- validação de licença ativa e não expirada;
+- validação transitória de membership por time, contrato, organização ou administrador da plataforma;
+- revogação de acesso cliente a RPCs sensíveis.
+
+A Edge Function aceita dois modos:
+
+### `audit`
+
+É o modo inicial. A função tenta reservar quota e registra o erro, mas continua a execução quando a estrutura de licença ainda não estiver completa. Ele serve apenas para implantação e saneamento dos dados existentes.
+
+### `enforce`
+
+Bloqueia chamadas sem empresa, licença ativa, vínculo do usuário ou quota disponível. Este é o modo obrigatório antes de pilotos pagos.
+
+Configuração:
+
+```bash
+supabase secrets set AI_USAGE_ENFORCEMENT_MODE=audit
+# Após validar empresas/licenças:
+supabase secrets set AI_USAGE_ENFORCEMENT_MODE=enforce
+```
+
+## Ordem de implantação em staging
+
+1. criar ou atualizar o projeto Supabase de staging;
+2. aplicar todas as migrations, incluindo `20260630010000_ai_usage_governance.sql`;
+3. cadastrar uma licença para cada empresa que utilizará APF/IA;
+4. implantar a função `apf-generate`;
+5. configurar os secrets documentados em `.env.example`;
+6. iniciar com `AI_USAGE_ENFORCEMENT_MODE=audit`;
+7. executar chamadas com usuário autorizado e não autorizado;
+8. conferir `ai_usage_events` e `licenses.ai_calls_used`;
+9. testar quota esgotada, licença expirada e usuário fora do time;
+10. mudar para `AI_USAGE_ENFORCEMENT_MODE=enforce`;
+11. repetir todos os cenários antes de promover para produção.
 
 ## Checklist de auditoria
 
@@ -39,11 +93,12 @@ Esta fase não declara o Axion pronto para self-service. A saída esperada é um
 
 ### Funções e privilégios
 
-- [ ] revisar grants para `anon` e `authenticated`;
-- [ ] revogar acesso cliente a funções que retornem chaves ou service role;
-- [ ] revisar funções `SECURITY DEFINER` e `search_path`;
-- [ ] verificar se funções administrativas validam papel e organização;
-- [ ] confirmar que webhooks e workers usam service role somente no servidor.
+- [ ] revisar todos os grants para `anon` e `authenticated`;
+- [x] revogar acesso cliente a funções conhecidas que retornem chaves ou service role;
+- [x] novas funções de consumo utilizam `SECURITY DEFINER` com `search_path` fixo;
+- [ ] revisar funções `SECURITY DEFINER` legadas e respectivos `search_path`;
+- [ ] verificar se todas as funções administrativas validam papel e organização;
+- [x] governança de IA executa com service role somente na Edge Function.
 
 ### Identidade e autorização
 
@@ -56,13 +111,15 @@ Esta fase não declara o Axion pronto para self-service. A saída esperada é um
 
 ### IA e custo
 
-- [ ] resolver organização antes de executar IA;
-- [ ] validar plano e entitlement;
-- [ ] reservar quota atomicamente;
-- [ ] limitar tamanho de prompt, arquivos e resposta;
-- [ ] aplicar rate limit por usuário e organização;
-- [ ] registrar provider, modelo, tokens, custo, duração e resultado;
-- [ ] impedir fallback para provider mais caro sem orçamento explícito;
+- [x] resolver time e empresa antes de executar IA;
+- [x] validar licença ativa e não expirada;
+- [x] reservar quota atomicamente;
+- [x] limitar tamanho de prompt e arquivos;
+- [x] limitar timeout e quantidade de fallbacks;
+- [x] registrar provider, duração, resultado e contexto operacional;
+- [ ] registrar tokens e custo monetário retornados por cada provider;
+- [ ] aplicar rate limit de curta duração por usuário e organização;
+- [ ] impedir fallback para faixa de custo superior sem política de orçamento;
 - [ ] criar alerta de anomalia de consumo.
 
 ### Operação
@@ -72,7 +129,9 @@ Esta fase não declara o Axion pronto para self-service. A saída esperada é um
 - [ ] validar backup e executar restauração de teste;
 - [ ] definir SLOs e alertas;
 - [ ] criar runbook de incidente;
-- [ ] adicionar testes RLS, migration lint e E2E ao CI;
+- [x] adicionar validação de Edge Function e contrato de segurança ao CI;
+- [ ] adicionar testes de RLS com banco efêmero ao CI;
+- [ ] adicionar E2E ao CI;
 - [ ] documentar rollback de frontend, migrations e Edge Functions.
 
 ## Critérios de saída
@@ -83,7 +142,7 @@ A Fase 0 termina somente quando:
 2. nenhuma chave privilegiada pode ser obtida por `anon` ou `authenticated`;
 3. uma restauração de backup foi executada com sucesso;
 4. staging funciona de forma independente da produção;
-5. chamadas de IA estão bloqueadas sem licença e quota;
+5. chamadas de IA estão em modo `enforce` e bloqueiam licença ou quota inválida;
 6. o relatório de auditoria possui responsável, evidência e decisão para cada achado crítico.
 
 ## Próxima fase

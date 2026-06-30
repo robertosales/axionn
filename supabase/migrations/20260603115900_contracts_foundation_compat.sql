@@ -1,5 +1,17 @@
--- Compatibilidade de replay: garante companies e contracts antes da entidade projects.
--- Instalações históricas já possuíam estas tabelas fora da cadeia versionada.
+-- Compatibilidade de replay: garante companies, contracts e o helper de
+-- timestamp antes da entidade projects. Instalações históricas já possuíam
+-- estes objetos fora da cadeia versionada.
+
+CREATE OR REPLACE FUNCTION public.fn_set_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS public.companies (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

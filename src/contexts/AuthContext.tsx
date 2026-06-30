@@ -1,414 +1,552 @@
-// src/contexts/AuthContext.tsx
-/**
- * fix(auth): refreshTeams via team_members — sem dependência de team_modules
- *
- * PROBLEMA RAIZ:
- *   refreshTeams buscava em team_modules com is_contract_member() que
- *   bloqueava membros comuns retornando []. Resultado: "Sem time" no dashboard.
- *
- * CORREÇÃO:
- *   Query em team_members com join direto em teams(id, name, module).
- *   A policy tm_select_own (user_id = auth.uid()) garante que cada usuário
- *   vê apenas seus próprios times, sem precisar passar userId como parâmetro.
- *
- * fix(teams-dedup-v2): dedup usa `${id}::${module}` como chave.
- *
- * fix(auth-team-module-validation): savedIsValid agora valida módulo além do ID.
- *   Impedia que usuários em múltiplos módulos carregassem o time errado ao
- *   restaurar selectedTeamId do localStorage, causando colunas do Kanban
- *   incorretas (ex: "Em Code Review" sumindo para membros do GESP3-TIME A).
- */
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { Session, User } from "@supabase/supabase-js";
-import { AppRole, Permission, getPermissionsForRoles } from "@/hooks/usePermissions";
-import { toast } from "sonner";
+import {
+  getPermissionsForRoles,
+  type AppRole,
+  type Permission,
+} from "@/hooks/usePermissions";
+import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
+import {
+  chooseCurrentTeamId,
+  deduplicateTeams,
+  type AuthTeam,
+} from "@/contexts/authTeams";
 
 interface Profile {
-  id:                   string;
-  user_id:              string;
-  display_name:         string;
-  email:                string;
-  avatar_url:           string | null;
-  module_access:        string;
+  id: string;
+  user_id: string;
+  display_name: string;
+  email: string;
+  avatar_url: string | null;
+  module_access: string;
   must_change_password?: boolean;
-  full_name?:           string;
-  role?:                string;
+  full_name?: string;
+  role?: string;
+  is_active?: boolean;
 }
 
 interface UserModuleRole {
-  module:    string;
+  module: string;
   role_name: string;
 }
 
-type AuthTeam = { id: string; name: string; module: string };
-
 interface AuthContextType {
-  session:           Session | null;
-  user:              User | null;
-  profile:           Profile | null;
-  isAdmin:           boolean;
-  loading:           boolean;
-  isSigningOut:      boolean;
-  signOut:           () => Promise<void>;
-  currentTeamId:     string | null;
-  currentTeam:       AuthTeam | null;
-  setCurrentTeamId:  (id: string | null) => void;
-  teams:             AuthTeam[];
-  refreshTeams:      () => Promise<void>;
-  roles:             AppRole[];
-  hasPermission:     (permission: Permission) => boolean;
-  refreshProfile:    () => Promise<void>;
-  moduleRoles:       UserModuleRole[];
-  hasModuleAccess:   (module: string) => boolean;
-  getModuleRole:     (module: string) => string | null;
+  session: Session | null;
+  user: User | null;
+  profile: Profile | null;
+  isAdmin: boolean;
+  isPlatformAdmin: boolean;
+  isLegacyAdmin: boolean;
+  loading: boolean;
+  isSigningOut: boolean;
+  signOut: () => Promise<void>;
+  currentTeamId: string | null;
+  currentTeam: AuthTeam | null;
+  setCurrentTeamId: (id: string | null) => void;
+  teams: AuthTeam[];
+  refreshTeams: (
+    profileData?: Profile,
+    organizationId?: string | null,
+  ) => Promise<void>;
+  roles: AppRole[];
+  hasPermission: (permission: Permission) => boolean;
+  refreshProfile: () => Promise<void>;
+  moduleRoles: UserModuleRole[];
+  hasModuleAccess: (module: string) => boolean;
+  getModuleRole: (module: string) => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function auditLog(
-  event: "SIGNOUT_INITIATED" | "SIGNOUT_REMOTE_SUCCESS" | "SIGNOUT_REMOTE_FAILED" | "SIGNOUT_LOCAL_CLEARED",
+  event:
+    | "SIGNOUT_INITIATED"
+    | "SIGNOUT_REMOTE_SUCCESS"
+    | "SIGNOUT_REMOTE_FAILED"
+    | "SIGNOUT_LOCAL_CLEARED",
   meta: Record<string, unknown> = {},
 ) {
-  console.info("[Auth:Audit]", event, { timestamp: new Date().toISOString(), ...meta });
+  console.info("[Auth:Audit]", event, {
+    timestamp: new Date().toISOString(),
+    ...meta,
+  });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session,       setSession]       = useState<Session | null>(null);
-  const [user,          setUser]          = useState<User | null>(null);
-  const [profile,       setProfile]       = useState<Profile | null>(null);
-  const [isAdmin,       setIsAdmin]       = useState(false);
-  const [roles,         setRoles]         = useState<AppRole[]>([]);
-  const [permissions,   setPermissions]   = useState<Set<Permission>>(new Set());
-  const [loading,       setLoading]       = useState(true);
-  const [isSigningOut,  setIsSigningOut]  = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [isLegacyAdmin, setIsLegacyAdmin] = useState(false);
+  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
-  const [teams,         setTeams]         = useState<AuthTeam[]>([]);
-  const [moduleRoles,   setModuleRoles]   = useState<UserModuleRole[]>([]);
+  const [teams, setTeams] = useState<AuthTeam[]>([]);
+  const [moduleRoles, setModuleRoles] = useState<UserModuleRole[]>([]);
 
   const currentTeamIdRef = useRef<string | null>(null);
-  const mountedRef       = useRef(true);
-  const loadedUserIdRef  = useRef<string | null>(null);
+  const profileRef = useRef<Profile | null>(null);
+  const effectiveAdminRef = useRef(false);
+  const legacyAdminRef = useRef(false);
+  const mountedRef = useRef(true);
+  const loadedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
-  // boot-sync — pré-popula currentTeamIdRef a partir do localStorage
   useEffect(() => {
     const saved = localStorage.getItem("selectedTeamId");
     if (saved && !currentTeamIdRef.current) {
       currentTeamIdRef.current = saved;
       setCurrentTeamIdState(saved);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const setCurrentTeamId = (id: string | null) => {
+  const setCurrentTeamId = useCallback((id: string | null) => {
     currentTeamIdRef.current = id;
     setCurrentTeamIdState(id);
     if (id) localStorage.setItem("selectedTeamId", id);
-    else     localStorage.removeItem("selectedTeamId");
-  };
+    else localStorage.removeItem("selectedTeamId");
+  }, []);
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles").select("*").eq("user_id", userId).single();
-    if (error) { console.error("[Auth] fetchProfile:", error); return; }
-    if (data && mountedRef.current) setProfile(data as Profile);
-  };
-
-  const refreshProfile = async () => {
-    if (user?.id) await fetchProfile(user.id);
-  };
-
-  const fetchRoles = async (userId: string): Promise<boolean> => {
-    const { data, error } = await supabase
-      .from("user_roles").select("role").eq("user_id", userId);
-    if (error) { console.error("[Auth] fetchRoles:", error); return false; }
-    const userRoles = (data ?? []).map((r: any) => r.role as AppRole);
-    const admin     = userRoles.includes("admin");
-    if (!mountedRef.current) return admin;
-    setRoles(userRoles);
-    setIsAdmin(admin);
-    try {
-      const perms = await getPermissionsForRoles(userRoles);
-      if (mountedRef.current) setPermissions(perms);
-    } catch (e) {
-      console.error("[Auth] getPermissionsForRoles:", e);
-    }
-    return admin;
-  };
-
-  const fetchModuleRoles = async (userId: string, profileData?: Profile) => {
-    const { data, error } = await supabase
-      .from("user_module_roles")
-      .select("module, role_name")
-      .eq("user_id", userId);
-
-    if (error || !data || data.length === 0) {
-      const moduleAccess = profileData?.module_access || "sala_agil";
-      const fallback: UserModuleRole[] =
-        moduleAccess === "admin"
-          ? [
-              { module: "sala_agil",   role_name: "admin" },
-              { module: "sustentacao", role_name: "admin" },
-              { module: "rdm",         role_name: "admin" },
-            ]
-          : [{ module: moduleAccess, role_name: "member" }];
-      if (mountedRef.current) setModuleRoles(fallback);
-      return;
-    }
-    if (mountedRef.current)
-      setModuleRoles(data.map((r: any) => ({ module: r.module, role_name: r.role_name })));
-  };
-
-  const refreshTeams = async (profileData?: Profile) => {
-    // fix(auth): admins enxergam TODOS os times (RLS teams_select_admin).
-    // Usuários comuns continuam via team_members (RLS tm_select_own).
-    let rawList: AuthTeam[] = [];
-
-    // Verifica se o usuário atual é admin via user_roles
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    let isAdminUser = false;
-    if (authUser) {
-      const { data: rolesData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", authUser.id);
-      isAdminUser = (rolesData ?? []).some((r: any) => r.role === "admin");
-    }
-
-    if (isAdminUser) {
-      const { data, error } = await supabase
-        .from("teams")
-        .select("id, name, module");
-      if (error) { console.error("[Auth] refreshTeams(admin):", error); return; }
-      rawList = (data ?? []).map((t: any) => ({
-        id: t.id, name: t.name, module: t.module ?? "",
-      }));
-    } else {
-      const { data, error } = await supabase
-        .from("team_members")
-        .select("team:team_id(id, name, module)");
-      if (error) { console.error("[Auth] refreshTeams:", error); return; }
-      rawList = (data ?? []).flatMap((row: any) => {
-        if (!row.team) return [];
-        return [{ id: row.team.id, name: row.team.name, module: row.team.module ?? "" }];
-      });
-    }
-
-    // dedup por (id × module)
-    const seen = new Set<string>();
-    const teamList = rawList.filter(t => {
-      const key = `${t.id}::${t.module}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  const clearUserState = useCallback(() => {
+    localStorage.removeItem("selectedTeamId");
+    localStorage.removeItem("selectedOrganizationId");
 
     if (!mountedRef.current) return;
-    setTeams(teamList);
+    profileRef.current = null;
+    effectiveAdminRef.current = false;
+    legacyAdminRef.current = false;
+    setProfile(null);
+    setIsAdmin(false);
+    setIsPlatformAdmin(false);
+    setIsLegacyAdmin(false);
+    setRoles([]);
+    setPermissions(new Set());
+    setTeams([]);
+    setModuleRoles([]);
+    setCurrentTeamId(null);
+  }, [setCurrentTeamId]);
 
-    const saved        = localStorage.getItem("selectedTeamId");
-    const alreadyHasTeam = !!currentTeamIdRef.current &&
-                           teamList.some(t => t.id === currentTeamIdRef.current);
+  const forceLocalClear = useCallback(() => {
+    try {
+      const keysToRemove = Object.keys(localStorage).filter(
+        (key) => key.startsWith("sb-") || key.startsWith("supabase."),
+      );
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+    } catch (error) {
+      console.warn("[Auth] forceLocalClear: erro ao limpar localStorage:", error);
+    }
 
-    if (alreadyHasTeam) return;
+    clearUserState();
+    if (!mountedRef.current) return;
+    setSession(null);
+    setUser(null);
+  }, [clearUserState]);
 
-    // fix(auth-team-module-validation):
-    // Valida o ID salvo contra o módulo correto do usuário.
-    // Sem essa validação, um usuário em múltiplos módulos poderia ter o
-    // selectedTeamId apontando para um time de outro módulo (ex: sustentacao),
-    // fazendo o Kanban carregar as colunas erradas — sem "Em Code Review".
-    const activeModule = isAdminUser
-      ? null  // admin pode usar qualquer time, não restringe por módulo
-      : (profileData?.module_access ?? "sala_agil");
+  const fetchProfile = useCallback(async (userId: string) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
 
-    const savedIsValid = saved && teamList.some(t =>
-      t.id === saved &&
-      (activeModule === null || t.module === activeModule)
+    if (error) {
+      console.error("[Auth] fetchProfile:", error);
+      return null;
+    }
+
+    const nextProfile = data as Profile;
+    profileRef.current = nextProfile;
+    if (mountedRef.current) setProfile(nextProfile);
+    return nextProfile;
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (user?.id) await fetchProfile(user.id);
+  }, [fetchProfile, user?.id]);
+
+  const fetchRoles = useCallback(async (userId: string): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("[Auth] fetchRoles:", error);
+      return false;
+    }
+
+    const userRoles = (data ?? []).map(
+      (roleRow: { role: string }) => roleRow.role as AppRole,
     );
+    const legacyAdmin = userRoles.includes("admin");
+    let platformAdmin = false;
 
-    if (savedIsValid) {
-      setCurrentTeamId(saved!);
-    } else {
-      if (saved) {
-        localStorage.removeItem("selectedTeamId");
-        console.warn(
-          "[Auth] selectedTeamId inválido ou módulo incorreto — removido do localStorage:",
-          saved,
-          "| módulo esperado:", activeModule,
-        );
-      }
-      // Seleciona o primeiro time do módulo correto (não o primeiro da lista global)
-      const firstValidTeam = activeModule
-        ? teamList.find(t => t.module === activeModule)
-        : teamList[0];
-      if (firstValidTeam) {
-        setCurrentTeamId(firstValidTeam.id);
+    if (ORGANIZATION_TENANCY_ENABLED) {
+      const { data: platformAccess, error: platformError } = await supabase.rpc(
+        "is_platform_admin",
+      );
+
+      if (platformError) {
+        console.error("[Auth] is_platform_admin:", platformError);
+      } else {
+        platformAdmin = platformAccess === true;
       }
     }
-  };
 
-  const hasPermission   = (permission: Permission) => isAdmin || permissions.has(permission);
-  const hasModuleAccess = (module: string): boolean => {
-    if (isAdmin) return true;
-    return moduleRoles.some(mr => mr.module === module);
-  };
-  const getModuleRole = (module: string): string | null =>
-    moduleRoles.find(mr => mr.module === module)?.role_name ?? null;
+    const effectiveAdmin = ORGANIZATION_TENANCY_ENABLED
+      ? platformAdmin
+      : legacyAdmin;
 
-  const loadUserData = async (userId: string) => {
+    legacyAdminRef.current = legacyAdmin;
+    effectiveAdminRef.current = effectiveAdmin;
+
+    if (!mountedRef.current) return effectiveAdmin;
+
+    setRoles(userRoles);
+    setIsLegacyAdmin(legacyAdmin);
+    setIsPlatformAdmin(platformAdmin);
+    setIsAdmin(effectiveAdmin);
+
     try {
-      const { data: profileData } = await supabase
-        .from("profiles").select("*").eq("user_id", userId).single();
+      const rolePermissions = await getPermissionsForRoles(userRoles);
+      if (mountedRef.current) setPermissions(rolePermissions);
+    } catch (permissionError) {
+      console.error("[Auth] getPermissionsForRoles:", permissionError);
+    }
 
-      if (profileData && profileData.is_active === false) {
-        console.warn("[Auth] Bloqueio: Usuário inativo detectado.");
-        await forceLocalClear();
+    return effectiveAdmin;
+  }, []);
+
+  const fetchModuleRoles = useCallback(
+    async (userId: string, profileData?: Profile) => {
+      const { data, error } = await supabase
+        .from("user_module_roles")
+        .select("module, role_name")
+        .eq("user_id", userId);
+
+      if (error || !data || data.length === 0) {
+        const moduleAccess = profileData?.module_access || "sala_agil";
+        const fallback: UserModuleRole[] =
+          moduleAccess === "admin"
+            ? [
+                { module: "sala_agil", role_name: "admin" },
+                { module: "sustentacao", role_name: "admin" },
+                { module: "rdm", role_name: "admin" },
+              ]
+            : [{ module: moduleAccess, role_name: "member" }];
+
+        if (mountedRef.current) setModuleRoles(fallback);
         return;
       }
 
-      if (profileData && mountedRef.current) setProfile(profileData as Profile);
+      if (mountedRef.current) {
+        setModuleRoles(
+          data.map((roleRow: { module: string; role_name: string }) => ({
+            module: roleRow.module,
+            role_name: roleRow.role_name,
+          })),
+        );
+      }
+    },
+    [],
+  );
 
-      await Promise.all([
-        fetchRoles(userId),
-        // Passa profileData para refreshTeams validar módulo corretamente
-        refreshTeams(profileData as Profile),
-        fetchModuleRoles(userId, profileData as Profile),
-      ]);
-    } catch (err) {
-      console.error("[Auth] loadUserData:", err);
-    }
-  };
+  const refreshTeams = useCallback(
+    async (profileData?: Profile, organizationId?: string | null) => {
+      const effectiveProfile = profileData ?? profileRef.current ?? undefined;
+      let rawList: AuthTeam[] = [];
 
-  const forceLocalClear = () => {
-    localStorage.removeItem("selectedTeamId");
-    try {
-      const keysToRemove = Object.keys(localStorage).filter(
-        (k) => k.startsWith("sb-") || k.startsWith("supabase."),
-      );
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
-    } catch (e) {
-      console.warn("[Auth] forceLocalClear: erro ao limpar localStorage:", e);
-    }
-    if (!mountedRef.current) return;
-    setProfile(null);
-    setIsAdmin(false);
-    setRoles([]);
-    setPermissions(new Set());
-    setTeams([]);
-    setModuleRoles([]);
-    setCurrentTeamId(null);
-    setSession(null);
-    setUser(null);
-  };
+      if (ORGANIZATION_TENANCY_ENABLED) {
+        if (!organizationId) {
+          if (mountedRef.current) setTeams([]);
+          setCurrentTeamId(null);
+          return;
+        }
 
-  const resetAuthState = () => {
-    if (!mountedRef.current) return;
-    setProfile(null);
-    setIsAdmin(false);
-    setRoles([]);
-    setPermissions(new Set());
-    setTeams([]);
-    setModuleRoles([]);
-    setCurrentTeamId(null);
-    localStorage.removeItem("selectedTeamId");
-  };
+        const { data, error } = await supabase.rpc(
+          "get_accessible_teams_v2",
+          { p_org_id: organizationId },
+        );
+
+        if (error) {
+          console.error("[Auth] get_accessible_teams_v2:", error);
+          if (mountedRef.current) setTeams([]);
+          setCurrentTeamId(null);
+          return;
+        }
+
+        rawList = ((data ?? []) as Array<Record<string, unknown>>).map(
+          (team) => ({
+            id: String(team.id),
+            name: String(team.name ?? "Time"),
+            module: String(team.module ?? ""),
+            organizationId: String(team.org_id ?? organizationId),
+          }),
+        );
+      } else if (legacyAdminRef.current) {
+        const { data, error } = await supabase
+          .from("teams")
+          .select("id, name, module");
+
+        if (error) {
+          console.error("[Auth] refreshTeams(admin):", error);
+          return;
+        }
+
+        rawList = (data ?? []).map(
+          (team: { id: string; name: string; module: string | null }) => ({
+            id: team.id,
+            name: team.name,
+            module: team.module ?? "",
+            organizationId: null,
+          }),
+        );
+      } else {
+        const { data, error } = await supabase
+          .from("team_members")
+          .select("team:team_id(id, name, module)");
+
+        if (error) {
+          console.error("[Auth] refreshTeams:", error);
+          return;
+        }
+
+        rawList = (data ?? []).flatMap(
+          (row: {
+            team:
+              | { id: string; name: string; module: string | null }
+              | null;
+          }) => {
+            if (!row.team) return [];
+            return [
+              {
+                id: row.team.id,
+                name: row.team.name,
+                module: row.team.module ?? "",
+                organizationId: null,
+              },
+            ];
+          },
+        );
+      }
+
+      const teamList = deduplicateTeams(rawList);
+      if (!mountedRef.current) return;
+      setTeams(teamList);
+
+      const canUseAnyModule =
+        effectiveAdminRef.current || effectiveProfile?.module_access === "admin";
+      const activeModule = canUseAnyModule
+        ? null
+        : effectiveProfile?.module_access ?? "sala_agil";
+      const savedTeamId = localStorage.getItem("selectedTeamId");
+      const selectedTeamId = chooseCurrentTeamId({
+        teams: teamList,
+        currentTeamId: currentTeamIdRef.current,
+        savedTeamId,
+        activeModule,
+      });
+
+      if (savedTeamId && savedTeamId !== selectedTeamId) {
+        console.warn(
+          "[Auth] selectedTeamId fora do contexto atual — seleção removida:",
+          savedTeamId,
+        );
+      }
+
+      setCurrentTeamId(selectedTeamId);
+    },
+    [setCurrentTeamId],
+  );
+
+  const loadUserData = useCallback(
+    async (userId: string) => {
+      try {
+        const profileData = await fetchProfile(userId);
+
+        if (profileData?.is_active === false) {
+          console.warn("[Auth] Bloqueio: usuário inativo detectado.");
+          forceLocalClear();
+          return;
+        }
+
+        await fetchRoles(userId);
+        await fetchModuleRoles(userId, profileData ?? undefined);
+
+        if (!ORGANIZATION_TENANCY_ENABLED) {
+          await refreshTeams(profileData ?? undefined);
+        }
+      } catch (error) {
+        console.error("[Auth] loadUserData:", error);
+      }
+    },
+    [
+      fetchModuleRoles,
+      fetchProfile,
+      fetchRoles,
+      forceLocalClear,
+      refreshTeams,
+    ],
+  );
 
   useEffect(() => {
     let initialised = false;
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    void supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mountedRef.current) return;
       setSession(session);
       setUser(session?.user ?? null);
+
       if (session?.user) {
         await loadUserData(session.user.id);
         loadedUserIdRef.current = session.user.id;
       }
+
       if (mountedRef.current) setLoading(false);
       initialised = true;
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mountedRef.current) return;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!mountedRef.current) return;
 
-        if (session?.user) {
-          if (!initialised) return;
-          const userId = session.user.id;
-          if (loadedUserIdRef.current === userId) return;
-          setSession(session);
-          setUser(session.user);
-          if (mountedRef.current) setLoading(true);
-          setTimeout(() => {
-            void loadUserData(userId).finally(() => {
-              loadedUserIdRef.current = userId;
-              if (mountedRef.current) setLoading(false);
-            });
-          }, 0);
-        } else if (event === "SIGNED_OUT") {
-          loadedUserIdRef.current = null;
-          setSession(null);
-          setUser(null);
-          resetAuthState();
-          if (mountedRef.current && initialised) setLoading(false);
-        }
+      if (nextSession?.user) {
+        if (!initialised) return;
+        const userId = nextSession.user.id;
+        if (loadedUserIdRef.current === userId) return;
+
+        setSession(nextSession);
+        setUser(nextSession.user);
+        setLoading(true);
+
+        setTimeout(() => {
+          void loadUserData(userId).finally(() => {
+            loadedUserIdRef.current = userId;
+            if (mountedRef.current) setLoading(false);
+          });
+        }, 0);
+      } else if (event === "SIGNED_OUT") {
+        loadedUserIdRef.current = null;
+        setSession(null);
+        setUser(null);
+        clearUserState();
+        if (mountedRef.current && initialised) setLoading(false);
       }
-    );
+    });
 
     return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [clearUserState, loadUserData]);
 
   const signOut = async () => {
     if (isSigningOut) return;
     setIsSigningOut(true);
 
-    const currentToken   = session?.access_token;
+    const currentToken = session?.access_token;
     const tokenExpiresAt = session?.expires_at;
 
-    auditLog("SIGNOUT_INITIATED", { userId: user?.id, email: user?.email, hasToken: !!currentToken, tokenExpiresAt });
+    auditLog("SIGNOUT_INITIATED", {
+      userId: user?.id,
+      email: user?.email,
+      hasToken: Boolean(currentToken),
+      tokenExpiresAt,
+    });
 
     let remoteSuccess = false;
     try {
-      const TIMEOUT_MS = 5_000;
+      const timeoutMs = 5_000;
       await Promise.race([
         supabase.auth.signOut(),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout_${TIMEOUT_MS}ms`)), TIMEOUT_MS)),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`timeout_${timeoutMs}ms`)), timeoutMs),
+        ),
       ]);
       remoteSuccess = true;
       auditLog("SIGNOUT_REMOTE_SUCCESS", { userId: user?.id });
-    } catch (err: any) {
-      const reason = err?.message ?? String(err);
-      auditLog("SIGNOUT_REMOTE_FAILED", { userId: user?.id, reason, tokenState: currentToken ? "present" : "absent" });
-      console.error("[Auth] signOut falhou — aplicando fallback local:", reason);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      auditLog("SIGNOUT_REMOTE_FAILED", {
+        userId: user?.id,
+        reason,
+        tokenState: currentToken ? "present" : "absent",
+      });
+      console.error(
+        "[Auth] signOut falhou — aplicando fallback local:",
+        reason,
+      );
     } finally {
       forceLocalClear();
-      auditLog("SIGNOUT_LOCAL_CLEARED", { userId: user?.id, remoteSuccess });
+      auditLog("SIGNOUT_LOCAL_CLEARED", {
+        userId: user?.id,
+        remoteSuccess,
+      });
       if (mountedRef.current) setIsSigningOut(false);
     }
   };
 
+  const hasPermission = (permission: Permission) =>
+    isAdmin || permissions.has(permission);
+
+  const hasModuleAccess = (module: string) => {
+    if (isAdmin) return true;
+    return moduleRoles.some((moduleRole) => moduleRole.module === module);
+  };
+
+  const getModuleRole = (module: string) =>
+    moduleRoles.find((moduleRole) => moduleRole.module === module)?.role_name ??
+    null;
+
   return (
-    <AuthContext.Provider value={{
-      session, user, profile, isAdmin, loading, isSigningOut, signOut,
-      currentTeamId,
-      currentTeam: teams.find((t) => t.id === currentTeamId) ?? null,
-      setCurrentTeamId, teams, refreshTeams,
-      roles, hasPermission, refreshProfile,
-      moduleRoles, hasModuleAccess, getModuleRole,
-    }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user,
+        profile,
+        isAdmin,
+        isPlatformAdmin,
+        isLegacyAdmin,
+        loading,
+        isSigningOut,
+        signOut,
+        currentTeamId,
+        currentTeam:
+          teams.find((team) => team.id === currentTeamId) ?? null,
+        setCurrentTeamId,
+        teams,
+        refreshTeams,
+        roles,
+        hasPermission,
+        refreshProfile,
+        moduleRoles,
+        hasModuleAccess,
+        getModuleRole,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
 }

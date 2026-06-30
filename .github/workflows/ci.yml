@@ -58,12 +58,16 @@ jobs:
         run: exit "$(cat vitest.exit 2>/dev/null || echo 1)"
 
   build-check:
-    name: 📦 Vite build check
+    name: 📦 Vite build (${{ matrix.tenancy == 'true' && 'tenant' || 'legacy' }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tenancy: ["false", "true"]
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
-      VITE_ORG_TENANCY_ENABLED: "false"
+      VITE_ORG_TENANCY_ENABLED: ${{ matrix.tenancy }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -122,14 +126,20 @@ jobs:
           governance="supabase/migrations/20260630010000_ai_usage_governance.sql"
           rate_limits="supabase/migrations/20260630011000_ai_rate_limits.sql"
           multitenant="supabase/migrations/20260630020000_multitenant_foundation.sql"
+          wrappers="supabase/migrations/20260630021000_org_access_wrappers.sql"
           edge="supabase/functions/apf-generate/index.ts"
           org_context="src/contexts/OrganizationContext.tsx"
+          auth_context="src/contexts/AuthContext.tsx"
+          org_switcher="src/components/OrganizationSwitcher.tsx"
 
           test -f "$governance"
           test -f "$rate_limits"
           test -f "$multitenant"
+          test -f "$wrappers"
           test -f "$edge"
           test -f "$org_context"
+          test -f "$auth_context"
+          test -f "$org_switcher"
 
           grep -q "create table if not exists public.ai_usage_events" "$governance"
           grep -q "create or replace function public.reserve_ai_usage" "$governance"
@@ -140,10 +150,16 @@ jobs:
 
           grep -q "create table if not exists public.platform_user_roles" "$multitenant"
           grep -q "add column if not exists org_id" "$multitenant"
-          grep -q "create or replace function public.is_platform_admin" "$multitenant"
           grep -q "create or replace function public.get_my_organizations_v2" "$multitenant"
           grep -q "create or replace function public.get_accessible_teams_v2" "$multitenant"
+          grep -q "create or replace function public.is_platform_admin()" "$wrappers"
+          grep -q "revoke all on function public.is_platform_admin(uuid)" "$wrappers"
+
           grep -q "VITE_ORG_TENANCY_ENABLED" "$org_context"
+          grep -q "get_accessible_teams_v2" "$auth_context"
+          grep -q "is_platform_admin" "$auth_context"
+          grep -q "Trocar a organização também redefine o time ativo" "$org_switcher"
+          ! grep -q 'isAdmin || moduleAccess === "admin"' src/App.tsx
 
           grep -q "AI_USAGE_ENFORCEMENT_MODE" "$edge"
           grep -q "reserve_ai_usage" "$edge"

@@ -6,6 +6,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
+import { OrganizationOperationalGuard } from "@/components/OrganizationOperationalGuard";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { SprintProvider } from "@/contexts/SprintContext";
@@ -108,7 +109,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {children}
+      <OrganizationOperationalGuard>{children}</OrganizationOperationalGuard>
       <SessionTimeoutAlert />
       <OnboardingWizard open={showWizard} onComplete={completeOnboarding} />
     </>

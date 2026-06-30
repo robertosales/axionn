@@ -1,16 +1,10 @@
-# .github/workflows/ci.yml
-# CI rodado em todo PR aberto ou atualizado contra develop ou main.
-
 name: ✅ CI
 
 on:
   pull_request:
-    branches:
-      - develop
-      - main
+    branches: [develop, main]
   push:
-    branches:
-      - develop
+    branches: [develop]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -21,37 +15,24 @@ jobs:
     name: 🔍 ESLint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Instala dependências
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
+      - run: npm ci
+      - run: npm run lint
 
   test:
     name: 🧪 Vitest
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Instala dependências
-        run: npm ci
-
+      - run: npm ci
       - name: Testes unitários
         id: vitest
         continue-on-error: true
@@ -63,7 +44,6 @@ jobs:
           echo "$code" > vitest.exit
           tail -n 160 vitest.log
           exit "$code"
-
       - name: Publica log do Vitest
         if: always()
         uses: actions/upload-artifact@v4
@@ -73,13 +53,9 @@ jobs:
             vitest.log
             vitest.exit
           retention-days: 3
-
       - name: Falha quando os testes falharem
         if: always()
-        shell: bash
-        run: |
-          code=$(cat vitest.exit 2>/dev/null || echo 1)
-          exit "$code"
+        run: exit "$(cat vitest.exit 2>/dev/null || echo 1)"
 
   build-check:
     name: 📦 Vite build check
@@ -88,54 +64,38 @@ jobs:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Instala dependências
-        run: npm ci
-
-      - name: Build
-        run: npm run build
+      - run: npm ci
+      - run: npm run build
 
   edge-functions:
     name: 🛡️ Edge Functions
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Instala tipagens Node
-        run: npm ci
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - run: npm ci
+      - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
       - name: Verifica função APF
         id: deno-check
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          deno check supabase/functions/apf-generate/index.ts > deno-check.log 2>&1
+          deno check --config supabase/functions/deno.json supabase/functions/apf-generate/index.ts > deno-check.log 2>&1
           code=$?
           echo "$code" > deno-check.exit
           tail -n 200 deno-check.log
           exit "$code"
-
       - name: Publica diagnóstico do Deno
         if: always()
         uses: actions/upload-artifact@v4
@@ -145,31 +105,23 @@ jobs:
             deno-check.log
             deno-check.exit
           retention-days: 3
-
       - name: Falha quando o Deno check falhar
         if: always()
-        shell: bash
-        run: |
-          code=$(cat deno-check.exit 2>/dev/null || echo 1)
-          exit "$code"
+        run: exit "$(cat deno-check.exit 2>/dev/null || echo 1)"
 
   security-contract:
     name: 🔐 Security contract
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Valida controles críticos da Fase 0
         shell: bash
         run: |
           set -euo pipefail
           migration="supabase/migrations/20260630010000_ai_usage_governance.sql"
           edge="supabase/functions/apf-generate/index.ts"
-
           test -f "$migration"
           test -f "$edge"
-
           grep -q "create table if not exists public.ai_usage_events" "$migration"
           grep -q "create or replace function public.reserve_ai_usage" "$migration"
           grep -q "revoke all on function public.reserve_ai_usage" "$migration"
@@ -178,8 +130,4 @@ jobs:
           grep -q "reserve_ai_usage" "$edge"
           grep -q "finalize_ai_usage" "$edge"
           grep -q "AI_MAX_PROMPT_CHARS" "$edge"
-
-          if grep -q "signUp" src/pages/Auth.tsx; then
-            echo "Cadastro público reapareceu em src/pages/Auth.tsx"
-            exit 1
-          fi
+          ! grep -q "signUp" src/pages/Auth.tsx

@@ -57,9 +57,10 @@ As funções de resolução ficam restritas ao `service_role`. Para o frontend f
 - indicação de administrador da plataforma;
 - indicação de administrador da organização;
 - persistência da seleção no navegador;
-- sincronização entre organização e time ativo.
+- sincronização entre organização e time ativo;
+- estado operacional da organização.
 
-Ao trocar de organização, o time anteriormente selecionado é removido e os times são carregados novamente por `get_accessible_teams_v2`.
+Ao trocar de organização, o time e o contrato anteriormente selecionados são invalidados quando não pertencem ao novo contexto.
 
 ### 5. Separação efetiva de administração
 
@@ -75,16 +76,50 @@ Com a flag desligada, `isAdmin` mantém o comportamento legado para não interro
 
 ### 6. Seletor de organização
 
-Foi adicionado um seletor global compacto:
+Foi adicionado um seletor global compacto que exibe organização, plano, status e papel. A troca redefine o time ativo e recarrega os recursos empresariais.
 
-- exibe a organização ativa;
-- diferencia administrador da plataforma;
-- apresenta status e plano;
-- permite alternar entre organizações;
-- redefine o time ativo ao trocar de contexto;
-- mostra um aviso quando a conta não possui organização vinculada.
+### 7. Isolamento de recursos empresariais
 
-### 7. Feature flag
+A Fase 1.3 adiciona escopo de organização a:
+
+- empresas;
+- contratos;
+- projetos;
+- times;
+- vínculos contrato–time;
+- vínculos contrato–sala;
+- SLAs contratuais.
+
+O frontend utiliza as RPCs:
+
+- `get_accessible_companies_v2`;
+- `get_accessible_contracts_v2`;
+- `get_accessible_projects_v2`;
+- `get_accessible_teams_v2`.
+
+Criações recebem `org_id`; atualizações e exclusões incluem a organização na condição da operação. A importação de projetos também passa a utilizar o contexto persistido da organização.
+
+### 8. Organizações suspensas e canceladas
+
+Usuários comuns de organizações `suspended` ou `cancelled` ficam bloqueados nas rotas operacionais. O `platform_admin` mantém acesso para suporte e saneamento.
+
+### 9. Enforcement progressivo no banco
+
+A tabela `saas_runtime_settings` controla o isolamento restritivo no banco. A configuração inicial é:
+
+```json
+{"enabled": false}
+```
+
+As policies restritivas e os triggers já ficam instalados, mas a obrigatoriedade de `org_id` só passa a valer quando o backend executar, com `service_role`:
+
+```sql
+select set_tenancy_enforcement(true);
+```
+
+O frontend não possui permissão para alterar essa configuração.
+
+### 10. Feature flag
 
 A consulta multi-tenant só é ativada quando:
 
@@ -98,40 +133,49 @@ O padrão permanece `false`, evitando chamadas às novas RPCs antes da aplicaç�
 
 1. aplicar `20260630020000_multitenant_foundation.sql`;
 2. aplicar `20260630021000_org_access_wrappers.sql`;
-3. executar a auditoria da Fase 0;
-4. consultar recursos com `org_id is null`;
-5. revisar organizações ambíguas ou ausentes;
-6. confirmar que os administradores atuais foram copiados para `platform_user_roles`;
-7. testar `get_my_organizations_v2` com usuário comum, owner, admin e platform admin;
-8. testar `get_accessible_teams_v2` com usuários de organizações diferentes;
-9. ativar `VITE_ORG_TENANCY_ENABLED=true` somente no staging;
-10. validar troca de organização, redefinição do time e persistência da seleção;
-11. confirmar que administrador de organização não acessa `/dashboard-admin` ou `/contratos`;
-12. manter produção com a flag desligada até os testes de isolamento passarem.
+3. aplicar `20260630022000_org_resource_isolation.sql`;
+4. aplicar `20260630023000_org_resource_isolation_hardening.sql`;
+5. executar a auditoria da Fase 0;
+6. executar `get_tenancy_readiness_report()` com `service_role`;
+7. eliminar registros sem `org_id` e vínculos divergentes;
+8. confirmar os registros de `platform_user_roles`;
+9. testar as RPCs com usuários de duas organizações distintas;
+10. ativar `VITE_ORG_TENANCY_ENABLED=true` somente no staging;
+11. validar troca de organização, time e contrato;
+12. validar bloqueio de organizações suspensas e canceladas;
+13. executar `set_tenancy_enforcement(true)` somente após o relatório retornar zero em todos os problemas;
+14. repetir testes de leitura, criação, atualização e exclusão cruzadas;
+15. manter produção com a flag e o enforcement desligados até aprovação formal.
 
 ## Consultas de verificação
 
 ```sql
-select count(*) from companies where org_id is null;
-select count(*) from contracts where org_id is null;
-select count(*) from teams where org_id is null;
-select count(*) from projects where org_id is null;
-
 select * from platform_user_roles order by created_at;
 select * from get_my_organizations_v2();
 select is_platform_admin();
+select * from get_tenancy_readiness_report();
+
+select set_tenancy_enforcement(true);
+select set_tenancy_enforcement(false);
 ```
+
+## Testes mínimos de isolamento
+
+- usuário da organização A não lista contratos, projetos, empresas ou times da organização B;
+- tentativa de atualizar um ID da organização B afeta zero registros;
+- não é possível vincular contrato de A a time ou projeto de B;
+- organização suspensa não cria nem altera recursos;
+- `platform_admin` consegue selecionar organizações e realizar suporte;
+- modo legado continua funcionando com a feature flag desligada.
 
 ## Próximos lotes da Fase 1
 
-1. filtrar contratos e projetos pela organização atual;
-2. criar painéis administrativos próprios da organização;
-3. substituir policies globais baseadas em `admin` por helpers de organização;
-4. bloquear organizações suspensas e canceladas para usuários comuns;
-5. criar testes pgTAP de isolamento;
-6. consolidar memberships duplicadas;
-7. tornar `org_id` obrigatório após o saneamento;
-8. descontinuar o papel global legado `admin`.
+1. criar painéis próprios para owner e admin da organização;
+2. migrar permissões de módulos para memberships organizacionais;
+3. criar testes pgTAP executáveis no pipeline de staging;
+4. consolidar memberships duplicadas;
+5. tornar `org_id` obrigatório após o saneamento;
+6. descontinuar o papel global legado `admin`.
 
 ## Critério de saída
 

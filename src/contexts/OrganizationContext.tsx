@@ -10,6 +10,11 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
+import {
+  resolveOrganizationAccess,
+  type OrganizationAccessMode,
+  type OrganizationStatus,
+} from "@/contexts/organizationAccess";
 
 const STORAGE_KEY = "selectedOrganizationId";
 
@@ -17,7 +22,7 @@ export interface OrganizationOption {
   id: string;
   name: string;
   slug: string;
-  status: "active" | "trial" | "suspended" | "cancelled";
+  status: OrganizationStatus;
   plan: "free" | "pro" | "enterprise";
   membershipRole: "owner" | "admin" | "member" | "platform_admin";
   isPlatformAdmin: boolean;
@@ -34,6 +39,9 @@ interface OrganizationContextValue {
   refreshOrganizations: () => Promise<void>;
   isPlatformAdmin: boolean;
   isOrganizationAdmin: boolean;
+  accessMode: OrganizationAccessMode;
+  canOperate: boolean;
+  operationBlockReason: string | null;
 }
 
 const OrganizationContext = createContext<OrganizationContextValue | undefined>(
@@ -202,6 +210,15 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         currentOrganization.membershipRole === "admin"),
   );
 
+  const accessDecision = useMemo(
+    () =>
+      resolveOrganizationAccess({
+        status: currentOrganization?.status ?? null,
+        isPlatformAdmin,
+      }),
+    [currentOrganization?.status, isPlatformAdmin],
+  );
+
   const value = useMemo<OrganizationContextValue>(
     () => ({
       enabled: ORGANIZATION_TENANCY_ENABLED,
@@ -214,8 +231,12 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       refreshOrganizations,
       isPlatformAdmin,
       isOrganizationAdmin,
+      accessMode: accessDecision.mode,
+      canOperate: accessDecision.canOperate,
+      operationBlockReason: accessDecision.reason,
     }),
     [
+      accessDecision,
       currentOrganization,
       currentOrganizationId,
       error,

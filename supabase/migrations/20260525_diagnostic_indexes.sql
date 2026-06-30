@@ -31,8 +31,8 @@ CREATE INDEX IF NOT EXISTS idx_activities_open
 CREATE INDEX IF NOT EXISTS idx_sprints_team_id
   ON public.sprints(team_id);
 
-CREATE INDEX IF NOT EXISTS idx_sprints_status
-  ON public.sprints(status);
+CREATE INDEX IF NOT EXISTS idx_sprints_is_active
+  ON public.sprints(is_active);
 
 CREATE INDEX IF NOT EXISTS idx_impediments_team_id
   ON public.impediments(team_id);

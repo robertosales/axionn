@@ -110,6 +110,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instala tipagens Node
+        run: npm ci
+
       - name: Setup Deno
         uses: denoland/setup-deno@v2
         with:

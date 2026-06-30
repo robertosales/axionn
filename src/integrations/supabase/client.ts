@@ -1,109 +1,135 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from './types';
-import { supabaseCircuitBreaker, CircuitOpenError } from '@/lib/circuit-breaker';
-import { retryQuery } from '@/lib/query-retry';
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "./types";
+import {
+  supabaseCircuitBreaker,
+  CircuitOpenError,
+} from "@/lib/circuit-breaker";
+import { retryQuery } from "@/lib/query-retry";
 
-// A Anon Key é uma chave PÚBLICA por design.
-// A segurança dos dados é garantida pelo RLS (Row Level Security) no Supabase.
-const SUPABASE_URL      = 'https://rgikyyazotqapaxijwui.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnaWt5eWF6b3RxYXBheGlqd3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjM5NTIsImV4cCI6MjA4OTgzOTk1Mn0.ADQ3VDenVwNL3fgyNc2Fgu-Si66T7SHdG5se4Hvf5eg';
+const FALLBACK_SUPABASE_URL = "https://rgikyyazotqapaxijwui.supabase.co";
+const FALLBACK_SUPABASE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6InJnaWt5eWF6b3RxYXBheGlqd3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjM5NTIsImV4cCI6MjA4OTgzOTk1Mn0.ADQ3VDenVwNL3fgyNc2Fgu-Si66T7SHdG5se4Hvf5eg";
 
-/**
- * instrumentedFetch — wraps every Supabase HTTP request with:
- *  • Circuit Breaker (CLOSED/OPEN/HALF_OPEN)  → fast-fail quando DB está inacessível
- *  • Retry com exponential backoff (3 tentativas, 500ms base)
- *  • 15 s hard timeout   → tela nunca trava indefinidamente
- *  • slow-query warning  → log de queries > 1 s no console
- *  • error logging       → log de respostas HTTP >= 400
- */
+const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const configuredKey =
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+const SUPABASE_URL = configuredUrl || FALLBACK_SUPABASE_URL;
+const SUPABASE_ANON_KEY = configuredKey || FALLBACK_SUPABASE_KEY;
+
+if (!configuredUrl || !configuredKey) {
+  console.warn(
+    "[Supabase] Variáveis de ambiente ausentes. Usando a configuração legada apenas para compatibilidade de transição.",
+  );
+}
+
 const instrumentedFetch: typeof fetch = (url, options) => {
   const start = performance.now();
-  const path = typeof url === 'string'
-    ? (() => { try { return new URL(url).pathname; } catch { return String(url); } })()
-    : String(url);
+  const path =
+    typeof url === "string"
+      ? (() => {
+          try {
+            return new URL(url).pathname;
+          } catch {
+            return String(url);
+          }
+        })()
+      : String(url);
 
-  // Endpoints de autenticação NÃO devem passar por retry nem circuit-breaker.
-  // O GoTrue/Supabase Auth client mantém um lock local (`lock:sb-...-auth-token`)
-  // por requisição; se nosso retry disparar uma segunda chamada concorrente,
-  // ela rouba o lock e o updateUser/getSession explode com
-  // "Lock ... was released because another request stole it".
-  // Especialmente crítico para PUT /auth/v1/user (troca de senha).
   const isAuthRequest = /\/auth\/v\d+\//.test(path);
   if (isAuthRequest) {
-    // Contador global de chamadas a /auth/v1/user — usado pelo
-    // ForcePasswordChange para diagnóstico (exibe quantos PUT /user
-    // foram disparados durante a troca de senha).
     if (/\/auth\/v\d+\/user(\b|\/|\?|$)/.test(path)) {
-      const w = window as unknown as { __authUserCallCount?: number };
-      w.__authUserCallCount = (w.__authUserCallCount ?? 0) + 1;
+      const windowWithCounter = window as unknown as {
+        __authUserCallCount?: number;
+      };
+      windowWithCounter.__authUserCallCount =
+        (windowWithCounter.__authUserCallCount ?? 0) + 1;
     }
-    return fetch(url, options).then((res) => {
-      const ms = Math.round(performance.now() - start);
-      if (ms > 1_000) console.warn(`[Supabase AUTH SLOW] ${ms} ms → ${path}`);
-      if (!res.ok)    console.error(`[Supabase AUTH ERROR] HTTP ${res.status} → ${path}`);
-      return res;
+
+    return fetch(url, options).then((response) => {
+      const durationMs = Math.round(performance.now() - start);
+      if (durationMs > 1_000) {
+        console.warn(`[Supabase AUTH SLOW] ${durationMs} ms → ${path}`);
+      }
+      if (!response.ok) {
+        console.error(`[Supabase AUTH ERROR] HTTP ${response.status} → ${path}`);
+      }
+      return response;
     });
   }
 
-  // AbortController para o timeout — independente do AbortController do chamador
   const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => {
     timeoutController.abort();
     console.error(`[Supabase TIMEOUT] 15 s excedido → ${path}`);
   }, 15_000);
 
-  // Combina o signal do chamador (se houver) com o signal de timeout
-  const callerSignal = (options as RequestInit | undefined)?.signal as AbortSignal | undefined;
+  const callerSignal = (options as RequestInit | undefined)?.signal as
+    | AbortSignal
+    | undefined;
   let combinedSignal = timeoutController.signal;
+
   if (callerSignal) {
-    if (typeof AbortSignal.any === 'function') {
-      combinedSignal = AbortSignal.any([timeoutController.signal, callerSignal]);
+    if (typeof AbortSignal.any === "function") {
+      combinedSignal = AbortSignal.any([
+        timeoutController.signal,
+        callerSignal,
+      ]);
     } else {
-      callerSignal.addEventListener('abort', () => timeoutController.abort(), { once: true });
+      callerSignal.addEventListener(
+        "abort",
+        () => timeoutController.abort(),
+        { once: true },
+      );
     }
   }
 
-  // Executa dentro do Circuit Breaker + Retry
   const doFetch = () =>
     fetch(url, { ...options, signal: combinedSignal })
-      .then((res) => {
-        const ms = Math.round(performance.now() - start);
-        if (ms > 1_000) console.warn(`[Supabase SLOW] ${ms} ms → ${path}`);
-        if (!res.ok)    console.error(`[Supabase ERROR] HTTP ${res.status} → ${path}`);
-        return res;
-      })
-      .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'AbortError') {
-          throw new Error(`[Supabase TIMEOUT] requisição cancelada após 15 s: ${path}`);
+      .then((response) => {
+        const durationMs = Math.round(performance.now() - start);
+        if (durationMs > 1_000) {
+          console.warn(`[Supabase SLOW] ${durationMs} ms → ${path}`);
         }
-        throw err;
+        if (!response.ok) {
+          console.error(`[Supabase ERROR] HTTP ${response.status} → ${path}`);
+        }
+        return response;
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new Error(
+            `[Supabase TIMEOUT] requisição cancelada após 15 s: ${path}`,
+          );
+        }
+        throw error;
       });
 
   return supabaseCircuitBreaker
-    .execute(() => retryQuery(doFetch, { maxAttempts: 3, baseDelayMs: 500, signal: combinedSignal }))
-    .catch((err: unknown) => {
-      if (err instanceof CircuitOpenError) {
-        console.error(`[Supabase CIRCUIT OPEN] requisição bloqueada → ${path}`);
+    .execute(() =>
+      retryQuery(doFetch, {
+        maxAttempts: 3,
+        baseDelayMs: 500,
+        signal: combinedSignal,
+      }),
+    )
+    .catch((error: unknown) => {
+      if (error instanceof CircuitOpenError) {
+        console.error(
+          `[Supabase CIRCUIT OPEN] requisição bloqueada → ${path}`,
+        );
       }
-      throw err;
+      throw error;
     })
     .finally(() => clearTimeout(timeoutId));
 };
 
-// Workaround: o validador de build do Lovable pina os tipos do postgrest-js
-// em uma versão estrita que falha em centenas de chamadas legadas pelo
-// codebase (Omit<Database, "__InternalSupabase">/SchemaNameOrClientOptions).
-// Mantemos createClient<Database> para checagem na construção, mas exportamos
-// o cliente com tipo "loose" (SupabaseClient<any>) para destravar a build em
-// produção. O runtime é idêntico — RLS continua sendo a fonte de verdade.
 const _supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-    // Obs.: lockAcquireTimeout não é tipado em todas as versões do supabase-js;
-    // passamos via spread para permanecer válido em runtime sem quebrar a
-    // checagem de tipos do validador de build.
     ...({ lockAcquireTimeout: 30_000 } as Record<string, unknown>),
   },
   global: {

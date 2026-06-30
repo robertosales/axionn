@@ -1,164 +1,235 @@
--- OKR Module: tabelas principais
--- Executar no Supabase SQL Editor ou via CLI: supabase db push
+-- OKR Module: schema idempotente para replay integral das migrations.
 
-create table if not exists public.okr_objectives (
-  id          uuid primary key default gen_random_uuid(),
-  team_id     uuid not null references public.teams(id) on delete cascade,
-  owner_id    uuid references public.profiles(user_id) on delete set null,
-  title       text not null,
+CREATE TABLE IF NOT EXISTS public.okr_objectives (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id uuid NOT NULL REFERENCES public.teams(id) ON DELETE CASCADE,
+  owner_id uuid REFERENCES public.profiles(user_id) ON DELETE SET NULL,
+  title text NOT NULL,
   description text,
-  cycle       text not null,              -- ex: 'Q1/2026', 'Q2/2026'
-  status      text not null default 'on_track'
-                check (status in ('on_track','at_risk','off_track','completed')),
-  progress    integer not null default 0 check (progress between 0 and 100),
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  cycle text NOT NULL,
+  status text NOT NULL DEFAULT 'on_track'
+    CHECK (status IN ('on_track', 'at_risk', 'off_track', 'completed')),
+  progress integer NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-create table if not exists public.okr_key_results (
-  id           uuid primary key default gen_random_uuid(),
-  objective_id uuid not null references public.okr_objectives(id) on delete cascade,
-  title        text not null,
-  unit         text not null default '%'
-                 check (unit in ('%','number','bool','bugs')),
-  target       numeric not null default 100,
-  current      numeric not null default 0,
-  created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS public.okr_key_results (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  objective_id uuid NOT NULL REFERENCES public.okr_objectives(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  unit text NOT NULL DEFAULT '%'
+    CHECK (unit IN ('%', 'number', 'bool', 'bugs')),
+  target numeric NOT NULL DEFAULT 100,
+  current numeric NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-create table if not exists public.okr_check_ins (
-  id             uuid primary key default gen_random_uuid(),
-  key_result_id  uuid not null references public.okr_key_results(id) on delete cascade,
-  value          numeric not null,
-  note           text,
-  author_id      uuid references public.profiles(user_id) on delete set null,
-  created_at     timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS public.okr_check_ins (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key_result_id uuid NOT NULL REFERENCES public.okr_key_results(id) ON DELETE CASCADE,
+  value numeric NOT NULL,
+  note text,
+  author_id uuid REFERENCES public.profiles(user_id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Índices de performance
-create index if not exists idx_okr_objectives_team_cycle on public.okr_objectives(team_id, cycle);
-create index if not exists idx_okr_key_results_objective on public.okr_key_results(objective_id);
-create index if not exists idx_okr_check_ins_kr on public.okr_check_ins(key_result_id);
+CREATE INDEX IF NOT EXISTS idx_okr_objectives_team_cycle
+  ON public.okr_objectives(team_id, cycle);
+CREATE INDEX IF NOT EXISTS idx_okr_key_results_objective
+  ON public.okr_key_results(objective_id);
+CREATE INDEX IF NOT EXISTS idx_okr_check_ins_kr
+  ON public.okr_check_ins(key_result_id);
 
--- RLS: habilitar e criar policies
-alter table public.okr_objectives enable row level security;
-alter table public.okr_key_results enable row level security;
-alter table public.okr_check_ins enable row level security;
+ALTER TABLE public.okr_objectives ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.okr_key_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.okr_check_ins ENABLE ROW LEVEL SECURITY;
 
--- Objectives: leitura e escrita por membros do time
-create policy "okr_objectives_team_select" on public.okr_objectives
-  for select using (is_team_member(team_id, auth.uid()));
+DROP POLICY IF EXISTS okr_objectives_team_select ON public.okr_objectives;
+DROP POLICY IF EXISTS okr_objectives_team_insert ON public.okr_objectives;
+DROP POLICY IF EXISTS okr_objectives_team_update ON public.okr_objectives;
+DROP POLICY IF EXISTS okr_objectives_team_delete ON public.okr_objectives;
 
-create policy "okr_objectives_team_insert" on public.okr_objectives
-  for insert with check (is_team_member(team_id, auth.uid()));
+CREATE POLICY okr_objectives_team_select
+ON public.okr_objectives FOR SELECT TO authenticated
+USING (
+  public.is_admin()
+  OR public.is_team_member(auth.uid(), team_id)
+);
 
-create policy "okr_objectives_team_update" on public.okr_objectives
-  for update using (is_team_member(team_id, auth.uid()));
+CREATE POLICY okr_objectives_team_insert
+ON public.okr_objectives FOR INSERT TO authenticated
+WITH CHECK (
+  public.is_admin()
+  OR public.is_team_member(auth.uid(), team_id)
+);
 
-create policy "okr_objectives_team_delete" on public.okr_objectives
-  for delete using (is_team_member(team_id, auth.uid()));
+CREATE POLICY okr_objectives_team_update
+ON public.okr_objectives FOR UPDATE TO authenticated
+USING (
+  public.is_admin()
+  OR public.is_team_member(auth.uid(), team_id)
+)
+WITH CHECK (
+  public.is_admin()
+  OR public.is_team_member(auth.uid(), team_id)
+);
 
--- Key Results: acesso via objective
-create policy "okr_key_results_select" on public.okr_key_results
-  for select using (
-    exists (
-      select 1 from public.okr_objectives o
-      where o.id = objective_id and is_team_member(o.team_id, auth.uid())
+CREATE POLICY okr_objectives_team_delete
+ON public.okr_objectives FOR DELETE TO authenticated
+USING (
+  public.is_admin()
+  OR public.is_team_member(auth.uid(), team_id)
+);
+
+DROP POLICY IF EXISTS okr_key_results_select ON public.okr_key_results;
+DROP POLICY IF EXISTS okr_key_results_insert ON public.okr_key_results;
+DROP POLICY IF EXISTS okr_key_results_update ON public.okr_key_results;
+DROP POLICY IF EXISTS okr_key_results_delete ON public.okr_key_results;
+
+CREATE POLICY okr_key_results_select
+ON public.okr_key_results FOR SELECT TO authenticated
+USING (
+  public.is_admin()
+  OR EXISTS (
+    SELECT 1
+    FROM public.okr_objectives objective
+    WHERE objective.id = objective_id
+      AND public.is_team_member(auth.uid(), objective.team_id)
+  )
+);
+
+CREATE POLICY okr_key_results_insert
+ON public.okr_key_results FOR INSERT TO authenticated
+WITH CHECK (
+  public.is_admin()
+  OR EXISTS (
+    SELECT 1
+    FROM public.okr_objectives objective
+    WHERE objective.id = objective_id
+      AND public.is_team_member(auth.uid(), objective.team_id)
+  )
+);
+
+CREATE POLICY okr_key_results_update
+ON public.okr_key_results FOR UPDATE TO authenticated
+USING (
+  public.is_admin()
+  OR EXISTS (
+    SELECT 1
+    FROM public.okr_objectives objective
+    WHERE objective.id = objective_id
+      AND public.is_team_member(auth.uid(), objective.team_id)
+  )
+)
+WITH CHECK (
+  public.is_admin()
+  OR EXISTS (
+    SELECT 1
+    FROM public.okr_objectives objective
+    WHERE objective.id = objective_id
+      AND public.is_team_member(auth.uid(), objective.team_id)
+  )
+);
+
+CREATE POLICY okr_key_results_delete
+ON public.okr_key_results FOR DELETE TO authenticated
+USING (
+  public.is_admin()
+  OR EXISTS (
+    SELECT 1
+    FROM public.okr_objectives objective
+    WHERE objective.id = objective_id
+      AND public.is_team_member(auth.uid(), objective.team_id)
+  )
+);
+
+DROP POLICY IF EXISTS okr_check_ins_select ON public.okr_check_ins;
+DROP POLICY IF EXISTS okr_check_ins_insert ON public.okr_check_ins;
+
+CREATE POLICY okr_check_ins_select
+ON public.okr_check_ins FOR SELECT TO authenticated
+USING (
+  public.is_admin()
+  OR EXISTS (
+    SELECT 1
+    FROM public.okr_key_results key_result
+    JOIN public.okr_objectives objective
+      ON objective.id = key_result.objective_id
+    WHERE key_result.id = key_result_id
+      AND public.is_team_member(auth.uid(), objective.team_id)
+  )
+);
+
+CREATE POLICY okr_check_ins_insert
+ON public.okr_check_ins FOR INSERT TO authenticated
+WITH CHECK (
+  author_id = auth.uid()
+  AND (
+    public.is_admin()
+    OR EXISTS (
+      SELECT 1
+      FROM public.okr_key_results key_result
+      JOIN public.okr_objectives objective
+        ON objective.id = key_result.objective_id
+      WHERE key_result.id = key_result_id
+        AND public.is_team_member(auth.uid(), objective.team_id)
     )
-  );
+  )
+);
 
-create policy "okr_key_results_insert" on public.okr_key_results
-  for insert with check (
-    exists (
-      select 1 from public.okr_objectives o
-      where o.id = objective_id and is_team_member(o.team_id, auth.uid())
-    )
-  );
-
-create policy "okr_key_results_update" on public.okr_key_results
-  for update using (
-    exists (
-      select 1 from public.okr_objectives o
-      where o.id = objective_id and is_team_member(o.team_id, auth.uid())
-    )
-  );
-
-create policy "okr_key_results_delete" on public.okr_key_results
-  for delete using (
-    exists (
-      select 1 from public.okr_objectives o
-      where o.id = objective_id and is_team_member(o.team_id, auth.uid())
-    )
-  );
-
--- Check-ins: acesso via key_result → objective
-create policy "okr_check_ins_select" on public.okr_check_ins
-  for select using (
-    exists (
-      select 1
-        from public.okr_key_results kr
-        join public.okr_objectives o on o.id = kr.objective_id
-       where kr.id = key_result_id and is_team_member(o.team_id, auth.uid())
-    )
-  );
-
-create policy "okr_check_ins_insert" on public.okr_check_ins
-  for insert with check (
-    exists (
-      select 1
-        from public.okr_key_results kr
-        join public.okr_objectives o on o.id = kr.objective_id
-       where kr.id = key_result_id and is_team_member(o.team_id, auth.uid())
-    )
-  );
-
--- Função para recalcular progress do objetivo automaticamente após check-in
-create or replace function public.fn_okr_recalc_objective_progress()
-returns trigger language plpgsql security definer as $$
-declare
+CREATE OR REPLACE FUNCTION public.fn_okr_recalc_objective_progress()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
   v_objective_id uuid;
-  v_progress     integer;
-  v_status       text;
-begin
-  select objective_id into v_objective_id
-    from public.okr_key_results where id = new.key_result_id;
+  v_progress integer;
+  v_status text;
+BEGIN
+  SELECT objective_id
+    INTO v_objective_id
+    FROM public.okr_key_results
+   WHERE id = NEW.key_result_id;
 
-  -- Atualiza current do KR
-  update public.okr_key_results
-     set current = new.value, updated_at = now()
-   where id = new.key_result_id;
-
-  -- Recalcula progresso médio do objetivo
-  select round(avg(
-    case
-      when unit = 'bugs'   then greatest(0, 100 - current * 20)
-      when unit = 'bool'   then case when current >= target then 100 else 0 end
-      when target = 0      then 100
-      else least(100, round((current / target) * 100))
-    end
-  ))::integer
-  into v_progress
-  from public.okr_key_results
-  where objective_id = v_objective_id;
-
-  v_status := case
-    when v_progress >= 100 then 'completed'
-    when v_progress >= 70  then 'on_track'
-    when v_progress >= 40  then 'at_risk'
-    else 'off_track'
-  end;
-
-  update public.okr_objectives
-     set progress = coalesce(v_progress, 0),
-         status   = v_status,
+  UPDATE public.okr_key_results
+     SET current = NEW.value,
          updated_at = now()
-   where id = v_objective_id;
+   WHERE id = NEW.key_result_id;
 
-  return new;
-end;
+  SELECT round(avg(
+    CASE
+      WHEN unit = 'bugs' THEN greatest(0, 100 - current * 20)
+      WHEN unit = 'bool' THEN CASE WHEN current >= target THEN 100 ELSE 0 END
+      WHEN target = 0 THEN 100
+      ELSE least(100, round((current / target) * 100))
+    END
+  ))::integer
+    INTO v_progress
+    FROM public.okr_key_results
+   WHERE objective_id = v_objective_id;
+
+  v_status := CASE
+    WHEN v_progress >= 100 THEN 'completed'
+    WHEN v_progress >= 70 THEN 'on_track'
+    WHEN v_progress >= 40 THEN 'at_risk'
+    ELSE 'off_track'
+  END;
+
+  UPDATE public.okr_objectives
+     SET progress = coalesce(v_progress, 0),
+         status = v_status,
+         updated_at = now()
+   WHERE id = v_objective_id;
+
+  RETURN NEW;
+END;
 $$;
 
-create trigger trg_okr_checkin_recalc
-after insert on public.okr_check_ins
-for each row execute function public.fn_okr_recalc_objective_progress();
+DROP TRIGGER IF EXISTS trg_okr_checkin_recalc ON public.okr_check_ins;
+CREATE TRIGGER trg_okr_checkin_recalc
+AFTER INSERT ON public.okr_check_ins
+FOR EACH ROW EXECUTE FUNCTION public.fn_okr_recalc_objective_progress();

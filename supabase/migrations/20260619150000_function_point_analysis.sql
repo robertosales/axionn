@@ -1,104 +1,104 @@
 -- ============================================================
--- Migration: Módulo de Análise de Ponto de Função (APF/IFPUG)
+-- Módulo de Análise de Ponto de Função (APF/IFPUG)
+-- Evolui a tabela criada em 20260619000001 sem assumir banco vazio.
 -- ============================================================
 
--- ============================================================
--- PARTE 1: Tabela de Baseline do Projeto
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS project_fp_baselines (
-  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id              UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  domain_context          TEXT NOT NULL DEFAULT '',
-  technology_stack        TEXT[] NOT NULL DEFAULT '{}',
-  complexity_rules        JSONB NOT NULL DEFAULT '{}',
-  function_type_criteria  JSONB NOT NULL DEFAULT '{}',
-  anchor_examples         JSONB NOT NULL DEFAULT '[]',
-  additional_instructions TEXT NOT NULL DEFAULT '',
-  version                 INTEGER NOT NULL DEFAULT 1,
-  status                  TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
-  created_by              UUID REFERENCES auth.users(id),
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS public.project_fp_baselines (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  domain_context text NOT NULL DEFAULT '',
+  technology_stack text[] NOT NULL DEFAULT '{}',
+  complexity_rules jsonb NOT NULL DEFAULT '{}',
+  function_type_criteria jsonb NOT NULL DEFAULT '{}',
+  anchor_examples jsonb NOT NULL DEFAULT '[]',
+  additional_instructions text NOT NULL DEFAULT '',
+  version integer NOT NULL DEFAULT 1,
+  status text NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'active', 'archived')),
+  created_by uuid REFERENCES auth.users(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_fp_baseline_one_active
-  ON project_fp_baselines(project_id)
+  ON public.project_fp_baselines(project_id)
   WHERE status = 'active';
 
--- ============================================================
--- PARTE 2: Tabela de Análises (histórico + aprendizado)
--- ============================================================
-
-CREATE TABLE IF NOT EXISTS function_point_analyses (
-  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id             UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  sprint_id              UUID REFERENCES sprints(id) ON DELETE SET NULL,
-  story_id               UUID REFERENCES user_stories(id) ON DELETE SET NULL,
-  baseline_id            UUID REFERENCES project_fp_baselines(id) ON DELETE SET NULL,
-  baseline_version       INTEGER,
-  story_text             TEXT NOT NULL,
-  story_context          JSONB DEFAULT '{}',
-  -- Resultado do agente IA
-  ai_raw_count           NUMERIC(6,2),
-  ai_breakdown           JSONB DEFAULT '{}',   -- EI, EO, EQ, ILF, EIF detalhado
-  ai_confidence          NUMERIC(3,2) CHECK (ai_confidence BETWEEN 0 AND 1),
-  ai_reasoning           TEXT,
-  model_used             TEXT,
-  few_shot_examples_used INTEGER DEFAULT 0,
-  -- Validação humana (base do aprendizado incremental)
-  validated_count        NUMERIC(6,2),
-  validation_notes       TEXT,
-  validated_by           UUID REFERENCES auth.users(id),
-  validated_at           TIMESTAMPTZ,
-  is_validated           BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS public.function_point_analyses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id uuid REFERENCES public.teams(id) ON DELETE CASCADE,
+  story_id uuid REFERENCES public.user_stories(id) ON DELETE SET NULL,
+  story_text text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.function_point_analyses
+  ADD COLUMN IF NOT EXISTS project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS sprint_id uuid REFERENCES public.sprints(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS baseline_id uuid REFERENCES public.project_fp_baselines(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS baseline_version integer,
+  ADD COLUMN IF NOT EXISTS story_context jsonb DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS ai_raw_count numeric(7, 2),
+  ADD COLUMN IF NOT EXISTS ai_breakdown jsonb DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS ai_confidence numeric(4, 3),
+  ADD COLUMN IF NOT EXISTS ai_reasoning text,
+  ADD COLUMN IF NOT EXISTS model_used text,
+  ADD COLUMN IF NOT EXISTS few_shot_examples_used integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS validated_count numeric(7, 2),
+  ADD COLUMN IF NOT EXISTS validation_notes text,
+  ADD COLUMN IF NOT EXISTS validated_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS validated_at timestamptz,
+  ADD COLUMN IF NOT EXISTS is_validated boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
 CREATE INDEX IF NOT EXISTS idx_fpa_project_validated
-  ON function_point_analyses(project_id, is_validated)
-  WHERE is_validated = TRUE;
+  ON public.function_point_analyses(project_id, is_validated)
+  WHERE is_validated = true AND project_id IS NOT NULL;
 
--- ============================================================
--- PARTE 3: RLS usando has_role() (padrão do projeto)
--- ============================================================
+ALTER TABLE public.project_fp_baselines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.function_point_analyses ENABLE ROW LEVEL SECURITY;
 
-ALTER TABLE project_fp_baselines ENABLE ROW LEVEL SECURITY;
-ALTER TABLE function_point_analyses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Todos autenticados veem baselines" ON public.project_fp_baselines;
+DROP POLICY IF EXISTS "Admin gerencia baselines" ON public.project_fp_baselines;
+DROP POLICY IF EXISTS "Autenticados veem analyses" ON public.function_point_analyses;
+DROP POLICY IF EXISTS "Autenticados inserem analyses" ON public.function_point_analyses;
+DROP POLICY IF EXISTS "Autenticados atualizam analyses" ON public.function_point_analyses;
 
 CREATE POLICY "Todos autenticados veem baselines"
-  ON project_fp_baselines FOR SELECT
-  TO authenticated USING (true);
+  ON public.project_fp_baselines FOR SELECT TO authenticated
+  USING (true);
 
 CREATE POLICY "Admin gerencia baselines"
-  ON project_fp_baselines FOR ALL
-  TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
+  ON public.project_fp_baselines FOR ALL TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
 CREATE POLICY "Autenticados veem analyses"
-  ON function_point_analyses FOR SELECT
-  TO authenticated USING (true);
+  ON public.function_point_analyses FOR SELECT TO authenticated
+  USING (true);
 
 CREATE POLICY "Autenticados inserem analyses"
-  ON function_point_analyses FOR INSERT
-  TO authenticated WITH CHECK (true);
+  ON public.function_point_analyses FOR INSERT TO authenticated
+  WITH CHECK (true);
 
 CREATE POLICY "Autenticados atualizam analyses"
-  ON function_point_analyses FOR UPDATE
-  TO authenticated USING (true);
+  ON public.function_point_analyses FOR UPDATE TO authenticated
+  USING (true)
+  WITH CHECK (true);
 
--- ============================================================
--- PARTE 4: Trigger updated_at
--- ============================================================
-
-CREATE OR REPLACE FUNCTION update_fp_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.update_fp_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
 BEGIN
-  NEW.updated_at = NOW();
+  NEW.updated_at = now();
   RETURN NEW;
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_fp_baselines_updated_at ON public.project_fp_baselines;
 CREATE TRIGGER trg_fp_baselines_updated_at
-  BEFORE UPDATE ON project_fp_baselines
-  FOR EACH ROW EXECUTE FUNCTION update_fp_updated_at();
+  BEFORE UPDATE ON public.project_fp_baselines
+  FOR EACH ROW EXECUTE FUNCTION public.update_fp_updated_at();

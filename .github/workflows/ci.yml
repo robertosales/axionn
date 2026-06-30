@@ -127,21 +127,24 @@ jobs:
           rate_limits="supabase/migrations/20260630011000_ai_rate_limits.sql"
           multitenant="supabase/migrations/20260630020000_multitenant_foundation.sql"
           wrappers="supabase/migrations/20260630021000_org_access_wrappers.sql"
+          isolation="supabase/migrations/20260630022000_org_resource_isolation.sql"
+          hardening="supabase/migrations/20260630023000_org_resource_isolation_hardening.sql"
           edge="supabase/functions/apf-generate/index.ts"
           feature_flags="src/lib/featureFlags.ts"
           org_context="src/contexts/OrganizationContext.tsx"
           auth_context="src/contexts/AuthContext.tsx"
           org_switcher="src/components/OrganizationSwitcher.tsx"
+          org_guard="src/components/OrganizationOperationalGuard.tsx"
+          admin_contracts="src/features/admin/hooks/useContracts.ts"
+          admin_projects="src/features/admin/services/projects.service.ts"
 
-          test -f "$governance"
-          test -f "$rate_limits"
-          test -f "$multitenant"
-          test -f "$wrappers"
-          test -f "$edge"
-          test -f "$feature_flags"
-          test -f "$org_context"
-          test -f "$auth_context"
-          test -f "$org_switcher"
+          for file in \
+            "$governance" "$rate_limits" "$multitenant" "$wrappers" \
+            "$isolation" "$hardening" "$edge" "$feature_flags" \
+            "$org_context" "$auth_context" "$org_switcher" "$org_guard" \
+            "$admin_contracts" "$admin_projects"; do
+            test -f "$file"
+          done
 
           grep -Fq "create table if not exists public.ai_usage_events" "$governance"
           grep -Fq "create or replace function public.reserve_ai_usage" "$governance"
@@ -157,11 +160,26 @@ jobs:
           grep -Fq "create or replace function public.is_platform_admin()" "$wrappers"
           grep -Fq "revoke all on function public.is_platform_admin(uuid)" "$wrappers"
 
+          grep -Fq "create table if not exists public.saas_runtime_settings" "$isolation"
+          grep -Fq "create or replace function public.set_tenancy_enforcement" "$isolation"
+          grep -Fq "create policy contracts_tenant_boundary" "$isolation"
+          grep -Fq "create policy projects_tenant_boundary" "$isolation"
+          grep -Fq "create policy teams_tenant_boundary" "$isolation"
+          grep -Fq "create or replace function public.get_accessible_contracts_v2" "$isolation"
+          grep -Fq "create or replace function public.get_accessible_projects_v2" "$isolation"
+          grep -Fq "grant execute on function public.is_tenancy_enforced() to authenticated" "$hardening"
+          grep -Fq "create trigger trg_contract_team_org_consistency" "$hardening"
+          grep -Fq "create trigger trg_contract_room_team_org_consistency" "$hardening"
+          grep -Fq "create or replace function public.get_tenancy_readiness_report" "$hardening"
+
           grep -Fq "VITE_ORG_TENANCY_ENABLED" "$feature_flags"
-          grep -Fq "ORGANIZATION_TENANCY_ENABLED" "$org_context"
+          grep -Fq "operationBlockReason" "$org_context"
           grep -Fq "get_accessible_teams_v2" "$auth_context"
           grep -Fq "is_platform_admin" "$auth_context"
           grep -Fq "Trocar a organização também redefine o time ativo" "$org_switcher"
+          grep -Fq "Operações temporariamente bloqueadas" "$org_guard"
+          grep -Fq "get_accessible_contracts_v2" "$admin_contracts"
+          grep -Fq "get_accessible_projects_v2" "$admin_projects"
           ! grep -Fq 'isAdmin || moduleAccess === "admin"' src/App.tsx
 
           grep -Fq "AI_USAGE_ENFORCEMENT_MODE" "$edge"

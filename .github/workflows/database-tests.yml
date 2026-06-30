@@ -6,12 +6,14 @@ on:
     paths:
       - "supabase/migrations/**"
       - "supabase/tests/**"
+      - "scripts/run-tenant-isolation-tests.sh"
       - ".github/workflows/database-tests.yml"
   push:
     branches: [develop]
     paths:
       - "supabase/migrations/**"
       - "supabase/tests/**"
+      - "scripts/run-tenant-isolation-tests.sh"
       - ".github/workflows/database-tests.yml"
   workflow_dispatch:
 
@@ -36,7 +38,9 @@ jobs:
         run: supabase db start
 
       - name: Run tenancy database tests
-        run: supabase test db supabase/tests/database
+        env:
+          SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: bash scripts/run-tenant-isolation-tests.sh
 
       - name: Stop local database
         if: always()

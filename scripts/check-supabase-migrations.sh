@@ -53,7 +53,10 @@ fi
   echo "# Ordem canônica de replay das migrations Supabase"
   echo "# Gerada em UTC: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
   echo "# Total: ${#MIGRATIONS[@]}"
-  printf '%04d  %s\n' "$(seq 1 "${#MIGRATIONS[@]}")" "${MIGRATIONS[@]}"
+
+  for index in "${!MIGRATIONS[@]}"; do
+    printf '%04d  %s\n' "$((index + 1))" "${MIGRATIONS[$index]}"
+  done
 } | if [[ -n "$OUTPUT_FILE" ]]; then
   tee "$OUTPUT_FILE"
 else

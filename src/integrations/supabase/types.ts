@@ -215,43 +215,79 @@ export type Database = {
           baseline_id: string
           category_sigla: string | null
           complexity: string
+          contribution_pct: number
           created_at: string
           description: string
+          factor_sigla: string | null
           function_sigla: string
           id: string
+          is_measurable: boolean
           item_ref: string
+          measurement_reference: string | null
           module: string | null
+          normalized_key: string | null
           notes: string | null
           pf_bruto: number | null
+          pf_fs: number
+          process_name: string | null
+          process_ref: string | null
+          product_reference: string | null
+          project_reference: string | null
           sort_order: number
+          source_payload: Json
+          source_row: number | null
         }
         Insert: {
           baseline_id: string
           category_sigla?: string | null
           complexity?: string
+          contribution_pct?: number
           created_at?: string
           description: string
+          factor_sigla?: string | null
           function_sigla: string
           id?: string
+          is_measurable?: boolean
           item_ref: string
+          measurement_reference?: string | null
           module?: string | null
+          normalized_key?: string | null
           notes?: string | null
           pf_bruto?: number | null
+          pf_fs?: number
+          process_name?: string | null
+          process_ref?: string | null
+          product_reference?: string | null
+          project_reference?: string | null
           sort_order?: number
+          source_payload?: Json
+          source_row?: number | null
         }
         Update: {
           baseline_id?: string
           category_sigla?: string | null
           complexity?: string
+          contribution_pct?: number
           created_at?: string
           description?: string
+          factor_sigla?: string | null
           function_sigla?: string
           id?: string
+          is_measurable?: boolean
           item_ref?: string
+          measurement_reference?: string | null
           module?: string | null
+          normalized_key?: string | null
           notes?: string | null
           pf_bruto?: number | null
+          pf_fs?: number
+          process_name?: string | null
+          process_ref?: string | null
+          product_reference?: string | null
+          project_reference?: string | null
           sort_order?: number
+          source_payload?: Json
+          source_row?: number | null
         }
         Relationships: [
           {
@@ -300,6 +336,8 @@ export type Database = {
       }
       apf_counting_items: {
         Row: {
+          absorbed_by_item_id: string | null
+          ai_confidence_score: number | null
           analyst_note: string | null
           baseline_item_id: string | null
           category_sigla: string | null
@@ -309,24 +347,43 @@ export type Database = {
           corrected_function_sigla: string | null
           corrected_pf_bruto: number | null
           corrected_pf_fs: number | null
+          counting_decision: string
           created_at: string
           ef_description: string
+          elementary_process_id: string | null
+          elementary_process_key: string | null
+          elementary_process_name: string | null
           evidence_literal: string | null
           factor_sigla: string
           function_sigla: string
           hu_ref: string | null
+          hu_refs: string[]
           id: string
           is_validated: boolean
           justification: string | null
+          match_confidence: number | null
+          match_type: string | null
+          normalized_key: string | null
           pf_bruto: number
           pf_fs: number
           precedent_ref: string | null
+          process_is_complete: boolean
+          process_is_independent: boolean
+          process_reasoning: string | null
+          process_role: string
+          separation_precedent_ref: string | null
           session_id: string
           sort_order: number | null
+          source_payload: Json
+          story_id: string | null
+          story_ids: string[]
+          updated_at: string
           validated_at: string | null
           validated_by: string | null
         }
         Insert: {
+          absorbed_by_item_id?: string | null
+          ai_confidence_score?: number | null
           analyst_note?: string | null
           baseline_item_id?: string | null
           category_sigla?: string | null
@@ -336,24 +393,43 @@ export type Database = {
           corrected_function_sigla?: string | null
           corrected_pf_bruto?: number | null
           corrected_pf_fs?: number | null
+          counting_decision?: string
           created_at?: string
           ef_description: string
+          elementary_process_id?: string | null
+          elementary_process_key?: string | null
+          elementary_process_name?: string | null
           evidence_literal?: string | null
           factor_sigla: string
           function_sigla: string
           hu_ref?: string | null
+          hu_refs?: string[]
           id?: string
           is_validated?: boolean
           justification?: string | null
+          match_confidence?: number | null
+          match_type?: string | null
+          normalized_key?: string | null
           pf_bruto?: number
           pf_fs?: number
           precedent_ref?: string | null
+          process_is_complete?: boolean
+          process_is_independent?: boolean
+          process_reasoning?: string | null
+          process_role?: string
+          separation_precedent_ref?: string | null
           session_id: string
           sort_order?: number | null
+          source_payload?: Json
+          story_id?: string | null
+          story_ids?: string[]
+          updated_at?: string
           validated_at?: string | null
           validated_by?: string | null
         }
         Update: {
+          absorbed_by_item_id?: string | null
+          ai_confidence_score?: number | null
           analyst_note?: string | null
           baseline_item_id?: string | null
           category_sigla?: string | null
@@ -363,24 +439,48 @@ export type Database = {
           corrected_function_sigla?: string | null
           corrected_pf_bruto?: number | null
           corrected_pf_fs?: number | null
+          counting_decision?: string
           created_at?: string
           ef_description?: string
+          elementary_process_id?: string | null
+          elementary_process_key?: string | null
+          elementary_process_name?: string | null
           evidence_literal?: string | null
           factor_sigla?: string
           function_sigla?: string
           hu_ref?: string | null
+          hu_refs?: string[]
           id?: string
           is_validated?: boolean
           justification?: string | null
+          match_confidence?: number | null
+          match_type?: string | null
+          normalized_key?: string | null
           pf_bruto?: number
           pf_fs?: number
           precedent_ref?: string | null
+          process_is_complete?: boolean
+          process_is_independent?: boolean
+          process_reasoning?: string | null
+          process_role?: string
+          separation_precedent_ref?: string | null
           session_id?: string
           sort_order?: number | null
+          source_payload?: Json
+          story_id?: string | null
+          story_ids?: string[]
+          updated_at?: string
           validated_at?: string | null
           validated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "apf_counting_items_absorbed_by_item_id_fkey"
+            columns: ["absorbed_by_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "apf_counting_items_baseline_item_id_fkey"
             columns: ["baseline_item_id"]
@@ -389,10 +489,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "apf_counting_items_elementary_process_id_fkey"
+            columns: ["elementary_process_id"]
+            isOneToOne: false
+            referencedRelation: "apf_elementary_processes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "apf_counting_items_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_counting_items_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
             referencedColumns: ["id"]
           },
         ]
@@ -579,6 +693,74 @@ export type Database = {
           },
         ]
       }
+      apf_elementary_processes: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          decision: string
+          decision_reason: string | null
+          id: string
+          is_complete: boolean
+          is_independent: boolean
+          objective: string | null
+          precedent_ref: string | null
+          process_key: string
+          process_name: string
+          process_role: string
+          session_id: string
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          decision?: string
+          decision_reason?: string | null
+          id?: string
+          is_complete?: boolean
+          is_independent?: boolean
+          objective?: string | null
+          precedent_ref?: string | null
+          process_key: string
+          process_name: string
+          process_role?: string
+          session_id: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          decision?: string
+          decision_reason?: string | null
+          id?: string
+          is_complete?: boolean
+          is_independent?: boolean
+          objective?: string | null
+          precedent_ref?: string | null
+          process_key?: string
+          process_name?: string
+          process_role?: string
+          session_id?: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_elementary_processes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_embedding_queue: {
         Row: {
           attempts: number
@@ -613,6 +795,44 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "apf_validation_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_function_type_weights: {
+        Row: {
+          complexity: string
+          created_at: string
+          function_sigla: string
+          id: string
+          model_id: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          complexity: string
+          created_at?: string
+          function_sigla: string
+          id?: string
+          model_id: string
+          updated_at?: string
+          weight: number
+        }
+        Update: {
+          complexity?: string
+          created_at?: string
+          function_sigla?: string
+          id?: string
+          model_id?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_function_type_weights_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_models"
             referencedColumns: ["id"]
           },
         ]
@@ -1100,6 +1320,51 @@ export type Database = {
           },
         ]
       }
+      apf_metric_factor_history: {
+        Row: {
+          created_at: string
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id: string
+          is_measurable: boolean
+          notes: string | null
+          pf_bruto: number
+          pf_fs: number
+          reference_code: string
+          source_measurement: string | null
+          system_key: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id?: string
+          is_measurable?: boolean
+          notes?: string | null
+          pf_bruto?: number
+          pf_fs?: number
+          reference_code: string
+          source_measurement?: string | null
+          system_key: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          factor_sigla?: string
+          function_sigla?: string
+          id?: string
+          is_measurable?: boolean
+          notes?: string | null
+          pf_bruto?: number
+          pf_fs?: number
+          reference_code?: string
+          source_measurement?: string | null
+          system_key?: string
+        }
+        Relationships: []
+      }
       apf_modules: {
         Row: {
           created_at: string | null
@@ -1156,41 +1421,478 @@ export type Database = {
           },
         ]
       }
+      apf_process_analysis_absorbed_items: {
+        Row: {
+          absorption_reason: string
+          analysis_run_id: string
+          created_at: string
+          description: string
+          id: string
+        }
+        Insert: {
+          absorption_reason: string
+          analysis_run_id: string
+          created_at?: string
+          description: string
+          id?: string
+        }
+        Update: {
+          absorption_reason?: string
+          analysis_run_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_absorbed_items_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_analogs: {
+        Row: {
+          adherence: string
+          adherence_reason: string | null
+          analysis_process_id: string
+          baseline_item_id: string | null
+          baseline_item_name: string
+          created_at: string
+          function_type: string
+          id: string
+          is_primary: boolean
+        }
+        Insert: {
+          adherence?: string
+          adherence_reason?: string | null
+          analysis_process_id: string
+          baseline_item_id?: string | null
+          baseline_item_name: string
+          created_at?: string
+          function_type?: string
+          id?: string
+          is_primary?: boolean
+        }
+        Update: {
+          adherence?: string
+          adherence_reason?: string | null
+          analysis_process_id?: string
+          baseline_item_id?: string | null
+          baseline_item_name?: string
+          created_at?: string
+          function_type?: string
+          id?: string
+          is_primary?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_analogs_analysis_process_id_fkey"
+            columns: ["analysis_process_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_analogs_baseline_item_id_fkey"
+            columns: ["baseline_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_baseline_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_items: {
+        Row: {
+          analysis_run_id: string
+          baseline_precedent_found: boolean
+          business_action: string | null
+          business_object: string | null
+          candidate_function_type: string
+          confidence: number | null
+          counter_signals: Json
+          counting_item_id: string | null
+          created_at: string
+          functional_result: string | null
+          id: string
+          is_central: boolean
+          is_complete: boolean
+          is_independent: boolean
+          process_name: string
+          recommendation: string
+          review_required: boolean
+          risks: Json
+          selected_baseline_item_id: string | null
+          separation_reason: string | null
+          should_count: boolean
+          sort_order: number
+          temporary_id: string
+          updated_at: string
+        }
+        Insert: {
+          analysis_run_id: string
+          baseline_precedent_found?: boolean
+          business_action?: string | null
+          business_object?: string | null
+          candidate_function_type?: string
+          confidence?: number | null
+          counter_signals?: Json
+          counting_item_id?: string | null
+          created_at?: string
+          functional_result?: string | null
+          id?: string
+          is_central?: boolean
+          is_complete?: boolean
+          is_independent?: boolean
+          process_name: string
+          recommendation?: string
+          review_required?: boolean
+          risks?: Json
+          selected_baseline_item_id?: string | null
+          separation_reason?: string | null
+          should_count?: boolean
+          sort_order?: number
+          temporary_id: string
+          updated_at?: string
+        }
+        Update: {
+          analysis_run_id?: string
+          baseline_precedent_found?: boolean
+          business_action?: string | null
+          business_object?: string | null
+          candidate_function_type?: string
+          confidence?: number | null
+          counter_signals?: Json
+          counting_item_id?: string | null
+          created_at?: string
+          functional_result?: string | null
+          id?: string
+          is_central?: boolean
+          is_complete?: boolean
+          is_independent?: boolean
+          process_name?: string
+          recommendation?: string
+          review_required?: boolean
+          risks?: Json
+          selected_baseline_item_id?: string | null
+          separation_reason?: string | null
+          should_count?: boolean
+          sort_order?: number
+          temporary_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_items_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_items_counting_item_id_fkey"
+            columns: ["counting_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_items_selected_baseline_item_id_fkey"
+            columns: ["selected_baseline_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_baseline_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_logical_files: {
+        Row: {
+          analysis_process_id: string
+          baseline_item_id: string | null
+          created_at: string
+          file_name: string
+          file_type: string
+          id: string
+          process_role: string
+        }
+        Insert: {
+          analysis_process_id: string
+          baseline_item_id?: string | null
+          created_at?: string
+          file_name: string
+          file_type?: string
+          id?: string
+          process_role?: string
+        }
+        Update: {
+          analysis_process_id?: string
+          baseline_item_id?: string | null
+          created_at?: string
+          file_name?: string
+          file_type?: string
+          id?: string
+          process_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_logical_files_analysis_process_id_fkey"
+            columns: ["analysis_process_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_logical_files_baseline_item_id_fkey"
+            columns: ["baseline_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_baseline_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_non_countable_items: {
+        Row: {
+          analysis_run_id: string
+          created_at: string
+          description: string
+          id: string
+          reason: string
+        }
+        Insert: {
+          analysis_run_id: string
+          created_at?: string
+          description: string
+          id?: string
+          reason: string
+        }
+        Update: {
+          analysis_run_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_non_countable_items_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_pending_details: {
+        Row: {
+          analysis_run_id: string
+          created_at: string
+          description: string
+          id: string
+        }
+        Insert: {
+          analysis_run_id: string
+          created_at?: string
+          description: string
+          id?: string
+        }
+        Update: {
+          analysis_run_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_pending_details_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_runs: {
+        Row: {
+          baseline_id: string
+          central_process_name: string | null
+          central_process_reasoning: string | null
+          countable_process_count: number
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          hu_summary: string | null
+          id: string
+          inferred_factor_sigla: string
+          input_hash: string
+          materialized_at: string | null
+          model_name: string | null
+          normalized_response: Json | null
+          process_count: number
+          project_id: string
+          prompt_version: string
+          provider_id: string | null
+          provider_name: string | null
+          raw_response: string | null
+          requested_by: string | null
+          review_process_count: number
+          schema_version: string
+          started_at: string
+          status: string
+          status_reason: string | null
+          story_id: string
+          updated_at: string
+          validation_mode: string
+        }
+        Insert: {
+          baseline_id: string
+          central_process_name?: string | null
+          central_process_reasoning?: string | null
+          countable_process_count?: number
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          hu_summary?: string | null
+          id?: string
+          inferred_factor_sigla: string
+          input_hash: string
+          materialized_at?: string | null
+          model_name?: string | null
+          normalized_response?: Json | null
+          process_count?: number
+          project_id: string
+          prompt_version: string
+          provider_id?: string | null
+          provider_name?: string | null
+          raw_response?: string | null
+          requested_by?: string | null
+          review_process_count?: number
+          schema_version: string
+          started_at?: string
+          status?: string
+          status_reason?: string | null
+          story_id: string
+          updated_at?: string
+          validation_mode?: string
+        }
+        Update: {
+          baseline_id?: string
+          central_process_name?: string | null
+          central_process_reasoning?: string | null
+          countable_process_count?: number
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          hu_summary?: string | null
+          id?: string
+          inferred_factor_sigla?: string
+          input_hash?: string
+          materialized_at?: string | null
+          model_name?: string | null
+          normalized_response?: Json | null
+          process_count?: number
+          project_id?: string
+          prompt_version?: string
+          provider_id?: string | null
+          provider_name?: string | null
+          raw_response?: string | null
+          requested_by?: string | null
+          review_process_count?: number
+          schema_version?: string
+          started_at?: string
+          status?: string
+          status_reason?: string | null
+          story_id?: string
+          updated_at?: string
+          validation_mode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_runs_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "apf_project_baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_runs_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_project_baselines: {
         Row: {
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           id: string
           imported_at: string | null
           imported_by: string | null
           label: string | null
           model_id: string
           project_id: string
+          scope_type: string
+          source_checksum: string | null
+          source_file_name: string | null
+          source_summary: Json
           status: Database["public"]["Enums"]["apf_baseline_status"]
           updated_at: string
+          validation_report: Json
+          validation_status: string
           version: string
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           id?: string
           imported_at?: string | null
           imported_by?: string | null
           label?: string | null
           model_id: string
           project_id: string
+          scope_type?: string
+          source_checksum?: string | null
+          source_file_name?: string | null
+          source_summary?: Json
           status?: Database["public"]["Enums"]["apf_baseline_status"]
           updated_at?: string
+          validation_report?: Json
+          validation_status?: string
           version: string
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           id?: string
           imported_at?: string | null
           imported_by?: string | null
           label?: string | null
           model_id?: string
           project_id?: string
+          scope_type?: string
+          source_checksum?: string | null
+          source_file_name?: string | null
+          source_summary?: Json
           status?: Database["public"]["Enums"]["apf_baseline_status"]
           updated_at?: string
+          validation_report?: Json
+          validation_status?: string
           version?: string
         }
         Relationships: [
@@ -1206,6 +1908,71 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_recalculation_events: {
+        Row: {
+          baseline_id: string | null
+          created_at: string
+          id: string
+          previous_snapshot: Json
+          project_id: string
+          reason: string | null
+          requested_by: string | null
+          session_id: string | null
+          story_id: string
+        }
+        Insert: {
+          baseline_id?: string | null
+          created_at?: string
+          id?: string
+          previous_snapshot?: Json
+          project_id: string
+          reason?: string | null
+          requested_by?: string | null
+          session_id?: string | null
+          story_id: string
+        }
+        Update: {
+          baseline_id?: string | null
+          created_at?: string
+          id?: string
+          previous_snapshot?: Json
+          project_id?: string
+          reason?: string | null
+          requested_by?: string | null
+          session_id?: string | null
+          story_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_recalculation_events_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "apf_project_baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_recalculation_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_recalculation_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_recalculation_events_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
             referencedColumns: ["id"]
           },
         ]
@@ -1325,9 +2092,13 @@ export type Database = {
         Row: {
           ai_complexity: string
           ai_confidence_score: number | null
+          ai_factor_sigla: string | null
           ai_functional_type: string
           ai_pf_bruto: number | null
+          ai_pf_bruto_exact: number | null
+          ai_pf_fs: number | null
           ai_reasoning: string | null
+          baseline_item_id: string | null
           corrected_by: string | null
           correction_notes: string | null
           correction_reason_code:
@@ -1349,16 +2120,24 @@ export type Database = {
           session_id: string
           team_id: string | null
           validated_complexity: string
+          validated_factor_sigla: string | null
           validated_functional_type: string
           validated_pf_bruto: number | null
+          validated_pf_bruto_exact: number | null
+          validated_pf_fs: number | null
           was_corrected: boolean | null
+          was_corrected_contractual: boolean
         }
         Insert: {
           ai_complexity: string
           ai_confidence_score?: number | null
+          ai_factor_sigla?: string | null
           ai_functional_type: string
           ai_pf_bruto?: number | null
+          ai_pf_bruto_exact?: number | null
+          ai_pf_fs?: number | null
           ai_reasoning?: string | null
+          baseline_item_id?: string | null
           corrected_by?: string | null
           correction_notes?: string | null
           correction_reason_code?:
@@ -1380,16 +2159,24 @@ export type Database = {
           session_id: string
           team_id?: string | null
           validated_complexity: string
+          validated_factor_sigla?: string | null
           validated_functional_type: string
           validated_pf_bruto?: number | null
+          validated_pf_bruto_exact?: number | null
+          validated_pf_fs?: number | null
           was_corrected?: boolean | null
+          was_corrected_contractual?: boolean
         }
         Update: {
           ai_complexity?: string
           ai_confidence_score?: number | null
+          ai_factor_sigla?: string | null
           ai_functional_type?: string
           ai_pf_bruto?: number | null
+          ai_pf_bruto_exact?: number | null
+          ai_pf_fs?: number | null
           ai_reasoning?: string | null
+          baseline_item_id?: string | null
           corrected_by?: string | null
           correction_notes?: string | null
           correction_reason_code?:
@@ -1411,11 +2198,22 @@ export type Database = {
           session_id?: string
           team_id?: string | null
           validated_complexity?: string
+          validated_factor_sigla?: string | null
           validated_functional_type?: string
           validated_pf_bruto?: number | null
+          validated_pf_bruto_exact?: number | null
+          validated_pf_fs?: number | null
           was_corrected?: boolean | null
+          was_corrected_contractual?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "apf_validation_events_baseline_item_id_fkey"
+            columns: ["baseline_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_baseline_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "apf_validation_events_counting_item_id_fkey"
             columns: ["counting_item_id"]
@@ -5041,6 +5839,11 @@ export type Database = {
           ai_fp_breakdown: Json | null
           ai_fp_confidence: number | null
           ai_fp_validated: boolean
+          apf_counting_session_id: string | null
+          apf_factor_sigla: string | null
+          apf_function_sigla: string | null
+          apf_pf_bruto: number | null
+          apf_pf_fs: number | null
           assignee_id: string | null
           backlog_order: number | null
           code: string
@@ -5075,6 +5878,11 @@ export type Database = {
           ai_fp_breakdown?: Json | null
           ai_fp_confidence?: number | null
           ai_fp_validated?: boolean
+          apf_counting_session_id?: string | null
+          apf_factor_sigla?: string | null
+          apf_function_sigla?: string | null
+          apf_pf_bruto?: number | null
+          apf_pf_fs?: number | null
           assignee_id?: string | null
           backlog_order?: number | null
           code: string
@@ -5109,6 +5917,11 @@ export type Database = {
           ai_fp_breakdown?: Json | null
           ai_fp_confidence?: number | null
           ai_fp_validated?: boolean
+          apf_counting_session_id?: string | null
+          apf_factor_sigla?: string | null
+          apf_function_sigla?: string | null
+          apf_pf_bruto?: number | null
+          apf_pf_fs?: number | null
           assignee_id?: string | null
           backlog_order?: number | null
           code?: string
@@ -5138,6 +5951,13 @@ export type Database = {
           voted_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "user_stories_apf_counting_session_id_fkey"
+            columns: ["apf_counting_session_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_stories_contract_id_fkey"
             columns: ["contract_id"]
@@ -5446,9 +6266,37 @@ export type Database = {
         Args: { p_contract_id: string }
         Returns: string
       }
+      apf_import_baseline: {
+        Args: {
+          p_activate?: boolean
+          p_function_types?: Json
+          p_impact_factors?: Json
+          p_items?: Json
+          p_label?: string
+          p_project_id: string
+          p_source_name?: string
+          p_source_summary?: Json
+          p_version: string
+        }
+        Returns: Json
+      }
+      apf_import_project_baseline: {
+        Args: {
+          p_activate?: boolean
+          p_function_types?: Json
+          p_impact_factors?: Json
+          p_items?: Json
+          p_label?: string
+          p_project_id: string
+          p_source_name?: string
+          p_source_summary?: Json
+          p_version: string
+        }
+        Returns: Json
+      }
       build_apf_prompt:
         | { Args: { p_contract_id: string; p_hu_text?: string }; Returns: Json }
-        | { Args: { p_session_id: string }; Returns: string }
+        | { Args: { p_session_id: string }; Returns: Json }
       calc_horas_uteis: {
         Args: {
           p_fim: string
@@ -5539,6 +6387,10 @@ export type Database = {
         Returns: Json
       }
       delete_ai_provider_key: { Args: { p_id: string }; Returns: undefined }
+      delete_apf_project_baseline: {
+        Args: { p_baseline_id: string }
+        Returns: Json
+      }
       fn_audit_log_insert: {
         Args: {
           p_action: string
@@ -5641,15 +6493,105 @@ export type Database = {
         Args: { p_contract_id?: string; p_project_id?: string }
         Returns: Json
       }
+      get_active_apf_context: { Args: { p_project_id: string }; Returns: Json }
       get_admin_kpis: {
         Args: { p_sla_dias?: number; p_team_ids: string[] }
         Returns: Json
       }
       get_ai_provider_key: { Args: { p_provider: string }; Returns: string }
       get_ai_provider_key_by_id: { Args: { p_id: string }; Returns: string }
+      get_apf_baseline_candidates: {
+        Args: { p_limit?: number; p_project_id: string; p_story_text: string }
+        Returns: {
+          category_sigla: string
+          complexity: string
+          contribution_pct: number
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id: string
+          is_measurable: boolean
+          item_ref: string
+          match_score: number
+          module: string
+          notes: string
+          pf_bruto: number
+          pf_fs: number
+        }[]
+      }
+      get_apf_baseline_exact_items: {
+        Args: { p_item_refs: string[]; p_project_id: string }
+        Returns: {
+          category_sigla: string
+          complexity: string
+          contribution_pct: number
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id: string
+          is_measurable: boolean
+          item_ref: string
+          match_score: number
+          module: string
+          notes: string
+          pf_bruto: number
+          pf_fs: number
+        }[]
+      }
+      get_apf_metric_history_for_story: {
+        Args: { p_project_id: string; p_story_id: string }
+        Returns: {
+          created_at: string
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id: string
+          is_measurable: boolean
+          notes: string | null
+          pf_bruto: number
+          pf_fs: number
+          reference_code: string
+          source_measurement: string | null
+          system_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "apf_metric_factor_history"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_apf_model_by_contract: {
         Args: { p_contract_id: string }
         Returns: Json
+      }
+      get_apf_process_analysis: {
+        Args: { p_analysis_id: string }
+        Returns: Json
+      }
+      get_apf_project_process_candidates: {
+        Args: { p_limit?: number; p_project_id: string; p_story_text: string }
+        Returns: {
+          baseline_id: string
+          item_count: number
+          items: Json
+          match_score: number
+          process_name: string
+          process_ref: string
+          total_pf_bruto: number
+        }[]
+      }
+      get_apf_project_process_candidates_unfiltered: {
+        Args: { p_limit?: number; p_project_id: string; p_story_text: string }
+        Returns: {
+          baseline_id: string
+          item_count: number
+          items: Json
+          match_score: number
+          process_name: string
+          process_ref: string
+          total_pf_bruto: number
+        }[]
       }
       get_apf_session_summary: { Args: { p_session_id: string }; Returns: Json }
       get_capacity_planner: {
@@ -5703,6 +6645,7 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      is_apf_auxiliary_action: { Args: { p_text: string }; Returns: boolean }
       is_contract_admin: {
         Args: { _contract_id: string; _user_id: string }
         Returns: boolean
@@ -5775,15 +6718,59 @@ export type Database = {
               similarity: number
             }[]
           }
+      materialize_apf_process_analysis: {
+        Args: { p_analysis_id: string; p_session_id: string }
+        Returns: Json
+      }
       my_org_ids: { Args: never; Returns: string[] }
-      open_counting_session: {
+      normalize_apf_contractual_function_sigla: {
+        Args: { p_sigla: string }
+        Returns: string
+      }
+      normalize_apf_metric_reference: {
+        Args: { p_value: string }
+        Returns: string
+      }
+      normalize_apf_process_key: { Args: { p_text: string }; Returns: string }
+      normalize_apf_ref: { Args: { p_text: string }; Returns: string }
+      normalize_apf_text: { Args: { p_text: string }; Returns: string }
+      open_counting_session:
+        | {
+            Args: {
+              p_baseline_id?: string
+              p_contract_id: string
+              p_project_id?: string
+              p_redmine_ref?: string
+              p_release_ref?: string
+              p_sprint_ref?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_baseline_id?: string
+              p_project_id: string
+              p_redmine_ref?: string
+              p_release_ref?: string
+              p_sprint_ref?: string
+            }
+            Returns: string
+          }
+      persist_apf_process_analysis: {
         Args: {
-          p_baseline_id?: string
-          p_contract_id: string
-          p_project_id?: string
-          p_redmine_ref?: string
-          p_release_ref?: string
-          p_sprint_ref?: string
+          p_analysis: Json
+          p_baseline_id: string
+          p_factor_sigla: string
+          p_input_hash: string
+          p_model_name: string
+          p_project_id: string
+          p_prompt_version: string
+          p_provider_id: string
+          p_provider_name: string
+          p_raw_response: string
+          p_schema_version: string
+          p_story_id: string
+          p_validation_mode: string
         }
         Returns: string
       }
@@ -5791,11 +6778,52 @@ export type Database = {
         Args: { p_contract_id: string; p_model_name?: string }
         Returns: string
       }
+      recalculate_apf_session_totals: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       recalculate_session_totals: {
         Args: { p_session_id: string }
         Returns: undefined
       }
       reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
+      reset_apf_story_counting: {
+        Args: { p_reason?: string; p_session_id: string; p_story_id: string }
+        Returns: Json
+      }
+      resolve_apf_elementary_process_item: {
+        Args: {
+          p_is_complete: boolean
+          p_is_independent: boolean
+          p_item_id: string
+          p_precedent_ref?: string
+          p_process_role: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      resolve_apf_item_weight: {
+        Args: {
+          p_baseline_item_id: string
+          p_complexity?: string
+          p_function_sigla: string
+          p_model_id: string
+        }
+        Returns: number
+      }
+      resolve_apf_process_analysis: {
+        Args: { p_analysis_id: string; p_decisions: Json; p_session_id: string }
+        Returns: Json
+      }
+      save_contractual_counting_items: {
+        Args: {
+          p_ai_model?: string
+          p_items: Json
+          p_session_id: string
+          p_story_id: string
+        }
+        Returns: Json
+      }
       save_counting_items: {
         Args: { p_ai_model?: string; p_items: Json; p_session_id: string }
         Returns: Json
@@ -5808,6 +6836,8 @@ export type Database = {
         Args: { p_id: string; p_key: string }
         Returns: undefined
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       status_concluidos: { Args: never; Returns: string[] }
       upsert_demandas_batch: {
         Args: { p_rows: Json; p_team_id: string }
@@ -5816,6 +6846,16 @@ export type Database = {
       users_share_contract: {
         Args: { _a: string; _b: string }
         Returns: boolean
+      }
+      validate_apf_counting_item: {
+        Args: {
+          p_factor_sigla: string
+          p_function_sigla: string
+          p_item_id: string
+          p_notes?: string
+          p_reason?: string
+        }
+        Returns: Json
       }
     }
     Enums: {
@@ -5831,6 +6871,12 @@ export type Database = {
         | "merge_required"
         | "already_counted"
         | "not_countable"
+        | "wrong_impact_factor"
+        | "wrong_baseline_match"
+        | "wrong_pf_value"
+        | "missing_function"
+        | "extra_function"
+        | "other"
       apf_function_class: "transactional" | "data"
       apf_session_status:
         | "in_progress"
@@ -5996,6 +7042,12 @@ export const Constants = {
         "merge_required",
         "already_counted",
         "not_countable",
+        "wrong_impact_factor",
+        "wrong_baseline_match",
+        "wrong_pf_value",
+        "missing_function",
+        "extra_function",
+        "other",
       ],
       apf_function_class: ["transactional", "data"],
       apf_session_status: [

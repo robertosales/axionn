@@ -5,6 +5,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MIGRATIONS_DIR="$ROOT_DIR/supabase/migrations"
 OUTPUT_FILE="${MIGRATION_ORDER_OUTPUT:-}"
 
+if [[ -n "$OUTPUT_FILE" ]]; then
+  exec > >(tee "$OUTPUT_FILE") 2>&1
+fi
+
 if [[ ! -d "$MIGRATIONS_DIR" ]]; then
   echo "Diretório de migrations não encontrado: $MIGRATIONS_DIR" >&2
   exit 1
@@ -46,19 +50,14 @@ if [[ ${#DUPLICATE_MESSAGES[@]} -gt 0 ]]; then
 fi
 
 if [[ ${#INVALID_FILES[@]} -gt 0 || ${#DUPLICATE_MESSAGES[@]} -gt 0 ]]; then
+  echo "Preflight de migrations reprovado." >&2
   exit 3
 fi
 
-{
-  echo "# Ordem canônica de replay das migrations Supabase"
-  echo "# Gerada em UTC: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-  echo "# Total: ${#MIGRATIONS[@]}"
+echo "# Ordem canônica de replay das migrations Supabase"
+echo "# Gerada em UTC: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+echo "# Total: ${#MIGRATIONS[@]}"
 
-  for index in "${!MIGRATIONS[@]}"; do
-    printf '%04d  %s\n' "$((index + 1))" "${MIGRATIONS[$index]}"
-  done
-} | if [[ -n "$OUTPUT_FILE" ]]; then
-  tee "$OUTPUT_FILE"
-else
-  cat
-fi
+for index in "${!MIGRATIONS[@]}"; do
+  printf '%04d  %s\n' "$((index + 1))" "${MIGRATIONS[$index]}"
+done

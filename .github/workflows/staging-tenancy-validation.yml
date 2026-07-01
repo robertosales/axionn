@@ -37,6 +37,11 @@ jobs:
         with:
           version: latest
 
+      - name: Validate migration versions and build replay manifest
+        env:
+          MIGRATION_ORDER_OUTPUT: migration-replay-order.txt
+        run: bash scripts/check-supabase-migrations.sh
+
       - name: Validate staging secrets and confirmation
         shell: bash
         run: |
@@ -90,6 +95,7 @@ jobs:
         with:
           name: staging-tenancy-validation-${{ github.run_number }}
           path: |
+            migration-replay-order.txt
             migration-dry-run.log
             migration-apply.log
             database-isolation.log

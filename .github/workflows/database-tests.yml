@@ -47,14 +47,19 @@ jobs:
       - name: Run tenancy database tests
         env:
           SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-        run: bash scripts/run-tenant-isolation-tests.sh
+        shell: bash
+        run: |
+          set -o pipefail
+          bash scripts/run-tenant-isolation-tests.sh 2>&1 | tee tenant-isolation-tests.log
 
-      - name: Publish migration replay manifest
+      - name: Publish database validation artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: migration-replay-order-${{ github.run_number }}
-          path: migration-replay-order.txt
+          name: database-validation-${{ github.run_number }}
+          path: |
+            migration-replay-order.txt
+            tenant-isolation-tests.log
           if-no-files-found: warn
           retention-days: 14
 

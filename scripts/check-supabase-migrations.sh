@@ -26,7 +26,7 @@ declare -a INVALID_FILES=()
 declare -a DUPLICATE_MESSAGES=()
 
 for migration in "${MIGRATIONS[@]}"; do
-  if [[ ! "$migration" =~ ^([0-9]{8,14})_[A-Za-z0-9._-]+\.sql$ ]]; then
+  if [[ ! "$migration" =~ ^([0-9]{8,})_[A-Za-z0-9._-]+\.sql$ ]]; then
     INVALID_FILES+=("$migration")
     continue
   fi

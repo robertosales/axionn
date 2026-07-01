@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(26);
+select plan(32);
 
 create or replace function pg_temp.authenticate_as(
   p_user_id uuid,
@@ -23,38 +23,63 @@ begin
 end;
 $$;
 
+select public.set_tenancy_enforcement(false);
+
+insert into auth.users (
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  created_at,
+  updated_at
+)
+values
+  ('20000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'tenant-a@axion.test', '', now(), now(), now()),
+  ('20000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'tenant-b@axion.test', '', now(), now(), now()),
+  ('20000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'tenant-suspended@axion.test', '', now(), now(), now()),
+  ('20000000-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'platform-admin@axion.test', '', now(), now(), now())
+on conflict (id) do nothing;
+
 insert into public.organizations (id, name, slug, status, plan)
 values
   ('10000000-0000-0000-0000-000000000001', 'Tenant Test A', 'tenant-test-a', 'active', 'pro'),
   ('10000000-0000-0000-0000-000000000002', 'Tenant Test B', 'tenant-test-b', 'active', 'pro'),
-  ('10000000-0000-0000-0000-000000000003', 'Tenant Test Suspended', 'tenant-test-suspended', 'suspended', 'pro');
+  ('10000000-0000-0000-0000-000000000003', 'Tenant Test Suspended', 'tenant-test-suspended', 'suspended', 'pro')
+on conflict (id) do nothing;
 
 insert into public.organization_members (org_id, user_id, role)
 values
   ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'owner'),
   ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', 'owner'),
-  ('10000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', 'owner');
+  ('10000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003', 'owner')
+on conflict do nothing;
 
 insert into public.platform_user_roles (user_id, role)
-values ('20000000-0000-0000-0000-000000000004', 'platform_admin');
+values ('20000000-0000-0000-0000-000000000004', 'platform_admin')
+on conflict do nothing;
 
 insert into public.companies (id, name, status, org_id)
 values
   ('30000000-0000-0000-0000-000000000001', 'Company Tenant A', 'active', '10000000-0000-0000-0000-000000000001'),
   ('30000000-0000-0000-0000-000000000002', 'Company Tenant B', 'active', '10000000-0000-0000-0000-000000000002'),
-  ('30000000-0000-0000-0000-000000000003', 'Company Suspended', 'active', '10000000-0000-0000-0000-000000000003');
+  ('30000000-0000-0000-0000-000000000003', 'Company Suspended', 'active', '10000000-0000-0000-0000-000000000003')
+on conflict (id) do nothing;
 
 insert into public.contracts (id, name, status, company_id, org_id)
 values
   ('40000000-0000-0000-0000-000000000001', 'Contract Tenant A', 'active', '30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
   ('40000000-0000-0000-0000-000000000002', 'Contract Tenant B', 'active', '30000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002'),
-  ('40000000-0000-0000-0000-000000000003', 'Contract Suspended', 'active', '30000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003');
+  ('40000000-0000-0000-0000-000000000003', 'Contract Suspended', 'active', '30000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003')
+on conflict (id) do nothing;
 
 insert into public.teams (id, name, module, company_id, contract_id, org_id)
 values
   ('50000000-0000-0000-0000-000000000001', 'Team Tenant A', 'sala_agil', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
   ('50000000-0000-0000-0000-000000000002', 'Team Tenant B', 'sala_agil', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002'),
-  ('50000000-0000-0000-0000-000000000003', 'Team Suspended', 'sala_agil', '30000000-0000-0000-0000-000000000003', '40000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003');
+  ('50000000-0000-0000-0000-000000000003', 'Team Suspended', 'sala_agil', '30000000-0000-0000-0000-000000000003', '40000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003')
+on conflict (id) do nothing;
 
 insert into public.projects (
   id,
@@ -68,14 +93,16 @@ insert into public.projects (
 values
   ('60000000-0000-0000-0000-000000000001', 'Project Tenant A', 'agile', 'active', '40000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001'),
   ('60000000-0000-0000-0000-000000000002', 'Project Tenant B', 'agile', 'active', '40000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002'),
-  ('60000000-0000-0000-0000-000000000003', 'Project Suspended', 'agile', 'active', '40000000-0000-0000-0000-000000000003', '50000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003');
+  ('60000000-0000-0000-0000-000000000003', 'Project Suspended', 'agile', 'active', '40000000-0000-0000-0000-000000000003', '50000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003')
+on conflict (id) do nothing;
 
+-- Organização A.
 select pg_temp.authenticate_as('20000000-0000-0000-0000-000000000001');
 
 select is(
   public.is_platform_admin(),
   false,
-  'organization owner is not a platform administrator'
+  'organization owner A is not a platform administrator'
 );
 select is(
   public.is_organization_member('10000000-0000-0000-0000-000000000001'),
@@ -90,7 +117,12 @@ select is(
 select is(
   public.can_operate_organization('10000000-0000-0000-0000-000000000001'),
   true,
-  'active organization member can operate its organization'
+  'user A can operate organization A'
+);
+select is(
+  public.can_operate_organization('10000000-0000-0000-0000-000000000002'),
+  false,
+  'user A cannot operate organization B'
 );
 
 select results_eq(
@@ -161,15 +193,70 @@ select results_eq(
   $expected$
     values ('10000000-0000-0000-0000-000000000001'::uuid)
   $expected$,
-  'user A receives only its organization from the organization selector RPC'
+  'user A receives only organization A from the selector RPC'
 );
 
+-- Organização B: cenário independente e simétrico ao tenant A.
+select pg_temp.authenticate_as('20000000-0000-0000-0000-000000000002');
+
+select is(
+  public.is_organization_member('10000000-0000-0000-0000-000000000002'),
+  true,
+  'user B is a member of organization B'
+);
+select is(
+  public.is_organization_member('10000000-0000-0000-0000-000000000001'),
+  false,
+  'user B is not a member of organization A'
+);
+
+select results_eq(
+  $query$
+    select id
+    from public.get_accessible_contracts_v2('10000000-0000-0000-0000-000000000002')
+    order by id
+  $query$,
+  $expected$
+    values ('40000000-0000-0000-0000-000000000002'::uuid)
+  $expected$,
+  'user B lists only contracts from organization B'
+);
+
+select is_empty(
+  $query$
+    select id
+    from public.get_accessible_contracts_v2('10000000-0000-0000-0000-000000000001')
+  $query$,
+  'user B cannot list contracts from organization A'
+);
+
+select results_eq(
+  $query$
+    select id
+    from public.get_accessible_projects_v2(
+      '10000000-0000-0000-0000-000000000002',
+      null::uuid
+    )
+    order by id
+  $query$,
+  $expected$
+    values ('60000000-0000-0000-0000-000000000002'::uuid)
+  $expected$,
+  'user B lists only projects from organization B'
+);
+
+-- Organização suspensa: leitura de membership permanece, operação é bloqueada.
 select pg_temp.authenticate_as('20000000-0000-0000-0000-000000000003');
 
 select is(
   public.is_organization_member('10000000-0000-0000-0000-000000000003'),
   true,
-  'suspended organization user remains a member for read access'
+  'suspended organization user remains a member'
+);
+select is(
+  public.can_read_organization('10000000-0000-0000-0000-000000000003'),
+  true,
+  'suspended organization user keeps read access'
 );
 select is(
   public.can_operate_organization('10000000-0000-0000-0000-000000000003'),
@@ -177,6 +264,7 @@ select is(
   'suspended organization user cannot operate resources'
 );
 
+-- Administrador da plataforma.
 select pg_temp.authenticate_as('20000000-0000-0000-0000-000000000004');
 
 select is(
@@ -211,6 +299,7 @@ select is(
   'platform administrator can support a suspended organization'
 );
 
+-- Integridade entre organizações.
 select throws_ok(
   $sql$
     insert into public.contract_teams (contract_id, team_id)
@@ -268,6 +357,7 @@ select throws_ok(
   'project cannot combine contract and team from different organizations'
 );
 
+-- Enforcement temporário dentro da transação de teste.
 select public.set_tenancy_enforcement(true);
 select is(
   public.is_tenancy_enforced(),

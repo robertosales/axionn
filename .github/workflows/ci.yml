@@ -157,7 +157,7 @@ jobs:
           grep -Fq "add column if not exists org_id" "$multitenant"
           grep -Fq "create or replace function public.get_my_organizations_v2" "$multitenant"
           grep -Fq "create or replace function public.get_accessible_teams_v2" "$multitenant"
-          grep -Fq "create or replace function public.is_platform_admin()" "$wrappers"
+          grep -Fq "p_user_id uuid default auth.uid()" "$multitenant"
           grep -Fq "revoke all on function public.is_platform_admin(uuid)" "$wrappers"
 
           grep -Fq "create table if not exists public.saas_runtime_settings" "$isolation"

@@ -25,6 +25,10 @@ $$;
 
 select public.set_tenancy_enforcement(false);
 
+-- As fixtures de autenticação não devem executar automações de onboarding.
+-- DISABLE TRIGGER USER preserva os triggers de FK e é revertido no fim da transação.
+alter table auth.users disable trigger user;
+
 insert into auth.users (
   id,
   aud,
@@ -41,6 +45,8 @@ values
   ('20000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'tenant-suspended@axion.test', '', now(), now(), now()),
   ('20000000-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'platform-admin@axion.test', '', now(), now(), now())
 on conflict (id) do nothing;
+
+alter table auth.users enable trigger user;
 
 insert into public.organizations (id, name, slug, status, plan)
 values

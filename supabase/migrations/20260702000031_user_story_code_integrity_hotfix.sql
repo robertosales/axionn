@@ -1,3 +1,5 @@
+BEGIN;
+
 -- ============================================================
 -- HOTFIX — Integridade dos códigos de User Stories
 --
@@ -9,7 +11,7 @@
 --   1. separar código interno de referência externa/oficial;
 --   2. preencher external_reference a partir do início do título;
 --   3. reparar apenas os códigos internos duplicados;
---   4. sincronizar a cópia textual apf_counting_items.hu_ref;
+--   4. sincronizar as cópias textuais da contagem APF;
 --   5. impedir novas duplicidades com índice único;
 --   6. atribuir o código em trigger transacional com advisory lock.
 --
@@ -31,19 +33,14 @@ PARALLEL SAFE
 SET search_path = public
 AS $$
   WITH matched AS (
-    SELECT substring(
-      upper(trim(coalesce(p_title, '')))
-      FROM '^(HU|FUNC)[[:space:]-]*([0-9]+(?:\.[0-9]+)?)'
-    ) AS raw_reference
+    SELECT regexp_match(
+      upper(trim(coalesce(p_title, ''))),
+      '^(HU|FUNC)[[:space:]-]*([0-9]+([.][0-9]+)?)'
+    ) AS parts
   )
   SELECT CASE
-    WHEN raw_reference IS NULL THEN NULL
-    ELSE regexp_replace(
-      regexp_replace(raw_reference, '[[:space:]]+', '', 'g'),
-      '^(HU|FUNC)-*',
-      '\1-',
-      'i'
-    )
+    WHEN parts IS NULL THEN NULL
+    ELSE parts[1] || '-' || parts[2]
   END
   FROM matched;
 $$;
@@ -64,7 +61,7 @@ WHERE code IS DISTINCT FROM upper(trim(code));
 
 LOCK TABLE public.user_stories IN SHARE ROW EXCLUSIVE MODE;
 
--- Mapeamento temporário e auditável durante a transação da migration.
+-- Mapeamento temporário dos códigos internos que precisam ser reparados.
 CREATE TEMP TABLE tmp_user_story_code_repairs
 ON COMMIT DROP
 AS
@@ -115,6 +112,40 @@ SELECT
 FROM to_repair repair
 JOIN team_maximum maximum ON maximum.team_id = repair.team_id;
 
+-- Auditoria persistente do reparo para conferência posterior.
+CREATE TABLE IF NOT EXISTS public.user_story_code_repair_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  migration_key TEXT NOT NULL,
+  story_id UUID NOT NULL,
+  team_id UUID NOT NULL,
+  old_code TEXT NOT NULL,
+  new_code TEXT NOT NULL,
+  external_reference TEXT,
+  repaired_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (migration_key, story_id)
+);
+
+ALTER TABLE public.user_story_code_repair_log ENABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.user_story_code_repair_log(
+  migration_key,
+  story_id,
+  team_id,
+  old_code,
+  new_code,
+  external_reference
+)
+SELECT
+  '20260702000031',
+  repair.story_id,
+  repair.team_id,
+  repair.old_code,
+  repair.new_code,
+  story.external_reference
+FROM tmp_user_story_code_repairs repair
+JOIN public.user_stories story ON story.id = repair.story_id
+ON CONFLICT (migration_key, story_id) DO NOTHING;
+
 -- Repara somente a identidade textual. UUIDs e relacionamentos permanecem iguais.
 UPDATE public.user_stories story
 SET code = repair.new_code,
@@ -122,17 +153,36 @@ SET code = repair.new_code,
 FROM tmp_user_story_code_repairs repair
 WHERE story.id = repair.story_id;
 
--- A contagem APF mantém hu_ref como cópia para relatórios; sincroniza pelo UUID.
+-- A contagem APF mantém hu_ref/hu_refs como cópias para relatórios.
+-- Reconstrói essas cópias a partir dos UUIDs, sem alterar os itens ou os PFs.
 UPDATE public.apf_counting_items item
-SET hu_ref = repair.new_code,
+SET hu_ref = CASE
+      WHEN item.story_id IS NOT NULL THEN coalesce(
+        (SELECT story.code FROM public.user_stories story WHERE story.id = item.story_id),
+        item.hu_ref
+      )
+      WHEN cardinality(item.story_ids) = 1 THEN coalesce(
+        (SELECT story.code FROM public.user_stories story WHERE story.id = item.story_ids[1]),
+        item.hu_ref
+      )
+      ELSE item.hu_ref
+    END,
+    hu_refs = CASE
+      WHEN cardinality(item.story_ids) > 0 THEN ARRAY(
+        SELECT story.code
+        FROM unnest(item.story_ids) WITH ORDINALITY AS reference(story_id, position)
+        JOIN public.user_stories story ON story.id = reference.story_id
+        ORDER BY reference.position
+      )
+      ELSE item.hu_refs
+    END,
     updated_at = now()
-FROM tmp_user_story_code_repairs repair
-WHERE item.story_id = repair.story_id
-   OR (
-     item.story_id IS NULL
-     AND cardinality(item.story_ids) = 1
-     AND repair.story_id = item.story_ids[1]
-   );
+WHERE EXISTS (
+  SELECT 1
+  FROM tmp_user_story_code_repairs repair
+  WHERE repair.story_id = item.story_id
+     OR repair.story_id = ANY(item.story_ids)
+);
 
 -- A migration deve falhar antes do índice se algum caso não tiver sido reparado.
 DO $$
@@ -151,6 +201,25 @@ $$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_user_stories_team_code
   ON public.user_stories(team_id, code);
 
+CREATE INDEX IF NOT EXISTS idx_user_stories_team_external_reference
+  ON public.user_stories(team_id, external_reference)
+  WHERE external_reference IS NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'public.user_stories'::regclass
+      AND conname = 'ck_user_stories_code_normalized'
+  ) THEN
+    ALTER TABLE public.user_stories
+      ADD CONSTRAINT ck_user_stories_code_normalized
+      CHECK (code = upper(trim(code)));
+  END IF;
+END;
+$$;
+
 -- Gera o próximo código sob lock por time. O lock evita corrida entre inserções.
 CREATE OR REPLACE FUNCTION public.assign_user_story_identity()
 RETURNS TRIGGER
@@ -165,7 +234,9 @@ BEGIN
     RAISE EXCEPTION 'team_id é obrigatório para gerar o código da HU';
   END IF;
 
-  PERFORM pg_advisory_xact_lock(hashtextextended('user_story_code:' || NEW.team_id::text, 0));
+  PERFORM pg_advisory_xact_lock(
+    hashtextextended('user_story_code:' || NEW.team_id::text, 0)
+  );
 
   NEW.external_reference := coalesce(
     nullif(trim(NEW.external_reference), ''),
@@ -237,7 +308,6 @@ HAVING count(*) > 1;
 
 GRANT SELECT ON public.v_user_story_code_duplicates TO authenticated;
 
--- Registro de auditoria da migration, sem manter a tabela temporária.
 DO $$
 DECLARE
   v_repaired_count INTEGER;
@@ -248,3 +318,5 @@ BEGIN
   RAISE NOTICE 'User Story code hotfix: % código(s) interno(s) reparado(s)', v_repaired_count;
 END;
 $$;
+
+COMMIT;

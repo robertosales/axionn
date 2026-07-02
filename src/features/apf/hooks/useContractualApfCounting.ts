@@ -6,6 +6,7 @@ import type { ContractualItem, HuRow } from "../types/apfItem.types";
 import type {
   AnalysisReviewDecision,
   ApfProcessAnalysis,
+  FactorReviewInput,
   GenerateResponse,
   LogicalFileCandidate,
   PersistSummary,
@@ -443,16 +444,19 @@ export function useContractualApfCounting() {
     }));
   }
 
-  async function confirmAnalysisReview() {
+  async function confirmAnalysisReview(factorReview: FactorReviewInput) {
     if (!analysisDialog.analysis || !analysisDialog.hu?._sessionId) return;
     setResolvingAnalysis(true);
     try {
       const { data, error } = await supabase.rpc(
-        "resolve_apf_process_analysis" as any,
+        "resolve_apf_process_analysis_v2" as any,
         {
           p_analysis_id: analysisDialog.analysis.id,
           p_session_id: analysisDialog.hu._sessionId,
           p_decisions: analysisDialog.decisions,
+          p_factor_sigla: factorReview.factor_sigla,
+          p_factor_override_reason: factorReview.factor_override_reason || null,
+          p_factor_override_notes: factorReview.factor_override_notes || null,
         } as any,
       );
       if (error) throw error;
@@ -466,7 +470,7 @@ export function useContractualApfCounting() {
         sessionId: analysisDialog.hu._sessionId,
       });
       setAnalysisDialog((current) => ({ ...current, open: false }));
-      toast.success(`${analysisDialog.hu.code}: processos enviados ao contador.`);
+      toast.success(`${analysisDialog.hu.code}: processos e fator enviados ao contador.`);
     } catch (error: any) {
       toast.error("Falha ao confirmar a análise", { description: error?.message });
     } finally {

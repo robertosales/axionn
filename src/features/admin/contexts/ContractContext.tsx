@@ -1,14 +1,22 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { useContracts, type Contract } from "@/features/admin/hooks/useContracts";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  useContracts,
+  type Contract,
+} from "@/features/admin/hooks/useContracts";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ContractContextValue {
-  /** null = "todos os contratos" (só para gestor) */
   selectedContractId: string | null;
-  selectedContract:   Contract | null;
+  selectedContract: Contract | null;
   setSelectedContractId: (id: string | null) => void;
   contracts: Contract[];
-  /** true = usuário é gestor master (sem user_contracts, role admin) */
   isGestor: boolean;
   loading: boolean;
 }
@@ -16,77 +24,87 @@ interface ContractContextValue {
 const ContractContext = createContext<ContractContextValue | null>(null);
 
 export function ContractProvider({ children }: { children: ReactNode }) {
+  const { user, isAdmin } = useAuth();
   const { contracts, loading: contractsLoading } = useContracts();
-  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
-  const [isGestor,  setIsGestor]  = useState(false);
-  const [resolved,  setResolved]  = useState(false);
+  const [selectedContractId, setSelectedContractId] = useState<string | null>(
+    null,
+  );
+  const [isGestor, setIsGestor] = useState(false);
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) { setResolved(true); return; }
-
-      // Busca em paralelo: vínculo em user_contracts + role admin
-      const [{ data: uc }, { data: role }] = await Promise.all([
-        supabase
-          .from("user_contracts")
-          .select("contract_id")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id)
-          .eq("role", "admin")
-          .maybeSingle(),
-      ]);
-
-      const isAdmin = !!role;
-
-      if (isAdmin) {
-        // Admin/Gestor: pode trocar entre todos os contratos.
-        // Se houver vínculo em user_contracts, usa como pré-seleção;
-        // caso contrário, o effect abaixo seleciona o primeiro automaticamente.
-        setIsGestor(true);
-        setSelectedContractId(uc?.contract_id ?? null);
-      } else if (uc?.contract_id) {
-        // Usuário comum vinculado a um contrato: fixo (locked).
-        setIsGestor(false);
-        setSelectedContractId(uc.contract_id);
-      } else {
-        // Usuário comum sem vínculo: sem contrato.
-        setIsGestor(false);
-        setSelectedContractId(null);
-      }
+    if (!user) {
+      setSelectedContractId(null);
+      setIsGestor(false);
       setResolved(true);
-    });
-  }, []);
-
-  // Quando os contratos carregarem e o gestor ainda não tiver selecionado nenhum,
-  // pré-seleciona o primeiro automaticamente para uma UX melhor
-  useEffect(() => {
-    if (isGestor && selectedContractId === null && contracts.length > 0) {
-      setSelectedContractId(contracts[0].id);
+      return;
     }
-  }, [isGestor, contracts, selectedContractId]);
 
-  const selectedContract = contracts.find(c => c.id === selectedContractId) ?? null;
+    let cancelled = false;
+    setResolved(false);
+
+    void supabase
+      .from("user_contracts")
+      .select("contract_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("[ContractContext] user_contracts:", error);
+        }
+
+        setIsGestor(isAdmin);
+        setSelectedContractId(data?.contract_id ?? null);
+        setResolved(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, user]);
+
+  useEffect(() => {
+    if (contractsLoading || !resolved) return;
+
+    if (contracts.length === 0) {
+      setSelectedContractId(null);
+      return;
+    }
+
+    const selectionIsAccessible = Boolean(
+      selectedContractId &&
+        contracts.some((contract) => contract.id === selectedContractId),
+    );
+
+    if (selectionIsAccessible) return;
+
+    setSelectedContractId(isGestor ? contracts[0].id : null);
+  }, [contracts, contractsLoading, isGestor, resolved, selectedContractId]);
+
+  const selectedContract =
+    contracts.find((contract) => contract.id === selectedContractId) ?? null;
 
   return (
-    <ContractContext.Provider value={{
-      selectedContractId,
-      selectedContract,
-      setSelectedContractId,
-      contracts,
-      isGestor,
-      loading: !resolved || contractsLoading,
-    }}>
+    <ContractContext.Provider
+      value={{
+        selectedContractId,
+        selectedContract,
+        setSelectedContractId,
+        contracts,
+        isGestor,
+        loading: !resolved || contractsLoading,
+      }}
+    >
       {children}
     </ContractContext.Provider>
   );
 }
 
 export function useContractContext() {
-  const ctx = useContext(ContractContext);
-  if (!ctx) throw new Error("useContractContext deve ser usado dentro de <ContractProvider>");
-  return ctx;
+  const context = useContext(ContractContext);
+  if (!context) {
+    throw new Error("useContractContext deve ser usado dentro de <ContractProvider>");
+  }
+  return context;
 }

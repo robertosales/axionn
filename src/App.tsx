@@ -5,100 +5,93 @@ import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
+import { OrganizationOperationalGuard } from "@/components/OrganizationOperationalGuard";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { SprintProvider } from "@/contexts/SprintContext";
 import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAlert";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useAppResilience } from "@/hooks/useAppResilience";
 
-// ─── Páginas leves (críticas — carregadas imediatamente) ──────────────────────
-import Auth            from "./pages/Auth.tsx";
-import AuthCallback    from "./pages/AuthCallback.tsx";
-import NotFound        from "./pages/NotFound.tsx";
-import ResetPassword   from "./pages/ResetPassword.tsx";
+import Auth from "./pages/Auth.tsx";
+import AuthCallback from "./pages/AuthCallback.tsx";
+import NotFound from "./pages/NotFound.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 
-// ─── Páginas pesadas — lazy loaded ───────────────────────────────────────────
-const Index                = lazy(() => import("./pages/Index.tsx"));
-const ForcePasswordChange  = lazy(() => import("./pages/ForcePasswordChange.tsx"));
-const SustentacaoPage      = lazy(() => import("./features/sustentacao/SustentacaoPage"));
-const RdmPage              = lazy(() => import("./features/rdm/RdmPage"));
-const ModuleSelector       = lazy(() =>
-  import("./features/sustentacao/components/ModuleSelector").then((m) => ({
-    default: m.ModuleSelector,
-  }))
+const Index = lazy(() => import("./pages/Index.tsx"));
+const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange.tsx"));
+const SustentacaoPage = lazy(() => import("./features/sustentacao/SustentacaoPage"));
+const RdmPage = lazy(() => import("./features/rdm/RdmPage"));
+const ModuleSelector = lazy(() =>
+  import("./features/sustentacao/components/ModuleSelector").then((module) => ({
+    default: module.ModuleSelector,
+  })),
 );
-const AdminDashboard       = lazy(() => import("./pages/AdminDashboard"));
-const PlanningPokerPage    = lazy(() => import("./pages/PlanningPokerPage"));
-const RetrospactivaPage    = lazy(() => import("./pages/RetrospactivaPage"));
-
-// ─── Módulo Contratos (lazy) ──────────────────────────────────────────────────
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const PlanningPokerPage = lazy(() => import("./pages/PlanningPokerPage"));
+const RetrospactivaPage = lazy(() => import("./pages/RetrospactivaPage"));
 const ContractsPage = lazy(() =>
-  import("./features/contracts/components/ContractsDashboard").then((m) => ({
-    default: m.ContractsDashboard,
-  }))
+  import("./features/contracts/components/ContractsDashboard").then((module) => ({
+    default: module.ContractsDashboard,
+  })),
 );
-
 const MeuContratoDashboard = lazy(() =>
-  import("./features/contracts/pages/MeuContratoDashboard").then((m) => ({
-    default: m.MeuContratoDashboard,
-  }))
+  import("./features/contracts/pages/MeuContratoDashboard").then((module) => ({
+    default: module.MeuContratoDashboard,
+  })),
 );
-
-// ─── Módulo OKR (lazy) ────────────────────────────────────────────────────────
 const OkrPage = lazy(() =>
-  import("./features/okr/OkrPage").then((m) => ({
-    default: m.OkrPage,
-  }))
+  import("./features/okr/OkrPage").then((module) => ({
+    default: module.OkrPage,
+  })),
 );
 
-// ─── Fallback de carregamento (Suspense) ──────────────────────────────────────
 function PageLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center space-y-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-        <p className="text-muted-foreground text-sm">Carregando...</p>
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="space-y-4 text-center">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
+        <p className="text-sm text-muted-foreground">Carregando...</p>
       </div>
     </div>
   );
 }
 
-// ─── Resolução central de home pós-login ─────────────────────────────────────
-function resolveHomePath(opts: {
+function resolveHomePath(options: {
   isAdmin: boolean;
   moduleAccess?: string | null;
-  hasModuleAccess: (m: string) => boolean;
+  hasModuleAccess: (module: string) => boolean;
   moduleRolesCount: number;
   roles: string[];
 }): string {
-  const { isAdmin, moduleAccess, hasModuleAccess, moduleRolesCount, roles } = opts;
+  const { isAdmin, moduleAccess, hasModuleAccess, moduleRolesCount, roles } =
+    options;
 
-  if (isAdmin || moduleAccess === "admin") return "/dashboard-admin";
-
-  // admin_contrato: painel isolado por contrato
-  if (roles.includes("admin_contrato") && !isAdmin) return "/meu-contrato";
+  if (isAdmin) return "/dashboard-admin";
+  if (roles.includes("admin_contrato")) return "/meu-contrato";
 
   const agil = hasModuleAccess("sala_agil");
-  const sust = hasModuleAccess("sustentacao");
-  const rdm  = hasModuleAccess("rdm");
-  const count = [agil, sust, rdm].filter(Boolean).length;
+  const sustentacao = hasModuleAccess("sustentacao");
+  const rdm = hasModuleAccess("rdm");
+  const count = [agil, sustentacao, rdm].filter(Boolean).length;
 
   if (count >= 2) return "/modulos";
-  if (sust) return "/sustentacao";
+  if (sustentacao) return "/sustentacao";
   if (agil) return "/sala-agil/dashboard";
-  if (rdm)  return "/rdm";
+  if (rdm) return "/rdm";
 
   if (moduleRolesCount === 0 && moduleAccess) {
     if (moduleAccess === "sustentacao") return "/sustentacao";
-    if (moduleAccess === "sala_agil")   return "/sala-agil/dashboard";
-    if (moduleAccess === "rdm")         return "/rdm";
+    if (moduleAccess === "sala_agil") return "/sala-agil/dashboard";
+    if (moduleAccess === "rdm") return "/rdm";
+    if (moduleAccess === "admin") return "/modulos";
   }
 
   return "/modulos";
 }
 
-// ─── Guards ───────────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, refreshProfile } = useAuth();
   const { showWizard, completeOnboarding } = useOnboarding();
@@ -116,7 +109,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {children}
+      <OrganizationOperationalGuard>{children}</OrganizationOperationalGuard>
       <SessionTimeoutAlert />
       <OnboardingWizard open={showWizard} onComplete={completeOnboarding} />
     </>
@@ -124,30 +117,47 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading, profile, isAdmin, hasModuleAccess, moduleRoles, roles } = useAuth();
+  const {
+    session,
+    loading,
+    profile,
+    isAdmin,
+    hasModuleAccess,
+    moduleRoles,
+    roles,
+  } = useAuth();
   if (loading) return <PageLoader />;
   if (!session) return <>{children}</>;
-  const to = resolveHomePath({
-    isAdmin,
-    moduleAccess: profile?.module_access,
-    hasModuleAccess,
-    moduleRolesCount: moduleRoles.length,
-    roles,
-  });
-  return <Navigate to={to} replace />;
+  return (
+    <Navigate
+      to={resolveHomePath({
+        isAdmin,
+        moduleAccess: profile?.module_access,
+        hasModuleAccess,
+        moduleRolesCount: moduleRoles.length,
+        roles,
+      })}
+      replace
+    />
+  );
 }
 
 function ModuleRedirect() {
-  const { profile, loading, isAdmin, hasModuleAccess, moduleRoles, roles } = useAuth();
+  const { profile, loading, isAdmin, hasModuleAccess, moduleRoles, roles } =
+    useAuth();
   if (loading) return <PageLoader />;
-  const to = resolveHomePath({
-    isAdmin,
-    moduleAccess: profile?.module_access,
-    hasModuleAccess,
-    moduleRolesCount: moduleRoles.length,
-    roles,
-  });
-  return <Navigate to={to} replace />;
+  return (
+    <Navigate
+      to={resolveHomePath({
+        isAdmin,
+        moduleAccess: profile?.module_access,
+        hasModuleAccess,
+        moduleRolesCount: moduleRoles.length,
+        roles,
+      })}
+      replace
+    />
+  );
 }
 
 function ModuleGuard({
@@ -160,10 +170,12 @@ function ModuleGuard({
   const { isAdmin, hasModuleAccess } = useAuth();
   if (isAdmin || hasModuleAccess(module)) return <>{children}</>;
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center space-y-4">
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="space-y-4 text-center">
         <p className="text-lg font-semibold text-destructive">Acesso Restrito</p>
-        <p className="text-muted-foreground">Você não tem permissão para acessar este módulo.</p>
+        <p className="text-muted-foreground">
+          Você não tem permissão para acessar este módulo.
+        </p>
       </div>
     </div>
   );
@@ -176,7 +188,6 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Exige role 'admin_contrato'. Super-admins também passam. */
 function ContractAdminGuard({ children }: { children: React.ReactNode }) {
   const { isAdmin, roles, loading } = useAuth();
   if (loading) return null;
@@ -184,69 +195,32 @@ function ContractAdminGuard({ children }: { children: React.ReactNode }) {
   return <Navigate to="/modulos" replace />;
 }
 
-// ─── Rotas ────────────────────────────────────────────────────────────────────
 function AppRoutes() {
   return (
     <SprintProvider>
       <Toaster />
       <Sonner />
+      <OrganizationSwitcher />
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Rotas públicas */}
-          <Route path="/auth"           element={<AuthRoute><Auth /></AuthRoute>} />
-          <Route path="/auth/callback"  element={<AuthCallback />} />
+          <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-
-          {/* Raiz */}
           <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
-
-          {/* Seletor de módulos */}
-          <Route
-            path="/modulos"
-            element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>}
-          />
-
-          {/* Admin */}
+          <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
           <Route
             path="/dashboard-admin"
-            element={
-              <ProtectedRoute>
-                <AdminGuard><AdminDashboard /></AdminGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><AdminGuard><AdminDashboard /></AdminGuard></ProtectedRoute>}
           />
-
-          {/* ── Painel admin_contrato ────────────────────────────────────── */}
           <Route
             path="/meu-contrato"
-            element={
-              <ProtectedRoute>
-                <ContractAdminGuard><MeuContratoDashboard /></ContractAdminGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><ContractAdminGuard><MeuContratoDashboard /></ContractAdminGuard></ProtectedRoute>}
           />
-
-          {/* ── Contratos (somente admin) ────────────────────────────────── */}
           <Route
             path="/contratos"
-            element={
-              <ProtectedRoute>
-                <AdminGuard><ContractsPage /></AdminGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><AdminGuard><ContractsPage /></AdminGuard></ProtectedRoute>}
           />
-
-          {/* ── OKR ─────────────────────────────────────────────────────── */}
-          <Route
-            path="/okr"
-            element={
-              <ProtectedRoute>
-                <OkrPage />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Sala Ágil */}
+          <Route path="/okr" element={<ProtectedRoute><OkrPage /></ProtectedRoute>} />
           <Route
             path="/sala-agil"
             element={
@@ -259,49 +233,24 @@ function AppRoutes() {
           />
           <Route
             path="/sala-agil/planning-poker"
-            element={
-              <ProtectedRoute>
-                <ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>}
           />
           <Route
             path="/sala-agil/retrospectiva"
-            element={
-              <ProtectedRoute>
-                <ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>}
           />
           <Route
             path="/sala-agil/:section"
-            element={
-              <ProtectedRoute>
-                <ModuleGuard module="sala_agil"><Index /></ModuleGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>}
           />
-
-          {/* Sustentação */}
           <Route
             path="/sustentacao/*"
-            element={
-              <ProtectedRoute>
-                <ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>}
           />
-
-          {/* RDM */}
           <Route
             path="/rdm/*"
-            element={
-              <ProtectedRoute>
-                <ModuleGuard module="rdm"><RdmPage /></ModuleGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><ModuleGuard module="rdm"><RdmPage /></ModuleGuard></ProtectedRoute>}
           />
-
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
@@ -314,7 +263,9 @@ const App = () => (
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <OrganizationProvider>
+            <AppRoutes />
+          </OrganizationProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

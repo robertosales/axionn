@@ -1,0 +1,38 @@
+name: 🩺 Database startup diagnostics
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "supabase/migrations/**"
+      - ".github/workflows/database-diagnostics.yml"
+
+jobs:
+  startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Replay migrations
+        id: replay
+        continue-on-error: true
+        run: supabase db start > supabase-start.log 2>&1
+      - name: Upload startup log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-startup-log
+          path: supabase-start.log
+          retention-days: 3
+      - name: Report migration failure
+        if: steps.replay.outcome == 'failure'
+        run: |
+          cat supabase-start.log
+          exit 1
+      - name: Stop local database
+        if: always()
+        run: supabase stop --no-backup

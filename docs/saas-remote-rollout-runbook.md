@@ -121,3 +121,21 @@ Antes de considerar ativação futura:
 ## Ativação futura
 
 A ativação do enforcement é uma mudança independente, sujeita a aprovação formal. Ela não pertence ao preflight nem à instalação inicial.
+
+## Gate 7 — canário da aplicação sem enforcement
+
+Depois da Operação 4 aprovada, validar a aplicação com a infraestrutura tenant-aware instalada, mas com o enforcement do banco desligado.
+
+Checklist:
+
+- executar `supabase/operations/20260703_05_frontend_canary_validation.sql` no SQL Editor do Lovable;
+- confirmar `public.is_tenancy_enforced() = false`;
+- confirmar `saas_runtime_settings.tenancy_enforcement.enabled = false`;
+- ligar `VITE_ORG_TENANCY_ENABLED=true` somente no ambiente de teste/canário do Lovable;
+- validar login, seletor de organização e carregamento de times;
+- validar listagem e navegação de empresas, contratos e projetos;
+- validar APF, importação, sustentação, dashboards e relatórios principais;
+- validar criação/edição controlada de empresa, contrato, time e projeto;
+- não chamar `public.set_tenancy_enforcement(true)`.
+
+Se o canário falhar, desligar apenas a feature flag de frontend e manter o banco no estado atual. O rollback de enforcement não se aplica porque o enforcement não foi ativado.

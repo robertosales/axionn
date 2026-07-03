@@ -144,3 +144,34 @@ Será entregue como um único arquivo de operação para o Lovable Cloud contend
 ## Próximo trabalho de código
 
 Finalizar a Operação 2 e depois a Operação 3. O usuário executará apenas os arquivos fechados de `supabase/operations`, manualmente no SQL Editor do Lovable Cloud, e enviará somente o resultado final retornado por cada operação.
+
+## Atualização operacional em 2026-07-03
+
+As operações manuais 2, 3 e 4 foram executadas no Lovable Cloud com resultado aprovado.
+
+Evidências registradas pelo SQL Editor:
+
+- Operação 2: `multitenant_foundation_ok = true`, `tenant_rpcs_available = true`, `internal_wrappers_secured = true`, `tenancy_enforcement_absent_or_disabled = true`.
+- Operação 3: `org_resource_isolation_ready_enforcement_off = true`, `tenant_boundary_policies = 7`, `tenancy_consistency_triggers = 6`, `tenancy_enforcement_enabled = false`.
+- Operação 4: `final_readiness_ok_enforcement_off = true`, `readiness_affected_rows = 0`, `organizations_without_owner_or_admin = 0`, `platform_admins = 9`, `tenancy_setting_enabled = false`.
+
+Estado atual:
+
+- infraestrutura multi-tenant instalada;
+- policies e triggers de consistência instaladas;
+- readiness sem pendências;
+- `saas_runtime_settings.tenancy_enforcement.enabled = false`;
+- `set_tenancy_enforcement(true)` não foi chamado e continua fora do escopo desta etapa.
+
+## Próximo passo sem ativar enforcement
+
+O próximo passo é validar a aplicação usando os RPCs tenant-aware com a feature flag de frontend ligada em ambiente controlado:
+
+- executar `supabase/operations/20260703_05_frontend_canary_validation.sql` no SQL Editor do Lovable;
+- configurar `VITE_ORG_TENANCY_ENABLED=true` no ambiente de teste/canário do Lovable;
+- manter no banco `public.is_tenancy_enforced() = false`;
+- validar login, seletor de organização, empresas, contratos, times, projetos, APF/importação e dashboards;
+- validar criação/edição de empresa, contrato, time e projeto quando for seguro;
+- confirmar que nenhum fluxo chama `public.set_tenancy_enforcement(true)`.
+
+A ativação real do enforcement deve ser uma operação futura separada, com janela, backup e rollback explícito para `select public.set_tenancy_enforcement(false);`.

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(31);
+select plan(33);
 
 create or replace function pg_temp.authenticate_as(p_user_id uuid)
 returns void
@@ -22,8 +22,25 @@ $$;
 
 select public.set_tenancy_enforcement(false);
 
+-- O trigger legado de onboarding vincula novos usuários a este contrato padrão.
+-- A fixture existe apenas durante esta transação e é removida pelo rollback.
+insert into public.contracts (id, name, status)
+values (
+  'd59ab6dc-421f-41b4-b415-ae0bc072ebd4',
+  'Auth Fixture Contract',
+  'active'
+)
+on conflict (id) do nothing;
+
 insert into auth.users (
-  id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  created_at,
+  updated_at
 )
 values
   ('21100000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'ent-a@axion.test', '', now(), now(), now()),
@@ -32,7 +49,14 @@ values
 on conflict (id) do nothing;
 
 insert into public.organizations (
-  id, name, slug, status, plan, max_projects, max_users, max_countings_per_month
+  id,
+  name,
+  slug,
+  status,
+  plan,
+  max_projects,
+  max_users,
+  max_countings_per_month
 )
 values
   ('11100000-0000-0000-0000-000000000001', 'Entitlement A', 'entitlement-a-v2', 'active', 'pro', 10, 7, 100),
@@ -51,7 +75,13 @@ insert into public.platform_user_roles (user_id, role)
 values ('21100000-0000-0000-0000-000000000003', 'platform_admin')
 on conflict do nothing;
 
-insert into public.organization_subscriptions (org_id, plan_id, status, starts_at, source)
+insert into public.organization_subscriptions (
+  org_id,
+  plan_id,
+  status,
+  starts_at,
+  source
+)
 select fixture.org_id, plan.id, fixture.status, now(), 'manual'
 from (
   values
@@ -60,16 +90,24 @@ from (
     ('11100000-0000-0000-0000-000000000003'::uuid, 'pro'::text, 'suspended'::text)
 ) fixture(org_id, plan_code, status)
 join public.saas_plans plan on plan.code = fixture.plan_code
-on conflict (org_id) do update set plan_id = excluded.plan_id, status = excluded.status;
+on conflict (org_id) do update
+set plan_id = excluded.plan_id,
+    status = excluded.status;
 
 insert into public.organization_entitlement_overrides (
-  org_id, feature_key, enabled, limit_value, reason
+  org_id,
+  feature_key,
+  enabled,
+  limit_value,
+  reason
 )
 values
   ('11100000-0000-0000-0000-000000000001', 'users.max', null, 7, 'Test override'),
   ('11100000-0000-0000-0000-000000000001', 'audit.access', true, null, 'Test feature override')
 on conflict (org_id, feature_key) do update
-set enabled = excluded.enabled, limit_value = excluded.limit_value, reason = excluded.reason;
+set enabled = excluded.enabled,
+    limit_value = excluded.limit_value,
+    reason = excluded.reason;
 
 insert into public.companies (id, name, status, org_id)
 values
@@ -78,8 +116,16 @@ values
 on conflict (id) do nothing;
 
 insert into public.licenses (
-  id, company_id, plan, pf_quota_month, pf_used_month, ai_calls_quota,
-  ai_calls_used, quota_reset_at, valid_until, status
+  id,
+  company_id,
+  plan,
+  pf_quota_month,
+  pf_used_month,
+  ai_calls_quota,
+  ai_calls_used,
+  quota_reset_at,
+  valid_until,
+  status
 )
 values
   ('71100000-0000-0000-0000-000000000001', '31100000-0000-0000-0000-000000000001', 'pro', 100, 11, 200, 7, current_date + 10, current_date + 30, 'active'),
@@ -108,7 +154,13 @@ values (
 on conflict (id) do nothing;
 
 insert into public.projects (
-  id, name, module_type, status, contract_id, team_id, org_id
+  id,
+  name,
+  module_type,
+  status,
+  contract_id,
+  team_id,
+  org_id
 )
 values (
   '61100000-0000-0000-0000-000000000001',
@@ -133,9 +185,12 @@ select is(
 );
 
 select is(
-  (select count(*)::integer from public.saas_plan_entitlements entitlement
+  (
+    select count(*)::integer
+    from public.saas_plan_entitlements entitlement
     join public.saas_plans plan on plan.id = entitlement.plan_id
-    where plan.code in ('starter', 'pro', 'enterprise')),
+    where plan.code in ('starter', 'pro', 'enterprise')
+  ),
   24,
   'initial entitlement catalog has 24 entries'
 );
@@ -158,19 +213,31 @@ select throws_ok(
 );
 
 select is(
-  (select limit_value from public.get_effective_organization_entitlements('11100000-0000-0000-0000-000000000001') where feature_key = 'users.max'),
+  (
+    select limit_value
+    from public.get_effective_organization_entitlements('11100000-0000-0000-0000-000000000001')
+    where feature_key = 'users.max'
+  ),
   7::bigint,
   'limit override wins over plan limit'
 );
 
 select is(
-  (select source from public.get_effective_organization_entitlements('11100000-0000-0000-0000-000000000001') where feature_key = 'users.max'),
+  (
+    select source
+    from public.get_effective_organization_entitlements('11100000-0000-0000-0000-000000000001')
+    where feature_key = 'users.max'
+  ),
   'organization_override',
   'effective entitlement reports override source'
 );
 
 select is(
-  (select enabled from public.get_effective_organization_entitlements('11100000-0000-0000-0000-000000000001') where feature_key = 'audit.access'),
+  (
+    select enabled
+    from public.get_effective_organization_entitlements('11100000-0000-0000-0000-000000000001')
+    where feature_key = 'audit.access'
+  ),
   true,
   'feature override enables a plan-disabled feature'
 );
@@ -191,13 +258,19 @@ select throws_ok(
 );
 
 select is(
-  public.has_organization_entitlement('11100000-0000-0000-0000-000000000001', 'reports.advanced'),
+  public.has_organization_entitlement(
+    '11100000-0000-0000-0000-000000000001',
+    'reports.advanced'
+  ),
   true,
   'active pro subscription authorizes advanced reports'
 );
 
 select is(
-  public.has_organization_entitlement('11100000-0000-0000-0000-000000000003', 'reports.advanced'),
+  public.has_organization_entitlement(
+    '11100000-0000-0000-0000-000000000003',
+    'reports.advanced'
+  ),
   false,
   'suspended subscription blocks entitlements'
 );
@@ -211,7 +284,11 @@ select is(
 );
 
 select is(
-  (select limit_value from public.get_effective_organization_entitlements('11100000-0000-0000-0000-000000000002') where feature_key = 'users.max'),
+  (
+    select limit_value
+    from public.get_effective_organization_entitlements('11100000-0000-0000-0000-000000000002')
+    where feature_key = 'users.max'
+  ),
   null::bigint,
   'null enterprise limit means unlimited'
 );
@@ -249,12 +326,20 @@ select is(
 );
 
 select results_eq(
-  $query$ select pf_used_month::bigint, ai_calls_used::bigint from public.licenses where id = '71100000-0000-0000-0000-000000000001' $query$,
+  $query$
+    select pf_used_month::bigint, ai_calls_used::bigint
+    from public.licenses
+    where id = '71100000-0000-0000-0000-000000000001'
+  $query$,
   $expected$ values (11::bigint, 7::bigint) $expected$,
   'entitlement reads preserve license counters'
 );
 
-select is(public.is_tenancy_enforced(), false, 'entitlements do not change tenancy enforcement');
+select is(
+  public.is_tenancy_enforced(),
+  false,
+  'entitlements do not change tenancy enforcement'
+);
 
 select ok(
   not has_function_privilege('anon', 'public.get_my_organization_entitlements(uuid)', 'execute')
@@ -298,25 +383,40 @@ select ok(
 );
 
 select is(
-  (select count(*)::integer from pg_class relation
+  (
+    select count(*)::integer
+    from pg_class relation
     join pg_namespace namespace on namespace.oid = relation.relnamespace
     where namespace.nspname = 'public'
-      and relation.relname in ('saas_plans', 'saas_plan_entitlements', 'organization_subscriptions', 'organization_entitlement_overrides')
-      and relation.relrowsecurity),
+      and relation.relname in (
+        'saas_plans',
+        'saas_plan_entitlements',
+        'organization_subscriptions',
+        'organization_entitlement_overrides'
+      )
+      and relation.relrowsecurity
+  ),
   4,
   'RLS is enabled on all entitlement tables'
 );
 
 select is(
-  (select status from public.organization_subscriptions where org_id = '11100000-0000-0000-0000-000000000001'),
+  (
+    select status
+    from public.organization_subscriptions
+    where org_id = '11100000-0000-0000-0000-000000000001'
+  ),
   'active',
   'organization A has one active subscription'
 );
 
 select is(
-  (select plan.code from public.organization_subscriptions subscription
+  (
+    select plan.code
+    from public.organization_subscriptions subscription
     join public.saas_plans plan on plan.id = subscription.plan_id
-    where subscription.org_id = '11100000-0000-0000-0000-000000000002'),
+    where subscription.org_id = '11100000-0000-0000-0000-000000000002'
+  ),
   'enterprise',
   'organization B resolves enterprise plan'
 );

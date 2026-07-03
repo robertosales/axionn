@@ -138,4 +138,10 @@ Checklist:
 - validar criação/edição controlada de empresa, contrato, time e projeto;
 - não chamar `public.set_tenancy_enforcement(true)`.
 
+Se o frontend retornar `42P17` com `infinite recursion detected in policy for relation "contracts"`, executar:
+
+`supabase/operations/20260703_055_frontend_canary_rls_recursion_hotfix.sql`
+
+Em seguida repetir a navegação do canário. O hotfix remove recursão entre `contracts`, `contract_teams`, `contract_room_teams` e `contract_slas` usando wrappers `SECURITY DEFINER`, sem ativar enforcement.
+
 Se o canário falhar, desligar apenas a feature flag de frontend e manter o banco no estado atual. O rollback de enforcement não se aplica porque o enforcement não foi ativado.

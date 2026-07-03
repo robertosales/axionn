@@ -174,4 +174,10 @@ O próximo passo é validar a aplicação usando os RPCs tenant-aware com a feat
 - validar criação/edição de empresa, contrato, time e projeto quando for seguro;
 - confirmar que nenhum fluxo chama `public.set_tenancy_enforcement(true)`.
 
+Se o canário retornar `42P17` com `infinite recursion detected in policy for relation "contracts"`, aplicar:
+
+`supabase/operations/20260703_055_frontend_canary_rls_recursion_hotfix.sql`
+
+Depois repetir o teste do canário. Esse hotfix troca policies recursivas conhecidas por wrappers `SECURITY DEFINER` e mantém `tenancy_enforcement = false`.
+
 A ativação real do enforcement deve ser uma operação futura separada, com janela, backup e rollback explícito para `select public.set_tenancy_enforcement(false);`.

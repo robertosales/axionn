@@ -1,6 +1,18 @@
-# Axion SaaS — estado central do rollout remoto
+# Axion SaaS — estado central do rollout no Lovable Cloud
 
-Este documento é a fonte de verdade operacional do rollout SaaS no Lovable Cloud.
+Este documento é a fonte de verdade operacional do rollout SaaS.
+
+## Ambiente real
+
+- O Supabase do Axion é o backend gerenciado pelo **Lovable Cloud**.
+- Não existe um projeto Supabase de staging separado para este rollout.
+- O banco do Lovable Cloud é o banco remoto em produção que estamos saneando.
+- Não usar Supabase CLI contra esse banco.
+- Não executar `supabase db push`, `supabase db reset` ou `supabase migration repair`.
+- Os arquivos em `supabase/migrations` permanecem como fonte de código e replay de ambientes limpos; eles não serão aplicados em massa no Lovable Cloud.
+- As alterações de produção serão entregues como arquivos em `supabase/operations` e executadas manualmente, uma por vez, no terminal/SQL Editor do Lovable Cloud.
+- Depois de cada operação, o resultado final retornado pelo próprio SQL será usado como gate antes da próxima.
+- Edge Functions, variáveis e secrets continuam sob o gerenciamento do Lovable Cloud. Nenhuma credencial de produção será colocada em GitHub Actions.
 
 ## Branches
 
@@ -23,11 +35,11 @@ Este documento é a fonte de verdade operacional do rollout SaaS no Lovable Clou
 
 ### APF / ponto de função
 
-- As migrations `20260702000026` a `20260702000031` estão fisicamente materializadas no banco remoto.
+- As migrations `20260702000026` a `20260702000031` estão fisicamente materializadas no banco do Lovable Cloud.
 - Funções, RPCs, triggers, views, índices e constraint finais foram comparados com o repositório.
 - As correções de contagem já estão em produção.
 - Não reaplicar as migrations 26–31.
-- Não executar backfill da migration 28 novamente.
+- Não executar novamente o backfill da migration 28.
 - O hardening de privilégios APF está preparado em `supabase/operations/20260703_apf_security_hardening.sql` e não altera fórmulas, fatores, PF ou contagens.
 
 ### Enforcement
@@ -37,26 +49,26 @@ Este documento é a fonte de verdade operacional do rollout SaaS no Lovable Clou
 
 ## Estado da série 20260630
 
-O histórico remoto termina em `20260623180256`. A série abaixo não está registrada no histórico.
+O histórico remoto termina em `20260623180256`. A série abaixo não está registrada no histórico do banco do Lovable Cloud.
 
 | Versão | Objeto | Estado remoto | Decisão |
 |---|---|---|---|
-| `20260630010000` | governança de uso de IA | ausente | aplicar |
-| `20260630011000` | rate limits de IA | ausente | aplicar depois de 10000 |
-| `20260630015900` | `min(uuid)` temporário | ausente | usar somente durante o backfill da fundação |
-| `20260630019000` | correção do trigger de auditoria | ausente | aplicar |
-| `20260630019500` | compatibilidade `contract_teams` | parcialmente materializada | não aplicar o arquivo original; preservar tabela/policies e evitar índices redundantes |
-| `20260630020000` | fundação multi-tenant | ausente | aplicar com backfills não destrutivos |
-| `20260630020500` | limpeza de `min(uuid)` | ausente | executar imediatamente após a fundação |
-| `20260630021000` | hardening dos wrappers | ausente | aplicar |
-| `20260630022000` | isolamento progressivo | ausente | aplicar mantendo `tenancy_enforcement=false` |
-| `20260630023000` | hardening e readiness report | ausente | aplicar |
+| `20260630010000` | governança de uso de IA | ausente | incorporar na Operação 1 |
+| `20260630011000` | rate limits de IA | ausente | incorporar na Operação 1 |
+| `20260630015900` | `min(uuid)` temporário | ausente | usar somente dentro da Operação 2 |
+| `20260630019000` | correção do trigger de auditoria | ausente | incorporar na Operação 2 |
+| `20260630019500` | compatibilidade `contract_teams` | parcialmente materializada | não executar o arquivo original; preservar tabela/policies e evitar índices redundantes |
+| `20260630020000` | fundação multi-tenant | ausente | incorporar na Operação 2 com backfills não destrutivos |
+| `20260630020500` | limpeza de `min(uuid)` | ausente | executar dentro da mesma transação da Operação 2 |
+| `20260630021000` | hardening dos wrappers | ausente | incorporar na Operação 2 |
+| `20260630022000` | isolamento progressivo | ausente | incorporar na Operação 3 mantendo `tenancy_enforcement=false` |
+| `20260630023000` | hardening e readiness report | ausente | incorporar na Operação 3 |
 
-## Ordem de implementação
+## Ordem de implementação no Lovable Cloud
 
 ### Operação 0 — hardening APF
 
-Executar o arquivo já preparado:
+Executar manualmente no SQL Editor do Lovable Cloud:
 
 `supabase/operations/20260703_apf_security_hardening.sql`
 
@@ -64,23 +76,30 @@ Resultado esperado: `apf_security_hardening_ok = true`.
 
 ### Operação 1 — governança de IA
 
-Instalar, em uma única transação:
+Arquivo preparado:
 
-- `20260630010000_ai_usage_governance.sql`
-- `20260630011000_ai_rate_limits.sql`
+`supabase/operations/20260703_01_ai_governance_rollout.sql`
 
-Não altera contagens APF nem tenancy enforcement.
+Instala, em uma única transação:
+
+- governança de uso de IA;
+- reserva e finalização de consumo;
+- rate limits por usuário, empresa e concorrência;
+- ACLs restritas ao backend/service role.
+
+Não altera contagens APF, contratos, organizações ou tenancy enforcement.
 
 ### Operação 2 — fundação multi-tenant
 
-Instalar, em uma única transação:
+Será entregue como um único arquivo de operação para o Lovable Cloud contendo:
 
 - helper temporário de UUID;
 - correção do trigger de auditoria;
 - compatibilidade segura da tabela existente `contract_teams`, sem recriação e sem índices redundantes;
-- `20260630020000_multitenant_foundation.sql`;
+- fundação multi-tenant;
+- backfills apenas quando a organização for inequívoca;
 - remoção do helper temporário;
-- `20260630021000_org_access_wrappers.sql`.
+- hardening dos wrappers internos.
 
 Resultado esperado:
 
@@ -92,37 +111,36 @@ Resultado esperado:
 
 ### Operação 3 — isolamento instalado, mas desligado
 
-Instalar, em uma única transação:
+Será entregue como um único arquivo de operação para o Lovable Cloud contendo:
 
-- `20260630022000_org_resource_isolation.sql`;
-- `20260630023000_org_resource_isolation_hardening.sql`.
+- `saas_runtime_settings`;
+- `tenancy_enforcement.enabled = false`;
+- funções e triggers de consistência;
+- policies restritivas neutralizadas enquanto o enforcement estiver desligado;
+- readiness report disponível somente ao backend.
 
-Resultado esperado:
+### Operação 4 — validação final
 
-- `saas_runtime_settings.tenancy_enforcement.enabled = false`;
-- funções e triggers de consistência instalados;
-- policies restritivas instaladas, mas neutralizadas pelo enforcement desligado;
-- `get_tenancy_readiness_report()` disponível somente ao backend.
-
-### Operação 4 — validação e histórico
-
-- Executar o readiness report.
+- Executar o readiness report no Lovable Cloud.
 - Corrigir somente pendências reais de dados.
-- Validar frontend com feature flag desligada.
-- Alinhar o histórico apenas depois da equivalência física integral.
+- Validar o frontend com feature flag desligada.
+- Alinhar o histórico somente depois da equivalência física integral e por mecanismo suportado pelo ambiente.
 - Não ativar enforcement nesta operação.
 
 ## Proibições durante o rollout
 
 - não alterar `main`;
-- não executar `supabase db push` contra produção;
+- não usar Supabase CLI contra o Lovable Cloud;
+- não executar `supabase db push`;
 - não executar `supabase db reset`;
+- não executar `supabase migration repair`;
 - não reparar histórico em massa;
 - não reaplicar migrations APF 26–31;
 - não ativar tenancy enforcement;
 - não excluir/recriar `contract_teams`;
-- não criar uma nova organização para SALES CONSULTORIA.
+- não criar uma nova organização para SALES CONSULTORIA;
+- não colocar credenciais do Lovable Cloud no GitHub.
 
 ## Próximo trabalho de código
 
-Preparar as três operações de produção idempotentes, com transação, advisory lock, validações prévias e pós-condições. O usuário executará apenas os arquivos de operação, não as migrations individuais.
+Finalizar a Operação 2 e depois a Operação 3. O usuário executará apenas os arquivos fechados de `supabase/operations`, manualmente no SQL Editor do Lovable Cloud, e enviará somente o resultado final retornado por cada operação.

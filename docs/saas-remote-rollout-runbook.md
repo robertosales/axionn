@@ -184,4 +184,12 @@ Rollback imediato, em qualquer falha crítica:
 
 Resultado esperado: `tenancy_enforcement_rollback_ok = true`.
 
-Se o canário falhar, desligar apenas a feature flag de frontend e manter o banco no estado atual. O rollback de enforcement não se aplica porque o enforcement não foi ativado.
+## Gate 9 - monitoramento pos-ativacao
+
+Depois que a Operacao 9 retornar `tenancy_enforcement_activation_ok = true` e o smoke test do frontend passar com `VITE_ORG_TENANCY_ENABLED=true`, executar:
+
+`supabase/operations/20260703_10_post_enforcement_monitoring.sql`
+
+Resultado esperado: `post_enforcement_monitoring_ok = true`.
+
+Durante a janela de monitoramento, manter `supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql` pronto. Se aparecer falha critica de acesso, isolamento ou carga operacional, executar rollback imediatamente e confirmar `tenancy_enforcement_rollback_ok = true`.

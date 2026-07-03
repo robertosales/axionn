@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "release:patch": "npm version patch --no-git-tag-version && git add package.json package-lock.json && git commit -m \"chore(release): v$(node -p 'require(\\\"./package.json\\\").version')\"",
     "release:minor": "npm version minor --no-git-tag-version && git add package.json package-lock.json && git commit -m \"chore(release): v$(node -p 'require(\\\"./package.json\\\").version')\"",
-    "release:major": "npm version major --no-git-tag-version && git add package.json package-lock.json && git commit -m \"chore(release): v$(node -p 'require(\\\"./package.json\\\").version')\""
+    "release:major": "npm version major --no-git-tag-version && git add package.json package-lock.json && git commit -m \"chore(release): v$(node -p 'require(\\\"./package.json\\\").version')\"}"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

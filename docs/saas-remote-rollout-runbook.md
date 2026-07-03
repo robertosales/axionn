@@ -138,13 +138,13 @@ Checklist:
 - validar criação/edição controlada de empresa, contrato, time e projeto;
 - não chamar `public.set_tenancy_enforcement(true)`.
 
-Se o frontend retornar `42P17` com `infinite recursion detected in policy for relation "contracts"`, executar:
+Depois da Operação 5 e antes da Operação 6, executar obrigatoriamente:
 
 `supabase/operations/20260703_055_frontend_canary_rls_recursion_hotfix.sql`
 
-Em seguida repetir a navegação do canário. O hotfix remove recursão entre `contracts`, `contract_teams`, `contract_room_teams` e `contract_slas` usando wrappers `SECURITY DEFINER`, sem ativar enforcement.
+A Operação 055 é idempotente, mantém o enforcement desligado e instala os wrappers `SECURITY DEFINER` exigidos pelos gates posteriores. Ela também remove a possibilidade de recursão entre `contracts`, `contract_teams`, `contract_room_teams` e `contract_slas`, mesmo quando o canário ainda não apresentou o erro `42P17`.
 
-Quando o canário estiver funcional, executar:
+Em seguida repetir a navegação do canário e executar:
 
 `supabase/operations/20260703_06_frontend_canary_closeout_validation.sql`
 

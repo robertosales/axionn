@@ -42,6 +42,7 @@ export interface ContractualItem {
 export interface HuRow {
   id: string;
   code: string;
+  external_reference?: string | null;
   title: string;
   description: string | null;
   acceptance_criteria: string | null;

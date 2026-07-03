@@ -2,218 +2,125 @@
 
 Este documento é a fonte de verdade operacional do rollout SaaS.
 
-## Ambiente real
+## Ambiente e branches
 
 - O Supabase do Axion é o backend gerenciado pelo **Lovable Cloud**.
 - Não existe um projeto Supabase de staging separado para este rollout.
-- O banco do Lovable Cloud é o banco remoto em produção que estamos saneando.
-- Não usar Supabase CLI contra esse banco.
-- Não executar `supabase db push`, `supabase db reset` ou `supabase migration repair`.
-- Os arquivos em `supabase/migrations` permanecem como fonte de código e replay de ambientes limpos; eles não serão aplicados em massa no Lovable Cloud.
-- As alterações de produção serão entregues como arquivos em `supabase/operations` e executadas manualmente, uma por vez, no terminal/SQL Editor do Lovable Cloud.
-- Depois de cada operação, o resultado final retornado pelo próprio SQL será usado como gate antes da próxima.
-- Edge Functions, variáveis e secrets continuam sob o gerenciamento do Lovable Cloud. Nenhuma credencial de produção será colocada em GitHub Actions.
+- O banco do Lovable Cloud é o banco remoto de produção.
+- `main` permanece congelada e fora deste rollout.
+- `develop` é a base de integração.
+- `codex/saas-remote-rollout` concentra o pacote operacional antes do merge em `develop`.
 
-## Branches
+## Restrições permanentes
 
-- `main`: congelada. Não será alterada nesta etapa.
-- `develop`: base funcional atual do projeto.
-- `codex/saas-remote-rollout`: branch única do rollout remoto, criada a partir de `codex/apf-security-hardening`, que por sua vez parte de `develop`.
+- não usar Supabase CLI contra o Lovable Cloud;
+- não executar `supabase db push`, `supabase db reset` ou `supabase migration repair`;
+- não reparar o histórico de migrations em massa;
+- não reaplicar as migrations APF `20260702000026` a `20260702000031`;
+- não excluir ou recriar `contract_teams`;
+- não criar outra organização para SALES CONSULTORIA;
+- não colocar credenciais do Lovable Cloud no GitHub;
+- executar arquivos de `supabase/operations` manualmente e em ordem no SQL Editor do Lovable Cloud.
 
-## Estado já concluído
+## Estado concluído e confirmado
 
 ### Organização licenciada
 
-- Organização: `SALES CONSULTORIA`
-- ID preservado: `d7f226d9-9f08-43a7-b565-482cca58f00d`
-- Slug: `sales-consultoria`
-- Plano: `enterprise`
-- Status: `active`
-- Membros: 4
-- Contratos: 2
-- A correção foi feita por rename-in-place, preservando memberships, papéis, limites e referências.
+- Organização: `SALES CONSULTORIA`.
+- ID preservado: `d7f226d9-9f08-43a7-b565-482cca58f00d`.
+- Slug: `sales-consultoria`.
+- Plano/status: `enterprise` / `active`.
+- Membros preservados: 4.
+- Contratos vinculados: 2.
 
-### APF / ponto de função
+### APF
 
-- As migrations `20260702000026` a `20260702000031` estão fisicamente materializadas no banco do Lovable Cloud.
-- Funções, RPCs, triggers, views, índices e constraint finais foram comparados com o repositório.
+- As migrations `20260702000026` a `20260702000031` estão fisicamente materializadas no Lovable Cloud.
+- Funções, RPCs, triggers, views, índices e constraints finais foram confrontados com o repositório.
 - As correções de contagem já estão em produção.
-- Não reaplicar as migrations 26–31.
-- Não executar novamente o backfill da migration 28.
-- O hardening de privilégios APF está preparado em `supabase/operations/20260703_apf_security_hardening.sql` e não altera fórmulas, fatores, PF ou contagens.
+- O backfill da migration 28 não deve ser repetido.
+- O hardening APF não altera fórmulas, fatores, PF ou decisões humanas.
 
-### Enforcement
+### Fundação e isolamento com enforcement desligado
 
-- O enforcement de tenancy continua ausente/desligado.
-- Não chamar `set_tenancy_enforcement(true)` durante a instalação.
+As evidências registradas no SQL Editor indicam:
 
-## Estado da série 20260630
+- Operação 2: `multitenant_foundation_ok = true`;
+- Operação 2: `tenant_rpcs_available = true`;
+- Operação 2: `internal_wrappers_secured = true`;
+- Operação 2: `tenancy_enforcement_absent_or_disabled = true`;
+- Operação 3: `org_resource_isolation_ready_enforcement_off = true`;
+- Operação 3: 7 policies tenant boundary e 6 triggers de consistência;
+- Operação 4: `final_readiness_ok_enforcement_off = true`;
+- Operação 4: `readiness_affected_rows = 0`;
+- Operação 4: `organizations_without_owner_or_admin = 0`;
+- Operação 4: `platform_admins = 9`;
+- Operação 4: `tenancy_setting_enabled = false`.
 
-O histórico remoto termina em `20260623180256`. A série abaixo não está registrada no histórico do banco do Lovable Cloud.
+### Canário do frontend
 
-| Versão | Objeto | Estado remoto | Decisão |
-|---|---|---|---|
-| `20260630010000` | governança de uso de IA | ausente | incorporar na Operação 1 |
-| `20260630011000` | rate limits de IA | ausente | incorporar na Operação 1 |
-| `20260630015900` | `min(uuid)` temporário | ausente | usar somente dentro da Operação 2 |
-| `20260630019000` | correção do trigger de auditoria | ausente | incorporar na Operação 2 |
-| `20260630019500` | compatibilidade `contract_teams` | parcialmente materializada | não executar o arquivo original; preservar tabela/policies e evitar índices redundantes |
-| `20260630020000` | fundação multi-tenant | ausente | incorporar na Operação 2 com backfills não destrutivos |
-| `20260630020500` | limpeza de `min(uuid)` | ausente | executar dentro da mesma transação da Operação 2 |
-| `20260630021000` | hardening dos wrappers | ausente | incorporar na Operação 2 |
-| `20260630022000` | isolamento progressivo | ausente | incorporar na Operação 3 mantendo `tenancy_enforcement=false` |
-| `20260630023000` | hardening e readiness report | ausente | incorporar na Operação 3 |
+- aplicação validada com `VITE_ORG_TENANCY_ENABLED=true`;
+- Operação 055 de hardening contra recursão RLS aplicada;
+- wrappers `can_read_contract_v2` e `can_operate_contract_v2` instalados;
+- enforcement permaneceu desligado durante o canário.
 
-## Ordem de implementação no Lovable Cloud
+A Operação 055 é obrigatória depois da Operação 5 e antes da Operação 6 em qualquer nova execução do fluxo. Ela não deve ser tratada como opcional, porque os gates posteriores dependem dos wrappers instalados por ela.
 
-### Operação 0 — hardening APF
+## Pacote implementado no repositório
 
-Executar manualmente no SQL Editor do Lovable Cloud:
+O pacote de rollout contém:
 
-`supabase/operations/20260703_apf_security_hardening.sql`
+1. `20260703_apf_security_hardening.sql` — hardening APF;
+2. `20260703_015_audit_log_prereq.sql` — pré-requisito condicional de auditoria;
+3. `20260703_01_ai_governance_rollout.sql` — governança e rate limits de IA;
+4. `20260703_02_multitenant_foundation_rollout.sql` — fundação multi-tenant;
+5. `20260703_03_org_resource_isolation_rollout.sql` — isolamento instalado com enforcement desligado;
+6. `20260703_04_final_readiness_validation.sql` — validação estrutural e de dados;
+7. `20260703_05_frontend_canary_validation.sql` — entrada do canário;
+8. `20260703_055_frontend_canary_rls_recursion_hotfix.sql` — wrappers e policies sem recursão;
+9. `20260703_06_frontend_canary_closeout_validation.sql` — fechamento do canário;
+10. `20260703_07_canary_observation_gate.sql` — gate de observação;
+11. `20260703_08_enforcement_activation_preflight.sql` — pré-ativação sem alterar estado;
+12. `20260703_09_enable_tenancy_enforcement.sql` — ativação controlada;
+13. `20260703_09_disable_tenancy_enforcement_rollback.sql` — rollback imediato;
+14. `20260703_10_post_enforcement_monitoring.sql` — monitoramento pós-ativação.
 
-Resultado esperado: `apf_security_hardening_ok = true`.
+## Estado da ativação
 
-### Operação 1 — governança de IA
+O repositório registra que a ativação formal foi autorizada e que a Operação 9 foi preparada com rollback explícito. O resultado de execução da Operação 10 ainda não está registrado neste documento.
 
-Arquivo preparado:
+Até existir evidência do SQL Editor com `post_enforcement_monitoring_ok = true`, o monitoramento pós-ativação deve ser tratado como pendente.
 
-`supabase/operations/20260703_01_ai_governance_rollout.sql`
+Durante essa janela, o arquivo abaixo deve permanecer pronto para execução imediata:
 
-Instala, em uma única transação:
+`supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql`
 
-- governança de uso de IA;
-- reserva e finalização de consumo;
-- rate limits por usuário, empresa e concorrência;
-- ACLs restritas ao backend/service role.
+## O que ainda falta
 
-Não altera contagens APF, contratos, organizações ou tenancy enforcement.
+### Implementação de código
 
-### Operação 2 — fundação multi-tenant
+Para o escopo atual do rollout, não falta uma nova operação SQL estrutural. O pacote cobre fundação, isolamento, canário, ativação, rollback e monitoramento.
 
-Será entregue como um único arquivo de operação para o Lovable Cloud contendo:
+### Execução e comprovação operacional
 
-- helper temporário de UUID;
-- correção do trigger de auditoria;
-- compatibilidade segura da tabela existente `contract_teams`, sem recriação e sem índices redundantes;
-- fundação multi-tenant;
-- backfills apenas quando a organização for inequívoca;
-- remoção do helper temporário;
-- hardening dos wrappers internos.
+Falta registrar, conforme o estado real do Lovable Cloud:
 
-Resultado esperado:
+- o resultado da Operação 6, caso ainda não tenha sido armazenado;
+- o resultado da Operação 7;
+- o resultado da Operação 8;
+- o resultado da Operação 9 ou do rollback, conforme o estado atual;
+- o resultado da Operação 10: `post_enforcement_monitoring_ok = true`.
 
-- `platform_user_roles` criada;
-- `companies.org_id`, `teams.org_id` e `projects.org_id` criados;
-- SALES CONSULTORIA propagada para empresas, times e projetos inequívocos;
-- wrappers tenant-scoped instalados;
-- enforcement ainda desligado/ausente.
+Não repetir operações já comprovadamente executadas apenas para preencher documentação.
 
-### Operação 3 — isolamento instalado, mas desligado
+### Histórico de migrations
 
-Será entregue como um único arquivo de operação para o Lovable Cloud contendo:
+O alinhamento do histórico remoto continua deliberadamente adiado. Ele só poderá ocorrer por mecanismo suportado pelo Lovable Cloud e após equivalência física integral. A ausência no histórico não autoriza reexecução de migrations.
 
-- `saas_runtime_settings`;
-- `tenancy_enforcement.enabled = false`;
-- funções e triggers de consistência;
-- policies restritivas neutralizadas enquanto o enforcement estiver desligado;
-- readiness report disponível somente ao backend.
+## Próxima decisão operacional
 
-### Operação 4 — validação final
+Antes de qualquer novo SQL, confirmar o estado real de `public.is_tenancy_enforced()` no resultado mais recente já disponível. A partir desse estado:
 
-- Executar o readiness report no Lovable Cloud.
-- Corrigir somente pendências reais de dados.
-- Validar o frontend com feature flag desligada.
-- Alinhar o histórico somente depois da equivalência física integral e por mecanismo suportado pelo ambiente.
-- Não ativar enforcement nesta operação.
-
-## Proibições durante o rollout
-
-- não alterar `main`;
-- não usar Supabase CLI contra o Lovable Cloud;
-- não executar `supabase db push`;
-- não executar `supabase db reset`;
-- não executar `supabase migration repair`;
-- não reparar histórico em massa;
-- não reaplicar migrations APF 26–31;
-- não ativar tenancy enforcement;
-- não excluir/recriar `contract_teams`;
-- não criar uma nova organização para SALES CONSULTORIA;
-- não colocar credenciais do Lovable Cloud no GitHub.
-
-## Próximo trabalho de código
-
-Finalizar a Operação 2 e depois a Operação 3. O usuário executará apenas os arquivos fechados de `supabase/operations`, manualmente no SQL Editor do Lovable Cloud, e enviará somente o resultado final retornado por cada operação.
-
-## Atualização operacional em 2026-07-03
-
-As operações manuais 2, 3 e 4 foram executadas no Lovable Cloud com resultado aprovado.
-
-Evidências registradas pelo SQL Editor:
-
-- Operação 2: `multitenant_foundation_ok = true`, `tenant_rpcs_available = true`, `internal_wrappers_secured = true`, `tenancy_enforcement_absent_or_disabled = true`.
-- Operação 3: `org_resource_isolation_ready_enforcement_off = true`, `tenant_boundary_policies = 7`, `tenancy_consistency_triggers = 6`, `tenancy_enforcement_enabled = false`.
-- Operação 4: `final_readiness_ok_enforcement_off = true`, `readiness_affected_rows = 0`, `organizations_without_owner_or_admin = 0`, `platform_admins = 9`, `tenancy_setting_enabled = false`.
-
-Estado atual:
-
-- infraestrutura multi-tenant instalada;
-- policies e triggers de consistência instaladas;
-- readiness sem pendências;
-- `saas_runtime_settings.tenancy_enforcement.enabled = false`;
-- `set_tenancy_enforcement(true)` não foi chamado e continua fora do escopo desta etapa.
-
-## Próximo passo sem ativar enforcement
-
-O próximo passo é validar a aplicação usando os RPCs tenant-aware com a feature flag de frontend ligada em ambiente controlado:
-
-- executar `supabase/operations/20260703_05_frontend_canary_validation.sql` no SQL Editor do Lovable;
-- configurar `VITE_ORG_TENANCY_ENABLED=true` no ambiente de teste/canário do Lovable;
-- manter no banco `public.is_tenancy_enforced() = false`;
-- validar login, seletor de organização, empresas, contratos, times, projetos, APF/importação e dashboards;
-- validar criação/edição de empresa, contrato, time e projeto quando for seguro;
-- confirmar que nenhum fluxo chama `public.set_tenancy_enforcement(true)`.
-
-Se o canário retornar `42P17` com `infinite recursion detected in policy for relation "contracts"`, aplicar:
-
-`supabase/operations/20260703_055_frontend_canary_rls_recursion_hotfix.sql`
-
-Depois repetir o teste do canário. Esse hotfix troca policies recursivas conhecidas por wrappers `SECURITY DEFINER` e mantém `tenancy_enforcement = false`.
-
-Canário validado em 2026-07-03:
-
-- aplicação funcionando com `VITE_ORG_TENANCY_ENABLED=true`;
-- hotfix de recursão RLS aplicado;
-- enforcement ainda desligado.
-
-Fechamento recomendado:
-
-- executar `supabase/operations/20260703_06_frontend_canary_closeout_validation.sql`;
-- manter `set_tenancy_enforcement(true)` fora de escopo.
-
-Gate de observação pós-canário:
-
-- manter a aplicação em observação com `VITE_ORG_TENANCY_ENABLED=true` e `tenancy_enforcement=false`;
-- executar `supabase/operations/20260703_07_canary_observation_gate.sql` depois da janela de observação;
-- resultado esperado: `canary_observation_gate_ok_enforcement_off = true`.
-
-Pré-ativação formal:
-
-- executar `supabase/operations/20260703_08_enforcement_activation_preflight.sql` somente quando o time começar a planejar uma janela futura de ativação;
-- resultado esperado: `enforcement_activation_preflight_ok_enforcement_off = true`;
-- esse arquivo não ativa enforcement.
-
-Ativação formal autorizada:
-
-- confirmação recebida: backup, janela e rollback aprovados;
-- manter `supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql` pronto antes da ativação;
-- executar `supabase/operations/20260703_09_enable_tenancy_enforcement.sql`;
-- resultado esperado: `tenancy_enforcement_activation_ok = true`;
-
-Pos-ativacao:
-
-- enforcement ativado pela Operacao 9;
-- executar `supabase/operations/20260703_10_post_enforcement_monitoring.sql` apos smoke test do frontend;
-- resultado esperado: `post_enforcement_monitoring_ok = true`;
-- manter `supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql` pronto durante a janela de monitoramento.
-- em qualquer falha crítica, executar imediatamente o rollback.
+- se estiver `false`, não executar a Operação 10 e não ativar sem nova autorização formal;
+- se estiver `true`, executar o monitoramento pós-ativação e manter o rollback pronto;
+- em qualquer falha crítica de acesso, isolamento ou operação, executar imediatamente o rollback.

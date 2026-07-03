@@ -330,17 +330,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         rawList = (data ?? []).flatMap(
-          (row: {
-            team:
-              | { id: string; name: string; module: string | null }
-              | null;
-          }) => {
-            if (!row.team) return [];
+          (row: any) => {
+            const team = Array.isArray(row.team) ? row.team[0] : row.team;
+            if (!team) return [];
             return [
               {
-                id: row.team.id,
-                name: row.team.name,
-                module: row.team.module ?? "",
+                id: String(team.id),
+                name: String(team.name),
+                module: String(team.module ?? ""),
                 organizationId: null,
               },
             ];

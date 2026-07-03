@@ -150,4 +150,10 @@ Quando o canário estiver funcional, executar:
 
 O resultado esperado é `frontend_canary_closeout_ok_enforcement_off = true`. Esse fechamento confirma que o banco continua em modo compatível, sem ativar enforcement.
 
+Depois da janela de observação com o canário funcional, executar:
+
+`supabase/operations/20260703_07_canary_observation_gate.sql`
+
+O resultado esperado é `canary_observation_gate_ok_enforcement_off = true`. Esse gate ainda não ativa enforcement; ele apenas confirma que a base continua pronta e que o canário permaneceu saudável.
+
 Se o canário falhar, desligar apenas a feature flag de frontend e manter o banco no estado atual. O rollback de enforcement não se aplica porque o enforcement não foi ativado.

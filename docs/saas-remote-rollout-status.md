@@ -191,4 +191,10 @@ Fechamento recomendado:
 - executar `supabase/operations/20260703_06_frontend_canary_closeout_validation.sql`;
 - manter `set_tenancy_enforcement(true)` fora de escopo.
 
+Gate de observação pós-canário:
+
+- manter a aplicação em observação com `VITE_ORG_TENANCY_ENABLED=true` e `tenancy_enforcement=false`;
+- executar `supabase/operations/20260703_07_canary_observation_gate.sql` depois da janela de observação;
+- resultado esperado: `canary_observation_gate_ok_enforcement_off = true`.
+
 A ativação real do enforcement deve ser uma operação futura separada, com janela, backup e rollback explícito para `select public.set_tenancy_enforcement(false);`.

@@ -121,3 +121,75 @@ Antes de considerar ativação futura:
 ## Ativação futura
 
 A ativação do enforcement é uma mudança independente, sujeita a aprovação formal. Ela não pertence ao preflight nem à instalação inicial.
+
+## Gate 7 — canário da aplicação sem enforcement
+
+Depois da Operação 4 aprovada, validar a aplicação com a infraestrutura tenant-aware instalada, mas com o enforcement do banco desligado.
+
+Checklist:
+
+- executar `supabase/operations/20260703_05_frontend_canary_validation.sql` no SQL Editor do Lovable;
+- confirmar `public.is_tenancy_enforced() = false`;
+- confirmar `saas_runtime_settings.tenancy_enforcement.enabled = false`;
+- ligar `VITE_ORG_TENANCY_ENABLED=true` somente no ambiente de teste/canário do Lovable;
+- validar login, seletor de organização e carregamento de times;
+- validar listagem e navegação de empresas, contratos e projetos;
+- validar APF, importação, sustentação, dashboards e relatórios principais;
+- validar criação/edição controlada de empresa, contrato, time e projeto;
+- não chamar `public.set_tenancy_enforcement(true)`.
+
+Depois da Operação 5 e antes da Operação 6, executar obrigatoriamente:
+
+`supabase/operations/20260703_055_frontend_canary_rls_recursion_hotfix.sql`
+
+A Operação 055 é idempotente, mantém o enforcement desligado e instala os wrappers `SECURITY DEFINER` exigidos pelos gates posteriores. Ela também remove a possibilidade de recursão entre `contracts`, `contract_teams`, `contract_room_teams` e `contract_slas`, mesmo quando o canário ainda não apresentou o erro `42P17`.
+
+Em seguida repetir a navegação do canário e executar:
+
+`supabase/operations/20260703_06_frontend_canary_closeout_validation.sql`
+
+O resultado esperado é `frontend_canary_closeout_ok_enforcement_off = true`. Esse fechamento confirma que o banco continua em modo compatível, sem ativar enforcement.
+
+Depois da janela de observação com o canário funcional, executar:
+
+`supabase/operations/20260703_07_canary_observation_gate.sql`
+
+O resultado esperado é `canary_observation_gate_ok_enforcement_off = true`. Esse gate ainda não ativa enforcement; ele apenas confirma que a base continua pronta e que o canário permaneceu saudável.
+
+Quando houver decisão de iniciar planejamento de ativação futura, executar:
+
+`supabase/operations/20260703_08_enforcement_activation_preflight.sql`
+
+O resultado esperado é `enforcement_activation_preflight_ok_enforcement_off = true`. Esse preflight ainda mantém o banco com `tenancy_enforcement=false` e não substitui aprovação formal, backup, janela e rollback.
+
+## Gate 8 — ativação formal do enforcement
+
+Executar somente após confirmação explícita de aprovação, backup, janela e rollback.
+
+Antes de ativar:
+
+- deixar `supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql` aberto e pronto para execução;
+- confirmar que a aplicação está publicada com `VITE_ORG_TENANCY_ENABLED=true`;
+- confirmar que a Operação 8 retornou `enforcement_activation_preflight_ok_enforcement_off = true`.
+
+Ativação:
+
+`supabase/operations/20260703_09_enable_tenancy_enforcement.sql`
+
+Resultado esperado: `tenancy_enforcement_activation_ok = true`.
+
+Rollback imediato, em qualquer falha crítica:
+
+`supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql`
+
+Resultado esperado: `tenancy_enforcement_rollback_ok = true`.
+
+## Gate 9 - monitoramento pos-ativacao
+
+Depois que a Operacao 9 retornar `tenancy_enforcement_activation_ok = true` e o smoke test do frontend passar com `VITE_ORG_TENANCY_ENABLED=true`, executar:
+
+`supabase/operations/20260703_10_post_enforcement_monitoring.sql`
+
+Resultado esperado: `post_enforcement_monitoring_ok = true`.
+
+Durante a janela de monitoramento, manter `supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql` pronto. Se aparecer falha critica de acesso, isolamento ou carga operacional, executar rollback imediatamente e confirmar `tenancy_enforcement_rollback_ok = true`.

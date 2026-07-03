@@ -203,4 +203,12 @@ Pré-ativação formal:
 - resultado esperado: `enforcement_activation_preflight_ok_enforcement_off = true`;
 - esse arquivo não ativa enforcement.
 
+Ativação formal autorizada:
+
+- confirmação recebida: backup, janela e rollback aprovados;
+- manter `supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql` pronto antes da ativação;
+- executar `supabase/operations/20260703_09_enable_tenancy_enforcement.sql`;
+- resultado esperado: `tenancy_enforcement_activation_ok = true`;
+- em qualquer falha crítica, executar imediatamente o rollback.
+
 A ativação real do enforcement deve ser uma operação futura separada, com janela, backup e rollback explícito para `select public.set_tenancy_enforcement(false);`.

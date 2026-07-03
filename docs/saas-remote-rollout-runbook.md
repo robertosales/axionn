@@ -162,4 +162,26 @@ Quando houver decisão de iniciar planejamento de ativação futura, executar:
 
 O resultado esperado é `enforcement_activation_preflight_ok_enforcement_off = true`. Esse preflight ainda mantém o banco com `tenancy_enforcement=false` e não substitui aprovação formal, backup, janela e rollback.
 
+## Gate 8 — ativação formal do enforcement
+
+Executar somente após confirmação explícita de aprovação, backup, janela e rollback.
+
+Antes de ativar:
+
+- deixar `supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql` aberto e pronto para execução;
+- confirmar que a aplicação está publicada com `VITE_ORG_TENANCY_ENABLED=true`;
+- confirmar que a Operação 8 retornou `enforcement_activation_preflight_ok_enforcement_off = true`.
+
+Ativação:
+
+`supabase/operations/20260703_09_enable_tenancy_enforcement.sql`
+
+Resultado esperado: `tenancy_enforcement_activation_ok = true`.
+
+Rollback imediato, em qualquer falha crítica:
+
+`supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql`
+
+Resultado esperado: `tenancy_enforcement_rollback_ok = true`.
+
 Se o canário falhar, desligar apenas a feature flag de frontend e manter o banco no estado atual. O rollback de enforcement não se aplica porque o enforcement não foi ativado.

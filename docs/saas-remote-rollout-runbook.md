@@ -156,4 +156,10 @@ Depois da janela de observação com o canário funcional, executar:
 
 O resultado esperado é `canary_observation_gate_ok_enforcement_off = true`. Esse gate ainda não ativa enforcement; ele apenas confirma que a base continua pronta e que o canário permaneceu saudável.
 
+Quando houver decisão de iniciar planejamento de ativação futura, executar:
+
+`supabase/operations/20260703_08_enforcement_activation_preflight.sql`
+
+O resultado esperado é `enforcement_activation_preflight_ok_enforcement_off = true`. Esse preflight ainda mantém o banco com `tenancy_enforcement=false` e não substitui aprovação formal, backup, janela e rollback.
+
 Se o canário falhar, desligar apenas a feature flag de frontend e manter o banco no estado atual. O rollback de enforcement não se aplica porque o enforcement não foi ativado.

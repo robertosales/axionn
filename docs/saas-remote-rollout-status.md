@@ -197,4 +197,10 @@ Gate de observação pós-canário:
 - executar `supabase/operations/20260703_07_canary_observation_gate.sql` depois da janela de observação;
 - resultado esperado: `canary_observation_gate_ok_enforcement_off = true`.
 
+Pré-ativação formal:
+
+- executar `supabase/operations/20260703_08_enforcement_activation_preflight.sql` somente quando o time começar a planejar uma janela futura de ativação;
+- resultado esperado: `enforcement_activation_preflight_ok_enforcement_off = true`;
+- esse arquivo não ativa enforcement.
+
 A ativação real do enforcement deve ser uma operação futura separada, com janela, backup e rollback explícito para `select public.set_tenancy_enforcement(false);`.

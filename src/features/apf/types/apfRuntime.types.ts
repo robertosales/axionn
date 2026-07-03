@@ -92,6 +92,19 @@ export type AnalysisStatus = "ok" | "requer_validacao_humana";
 export type AnalysisCandidateType = "EE" | "CE" | "SE" | "TRN" | "indefinido";
 export type AnalysisRecommendation = "enviar" | "nao_enviar" | "enviar_com_validacao";
 
+export type FactorOverrideReason =
+  | "correcao_classificacao"
+  | "precedente_oficial"
+  | "regra_contratual"
+  | "evidencia_funcional"
+  | "outro";
+
+export interface FactorReviewInput {
+  factor_sigla: string;
+  factor_override_reason: FactorOverrideReason | "";
+  factor_override_notes: string;
+}
+
 export interface AnalysisBaselineAnalog {
   id?: string;
   baseline_item_id: string | null;
@@ -118,6 +131,8 @@ export interface AnalysisProcess {
   objeto_negocio: string;
   tipo_funcional_candidato: AnalysisCandidateType;
   deve_contar_como_processo_elementar: boolean;
+  selected_by_default: boolean;
+  decision_source: string;
   justificativa_separacao: string;
   resultado_funcional_entregue: string;
   central: boolean;
@@ -147,9 +162,22 @@ export interface ApfProcessAnalysis {
   status_reason: string | null;
   validation_mode: "assisted" | "automatic";
   inferred_factor_sigla: string;
+  suggested_factor_sigla: string | null;
+  factor_source: string;
+  factor_confidence: number | null;
+  factor_review_required: boolean;
+  factor_reasoning: string | null;
+  confirmed_factor_sigla: string | null;
+  confirmed_factor_source: string | null;
+  factor_override_reason: FactorOverrideReason | null;
+  factor_override_notes: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
   hu_summary: string | null;
   processo_central: { nome: string | null; justificativa: string | null };
   quantidade_processos_identificados: number;
+  quantidade_processos_contaveis: number;
+  quantidade_processos_em_revisao: number;
   processos: AnalysisProcess[];
   itens_absorvidos_no_processo_central: Array<{
     descricao: string;

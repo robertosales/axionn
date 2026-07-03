@@ -144,4 +144,10 @@ Se o frontend retornar `42P17` com `infinite recursion detected in policy for re
 
 Em seguida repetir a navegação do canário. O hotfix remove recursão entre `contracts`, `contract_teams`, `contract_room_teams` e `contract_slas` usando wrappers `SECURITY DEFINER`, sem ativar enforcement.
 
+Quando o canário estiver funcional, executar:
+
+`supabase/operations/20260703_06_frontend_canary_closeout_validation.sql`
+
+O resultado esperado é `frontend_canary_closeout_ok_enforcement_off = true`. Esse fechamento confirma que o banco continua em modo compatível, sem ativar enforcement.
+
 Se o canário falhar, desligar apenas a feature flag de frontend e manter o banco no estado atual. O rollback de enforcement não se aplica porque o enforcement não foi ativado.

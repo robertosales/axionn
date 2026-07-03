@@ -180,4 +180,15 @@ Se o canário retornar `42P17` com `infinite recursion detected in policy for re
 
 Depois repetir o teste do canário. Esse hotfix troca policies recursivas conhecidas por wrappers `SECURITY DEFINER` e mantém `tenancy_enforcement = false`.
 
+Canário validado em 2026-07-03:
+
+- aplicação funcionando com `VITE_ORG_TENANCY_ENABLED=true`;
+- hotfix de recursão RLS aplicado;
+- enforcement ainda desligado.
+
+Fechamento recomendado:
+
+- executar `supabase/operations/20260703_06_frontend_canary_closeout_validation.sql`;
+- manter `set_tenancy_enforcement(true)` fora de escopo.
+
 A ativação real do enforcement deve ser uma operação futura separada, com janela, backup e rollback explícito para `select public.set_tenancy_enforcement(false);`.

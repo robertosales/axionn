@@ -3,6 +3,7 @@ import {
   Building2,
   Check,
   ChevronsUpDown,
+  Gauge,
   Loader2,
   ShieldCheck,
   Users,
@@ -45,9 +46,9 @@ export function OrganizationSwitcher() {
 
   if (!enabled || !session) return null;
 
-  // A tela de membros já identifica a organização no próprio cabeçalho.
-  // Ocultar o switcher flutuante evita sobreposição com Atualizar/Convidar.
-  if (location.pathname.startsWith("/organization/members")) return null;
+  // As páginas da organização já identificam o tenant no próprio cabeçalho.
+  // Ocultar o switcher flutuante evita sobreposição com ações da página.
+  if (location.pathname.startsWith("/organization/")) return null;
 
   const baseClass =
     "fixed z-[70] flex h-8 max-w-[210px] items-center gap-2 rounded-lg border bg-background/95 px-2.5 text-xs shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:right-[5.5rem] sm:top-2 max-sm:bottom-4 max-sm:right-4";
@@ -172,6 +173,20 @@ export function OrganizationSwitcher() {
                 <p className="text-sm font-medium">Gerenciar membros</p>
                 <p className="text-[11px] text-muted-foreground">
                   Convites, papéis e módulos
+                </p>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer gap-3 py-2.5"
+              onClick={() => navigate("/organization/usage")}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <Gauge className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Plano e uso</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Limites, consumo e recursos
                 </p>
               </div>
             </DropdownMenuItem>

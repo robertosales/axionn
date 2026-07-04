@@ -100,7 +100,9 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(ORGANIZATION_TENANCY_ENABLED);
   const [error, setError] = useState<string | null>(null);
   const [moduleRoles, setModuleRoles] = useState<OrganizationModuleRole[]>([]);
-  const [moduleAccessLoading, setModuleAccessLoading] = useState(false);
+  const [moduleAccessLoading, setModuleAccessLoading] = useState(
+    ORGANIZATION_TENANCY_ENABLED,
+  );
   const [moduleAccessAuthoritative, setModuleAccessAuthoritative] =
     useState(false);
 
@@ -123,6 +125,9 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
           setCurrentTeamId(null);
           setModuleRoles([]);
           setModuleAccessAuthoritative(false);
+          setModuleAccessLoading(
+            ORGANIZATION_TENANCY_ENABLED && Boolean(organizationId),
+          );
         }
         return organizationId;
       });
@@ -138,6 +143,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setOrganizations([]);
       setModuleRoles([]);
       setModuleAccessAuthoritative(false);
+      setModuleAccessLoading(false);
       setError(null);
       setLoading(false);
       return;
@@ -149,6 +155,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCurrentTeamId(null);
       setModuleRoles([]);
       setModuleAccessAuthoritative(false);
+      setModuleAccessLoading(false);
       localStorage.removeItem(STORAGE_KEY);
       setError(null);
       setLoading(false);
@@ -169,6 +176,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCurrentTeamId(null);
       setModuleRoles([]);
       setModuleAccessAuthoritative(false);
+      setModuleAccessLoading(false);
       setError(
         "Não foi possível carregar as organizações disponíveis para esta conta.",
       );
@@ -201,13 +209,20 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       const requested = current ?? localStorage.getItem(STORAGE_KEY);
       const selected = chooseCurrentOrganizationId(unique, requested);
 
-      if (selected) localStorage.setItem(STORAGE_KEY, selected);
-      else {
+      if (selected) {
+        localStorage.setItem(STORAGE_KEY, selected);
+        if (current !== selected) {
+          setModuleRoles([]);
+          setModuleAccessAuthoritative(false);
+          setModuleAccessLoading(true);
+        }
+      } else {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem("selectedTeamId");
         setCurrentTeamId(null);
         setModuleRoles([]);
         setModuleAccessAuthoritative(false);
+        setModuleAccessLoading(false);
       }
 
       return selected;
@@ -287,6 +302,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCurrentTeamId(null);
       setModuleRoles([]);
       setModuleAccessAuthoritative(false);
+      setModuleAccessLoading(false);
       return;
     }
 

@@ -193,7 +193,7 @@ export default function OrganizationModuleSelector() {
         <div className="grid gap-5 md:grid-cols-3">
           {MODULES.map((module) => {
             const Icon = module.icon;
-            const allowed = isAdmin || hasModuleAccess(module.key);
+            const allowed = isAdmin || isPlatformAdmin || hasModuleAccess(module.key);
 
             return (
               <Card

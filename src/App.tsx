@@ -114,18 +114,23 @@ function PageLoader() {
 
 function resolveHomePath(options: {
   isAdmin: boolean;
+  isPlatformAdmin: boolean;
+  isOrganizationAdmin: boolean;
   hasModuleAccess: (module: string) => boolean;
   moduleRolesCount: number;
   roles: string[];
 }): string {
   const {
     isAdmin,
+    isPlatformAdmin,
+    isOrganizationAdmin,
     hasModuleAccess,
     moduleRolesCount,
     roles,
   } = options;
 
-  if (isAdmin) return "/dashboard-admin";
+  if (isAdmin || isPlatformAdmin) return "/dashboard-admin";
+  if (isOrganizationAdmin) return "/organization/admin";
   if (roles.includes("admin_contrato")) return "/meu-contrato";
 
   const agil = hasModuleAccess("sala_agil");
@@ -175,12 +180,17 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { session, loading, isAdmin, roles } = useAuth();
   const {
+    loading: organizationLoading,
+    isPlatformAdmin,
+    isOrganizationAdmin,
     hasModuleAccess,
     moduleRoles,
+    moduleAccessLoading,
   } = useOrganization();
 
   if (loading) return <PageLoader />;
   if (!session) return <>{children}</>;
+  if (organizationLoading || moduleAccessLoading) return <PageLoader />;
 
   const nextPath = resolveSafeNextPath(location.search);
   if (nextPath) return <Navigate to={nextPath} replace />;
@@ -189,6 +199,8 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
     <Navigate
       to={resolveHomePath({
         isAdmin,
+        isPlatformAdmin,
+        isOrganizationAdmin,
         hasModuleAccess,
         moduleRolesCount: moduleRoles.length,
         roles,
@@ -201,17 +213,22 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 function ModuleRedirect() {
   const { loading, isAdmin, roles } = useAuth();
   const {
+    loading: organizationLoading,
+    isPlatformAdmin,
+    isOrganizationAdmin,
     hasModuleAccess,
     moduleRoles,
     moduleAccessLoading,
   } = useOrganization();
 
-  if (loading || moduleAccessLoading) return <PageLoader />;
+  if (loading || organizationLoading || moduleAccessLoading) return <PageLoader />;
 
   return (
     <Navigate
       to={resolveHomePath({
         isAdmin,
+        isPlatformAdmin,
+        isOrganizationAdmin,
         hasModuleAccess,
         moduleRolesCount: moduleRoles.length,
         roles,
@@ -229,10 +246,10 @@ function ModuleGuard({
   children: React.ReactNode;
 }) {
   const { isAdmin } = useAuth();
-  const { hasModuleAccess, moduleAccessLoading } = useOrganization();
+  const { isPlatformAdmin, hasModuleAccess, moduleAccessLoading } = useOrganization();
 
   if (moduleAccessLoading) return <PageLoader />;
-  if (isAdmin || hasModuleAccess(module)) return <>{children}</>;
+  if (isAdmin || isPlatformAdmin || hasModuleAccess(module)) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">

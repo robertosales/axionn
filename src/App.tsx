@@ -248,8 +248,14 @@ function ModuleGuard({
 
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const { isAdmin, loading } = useAuth();
-  if (loading) return null;
-  if (!isAdmin) return <Navigate to="/modulos" replace />;
+  const {
+    loading: organizationLoading,
+    isPlatformAdmin: isOrganizationContextPlatformAdmin,
+  } = useOrganization();
+  if (loading || organizationLoading) return <PageLoader />;
+  if (!isAdmin && !isOrganizationContextPlatformAdmin) {
+    return <Navigate to="/modulos" replace />;
+  }
   return <>{children}</>;
 }
 

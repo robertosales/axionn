@@ -41,6 +41,40 @@ const OrganizationMembersPage = lazy(
 const OrganizationUsagePage = lazy(
   () => import("./features/organization/pages/OrganizationUsagePage"),
 );
+const OrganizationSettingsPage = lazy(
+  () => import("./features/organization/pages/OrganizationSettingsPage"),
+);
+const OrganizationAdminOverviewPage = lazy(
+  () => import("./features/organization/pages/OrganizationAdminOverviewPage"),
+);
+const OrganizationAdminShell = lazy(() =>
+  import("./features/organization/components/OrganizationAdminShell").then(
+    (module) => ({ default: module.OrganizationAdminShell }),
+  ),
+);
+const PlatformAIProvidersPage = lazy(
+  () => import("./features/platform/pages/PlatformAIProvidersPage"),
+);
+const AdminEmpresasPage = lazy(() =>
+  import("./features/admin/pages/AdminEmpresasPage").then((module) => ({
+    default: module.AdminEmpresasPage,
+  })),
+);
+const AdminContratosPage = lazy(() =>
+  import("./features/admin/pages/AdminContratosPage").then((module) => ({
+    default: module.AdminContratosPage,
+  })),
+);
+const AdminTimesPage = lazy(() =>
+  import("./features/admin/pages/AdminTimesPage").then((module) => ({
+    default: module.AdminTimesPage,
+  })),
+);
+const ProjetosAdminPanel = lazy(() =>
+  import("./features/admin/components/ProjetosAdminPanel").then((module) => ({
+    default: module.ProjetosAdminPanel,
+  })),
+);
 const SustentacaoPage = lazy(
   () => import("./features/sustentacao/SustentacaoPage"),
 );
@@ -220,9 +254,18 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 }
 
 function OrganizationAdminGuard({ children }: { children: React.ReactNode }) {
-  const { loading, isOrganizationAdmin } = useOrganization();
+  const { loading, currentOrganizationId, isOrganizationAdmin } = useOrganization();
   if (loading) return <PageLoader />;
-  if (!isOrganizationAdmin) return <Navigate to="/modulos" replace />;
+  if (!currentOrganizationId || !isOrganizationAdmin) {
+    return <Navigate to="/modulos" replace />;
+  }
+  return <>{children}</>;
+}
+
+function PlatformAdminGuard({ children }: { children: React.ReactNode }) {
+  const { loading, isPlatformAdmin } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!isPlatformAdmin) return <Navigate to="/organization/admin" replace />;
   return <>{children}</>;
 }
 
@@ -258,11 +301,73 @@ function AppRoutes() {
             element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>}
           />
           <Route
+            path="/organization/admin"
+            element={
+              <ProtectedRoute>
+                <OrganizationAdminGuard>
+                  <OrganizationAdminShell>
+                    <OrganizationAdminOverviewPage />
+                  </OrganizationAdminShell>
+                </OrganizationAdminGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organization/companies"
+            element={
+              <ProtectedRoute>
+                <OrganizationAdminGuard>
+                  <OrganizationAdminShell>
+                    <AdminEmpresasPage />
+                  </OrganizationAdminShell>
+                </OrganizationAdminGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organization/contracts"
+            element={
+              <ProtectedRoute>
+                <OrganizationAdminGuard>
+                  <OrganizationAdminShell>
+                    <AdminContratosPage />
+                  </OrganizationAdminShell>
+                </OrganizationAdminGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organization/projects"
+            element={
+              <ProtectedRoute>
+                <OrganizationAdminGuard>
+                  <OrganizationAdminShell>
+                    <ProjetosAdminPanel />
+                  </OrganizationAdminShell>
+                </OrganizationAdminGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organization/teams"
+            element={
+              <ProtectedRoute>
+                <OrganizationAdminGuard>
+                  <OrganizationAdminShell>
+                    <AdminTimesPage />
+                  </OrganizationAdminShell>
+                </OrganizationAdminGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/organization/members"
             element={
               <ProtectedRoute>
                 <OrganizationAdminGuard>
-                  <OrganizationMembersPage />
+                  <OrganizationAdminShell>
+                    <OrganizationMembersPage />
+                  </OrganizationAdminShell>
                 </OrganizationAdminGuard>
               </ProtectedRoute>
             }
@@ -272,10 +377,32 @@ function AppRoutes() {
             element={
               <ProtectedRoute>
                 <OrganizationAdminGuard>
-                  <OrganizationUsagePage />
+                  <OrganizationAdminShell>
+                    <OrganizationUsagePage />
+                  </OrganizationAdminShell>
                 </OrganizationAdminGuard>
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/organization/settings"
+            element={
+              <ProtectedRoute>
+                <OrganizationAdminGuard>
+                  <OrganizationAdminShell>
+                    <OrganizationSettingsPage />
+                  </OrganizationAdminShell>
+                </OrganizationAdminGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/platform"
+            element={<ProtectedRoute><PlatformAdminGuard><Navigate to="/platform/ai-providers" replace /></PlatformAdminGuard></ProtectedRoute>}
+          />
+          <Route
+            path="/platform/ai-providers"
+            element={<ProtectedRoute><PlatformAdminGuard><PlatformAIProvidersPage /></PlatformAdminGuard></ProtectedRoute>}
           />
           <Route
             path="/dashboard-admin"

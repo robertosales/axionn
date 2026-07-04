@@ -90,13 +90,16 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Verifica função APF
+      - name: Verifica Edge Functions críticas
         id: deno-check
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          deno check --config supabase/functions/deno.json supabase/functions/apf-generate/index.ts > deno-check.log 2>&1
+          deno check --config supabase/functions/deno.json \
+            supabase/functions/apf-generate/index.ts \
+            supabase/functions/organization-invitations/index.ts \
+            > deno-check.log 2>&1
           code=$?
           echo "$code" > deno-check.exit
           tail -n 200 deno-check.log
@@ -119,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Valida controles críticos das Fases 0 e 1
+      - name: Valida controles críticos das Fases 0, 1 e 2A
         shell: bash
         run: |
           set -euo pipefail
@@ -129,7 +132,11 @@ jobs:
           wrappers="supabase/migrations/20260630021000_org_access_wrappers.sql"
           isolation="supabase/migrations/20260630022000_org_resource_isolation.sql"
           hardening="supabase/migrations/20260630023000_org_resource_isolation_hardening.sql"
-          edge="supabase/functions/apf-generate/index.ts"
+          entitlements="supabase/migrations/20260704010000_saas_entitlements_domain.sql"
+          memberships="supabase/migrations/20260704020000_organization_member_invitations.sql"
+          membership_hardening="supabase/migrations/20260704020001_invitation_crypto_hardening.sql"
+          apf_edge="supabase/functions/apf-generate/index.ts"
+          invitation_edge="supabase/functions/organization-invitations/index.ts"
           feature_flags="src/lib/featureFlags.ts"
           org_context="src/contexts/OrganizationContext.tsx"
           auth_context="src/contexts/AuthContext.tsx"
@@ -140,9 +147,11 @@ jobs:
 
           for file in \
             "$governance" "$rate_limits" "$multitenant" "$wrappers" \
-            "$isolation" "$hardening" "$edge" "$feature_flags" \
-            "$org_context" "$auth_context" "$org_switcher" "$org_guard" \
-            "$admin_contracts" "$admin_projects"; do
+            "$isolation" "$hardening" "$entitlements" "$memberships" \
+            "$membership_hardening" "$apf_edge" "$invitation_edge" \
+            "$feature_flags" "$org_context" "$auth_context" \
+            "$org_switcher" "$org_guard" "$admin_contracts" \
+            "$admin_projects"; do
             test -f "$file"
           done
 
@@ -172,19 +181,28 @@ jobs:
           grep -Fq "create trigger trg_contract_room_team_org_consistency" "$hardening"
           grep -Fq "create or replace function public.get_tenancy_readiness_report" "$hardening"
 
+          grep -Fq "create table if not exists public.organization_subscriptions" "$entitlements"
+          grep -Fq "create table if not exists public.organization_invitations" "$memberships"
+          grep -Fq "create table if not exists public.organization_member_modules" "$memberships"
+          grep -Fq "create or replace function public.accept_organization_invitation" "$memberships"
+          grep -Fq "extensions.digest" "$membership_hardening"
+          grep -Fq "drop function public.digest(text, text)" "$membership_hardening"
+          grep -Fq "inviteUserByEmail" "$invitation_edge"
+          grep -Fq "shouldCreateUser: false" "$invitation_edge"
+
           grep -Fq "VITE_ORG_TENANCY_ENABLED" "$feature_flags"
           grep -Fq "operationBlockReason" "$org_context"
           grep -Fq "get_accessible_teams_v2" "$auth_context"
           grep -Fq "is_platform_admin" "$auth_context"
-          grep -Fq "Trocar a organização também redefine o time ativo" "$org_switcher"
+          grep -Fq "Gerenciar membros" "$org_switcher"
           grep -Fq "Operações temporariamente bloqueadas" "$org_guard"
           grep -Fq "get_accessible_contracts_v2" "$admin_contracts"
           grep -Fq "get_accessible_projects_v2" "$admin_projects"
           ! grep -Fq 'isAdmin || moduleAccess === "admin"' src/App.tsx
 
-          grep -Fq "AI_USAGE_ENFORCEMENT_MODE" "$edge"
-          grep -Fq "reserve_ai_usage" "$edge"
-          grep -Fq "finalize_ai_usage" "$edge"
-          grep -Fq "AI_MAX_PROMPT_CHARS" "$edge"
+          grep -Fq "AI_USAGE_ENFORCEMENT_MODE" "$apf_edge"
+          grep -Fq "reserve_ai_usage" "$apf_edge"
+          grep -Fq "finalize_ai_usage" "$apf_edge"
+          grep -Fq "AI_MAX_PROMPT_CHARS" "$apf_edge"
 
           ! grep -Fq "signUp" src/pages/Auth.tsx

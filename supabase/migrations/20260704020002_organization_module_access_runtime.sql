@@ -1,7 +1,16 @@
 -- Axion SaaS — Fase 2A / Lote 2
 -- Adapta o runtime de módulos ao membership organizacional sem remover o legado.
 
--- Backfill transitório: replica os papéis globais atuais para cada membership ativo.
+-- Papéis globais legados não identificam a organização de origem. Para evitar
+-- propagação cruzada, o backfill automático só ocorre quando o usuário possui
+-- exatamente um membership organizacional ativo. Usuários multi-organização
+-- devem receber módulos explicitamente por organização.
+with active_membership_counts as (
+  select member.user_id, count(*) as membership_count
+  from public.organization_members member
+  where member.is_active
+  group by member.user_id
+)
 insert into public.organization_member_modules (
   org_id,
   user_id,
@@ -16,13 +25,22 @@ select
   module_role.role_name,
   null
 from public.organization_members member
+join active_membership_counts membership_count
+  on membership_count.user_id = member.user_id
+ and membership_count.membership_count = 1
 join public.user_module_roles module_role on module_role.user_id = member.user_id
 where member.is_active
   and module_role.module in ('sala_agil', 'sustentacao', 'rdm')
 on conflict (org_id, user_id, module_key) do nothing;
 
--- Usuários que ainda dependem de profiles.module_access recebem compatibilidade
--- apenas quando não possuem papéis explícitos no novo domínio da organização.
+-- Usuários de organização única que ainda dependem de profiles.module_access
+-- recebem compatibilidade apenas quando não possuem papéis organizacionais.
+with active_membership_counts as (
+  select member.user_id, count(*) as membership_count
+  from public.organization_members member
+  where member.is_active
+  group by member.user_id
+)
 insert into public.organization_member_modules (
   org_id,
   user_id,
@@ -41,6 +59,9 @@ select
   end,
   null
 from public.organization_members member
+join active_membership_counts membership_count
+  on membership_count.user_id = member.user_id
+ and membership_count.membership_count = 1
 join public.profiles profile on profile.user_id = member.user_id
 cross join lateral unnest(
   case

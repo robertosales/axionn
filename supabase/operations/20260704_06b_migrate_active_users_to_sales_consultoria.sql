@@ -21,8 +21,10 @@ begin
       ('public.profiles', to_regclass('public.profiles') is not null),
       ('public.user_roles', to_regclass('public.user_roles') is not null),
       ('public.user_module_roles', to_regclass('public.user_module_roles') is not null),
+      ('public.organization_entitlement_overrides', to_regclass('public.organization_entitlement_overrides') is not null),
       ('public.organization_members', to_regclass('public.organization_members') is not null),
       ('public.organization_member_modules', to_regclass('public.organization_member_modules') is not null),
+      ('public.get_effective_organization_entitlements(uuid)', to_regprocedure('public.get_effective_organization_entitlements(uuid)') is not null),
       ('public.get_organization_members_v2(uuid)', to_regprocedure('public.get_organization_members_v2(uuid)') is not null),
       ('public.is_organization_legacy_permission_fallback_enabled()', to_regprocedure('public.is_organization_legacy_permission_fallback_enabled()') is not null)
   ) dependency(object_name, present)
@@ -43,6 +45,66 @@ begin
   end if;
 end;
 $$;
+
+with target_users as (
+  select profile.user_id
+  from public.profiles profile
+  where profile.user_id is not null
+    and coalesce(profile.is_active, true)
+  union
+  select member.user_id
+  from public.organization_members member
+  where member.org_id = 'd7f226d9-9f08-43a7-b565-482cca58f00d'::uuid
+    and member.is_active
+),
+required_capacity as (
+  select greatest(count(*)::bigint, 1::bigint) as users_limit
+  from target_users
+),
+current_entitlement as (
+  select entitlement.limit_value
+  from public.get_effective_organization_entitlements(
+    'd7f226d9-9f08-43a7-b565-482cca58f00d'::uuid
+  ) entitlement
+  where entitlement.feature_key = 'users.max'
+  limit 1
+)
+insert into public.organization_entitlement_overrides (
+  org_id,
+  feature_key,
+  enabled,
+  limit_value,
+  reason,
+  metadata
+)
+select
+  'd7f226d9-9f08-43a7-b565-482cca58f00d'::uuid,
+  'users.max',
+  true,
+  greatest(
+    required.users_limit,
+    coalesce(current_entitlement.limit_value, required.users_limit)
+  ),
+  'Ajuste operacional Lote 6b para migrar usuarios ativos para SALES CONSULTORIA.',
+  jsonb_build_object(
+    'operation', '20260704_06b_migrate_active_users_to_sales_consultoria',
+    'required_users_limit', required.users_limit,
+    'previous_effective_limit', current_entitlement.limit_value
+  )
+from required_capacity required
+left join current_entitlement on true
+on conflict (org_id, feature_key) do update
+  set enabled = true,
+      limit_value = case
+        when organization_entitlement_overrides.limit_value is null then null
+        else greatest(
+          organization_entitlement_overrides.limit_value,
+          excluded.limit_value
+        )
+      end,
+      reason = excluded.reason,
+      metadata = organization_entitlement_overrides.metadata || excluded.metadata,
+      updated_at = now();
 
 with target_users as (
   select distinct profile.user_id
@@ -235,6 +297,14 @@ with summary as (
       where member.org_id = 'd7f226d9-9f08-43a7-b565-482cca58f00d'::uuid
         and member.is_active
     )::bigint as sales_active_members,
+    (
+      select entitlement.limit_value
+      from public.get_effective_organization_entitlements(
+        'd7f226d9-9f08-43a7-b565-482cca58f00d'::uuid
+      ) entitlement
+      where entitlement.feature_key = 'users.max'
+      limit 1
+    ) as effective_users_limit,
     (
       select count(*)
       from public.profiles profile

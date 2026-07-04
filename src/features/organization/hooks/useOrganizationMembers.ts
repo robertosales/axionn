@@ -89,6 +89,7 @@ export function useOrganizationMembers() {
     currentOrganization,
     isOrganizationAdmin,
     refreshOrganizations,
+    refreshModuleAccess,
   } = useOrganization();
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
@@ -226,12 +227,21 @@ export function useOrganizationMembers() {
           },
         );
         if (mutationError) throw mutationError;
-        await Promise.all([refresh(), refreshOrganizations()]);
+        await Promise.all([
+          refresh(),
+          refreshOrganizations(),
+          refreshModuleAccess(currentOrganizationId),
+        ]);
       } finally {
         setMutating(false);
       }
     },
-    [currentOrganizationId, refresh, refreshOrganizations],
+    [
+      currentOrganizationId,
+      refresh,
+      refreshModuleAccess,
+      refreshOrganizations,
+    ],
   );
 
   const deactivateMember = useCallback(

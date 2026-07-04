@@ -16,7 +16,7 @@ dependencies as (
       ('public.organization_member_modules', to_regclass('public.organization_member_modules') is not null),
       ('public.platform_user_roles', to_regclass('public.platform_user_roles') is not null),
       ('public.saas_runtime_settings', to_regclass('public.saas_runtime_settings') is not null),
-      ('public.is_platform_admin()', to_regprocedure('public.is_platform_admin()') is not null),
+      ('public.is_platform_admin(uuid)', to_regprocedure('public.is_platform_admin(uuid)') is not null),
       ('public.is_organization_admin(uuid,uuid)', to_regprocedure('public.is_organization_admin(uuid,uuid)') is not null),
       ('public.can_operate_organization(uuid)', to_regprocedure('public.can_operate_organization(uuid)') is not null),
       ('public.get_accessible_companies_v2(uuid)', to_regprocedure('public.get_accessible_companies_v2(uuid)') is not null),

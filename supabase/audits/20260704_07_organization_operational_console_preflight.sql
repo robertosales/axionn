@@ -136,11 +136,11 @@ permission_integrity as (
 ),
 sales_consultoria as (
   select
-    max(organization.id) as sales_org_id,
-    max(organization.name) as sales_name,
-    max(organization.slug) as sales_slug,
-    max(organization.status::text) as sales_status,
-    max(organization.plan::text) as sales_plan,
+    (array_agg(organization.id))[1] as sales_org_id,
+    (array_agg(organization.name))[1] as sales_name,
+    (array_agg(organization.slug))[1] as sales_slug,
+    (array_agg(organization.status::text))[1] as sales_status,
+    (array_agg(organization.plan::text))[1] as sales_plan,
     (
       select count(*)
       from public.organization_members member

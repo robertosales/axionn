@@ -20,6 +20,10 @@ begin
 end;
 $$;
 
+insert into public.contracts (id, name, status)
+values ('d59ab6dc-421f-41b4-b415-ae0bc072ebd4', 'Lote 6 Fixture Contract', 'active')
+on conflict (id) do nothing;
+
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at
 )

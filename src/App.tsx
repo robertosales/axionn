@@ -12,6 +12,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
+import { GlobalLogoutButton } from "@/components/GlobalLogoutButton";
 import { OrganizationOperationalGuard } from "@/components/OrganizationOperationalGuard";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import {
@@ -254,6 +255,7 @@ function AppRoutes() {
     <SprintProvider>
       <Toaster />
       <Sonner />
+      <GlobalLogoutButton />
       <OrganizationSwitcher />
       <Suspense fallback={<PageLoader />}>
         <Routes>

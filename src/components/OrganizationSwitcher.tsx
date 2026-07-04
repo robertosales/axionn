@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import {
@@ -29,6 +29,7 @@ const STATUS_LABELS = {
 
 export function OrganizationSwitcher() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { session } = useAuth();
   const {
     enabled,
@@ -43,6 +44,10 @@ export function OrganizationSwitcher() {
   } = useOrganization();
 
   if (!enabled || !session) return null;
+
+  // A tela de membros já identifica a organização no próprio cabeçalho.
+  // Ocultar o switcher flutuante evita sobreposição com Atualizar/Convidar.
+  if (location.pathname.startsWith("/organization/members")) return null;
 
   const baseClass =
     "fixed z-[70] flex h-8 max-w-[210px] items-center gap-2 rounded-lg border bg-background/95 px-2.5 text-xs shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:right-[5.5rem] sm:top-2 max-sm:bottom-4 max-sm:right-4";

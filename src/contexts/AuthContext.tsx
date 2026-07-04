@@ -95,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
   const [teams, setTeams] = useState<AuthTeam[]>([]);
   const [moduleRoles, setModuleRoles] = useState<UserModuleRole[]>([]);
+  const [legacyFallbackEnabled, setLegacyFallbackEnabled] = useState(true);
 
   const currentTeamIdRef = useRef<string | null>(null);
   const profileRef = useRef<Profile | null>(null);
@@ -182,21 +183,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user?.id) await fetchProfile(user.id);
   }, [fetchProfile, user?.id]);
 
-  const fetchRoles = useCallback(async (userId: string): Promise<boolean> => {
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
-
-    if (error) {
-      console.error("[Auth] fetchRoles:", error);
-      return false;
+  const refreshLegacyFallbackFlag = useCallback(async () => {
+    if (!ORGANIZATION_TENANCY_ENABLED) {
+      setLegacyFallbackEnabled(true);
+      return true;
     }
 
-    const userRoles = (data ?? []).map(
-      (roleRow: { role: string }) => roleRow.role as AppRole,
+    const { data, error } = await (supabase as any).rpc(
+      "is_organization_legacy_permission_fallback_enabled",
     );
-    const legacyAdmin = userRoles.includes("admin");
+
+    if (error) {
+      console.warn(
+        "[Auth] fallback legado organizacional indisponivel; mantendo rollback legado temporario.",
+        error,
+      );
+      setLegacyFallbackEnabled(true);
+      return true;
+    }
+
+    const enabled = data === true;
+    setLegacyFallbackEnabled(enabled);
+    return enabled;
+  }, []);
+
+  const fetchRoles = useCallback(async (
+    userId: string,
+    allowLegacyFallback: boolean,
+  ): Promise<boolean> => {
+    let userRoles: AppRole[] = [];
+    let legacyAdmin = false;
     let platformAdmin = false;
 
     if (ORGANIZATION_TENANCY_ENABLED) {
@@ -208,6 +224,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("[Auth] is_platform_admin:", platformError);
       } else {
         platformAdmin = platformAccess === true;
+      }
+    }
+
+    if (!ORGANIZATION_TENANCY_ENABLED || allowLegacyFallback) {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("[Auth] fetchRoles:", error);
+        return platformAdmin;
+      }
+
+      userRoles = (data ?? []).map(
+        (roleRow: { role: string }) => roleRow.role as AppRole,
+      );
+      legacyAdmin = userRoles.includes("admin");
+
+      if (ORGANIZATION_TENANCY_ENABLED && legacyAdmin) {
+        console.warn(
+          "[Auth] fallback legado usado para ler user_roles durante rollback organizacional.",
+        );
       }
     }
 
@@ -236,13 +275,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchModuleRoles = useCallback(
-    async (userId: string, profileData?: Profile) => {
+    async (
+      userId: string,
+      profileData: Profile | undefined,
+      allowLegacyFallback: boolean,
+    ) => {
+      if (ORGANIZATION_TENANCY_ENABLED && !allowLegacyFallback) {
+        if (mountedRef.current) setModuleRoles([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("user_module_roles")
         .select("module, role_name")
         .eq("user_id", userId);
 
       if (error || !data || data.length === 0) {
+        if (ORGANIZATION_TENANCY_ENABLED) {
+          console.warn(
+            "[Auth] fallback legado usado para profiles.module_access durante rollback organizacional.",
+          );
+        }
         const moduleAccess = profileData?.module_access || "sala_agil";
         const fallback: UserModuleRole[] =
           moduleAccess === "admin"
@@ -255,6 +308,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (mountedRef.current) setModuleRoles(fallback);
         return;
+      }
+
+      if (ORGANIZATION_TENANCY_ENABLED) {
+        console.warn(
+          "[Auth] fallback legado usado para user_module_roles durante rollback organizacional.",
+        );
       }
 
       if (mountedRef.current) {
@@ -350,7 +409,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTeams(teamList);
 
       const canUseAnyModule =
-        effectiveAdminRef.current || effectiveProfile?.module_access === "admin";
+        ORGANIZATION_TENANCY_ENABLED ||
+        effectiveAdminRef.current ||
+        effectiveProfile?.module_access === "admin";
       const activeModule = canUseAnyModule
         ? null
         : effectiveProfile?.module_access ?? "sala_agil";
@@ -378,6 +439,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (userId: string) => {
       try {
         const profileData = await fetchProfile(userId);
+        const allowLegacyFallback = await refreshLegacyFallbackFlag();
 
         if (profileData?.is_active === false) {
           console.warn("[Auth] Bloqueio: usuário inativo detectado.");
@@ -385,8 +447,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        await fetchRoles(userId);
-        await fetchModuleRoles(userId, profileData ?? undefined);
+        await fetchRoles(userId, allowLegacyFallback);
+        await fetchModuleRoles(
+          userId,
+          profileData ?? undefined,
+          allowLegacyFallback,
+        );
 
         if (!ORGANIZATION_TENANCY_ENABLED) {
           await refreshTeams(profileData ?? undefined);
@@ -400,6 +466,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchProfile,
       fetchRoles,
       forceLocalClear,
+      refreshLegacyFallbackFlag,
       refreshTeams,
     ],
   );

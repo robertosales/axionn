@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useOrganization } from "@/contexts/OrganizationContext";
+import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
 import { toast } from "sonner";
 
 export interface UserModuleRole {
@@ -30,9 +32,20 @@ export interface UserAdmin {
  * null = todos os usuários.
  */
 export function useUsersAdmin(contractId?: string | null) {
+  const { currentOrganizationId, refreshOrganizations, refreshModuleAccess } =
+    useOrganization();
   const [users, setUsers] = useState<UserAdmin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const isOrganizationAuthorityCutover = useCallback(async () => {
+    if (!ORGANIZATION_TENANCY_ENABLED) return false;
+    const { data: fallbackEnabled, error: fallbackError } =
+      await (supabase as any).rpc(
+        "is_organization_legacy_permission_fallback_enabled",
+      );
+    return fallbackError === null && fallbackEnabled !== true;
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +61,71 @@ export function useUsersAdmin(contractId?: string | null) {
         allowedUserIds = new Set(
           (ucData ?? []).map((row: any) => row.user_id as string),
         );
+      }
+
+      const useOrganizationAuthority =
+        (await isOrganizationAuthorityCutover()) &&
+        Boolean(currentOrganizationId);
+
+      if (useOrganizationAuthority && currentOrganizationId) {
+        const [membersRes, contractRolesRes] = await Promise.all([
+          (supabase as any).rpc("get_organization_members_v2", {
+            p_org_id: currentOrganizationId,
+          }),
+          supabase.from("user_contracts").select("user_id, role"),
+        ]);
+
+        if (membersRes.error) {
+          setError(`Erro ao buscar membros: ${membersRes.error.message}`);
+          return;
+        }
+
+        const contractRoleMap: Record<string, "admin_contrato" | "member"> = {};
+        (contractRolesRes.error ? [] : contractRolesRes.data || []).forEach(
+          (contractRole: any) => {
+            if (contractRole.user_id) {
+              contractRoleMap[contractRole.user_id] = contractRole.role;
+            }
+          },
+        );
+
+        setUsers(
+          ((membersRes.data ?? []) as any[])
+            .filter((member) =>
+              allowedUserIds ? allowedUserIds.has(member.user_id) : true,
+            )
+            .map((member) => {
+              const moduleKeys = (member.module_keys ?? []) as string[];
+              const roleName =
+                member.membership_role === "owner" ||
+                member.membership_role === "admin"
+                  ? "admin"
+                  : "member";
+
+              return {
+                id: String(member.user_id),
+                user_id: String(member.user_id),
+                display_name: String(member.display_name ?? ""),
+                email: String(member.email ?? ""),
+                module_access: moduleKeys[0] ?? "sala_agil",
+                team_id: null,
+                team_name: undefined,
+                teams: [],
+                module_roles: moduleKeys.map((moduleKey) => ({
+                  module: moduleKey,
+                  role_name: roleName,
+                })),
+                contract_role: contractRoleMap[member.user_id] ?? null,
+                is_admin:
+                  member.membership_role === "owner" ||
+                  member.membership_role === "admin",
+                is_active: Boolean(member.is_active),
+                must_change_password: false,
+                created_at: String(member.joined_at ?? ""),
+              };
+            }),
+        );
+        return;
       }
 
       const [
@@ -165,7 +243,7 @@ export function useUsersAdmin(contractId?: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [contractId]);
+  }, [contractId, currentOrganizationId, isOrganizationAuthorityCutover]);
 
   useEffect(() => {
     void load();
@@ -175,6 +253,26 @@ export function useUsersAdmin(contractId?: string | null) {
     userId: string,
     moduleRoles: UserModuleRole[],
   ) => {
+    if (await isOrganizationAuthorityCutover()) {
+      if (!currentOrganizationId) throw new Error("Organizacao nao selecionada.");
+      const { error: updateError } = await (supabase as any).rpc(
+        "update_organization_member_v2",
+        {
+          p_org_id: currentOrganizationId,
+          p_user_id: userId,
+          p_role: null,
+          p_is_active: null,
+          p_module_keys: moduleRoles.map((moduleRole) => moduleRole.module),
+        },
+      );
+      if (updateError) throw updateError;
+      await Promise.all([
+        refreshOrganizations(),
+        refreshModuleAccess(currentOrganizationId),
+      ]);
+      return;
+    }
+
     const { error: deleteError } = await supabase
       .from("user_module_roles")
       .delete()
@@ -241,7 +339,10 @@ export function useUsersAdmin(contractId?: string | null) {
       }
       if (data.team_id !== undefined) profileData.team_id = data.team_id;
       if (data.is_active !== undefined) profileData.is_active = data.is_active;
-      if (data.module_access !== undefined) {
+      if (
+        data.module_access !== undefined &&
+        !(await isOrganizationAuthorityCutover())
+      ) {
         profileData.module_access = data.module_access;
       }
 
@@ -272,6 +373,30 @@ export function useUsersAdmin(contractId?: string | null) {
   };
 
   const toggleAdmin = async (userId: string, isAdmin: boolean) => {
+    if (await isOrganizationAuthorityCutover()) {
+      if (!currentOrganizationId) {
+        toast.error("Organizacao nao selecionada");
+        return false;
+      }
+      const { error: memberError } = await (supabase as any).rpc(
+        "update_organization_member_v2",
+        {
+          p_org_id: currentOrganizationId,
+          p_user_id: userId,
+          p_role: isAdmin ? "admin" : "member",
+          p_is_active: null,
+          p_module_keys: null,
+        },
+      );
+      if (memberError) {
+        toast.error("Erro ao alterar papel organizacional");
+        return false;
+      }
+      toast.success(isAdmin ? "Membro promovido a admin" : "Papel admin removido");
+      await load();
+      return true;
+    }
+
     if (isAdmin) {
       const { error: adminError } = await supabase
         .from("user_roles")
@@ -339,6 +464,13 @@ export function useUsersAdmin(contractId?: string | null) {
       if (data.contract_role && !contractId) {
         toast.error(
           "Selecione um contrato antes de criar um usuário com papel contratual.",
+        );
+        return false;
+      }
+
+      if (await isOrganizationAuthorityCutover()) {
+        toast.error(
+          "Crie membros pela administracao da organizacao apos o cutover.",
         );
         return false;
       }

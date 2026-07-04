@@ -11,7 +11,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
 import {
+  resolveOrganizationPermissionAuthority,
   resolveOrganizationAccess,
+  type OrganizationModuleRpcStatus,
   type OrganizationAccessMode,
   type OrganizationStatus,
 } from "@/contexts/organizationAccess";
@@ -105,6 +107,33 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   );
   const [moduleAccessAuthoritative, setModuleAccessAuthoritative] =
     useState(false);
+  const [moduleRpcStatus, setModuleRpcStatus] =
+    useState<OrganizationModuleRpcStatus>("idle");
+  const [legacyFallbackEnabled, setLegacyFallbackEnabled] = useState(true);
+
+  const refreshLegacyFallbackFlag = useCallback(async () => {
+    if (!ORGANIZATION_TENANCY_ENABLED) {
+      setLegacyFallbackEnabled(true);
+      return true;
+    }
+
+    const { data, error: fallbackError } = await (supabase as any).rpc(
+      "is_organization_legacy_permission_fallback_enabled",
+    );
+
+    if (fallbackError) {
+      console.warn(
+        "[OrganizationContext] fallback legado indisponivel; mantendo rollback legado temporario.",
+        fallbackError,
+      );
+      setLegacyFallbackEnabled(true);
+      return true;
+    }
+
+    const enabled = data === true;
+    setLegacyFallbackEnabled(enabled);
+    return enabled;
+  }, []);
 
   const setCurrentOrganizationId = useCallback(
     (organizationId: string | null) => {
@@ -125,6 +154,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
           setCurrentTeamId(null);
           setModuleRoles([]);
           setModuleAccessAuthoritative(false);
+          setModuleRpcStatus("idle");
           setModuleAccessLoading(
             ORGANIZATION_TENANCY_ENABLED && Boolean(organizationId),
           );
@@ -143,6 +173,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setOrganizations([]);
       setModuleRoles([]);
       setModuleAccessAuthoritative(false);
+      setModuleRpcStatus("idle");
       setModuleAccessLoading(false);
       setError(null);
       setLoading(false);
@@ -155,6 +186,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCurrentTeamId(null);
       setModuleRoles([]);
       setModuleAccessAuthoritative(false);
+      setModuleRpcStatus("idle");
       setModuleAccessLoading(false);
       localStorage.removeItem(STORAGE_KEY);
       setError(null);
@@ -176,6 +208,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCurrentTeamId(null);
       setModuleRoles([]);
       setModuleAccessAuthoritative(false);
+      setModuleRpcStatus("error");
       setModuleAccessLoading(false);
       setError(
         "Não foi possível carregar as organizações disponíveis para esta conta.",
@@ -214,6 +247,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         if (current !== selected) {
           setModuleRoles([]);
           setModuleAccessAuthoritative(false);
+          setModuleRpcStatus("idle");
           setModuleAccessLoading(true);
         }
       } else {
@@ -222,6 +256,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         setCurrentTeamId(null);
         setModuleRoles([]);
         setModuleAccessAuthoritative(false);
+        setModuleRpcStatus("idle");
         setModuleAccessLoading(false);
       }
 
@@ -249,11 +284,13 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       ) {
         setModuleRoles([]);
         setModuleAccessAuthoritative(false);
+        setModuleRpcStatus("idle");
         setModuleAccessLoading(false);
         return;
       }
 
       setModuleAccessLoading(true);
+      const allowLegacyFallback = await refreshLegacyFallbackFlag();
 
       const { data, error: moduleError } = await (supabase as any).rpc(
         "get_my_organization_module_roles",
@@ -262,19 +299,24 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
       if (moduleError) {
         if (isOrganizationModuleRpcUnavailable(moduleError)) {
-          console.warn(
-            "[OrganizationContext] RPC organizacional de módulos ainda indisponível; mantendo compatibilidade legada.",
-          );
+          if (allowLegacyFallback) {
+            console.warn(
+              "[OrganizationContext] fallback legado usado porque o RPC organizacional de modulos esta indisponivel.",
+            );
+          }
           setModuleRoles([]);
-          setModuleAccessAuthoritative(false);
+          setModuleAccessAuthoritative(!allowLegacyFallback);
+          setModuleRpcStatus("unavailable");
         } else {
           console.error(
             "[OrganizationContext] get_my_organization_module_roles:",
             moduleError,
           );
           setModuleRoles([]);
-          setModuleAccessAuthoritative(true);
+          setModuleAccessAuthoritative(!allowLegacyFallback);
+          setModuleRpcStatus("error");
         }
+        if (!allowLegacyFallback) setCurrentTeamId(null);
         setModuleAccessLoading(false);
         return;
       }
@@ -286,9 +328,15 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         })),
       );
       setModuleAccessAuthoritative(true);
+      setModuleRpcStatus("success");
       setModuleAccessLoading(false);
     },
-    [currentOrganizationId, session],
+    [
+      currentOrganizationId,
+      refreshLegacyFallbackFlag,
+      session,
+      setCurrentTeamId,
+    ],
   );
 
   useEffect(() => {
@@ -302,6 +350,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setCurrentTeamId(null);
       setModuleRoles([]);
       setModuleAccessAuthoritative(false);
+      setModuleRpcStatus("idle");
       setModuleAccessLoading(false);
       return;
     }
@@ -347,33 +396,64 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
   const hasModuleAccess = useCallback(
     (module: string) => {
-      if (isPlatformAdmin) return true;
-      if (!ORGANIZATION_TENANCY_ENABLED || !moduleAccessAuthoritative) {
-        return hasLegacyModuleAccess(module);
+      const decision = resolveOrganizationPermissionAuthority({
+        tenancyEnabled: ORGANIZATION_TENANCY_ENABLED,
+        legacyFallbackEnabled,
+        rpcStatus: moduleRpcStatus,
+        isPlatformAdmin,
+        module,
+        moduleRoles,
+        legacyHasAccess: hasLegacyModuleAccess(module),
+        legacyRoleName: getLegacyModuleRole(module),
+      });
+
+      if (decision.shouldWarnLegacyFallback) {
+        console.warn(
+          "[OrganizationContext] fallback legado usado para autorizacao de modulo.",
+          { module },
+        );
       }
-      return moduleRoles.some((moduleRole) => moduleRole.module === module);
+
+      return decision.hasAccess;
     }, [
+      getLegacyModuleRole,
       hasLegacyModuleAccess,
       isPlatformAdmin,
+      legacyFallbackEnabled,
       moduleAccessAuthoritative,
+      moduleRpcStatus,
       moduleRoles,
     ],
   );
 
   const getModuleRole = useCallback(
     (module: string) => {
-      if (isPlatformAdmin) return "admin";
-      if (!ORGANIZATION_TENANCY_ENABLED || !moduleAccessAuthoritative) {
-        return getLegacyModuleRole(module);
+      const decision = resolveOrganizationPermissionAuthority({
+        tenancyEnabled: ORGANIZATION_TENANCY_ENABLED,
+        legacyFallbackEnabled,
+        rpcStatus: moduleRpcStatus,
+        isPlatformAdmin,
+        module,
+        moduleRoles,
+        legacyHasAccess: hasLegacyModuleAccess(module),
+        legacyRoleName: getLegacyModuleRole(module),
+      });
+
+      if (decision.shouldWarnLegacyFallback) {
+        console.warn(
+          "[OrganizationContext] fallback legado usado para papel de modulo.",
+          { module },
+        );
       }
-      return (
-        moduleRoles.find((moduleRole) => moduleRole.module === module)
-          ?.roleName ?? null
-      );
+
+      return decision.roleName;
     }, [
       getLegacyModuleRole,
+      hasLegacyModuleAccess,
       isPlatformAdmin,
+      legacyFallbackEnabled,
       moduleAccessAuthoritative,
+      moduleRpcStatus,
       moduleRoles,
     ],
   );

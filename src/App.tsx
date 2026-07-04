@@ -80,19 +80,15 @@ function PageLoader() {
 
 function resolveHomePath(options: {
   isAdmin: boolean;
-  moduleAccess?: string | null;
   hasModuleAccess: (module: string) => boolean;
   moduleRolesCount: number;
   roles: string[];
-  allowLegacyFallback: boolean;
 }): string {
   const {
     isAdmin,
-    moduleAccess,
     hasModuleAccess,
     moduleRolesCount,
     roles,
-    allowLegacyFallback,
   } = options;
 
   if (isAdmin) return "/dashboard-admin";
@@ -107,13 +103,6 @@ function resolveHomePath(options: {
   if (sustentacao) return "/sustentacao";
   if (agil) return "/sala-agil/dashboard";
   if (rdm) return "/rdm";
-
-  if (allowLegacyFallback && moduleRolesCount === 0 && moduleAccess) {
-    if (moduleAccess === "sustentacao") return "/sustentacao";
-    if (moduleAccess === "sala_agil") return "/sala-agil/dashboard";
-    if (moduleAccess === "rdm") return "/rdm";
-    if (moduleAccess === "admin") return "/modulos";
-  }
 
   return "/modulos";
 }
@@ -150,9 +139,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { session, loading, profile, isAdmin, roles } = useAuth();
+  const { session, loading, isAdmin, roles } = useAuth();
   const {
-    enabled: organizationTenancyEnabled,
     hasModuleAccess,
     moduleRoles,
   } = useOrganization();
@@ -167,11 +155,9 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
     <Navigate
       to={resolveHomePath({
         isAdmin,
-        moduleAccess: profile?.module_access,
         hasModuleAccess,
         moduleRolesCount: moduleRoles.length,
         roles,
-        allowLegacyFallback: !organizationTenancyEnabled,
       })}
       replace
     />
@@ -179,9 +165,8 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 }
 
 function ModuleRedirect() {
-  const { profile, loading, isAdmin, roles } = useAuth();
+  const { loading, isAdmin, roles } = useAuth();
   const {
-    enabled: organizationTenancyEnabled,
     hasModuleAccess,
     moduleRoles,
     moduleAccessLoading,
@@ -193,11 +178,9 @@ function ModuleRedirect() {
     <Navigate
       to={resolveHomePath({
         isAdmin,
-        moduleAccess: profile?.module_access,
         hasModuleAccess,
         moduleRolesCount: moduleRoles.length,
         roles,
-        allowLegacyFallback: !organizationTenancyEnabled,
       })}
       replace
     />

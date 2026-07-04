@@ -50,6 +50,7 @@ import {
   Copy, CheckCircle2, Save, History, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
 import { getInitials, formatPersonName } from "@/lib/personName";
 import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination }      from "@/shared/hooks/usePagination";
@@ -220,6 +221,8 @@ const TOG0: ToggleState = { user: null, saving: false };
 export function UserRolesManager() {
   const [users,         setUsers]         = useState<UserRow[]>([]);
   const [loading,       setLoading]       = useState(false);
+  const [organizationAuthorityLocked, setOrganizationAuthorityLocked] =
+    useState(false);
   const [searchFilter,  setSearchFilter]  = useState("");
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
   const debouncedSearch = useDebounce(searchFilter);
@@ -241,6 +244,21 @@ export function UserRolesManager() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
+      if (ORGANIZATION_TENANCY_ENABLED) {
+        const { data: fallbackEnabled, error: fallbackError } =
+          await (supabase as any).rpc(
+            "is_organization_legacy_permission_fallback_enabled",
+          );
+
+        if (!fallbackError && fallbackEnabled !== true) {
+          setOrganizationAuthorityLocked(true);
+          setUsers([]);
+          return;
+        }
+      }
+
+      setOrganizationAuthorityLocked(false);
+
       // Verifica se o usuário atual é admin_master
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
@@ -359,6 +377,10 @@ export function UserRolesManager() {
     if (!trimmed) { toast.error("O nome não pode estar vazio"); return; }
     const enabled = MODULES.filter(m => pendingModules[m.key]?.enabled);
     if (enabled.length === 0) { toast.error("Selecione pelo menos um módulo"); return; }
+    if (organizationAuthorityLocked) {
+      toast.error("Use a administracao de membros da organizacao para alterar acessos.");
+      return;
+    }
 
     setSaving(true);
     try {

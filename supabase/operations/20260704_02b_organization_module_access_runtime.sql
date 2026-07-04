@@ -37,6 +37,15 @@ begin
 end;
 $$;
 
+-- O legado não registra a organização de origem. Para impedir vazamento de
+-- permissões entre tenants, o backfill automático só atende usuários com um
+-- único membership ativo. Usuários multi-organização ficam para revisão.
+with active_membership_counts as (
+  select member.user_id, count(*) as membership_count
+  from public.organization_members member
+  where member.is_active
+  group by member.user_id
+)
 insert into public.organization_member_modules (
   org_id, user_id, module_key, role_name, assigned_by
 )
@@ -47,11 +56,20 @@ select
   module_role.role_name,
   null
 from public.organization_members member
+join active_membership_counts membership_count
+  on membership_count.user_id = member.user_id
+ and membership_count.membership_count = 1
 join public.user_module_roles module_role on module_role.user_id = member.user_id
 where member.is_active
   and module_role.module in ('sala_agil', 'sustentacao', 'rdm')
 on conflict (org_id, user_id, module_key) do nothing;
 
+with active_membership_counts as (
+  select member.user_id, count(*) as membership_count
+  from public.organization_members member
+  where member.is_active
+  group by member.user_id
+)
 insert into public.organization_member_modules (
   org_id, user_id, module_key, role_name, assigned_by
 )
@@ -66,6 +84,9 @@ select
   end,
   null
 from public.organization_members member
+join active_membership_counts membership_count
+  on membership_count.user_id = member.user_id
+ and membership_count.membership_count = 1
 join public.profiles profile on profile.user_id = member.user_id
 cross join lateral unnest(
   case
@@ -152,37 +173,69 @@ begin
   ) then
     raise exception 'Post-validation failed: acesso anônimo indevido';
   end if;
+
+  if exists (
+    select 1
+    from public.organization_member_modules module_access
+    left join public.organization_members member
+      on member.org_id = module_access.org_id
+     and member.user_id = module_access.user_id
+    where member.user_id is null
+  ) then
+    raise exception 'Post-validation failed: módulo sem membership correspondente';
+  end if;
 end;
 $$;
 
 commit;
 
-select
-  (select count(*) from public.organization_member_modules)::bigint
-    as organization_module_assignments,
-  (select count(distinct (org_id, user_id))
-    from public.organization_member_modules)::bigint
-    as members_with_module_access,
-  has_function_privilege(
-    'authenticated',
-    'public.get_my_organization_module_roles(uuid)',
-    'EXECUTE'
-  ) as tenant_module_rpc_available,
-  not has_function_privilege(
-    'anon',
-    'public.get_my_organization_module_roles(uuid)',
-    'EXECUTE'
-  ) as anonymous_access_revoked,
-  (
-    to_regprocedure('public.get_my_organization_module_roles(uuid)') is not null
-    and has_function_privilege(
+with multi_org_users as (
+  select member.user_id
+  from public.organization_members member
+  where member.is_active
+    and not public.is_platform_admin(member.user_id)
+  group by member.user_id
+  having count(*) > 1
+),
+state as (
+  select
+    (select count(*) from public.organization_member_modules)::bigint
+      as organization_module_assignments,
+    (select count(distinct (org_id, user_id))
+      from public.organization_member_modules)::bigint
+      as members_with_module_access,
+    (select count(*) from multi_org_users)::bigint
+      as multi_org_users_requiring_review,
+    has_function_privilege(
       'authenticated',
       'public.get_my_organization_module_roles(uuid)',
       'EXECUTE'
-    )
-    and not has_function_privilege(
+    ) as tenant_module_rpc_available,
+    not has_function_privilege(
       'anon',
       'public.get_my_organization_module_roles(uuid)',
       'EXECUTE'
-    )
-  ) as organization_module_access_runtime_ok;
+    ) as anonymous_access_revoked,
+    not exists (
+      select 1
+      from public.organization_member_modules module_access
+      left join public.organization_members member
+        on member.org_id = module_access.org_id
+       and member.user_id = module_access.user_id
+      where member.user_id is null
+    ) as assignments_consistent
+)
+select
+  state.organization_module_assignments,
+  state.members_with_module_access,
+  state.multi_org_users_requiring_review,
+  state.tenant_module_rpc_available,
+  state.anonymous_access_revoked,
+  state.assignments_consistent,
+  (
+    to_regprocedure('public.get_my_organization_module_roles(uuid)') is not null
+    and state.tenant_module_rpc_available
+    and state.anonymous_access_revoked
+    and state.assignments_consistent
+  ) as organization_module_access_runtime_ok
+from state;

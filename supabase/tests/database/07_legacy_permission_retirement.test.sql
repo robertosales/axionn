@@ -34,8 +34,15 @@ values
   ('22600000-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'existing@lote6.test', '', now(), now(), now()),
   ('22600000-0000-0000-0000-000000000005', 'authenticated', 'authenticated', 'inactive@lote6.test', '', now(), now(), now()),
   ('22600000-0000-0000-0000-000000000006', 'authenticated', 'authenticated', 'platform@lote6.test', '', now(), now(), now()),
-  ('22600000-0000-0000-0000-000000000007', 'authenticated', 'authenticated', 'common@lote6.test', '', now(), now(), now())
+  ('22600000-0000-0000-0000-000000000007', 'authenticated', 'authenticated', 'common@lote6.test', '', now(), now(), now()),
+  ('22600000-0000-0000-0000-000000000008', 'authenticated', 'authenticated', 'fixture-admin@lote6.test', '', now(), now(), now())
 on conflict (id) do nothing;
+
+insert into public.user_roles (user_id, role)
+values ('22600000-0000-0000-0000-000000000008', 'admin')
+on conflict do nothing;
+
+select pg_temp.authenticate_as('22600000-0000-0000-0000-000000000008');
 
 insert into public.profiles (user_id, display_name, email, module_access, is_active)
 values

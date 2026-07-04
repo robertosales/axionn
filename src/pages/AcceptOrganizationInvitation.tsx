@@ -61,10 +61,7 @@ export default function AcceptOrganizationInvitation() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const { session, loading: authLoading } = useAuth();
-  const {
-    refreshOrganizations,
-    setCurrentOrganizationId,
-  } = useOrganization();
+  const { refreshOrganizations } = useOrganization();
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
   const [result, setResult] = useState<AcceptanceResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,11 +138,18 @@ export default function AcceptOrganizationInvitation() {
     setResult(normalized);
 
     if (normalized?.accepted && normalized.organizationId) {
+      localStorage.setItem("selectedOrganizationId", normalized.organizationId);
       await refreshOrganizations();
-      setCurrentOrganizationId(normalized.organizationId);
     }
 
     setAccepting(false);
+  };
+
+  const continueToAxion = () => {
+    if (result?.organizationId) {
+      localStorage.setItem("selectedOrganizationId", result.organizationId);
+    }
+    window.location.assign("/modulos");
   };
 
   const roleLabel =
@@ -262,7 +266,7 @@ export default function AcceptOrganizationInvitation() {
           )}
 
           {result?.accepted && (
-            <Button className="w-full" onClick={() => navigate("/modulos") }>
+            <Button className="w-full" onClick={continueToAxion}>
               Continuar para o Axion
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>

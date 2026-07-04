@@ -14,7 +14,7 @@ export function GlobalLogoutButton() {
       type="button"
       variant="outline"
       size="sm"
-      className="fixed right-[19.25rem] top-2 z-[71] hidden h-8 bg-background/95 shadow-sm backdrop-blur sm:flex"
+      className="fixed right-[25rem] top-2 z-[71] hidden h-8 bg-background/95 shadow-sm backdrop-blur lg:flex"
       onClick={signOut}
     >
       <LogOut className="mr-2 h-4 w-4" />

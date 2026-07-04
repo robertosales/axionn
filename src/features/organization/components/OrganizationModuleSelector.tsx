@@ -1,11 +1,31 @@
 import { useNavigate } from "react-router-dom";
-import { ClipboardCheck, Kanban, Loader2, LogOut, Wrench } from "lucide-react";
+import {
+  Building2,
+  Check,
+  ChevronsUpDown,
+  ClipboardCheck,
+  Gauge,
+  Kanban,
+  Loader2,
+  ShieldCheck,
+  Users,
+  Wrench,
+} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { AxionLogo } from "@/components/AxionLogo";
+import { UserAccountMenu } from "@/components/GlobalLogoutButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ModuleDefinition {
   key: "sala_agil" | "sustentacao" | "rdm";
@@ -48,9 +68,14 @@ const MODULES: ModuleDefinition[] = [
 
 export default function OrganizationModuleSelector() {
   const navigate = useNavigate();
-  const { profile, signOut, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const {
+    organizations,
     currentOrganization,
+    currentOrganizationId,
+    setCurrentOrganizationId,
+    isPlatformAdmin,
+    isOrganizationAdmin,
     hasModuleAccess,
     moduleAccessLoading,
   } = useOrganization();
@@ -68,26 +93,83 @@ export default function OrganizationModuleSelector() {
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/20">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <AxionLogo size={36} />
-            <div>
-              <p className="font-semibold">Axion</p>
-              <p className="text-xs text-muted-foreground">
+      <header className="relative z-[80] border-b bg-background">
+        <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <AxionLogo size={34} />
+            <div className="min-w-0 leading-tight">
+              <p className="text-base font-semibold">Axion</p>
+              <p className="truncate text-xs text-muted-foreground">
                 {currentOrganization?.name ?? "Organização"}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-muted-foreground sm:block">
-              {profile?.display_name ?? profile?.email}
-            </span>
-            <Button variant="ghost" size="sm" onClick={signOut}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Sair
-            </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {currentOrganization && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-10 min-w-[190px] max-w-[240px] items-center gap-2 rounded-xl border bg-background px-3 text-sm shadow-sm transition-colors hover:bg-accent"
+                    aria-label="Opções da organização"
+                  >
+                    {isPlatformAdmin ? (
+                      <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
+                    ) : (
+                      <Building2 className="h-4 w-4 shrink-0 text-primary" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-left font-medium">
+                      {currentOrganization.name}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72">
+                  <DropdownMenuLabel>Organização ativa</DropdownMenuLabel>
+                  {organizations.length > 1 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      {organizations.map((organization) => (
+                        <DropdownMenuItem
+                          key={organization.id}
+                          className="cursor-pointer gap-3"
+                          onClick={() => setCurrentOrganizationId(organization.id)}
+                        >
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate">
+                            {organization.name}
+                          </span>
+                          {organization.id === currentOrganizationId && (
+                            <Check className="h-4 w-4 text-primary" />
+                          )}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  )}
+                  {isOrganizationAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="cursor-pointer gap-2"
+                        onClick={() => navigate("/organization/members")}
+                      >
+                        <Users className="h-4 w-4" />
+                        Gerenciar membros
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="cursor-pointer gap-2"
+                        onClick={() => navigate("/organization/usage")}
+                      >
+                        <Gauge className="h-4 w-4" />
+                        Plano e uso
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <UserAccountMenu variant="inline" />
           </div>
         </div>
       </header>

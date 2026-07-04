@@ -1,14 +1,23 @@
 import { Suspense, lazy } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Route,
+  Routes,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
 import { OrganizationOperationalGuard } from "@/components/OrganizationOperationalGuard";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { OrganizationProvider } from "@/contexts/OrganizationContext";
+import {
+  OrganizationProvider,
+  useOrganization,
+} from "@/contexts/OrganizationContext";
 import { SprintProvider } from "@/contexts/SprintContext";
 import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAlert";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -22,6 +31,12 @@ import ResetPassword from "./pages/ResetPassword.tsx";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange.tsx"));
+const AcceptOrganizationInvitation = lazy(
+  () => import("./pages/AcceptOrganizationInvitation.tsx"),
+);
+const OrganizationMembersPage = lazy(
+  () => import("./features/organization/pages/OrganizationMembersPage"),
+);
 const SustentacaoPage = lazy(() => import("./features/sustentacao/SustentacaoPage"));
 const RdmPage = lazy(() => import("./features/rdm/RdmPage"));
 const ModuleSelector = lazy(() =>
@@ -92,6 +107,12 @@ function resolveHomePath(options: {
   return "/modulos";
 }
 
+function resolveSafeNextPath(search: string) {
+  const next = new URLSearchParams(search).get("next");
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
+  return next;
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, refreshProfile } = useAuth();
   const { showWizard, completeOnboarding } = useOnboarding();
@@ -117,6 +138,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
   const {
     session,
     loading,
@@ -128,6 +150,10 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   } = useAuth();
   if (loading) return <PageLoader />;
   if (!session) return <>{children}</>;
+
+  const nextPath = resolveSafeNextPath(location.search);
+  if (nextPath) return <Navigate to={nextPath} replace />;
+
   return (
     <Navigate
       to={resolveHomePath({
@@ -188,6 +214,13 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function OrganizationAdminGuard({ children }: { children: React.ReactNode }) {
+  const { loading, isOrganizationAdmin } = useOrganization();
+  if (loading) return <PageLoader />;
+  if (!isOrganizationAdmin) return <Navigate to="/modulos" replace />;
+  return <>{children}</>;
+}
+
 function ContractAdminGuard({ children }: { children: React.ReactNode }) {
   const { isAdmin, roles, loading } = useAuth();
   if (loading) return null;
@@ -206,8 +239,22 @@ function AppRoutes() {
           <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route
+            path="/accept-invitation"
+            element={<AcceptOrganizationInvitation />}
+          />
           <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
           <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
+          <Route
+            path="/organization/members"
+            element={
+              <ProtectedRoute>
+                <OrganizationAdminGuard>
+                  <OrganizationMembersPage />
+                </OrganizationAdminGuard>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/dashboard-admin"
             element={<ProtectedRoute><AdminGuard><AdminDashboard /></AdminGuard></ProtectedRoute>}

@@ -41,10 +41,8 @@ const SustentacaoPage = lazy(
   () => import("./features/sustentacao/SustentacaoPage"),
 );
 const RdmPage = lazy(() => import("./features/rdm/RdmPage"));
-const ModuleSelector = lazy(() =>
-  import("./features/sustentacao/components/ModuleSelector").then((module) => ({
-    default: module.ModuleSelector,
-  })),
+const ModuleSelector = lazy(
+  () => import("./features/organization/components/OrganizationModuleSelector"),
 );
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const PlanningPokerPage = lazy(() => import("./pages/PlanningPokerPage"));

@@ -37,6 +37,9 @@ const AcceptOrganizationInvitation = lazy(
 const OrganizationMembersPage = lazy(
   () => import("./features/organization/pages/OrganizationMembersPage"),
 );
+const OrganizationUsagePage = lazy(
+  () => import("./features/organization/pages/OrganizationUsagePage"),
+);
 const SustentacaoPage = lazy(
   () => import("./features/sustentacao/SustentacaoPage"),
 );
@@ -275,6 +278,16 @@ function AppRoutes() {
               <ProtectedRoute>
                 <OrganizationAdminGuard>
                   <OrganizationMembersPage />
+                </OrganizationAdminGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organization/usage"
+            element={
+              <ProtectedRoute>
+                <OrganizationAdminGuard>
+                  <OrganizationUsagePage />
                 </OrganizationAdminGuard>
               </ProtectedRoute>
             }

@@ -37,7 +37,9 @@ const AcceptOrganizationInvitation = lazy(
 const OrganizationMembersPage = lazy(
   () => import("./features/organization/pages/OrganizationMembersPage"),
 );
-const SustentacaoPage = lazy(() => import("./features/sustentacao/SustentacaoPage"));
+const SustentacaoPage = lazy(
+  () => import("./features/sustentacao/SustentacaoPage"),
+);
 const RdmPage = lazy(() => import("./features/rdm/RdmPage"));
 const ModuleSelector = lazy(() =>
   import("./features/sustentacao/components/ModuleSelector").then((module) => ({
@@ -80,9 +82,16 @@ function resolveHomePath(options: {
   hasModuleAccess: (module: string) => boolean;
   moduleRolesCount: number;
   roles: string[];
+  allowLegacyFallback: boolean;
 }): string {
-  const { isAdmin, moduleAccess, hasModuleAccess, moduleRolesCount, roles } =
-    options;
+  const {
+    isAdmin,
+    moduleAccess,
+    hasModuleAccess,
+    moduleRolesCount,
+    roles,
+    allowLegacyFallback,
+  } = options;
 
   if (isAdmin) return "/dashboard-admin";
   if (roles.includes("admin_contrato")) return "/meu-contrato";
@@ -97,7 +106,7 @@ function resolveHomePath(options: {
   if (agil) return "/sala-agil/dashboard";
   if (rdm) return "/rdm";
 
-  if (moduleRolesCount === 0 && moduleAccess) {
+  if (allowLegacyFallback && moduleRolesCount === 0 && moduleAccess) {
     if (moduleAccess === "sustentacao") return "/sustentacao";
     if (moduleAccess === "sala_agil") return "/sala-agil/dashboard";
     if (moduleAccess === "rdm") return "/rdm";
@@ -139,15 +148,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const { session, loading, profile, isAdmin, roles } = useAuth();
   const {
-    session,
-    loading,
-    profile,
-    isAdmin,
+    enabled: organizationTenancyEnabled,
     hasModuleAccess,
     moduleRoles,
-    roles,
-  } = useAuth();
+  } = useOrganization();
+
   if (loading) return <PageLoader />;
   if (!session) return <>{children}</>;
 
@@ -162,6 +169,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
         hasModuleAccess,
         moduleRolesCount: moduleRoles.length,
         roles,
+        allowLegacyFallback: !organizationTenancyEnabled,
       })}
       replace
     />
@@ -169,9 +177,16 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 }
 
 function ModuleRedirect() {
-  const { profile, loading, isAdmin, hasModuleAccess, moduleRoles, roles } =
-    useAuth();
-  if (loading) return <PageLoader />;
+  const { profile, loading, isAdmin, roles } = useAuth();
+  const {
+    enabled: organizationTenancyEnabled,
+    hasModuleAccess,
+    moduleRoles,
+    moduleAccessLoading,
+  } = useOrganization();
+
+  if (loading || moduleAccessLoading) return <PageLoader />;
+
   return (
     <Navigate
       to={resolveHomePath({
@@ -180,6 +195,7 @@ function ModuleRedirect() {
         hasModuleAccess,
         moduleRolesCount: moduleRoles.length,
         roles,
+        allowLegacyFallback: !organizationTenancyEnabled,
       })}
       replace
     />
@@ -193,14 +209,18 @@ function ModuleGuard({
   module: "sala_agil" | "sustentacao" | "rdm";
   children: React.ReactNode;
 }) {
-  const { isAdmin, hasModuleAccess } = useAuth();
+  const { isAdmin } = useAuth();
+  const { hasModuleAccess, moduleAccessLoading } = useOrganization();
+
+  if (moduleAccessLoading) return <PageLoader />;
   if (isAdmin || hasModuleAccess(module)) return <>{children}</>;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="space-y-4 text-center">
         <p className="text-lg font-semibold text-destructive">Acesso Restrito</p>
         <p className="text-muted-foreground">
-          Você não tem permissão para acessar este módulo.
+          Você não tem permissão para acessar este módulo nesta organização.
         </p>
       </div>
     </div>
@@ -243,8 +263,14 @@ function AppRoutes() {
             path="/accept-invitation"
             element={<AcceptOrganizationInvitation />}
           />
-          <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
-          <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
+          <Route
+            path="/"
+            element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>}
+          />
+          <Route
+            path="/modulos"
+            element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>}
+          />
           <Route
             path="/organization/members"
             element={
@@ -267,7 +293,10 @@ function AppRoutes() {
             path="/contratos"
             element={<ProtectedRoute><AdminGuard><ContractsPage /></AdminGuard></ProtectedRoute>}
           />
-          <Route path="/okr" element={<ProtectedRoute><OkrPage /></ProtectedRoute>} />
+          <Route
+            path="/okr"
+            element={<ProtectedRoute><OkrPage /></ProtectedRoute>}
+          />
           <Route
             path="/sala-agil"
             element={

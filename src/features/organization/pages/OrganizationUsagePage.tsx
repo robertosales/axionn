@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Bot,
@@ -9,9 +9,11 @@ import {
   Gauge,
   Loader2,
   RefreshCw,
+  Settings2,
   Users,
 } from "lucide-react";
 import { useOrganizationUsage } from "@/features/organization/hooks/useOrganizationUsage";
+import OrganizationSettingsPage from "@/features/organization/pages/OrganizationSettingsPage";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -119,6 +121,7 @@ function UsageCard({
 
 export default function OrganizationUsagePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { organization, usage, entitlements, loading, error, refresh } =
     useOrganizationUsage();
 
@@ -132,6 +135,10 @@ export default function OrganizationUsagePage() {
       ),
     [entitlements],
   );
+
+  if (searchParams.get("view") === "settings") {
+    return <OrganizationSettingsPage />;
+  }
 
   if (!organization) {
     return (
@@ -172,6 +179,14 @@ export default function OrganizationUsagePage() {
             >
               <Users className="mr-2 h-4 w-4" />
               Membros
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/organization/usage?view=settings")}
+            >
+              <Settings2 className="mr-2 h-4 w-4" />
+              Configurações
             </Button>
             <Button variant="outline" size="sm" onClick={() => void refresh()}>
               <RefreshCw className="mr-2 h-4 w-4" />

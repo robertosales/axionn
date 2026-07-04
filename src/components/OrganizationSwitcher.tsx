@@ -5,7 +5,9 @@ import {
   ChevronsUpDown,
   Loader2,
   ShieldCheck,
+  Users,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import {
@@ -26,6 +28,7 @@ const STATUS_LABELS = {
 } as const;
 
 export function OrganizationSwitcher() {
+  const navigate = useNavigate();
   const { session } = useAuth();
   const {
     enabled,
@@ -36,6 +39,7 @@ export function OrganizationSwitcher() {
     currentOrganizationId,
     setCurrentOrganizationId,
     isPlatformAdmin,
+    isOrganizationAdmin,
   } = useOrganization();
 
   if (!enabled || !session) return null;
@@ -73,7 +77,7 @@ export function OrganizationSwitcher() {
         ? "Admin da empresa"
         : "Membro";
 
-  if (organizations.length === 1) {
+  if (organizations.length === 1 && !isOrganizationAdmin) {
     return (
       <div className={baseClass} title={`${organizationLabel} · ${roleLabel}`}>
         {isPlatformAdmin ? (
@@ -92,7 +96,7 @@ export function OrganizationSwitcher() {
         <button
           type="button"
           className={cn(baseClass, "cursor-pointer hover:bg-accent")}
-          aria-label="Trocar organização"
+          aria-label="Opções da organização"
           title={`${organizationLabel} · ${roleLabel}`}
         >
           {isPlatformAdmin ? (
@@ -111,37 +115,63 @@ export function OrganizationSwitcher() {
         <DropdownMenuLabel>
           <span className="block text-xs font-semibold">Organização ativa</span>
           <span className="block text-[11px] font-normal text-muted-foreground">
-            Trocar a organização também redefine o time ativo.
+            {organizations.length > 1
+              ? "Trocar a organização também redefine o time ativo."
+              : roleLabel}
           </span>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
 
-        {organizations.map((organization) => (
-          <DropdownMenuItem
-            key={organization.id}
-            onClick={() => setCurrentOrganizationId(organization.id)}
-            className="cursor-pointer gap-3 py-2.5"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-              {organization.isPlatformAdmin ? (
-                <ShieldCheck className="h-4 w-4 text-primary" />
-              ) : (
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-              )}
-            </div>
+        {organizations.length > 1 && (
+          <>
+            <DropdownMenuSeparator />
+            {organizations.map((organization) => (
+              <DropdownMenuItem
+                key={organization.id}
+                onClick={() => setCurrentOrganizationId(organization.id)}
+                className="cursor-pointer gap-3 py-2.5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+                  {organization.isPlatformAdmin ? (
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{organization.name}</p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {STATUS_LABELS[organization.status]} · {organization.plan}
-              </p>
-            </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{organization.name}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {STATUS_LABELS[organization.status]} · {organization.plan}
+                  </p>
+                </div>
 
-            {organization.id === currentOrganizationId && (
-              <Check className="h-4 w-4 shrink-0 text-primary" />
-            )}
-          </DropdownMenuItem>
-        ))}
+                {organization.id === currentOrganizationId && (
+                  <Check className="h-4 w-4 shrink-0 text-primary" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
+
+        {isOrganizationAdmin && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer gap-3 py-2.5"
+              onClick={() => navigate("/organization/members")}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <Users className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Gerenciar membros</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Convites, papéis e módulos
+                </p>
+              </div>
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

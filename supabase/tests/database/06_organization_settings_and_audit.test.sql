@@ -131,14 +131,18 @@ select results_eq(
   'audit event identifies all changed fields'
 );
 
-select *
-from public.update_organization_settings_v2(
-  '12400000-0000-0000-0000-000000000001',
-  'Settings Tenant Updated',
-  'Novo Contato',
-  'contact@test.local',
-  'https://example.com/logo.png'
-);
+do $$
+begin
+  perform *
+  from public.update_organization_settings_v2(
+    '12400000-0000-0000-0000-000000000001',
+    'Settings Tenant Updated',
+    'Novo Contato',
+    'contact@test.local',
+    'https://example.com/logo.png'
+  );
+end;
+$$;
 
 select is(
   (

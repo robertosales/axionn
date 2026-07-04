@@ -7,6 +7,7 @@ import {
   Gauge,
   Kanban,
   Loader2,
+  Settings2,
   ShieldCheck,
   Users,
   Wrench,
@@ -163,6 +164,13 @@ export default function OrganizationModuleSelector() {
                       >
                         <Gauge className="h-4 w-4" />
                         Plano e uso
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="cursor-pointer gap-2"
+                        onClick={() => navigate("/organization/usage?view=settings")}
+                      >
+                        <Settings2 className="h-4 w-4" />
+                        Configurações
                       </DropdownMenuItem>
                     </>
                   )}

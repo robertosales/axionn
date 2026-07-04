@@ -17,6 +17,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { Button }  from "@/components/ui/button";
 import { Badge }   from "@/components/ui/badge";
 import { Input }   from "@/components/ui/input";
@@ -219,6 +220,7 @@ const TOG0: ToggleState = { user: null, saving: false };
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function UserRolesManager() {
+  const { currentOrganizationId, isOrganizationAdmin } = useOrganization();
   const [users,         setUsers]         = useState<UserRow[]>([]);
   const [loading,       setLoading]       = useState(false);
   const [organizationAuthorityLocked, setOrganizationAuthorityLocked] =
@@ -252,7 +254,61 @@ export function UserRolesManager() {
 
         if (!fallbackError && fallbackEnabled !== true) {
           setOrganizationAuthorityLocked(true);
-          setUsers([]);
+          setIsCurrentUserAdmin(isOrganizationAdmin);
+
+          if (!currentOrganizationId || !isOrganizationAdmin) {
+            setUsers([]);
+            return;
+          }
+
+          const [membersRes, contractRolesRes] = await Promise.all([
+            (supabase as any).rpc("get_organization_members_v2", {
+              p_org_id: currentOrganizationId,
+            }),
+            supabase.from("user_contracts").select("user_id, role"),
+          ]);
+
+          if (membersRes.error) {
+            throw membersRes.error;
+          }
+
+          const contractRoleMap: Record<string, "admin_contrato" | "member"> = {};
+          (contractRolesRes.error ? [] : contractRolesRes.data || []).forEach(
+            (contractRole: any) => {
+              if (contractRole.user_id) {
+                contractRoleMap[contractRole.user_id] = contractRole.role;
+              }
+            },
+          );
+
+          setUsers(
+            ((membersRes.data ?? []) as any[]).map((member) => {
+              const moduleKeys = ((member.module_keys ?? []) as string[])
+                .filter((moduleKey) =>
+                  ["sala_agil", "sustentacao", "rdm"].includes(moduleKey),
+                ) as ModuleKey[];
+              const roleName =
+                member.membership_role === "owner" ||
+                member.membership_role === "admin"
+                  ? "admin"
+                  : "member";
+
+              return {
+                user_id:              String(member.user_id),
+                display_name:         String(member.display_name || "—"),
+                email:                String(member.email || ""),
+                module_access:        moduleKeys[0] || "sala_agil",
+                is_active:            Boolean(member.is_active),
+                must_change_password: false,
+                teams:                [],
+                moduleRoles:          moduleKeys.map((moduleKey) => ({
+                  module: moduleKey,
+                  role: roleName,
+                })),
+                contract_role:        contractRoleMap[member.user_id] ?? null,
+              };
+            }),
+          );
           return;
         }
       }
@@ -318,7 +374,7 @@ export function UserRolesManager() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentOrganizationId, isOrganizationAdmin]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 

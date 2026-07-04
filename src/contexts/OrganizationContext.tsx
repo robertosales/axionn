@@ -28,6 +28,11 @@ export interface OrganizationOption {
   isPlatformAdmin: boolean;
 }
 
+export interface OrganizationModuleRole {
+  module: string;
+  roleName: string;
+}
+
 interface OrganizationContextValue {
   enabled: boolean;
   loading: boolean;
@@ -42,6 +47,11 @@ interface OrganizationContextValue {
   accessMode: OrganizationAccessMode;
   canOperate: boolean;
   operationBlockReason: string | null;
+  moduleRoles: OrganizationModuleRole[];
+  moduleAccessLoading: boolean;
+  hasModuleAccess: (module: string) => boolean;
+  getModuleRole: (module: string) => string | null;
+  refreshModuleAccess: (organizationId?: string | null) => Promise<void>;
 }
 
 const OrganizationContext = createContext<OrganizationContextValue | undefined>(
@@ -62,14 +72,37 @@ export function chooseCurrentOrganizationId(
   return organizations[0]?.id ?? null;
 }
 
+function isOrganizationModuleRpcUnavailable(error: {
+  code?: string;
+  message?: string;
+}) {
+  return (
+    error.code === "PGRST202" ||
+    error.code === "42883" ||
+    error.message?.includes("Could not find the function") === true ||
+    error.message?.includes("does not exist") === true
+  );
+}
+
 export function OrganizationProvider({ children }: { children: ReactNode }) {
-  const { user, session, refreshTeams, setCurrentTeamId } = useAuth();
+  const {
+    user,
+    session,
+    refreshTeams,
+    setCurrentTeamId,
+    hasModuleAccess: hasLegacyModuleAccess,
+    getModuleRole: getLegacyModuleRole,
+  } = useAuth();
   const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
   const [currentOrganizationId, setCurrentOrganizationIdState] = useState<
     string | null
   >(() => localStorage.getItem(STORAGE_KEY));
   const [loading, setLoading] = useState(ORGANIZATION_TENANCY_ENABLED);
   const [error, setError] = useState<string | null>(null);
+  const [moduleRoles, setModuleRoles] = useState<OrganizationModuleRole[]>([]);
+  const [moduleAccessLoading, setModuleAccessLoading] = useState(false);
+  const [moduleAccessAuthoritative, setModuleAccessAuthoritative] =
+    useState(false);
 
   const setCurrentOrganizationId = useCallback(
     (organizationId: string | null) => {
@@ -88,6 +121,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         if (current !== organizationId) {
           localStorage.removeItem("selectedTeamId");
           setCurrentTeamId(null);
+          setModuleRoles([]);
+          setModuleAccessAuthoritative(false);
         }
         return organizationId;
       });
@@ -101,6 +136,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const refreshOrganizations = useCallback(async () => {
     if (!ORGANIZATION_TENANCY_ENABLED) {
       setOrganizations([]);
+      setModuleRoles([]);
+      setModuleAccessAuthoritative(false);
       setError(null);
       setLoading(false);
       return;
@@ -110,6 +147,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setOrganizations([]);
       setCurrentOrganizationIdState(null);
       setCurrentTeamId(null);
+      setModuleRoles([]);
+      setModuleAccessAuthoritative(false);
       localStorage.removeItem(STORAGE_KEY);
       setError(null);
       setLoading(false);
@@ -128,6 +167,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       setOrganizations([]);
       setCurrentOrganizationIdState(null);
       setCurrentTeamId(null);
+      setModuleRoles([]);
+      setModuleAccessAuthoritative(false);
       setError(
         "Não foi possível carregar as organizações disponíveis para esta conta.",
       );
@@ -165,6 +206,8 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem("selectedTeamId");
         setCurrentTeamId(null);
+        setModuleRoles([]);
+        setModuleAccessAuthoritative(false);
       }
 
       return selected;
@@ -177,6 +220,62 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, [session, setCurrentTeamId, user?.id]);
 
+  const refreshModuleAccess = useCallback(
+    async (organizationId?: string | null) => {
+      const targetOrganizationId =
+        organizationId === undefined
+          ? currentOrganizationId
+          : organizationId;
+
+      if (
+        !ORGANIZATION_TENANCY_ENABLED ||
+        !session ||
+        !targetOrganizationId
+      ) {
+        setModuleRoles([]);
+        setModuleAccessAuthoritative(false);
+        setModuleAccessLoading(false);
+        return;
+      }
+
+      setModuleAccessLoading(true);
+
+      const { data, error: moduleError } = await (supabase as any).rpc(
+        "get_my_organization_module_roles",
+        { p_org_id: targetOrganizationId },
+      );
+
+      if (moduleError) {
+        if (isOrganizationModuleRpcUnavailable(moduleError)) {
+          console.warn(
+            "[OrganizationContext] RPC organizacional de módulos ainda indisponível; mantendo compatibilidade legada.",
+          );
+          setModuleRoles([]);
+          setModuleAccessAuthoritative(false);
+        } else {
+          console.error(
+            "[OrganizationContext] get_my_organization_module_roles:",
+            moduleError,
+          );
+          setModuleRoles([]);
+          setModuleAccessAuthoritative(true);
+        }
+        setModuleAccessLoading(false);
+        return;
+      }
+
+      setModuleRoles(
+        ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+          module: String(row.module),
+          roleName: String(row.role_name ?? "member"),
+        })),
+      );
+      setModuleAccessAuthoritative(true);
+      setModuleAccessLoading(false);
+    },
+    [currentOrganizationId, session],
+  );
+
   useEffect(() => {
     void refreshOrganizations();
   }, [refreshOrganizations]);
@@ -186,11 +285,22 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
     if (!currentOrganizationId) {
       setCurrentTeamId(null);
+      setModuleRoles([]);
+      setModuleAccessAuthoritative(false);
       return;
     }
 
-    void refreshTeams(undefined, currentOrganizationId);
-  }, [currentOrganizationId, refreshTeams, session, setCurrentTeamId]);
+    void Promise.all([
+      refreshTeams(undefined, currentOrganizationId),
+      refreshModuleAccess(currentOrganizationId),
+    ]);
+  }, [
+    currentOrganizationId,
+    refreshModuleAccess,
+    refreshTeams,
+    session,
+    setCurrentTeamId,
+  ]);
 
   const currentOrganization = useMemo(
     () =>
@@ -219,6 +329,39 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     [currentOrganization?.status, isPlatformAdmin],
   );
 
+  const hasModuleAccess = useCallback(
+    (module: string) => {
+      if (isPlatformAdmin) return true;
+      if (!ORGANIZATION_TENANCY_ENABLED || !moduleAccessAuthoritative) {
+        return hasLegacyModuleAccess(module);
+      }
+      return moduleRoles.some((moduleRole) => moduleRole.module === module);
+    }, [
+      hasLegacyModuleAccess,
+      isPlatformAdmin,
+      moduleAccessAuthoritative,
+      moduleRoles,
+    ],
+  );
+
+  const getModuleRole = useCallback(
+    (module: string) => {
+      if (isPlatformAdmin) return "admin";
+      if (!ORGANIZATION_TENANCY_ENABLED || !moduleAccessAuthoritative) {
+        return getLegacyModuleRole(module);
+      }
+      return (
+        moduleRoles.find((moduleRole) => moduleRole.module === module)
+          ?.roleName ?? null
+      );
+    }, [
+      getLegacyModuleRole,
+      isPlatformAdmin,
+      moduleAccessAuthoritative,
+      moduleRoles,
+    ],
+  );
+
   const value = useMemo<OrganizationContextValue>(
     () => ({
       enabled: ORGANIZATION_TENANCY_ENABLED,
@@ -234,16 +377,26 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       accessMode: accessDecision.mode,
       canOperate: accessDecision.canOperate,
       operationBlockReason: accessDecision.reason,
+      moduleRoles,
+      moduleAccessLoading,
+      hasModuleAccess,
+      getModuleRole,
+      refreshModuleAccess,
     }),
     [
       accessDecision,
       currentOrganization,
       currentOrganizationId,
       error,
+      getModuleRole,
+      hasModuleAccess,
       isOrganizationAdmin,
       isPlatformAdmin,
       loading,
+      moduleAccessLoading,
+      moduleRoles,
       organizations,
+      refreshModuleAccess,
       refreshOrganizations,
       setCurrentOrganizationId,
     ],

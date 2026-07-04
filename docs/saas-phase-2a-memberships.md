@@ -2,82 +2,56 @@
 
 ## Objetivo
 
-Permitir que owners e administradores gerenciem o acesso à própria organização sem depender do papel global legado `admin`.
+Permitir que owners e administradores gerenciem membros, convites, papéis e módulos dentro da organização ativa.
 
 ## Escopo implementado
 
-- convites por e-mail com token one-time armazenado apenas como hash;
-- validade, reenvio, revogação, aceite e histórico do convite;
-- validação de que o usuário autenticado possui o mesmo e-mail convidado;
+- convites por e-mail com token one-time armazenado somente como hash;
+- validade, reenvio, revogação, aceite e histórico;
+- validação do e-mail autenticado;
 - memberships ativos e inativos;
 - papéis `owner`, `admin` e `member`;
 - transferência explícita de ownership;
-- permissões de módulos vinculadas à organização;
-- auditoria de alterações de acesso;
-- Edge Function para entrega via convite Auth ou magic link;
-- página `/organization/members` para gestão visual;
-- página `/accept-invitation` para aceite;
-- RPCs tenant-scoped e testes pgTAP;
-- operação transacional e idempotente para o Lovable Cloud.
+- módulos vinculados à organização;
+- auditoria de alterações;
+- entrega de convite por Edge Function;
+- tela `/organization/members`;
+- tela `/accept-invitation`;
+- seletor `/modulos` baseado na organização ativa;
+- testes pgTAP e validações de CI.
 
 ## Segurança
 
-- o token bruto nunca é persistido;
-- somente a Edge Function com `service_role` cria ou rotaciona tokens;
-- `anon` pode consultar apenas uma prévia mascarada do convite;
-- somente usuário autenticado com o e-mail correto aceita o convite;
-- token já aceito só é idempotente para o usuário que efetivamente o aceitou;
-- owners e admins gerenciam apenas a organização selecionada;
-- tabelas de convite, módulos e auditoria não têm acesso direto pelo frontend;
-- owner não pode ser desativado ou rebaixado sem transferência de ownership;
-- usuário não pode desativar o próprio membership;
-- memberships inativos deixam de conceder acesso nas funções centrais de tenancy.
+- o token bruto não é persistido;
+- criação e rotação de tokens são restritas ao backend;
+- a prévia pública mascara o e-mail;
+- apenas o usuário autenticado com o e-mail correto aceita o convite;
+- token já aceito não cria membership para outro usuário;
+- owners e admins atuam apenas na organização selecionada;
+- tabelas internas não são acessadas diretamente pelo frontend;
+- owner exige transferência antes de desativação ou rebaixamento;
+- membership inativo deixa de conceder acesso;
+- permissões legadas só são migradas automaticamente para usuários com uma única organização ativa.
 
 ## Compatibilidade
 
-Este lote mantém:
-
-- `user_roles`;
-- `user_contracts`;
-- `team_members`;
-- `user_module_roles`;
-- `profiles.module_access`;
-- fluxo atual de APF;
-- licenses e quotas;
-- estado atual do tenancy enforcement.
-
-`organization_member_modules` é a fonte nova para módulos dentro da organização. A remoção das estruturas legadas ocorrerá em lote posterior, após migração e validação dos fluxos existentes.
-
-## Fluxo do convite
-
-1. owner/admin informa e-mail, papel e módulos;
-2. Edge Function valida a sessão do administrador;
-3. banco cria o convite e retorna o token bruto somente ao `service_role`;
-4. Edge Function envia convite Auth para usuário novo ou magic link para usuário existente;
-5. link direciona para `/accept-invitation?token=...`;
-6. usuário autentica com o mesmo e-mail;
-7. RPC cria ou reativa o membership e aplica os módulos;
-8. convite passa para `accepted` e registra auditoria.
+O lote mantém temporariamente as estruturas legadas de usuários e módulos, além de APF, licenses, quotas e tenancy enforcement. `organization_member_modules` passa a ser a fonte tenant-scoped para os módulos da organização.
 
 ## Rollout no Lovable Cloud
 
-Executar manualmente no SQL Editor:
+Executar manualmente no SQL Editor, nesta ordem:
 
-`supabase/operations/20260704_02_organization_member_invitations_rollout.sql`
+1. `supabase/operations/20260704_02_organization_member_invitations_rollout.sql`
+2. `supabase/operations/20260704_02a_organization_member_query_hardening.sql`
+3. `supabase/operations/20260704_02b_organization_module_access_runtime.sql`
 
-Resultado obrigatório:
+Resultados obrigatórios:
 
-`organization_member_invitations_ok = true`
+- `organization_member_invitations_ok = true`
+- `organization_member_query_hardening_ok = true`
+- `organization_module_access_runtime_ok = true`
 
-Depois do SQL:
-
-1. publicar a Edge Function `organization-invitations` pelo mecanismo do Lovable Cloud;
-2. confirmar `PUBLIC_SITE_URL` ou `SITE_URL` com a origem da aplicação;
-3. manter `EXPOSE_ORGANIZATION_INVITE_LINKS` desligado em produção;
-4. publicar o frontend da `develop` com a feature de tenancy já habilitada;
-5. validar a tela de membros antes de convidar usuários externos.
-
-A operação preserva memberships, owners, licenses, quotas, sessões APF e o estado de tenancy enforcement.
+Depois dos três resultados positivos, publicar a Edge Function, configurar a URL pública da aplicação, publicar o frontend da `develop` e validar o fluxo com usuários controlados.
 
 ## Validação visual
 
@@ -86,10 +60,9 @@ Owner ou administrador:
 1. abre o seletor de organização;
 2. escolhe **Gerenciar membros**;
 3. acessa `/organization/members`;
-4. confere membros ativos, papéis e módulos;
-5. cria um convite controlado;
-6. confere o convite na aba **Convites**;
-7. testa reenvio e revogação.
+4. confere membros, papéis, módulos e convites;
+5. testa criação, reenvio e revogação de convite;
+6. altera módulos de um usuário de teste e confirma o bloqueio por organização.
 
 Usuário convidado:
 
@@ -97,24 +70,13 @@ Usuário convidado:
 2. visualiza organização, papel e e-mail mascarado;
 3. autentica com o mesmo e-mail;
 4. aceita o convite;
-5. é direcionado para o Axion com a organização ativa.
-
-## Configuração da Edge Function
-
-A função utiliza as credenciais gerenciadas pelo ambiente:
-
-- `SUPABASE_URL`;
-- `SUPABASE_SERVICE_ROLE_KEY` ou `SUPABASE_SECRET_KEYS`;
-- `SUPABASE_ANON_KEY` ou `SUPABASE_PUBLISHABLE_KEYS`;
-- `PUBLIC_SITE_URL` ou `SITE_URL`.
-
-Opcionalmente, `EXPOSE_ORGANIZATION_INVITE_LINKS=true` expõe o link no retorno da função para testes controlados. Deve permanecer desligado em produção.
+5. entra no Axion com a nova organização selecionada;
+6. visualiza apenas os módulos concedidos.
 
 ## Fora do escopo
 
 - cobrança por usuário;
 - enforcement de `users.max`;
-- remoção automática do vínculo contratual legado criado no signup;
-- gestão completa de configurações, plano e uso da organização;
-- remoção de `profiles.module_access` e `user_module_roles`;
+- remoção definitiva das estruturas legadas;
+- painel completo de plano e uso;
 - convite público ou cadastro self-service.

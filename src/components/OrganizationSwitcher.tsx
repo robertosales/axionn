@@ -5,6 +5,7 @@ import {
   ChevronsUpDown,
   Gauge,
   Loader2,
+  Settings2,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -46,8 +47,6 @@ export function OrganizationSwitcher() {
 
   if (!enabled || !session) return null;
 
-  // As páginas da organização já identificam o tenant no próprio cabeçalho.
-  // Ocultar o switcher flutuante evita sobreposição com ações da página.
   if (location.pathname.startsWith("/organization/")) return null;
 
   const baseClass =
@@ -187,6 +186,20 @@ export function OrganizationSwitcher() {
                 <p className="text-sm font-medium">Plano e uso</p>
                 <p className="text-[11px] text-muted-foreground">
                   Limites, consumo e recursos
+                </p>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer gap-3 py-2.5"
+              onClick={() => navigate("/organization/usage?view=settings")}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <Settings2 className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Configurações</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Identidade, contato e auditoria
                 </p>
               </div>
             </DropdownMenuItem>

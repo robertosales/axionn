@@ -1,13 +1,25 @@
+interface OperationalErrorLike {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
+
 export function resolveOrganizationOperationalError(
   error: unknown,
   fallback: string,
 ) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "";
+  const candidate = error as OperationalErrorLike | null;
+  const message = [
+    error instanceof Error ? error.message : null,
+    typeof error === "string" ? error : null,
+    candidate?.message,
+    candidate?.details,
+    candidate?.hint,
+    candidate?.code,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   if (message.includes("contracts.max")) {
     return "O limite de contratos do plano foi atingido.";
@@ -17,16 +29,27 @@ export function resolveOrganizationOperationalError(
     return "O limite de projetos ativos do plano foi atingido.";
   }
 
+  if (message.includes("users.max")) {
+    return "O limite de usuários ativos do plano foi atingido.";
+  }
+
   if (message.includes("organization_resource_limit_reached")) {
-    return "O limite do plano foi atingido.";
+    return "O limite de recursos do plano foi atingido.";
   }
 
-  if (message.includes("organization_access_denied")) {
-    return "Voce nao tem permissao para administrar esta organizacao.";
+  if (
+    message.includes("organization_access_denied") ||
+    message.includes("organization_operational_admin_required") ||
+    message.includes("organization_settings_update_denied")
+  ) {
+    return "Você não tem permissão para administrar esta organização.";
   }
 
-  if (message.includes("organization_context_required")) {
-    return "Selecione uma organizacao para continuar.";
+  if (
+    message.includes("organization_context_required") ||
+    message.includes("organization_required")
+  ) {
+    return "Selecione uma organização para continuar.";
   }
 
   if (
@@ -34,7 +57,11 @@ export function resolveOrganizationOperationalError(
     message.includes("organization_mismatch") ||
     message.includes("organization_not_operational")
   ) {
-    return "O recurso selecionado nao pertence a organizacao ativa.";
+    return "O recurso selecionado não pertence à organização ativa.";
+  }
+
+  if (message.includes("platform_admin_required")) {
+    return "Esta operação é exclusiva da administração da plataforma.";
   }
 
   return fallback;

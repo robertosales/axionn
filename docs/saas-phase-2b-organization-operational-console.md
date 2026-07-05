@@ -89,6 +89,9 @@ As flags ficam em `public.saas_runtime_settings`:
 
 - `organization_operational_console_enabled`: inicia como `false`.
 - `legacy_operational_admin_fallback_enabled`: inicia como `true`.
+- O rollout preserva o valor atual das duas flags quando reexecutado. Se o
+  console ja estiver ativo por execucao anterior do enable, o rollout nao deve
+  tentar voltar a flag para `false`.
 
 O rollout cria funcoes seguras:
 

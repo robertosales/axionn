@@ -12,11 +12,40 @@ do $$
 declare
   v_missing text;
   v_tenancy_enforced_before boolean;
+  v_console_enabled_before boolean;
+  v_legacy_fallback_enabled_before boolean;
 begin
   select public.is_tenancy_enforced() into v_tenancy_enforced_before;
+  select coalesce(
+    (
+      select lower(setting.value ->> 'enabled') = 'true'
+      from public.saas_runtime_settings setting
+      where setting.key = 'organization_operational_console_enabled'
+    ),
+    false
+  ) into v_console_enabled_before;
+  select coalesce(
+    (
+      select lower(setting.value ->> 'enabled') = 'true'
+      from public.saas_runtime_settings setting
+      where setting.key = 'legacy_operational_admin_fallback_enabled'
+    ),
+    true
+  ) into v_legacy_fallback_enabled_before;
+
   perform set_config(
     'axionn.lote7.tenancy_enforced_before',
     v_tenancy_enforced_before::text,
+    false
+  );
+  perform set_config(
+    'axionn.lote7.console_enabled_before',
+    v_console_enabled_before::text,
+    false
+  );
+  perform set_config(
+    'axionn.lote7.legacy_fallback_enabled_before',
+    v_legacy_fallback_enabled_before::text,
     false
   );
 
@@ -615,12 +644,14 @@ grant execute on function public.archive_organization_contract_v2(uuid, uuid)
 
 do $$
 begin
-  if public.is_organization_operational_console_enabled() then
-    raise exception 'Post-validation failed: console operacional foi ativado pelo rollout';
+  if public.is_organization_operational_console_enabled()::text is distinct from
+     current_setting('axionn.lote7.console_enabled_before', true) then
+    raise exception 'Post-validation failed: console operacional foi alterado pelo rollout';
   end if;
 
-  if not public.is_legacy_operational_admin_fallback_enabled() then
-    raise exception 'Post-validation failed: fallback operacional foi desligado pelo rollout';
+  if public.is_legacy_operational_admin_fallback_enabled()::text is distinct from
+     current_setting('axionn.lote7.legacy_fallback_enabled_before', true) then
+    raise exception 'Post-validation failed: fallback operacional foi alterado pelo rollout';
   end if;
 
   if public.is_tenancy_enforced()::text is distinct from
@@ -633,14 +664,20 @@ $$;
 commit;
 
 select
-  public.is_organization_operational_console_enabled() = false as console_still_disabled,
-  public.is_legacy_operational_admin_fallback_enabled() = true as legacy_fallback_still_enabled,
+  public.is_organization_operational_console_enabled()::text =
+    current_setting('axionn.lote7.console_enabled_before', true)
+    as console_flag_preserved,
+  public.is_legacy_operational_admin_fallback_enabled()::text =
+    current_setting('axionn.lote7.legacy_fallback_enabled_before', true)
+    as legacy_fallback_flag_preserved,
   to_regclass('public.organization_operational_audit_log') is not null as audit_log_ready,
   public.is_tenancy_enforced()::text =
     current_setting('axionn.lote7.tenancy_enforced_before', true) as tenancy_enforcement_unchanged,
   (
-    public.is_organization_operational_console_enabled() = false
-    and public.is_legacy_operational_admin_fallback_enabled() = true
+    public.is_organization_operational_console_enabled()::text =
+      current_setting('axionn.lote7.console_enabled_before', true)
+    and public.is_legacy_operational_admin_fallback_enabled()::text =
+      current_setting('axionn.lote7.legacy_fallback_enabled_before', true)
     and to_regclass('public.organization_operational_audit_log') is not null
     and public.is_tenancy_enforced()::text =
       current_setting('axionn.lote7.tenancy_enforced_before', true)

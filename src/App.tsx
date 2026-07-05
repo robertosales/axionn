@@ -3,9 +3,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import {
   BrowserRouter,
+  Navigate,
   Route,
   Routes,
-  Navigate,
   useLocation,
 } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -48,6 +48,9 @@ const OrganizationSettingsPage = lazy(
 const OrganizationAdminOverviewPage = lazy(
   () => import("./features/organization/pages/OrganizationAdminOverviewPage"),
 );
+const OrganizationCompaniesPage = lazy(
+  () => import("./features/organization/pages/OrganizationCompaniesPage"),
+);
 const OrganizationAdminShell = lazy(() =>
   import("./features/organization/components/OrganizationAdminShell").then(
     (module) => ({ default: module.OrganizationAdminShell }),
@@ -55,11 +58,6 @@ const OrganizationAdminShell = lazy(() =>
 );
 const PlatformAIProvidersPage = lazy(
   () => import("./features/platform/pages/PlatformAIProvidersPage"),
-);
-const AdminEmpresasPage = lazy(() =>
-  import("./features/admin/pages/AdminEmpresasPage").then((module) => ({
-    default: module.AdminEmpresasPage,
-  })),
 );
 const AdminContratosPage = lazy(() =>
   import("./features/admin/pages/AdminContratosPage").then((module) => ({
@@ -118,7 +116,6 @@ function resolveHomePath(options: {
   isPlatformAdmin: boolean;
   isOrganizationAdmin: boolean;
   hasModuleAccess: (module: string) => boolean;
-  moduleRolesCount: number;
   roles: string[];
 }): string {
   const {
@@ -126,12 +123,12 @@ function resolveHomePath(options: {
     isPlatformAdmin,
     isOrganizationAdmin,
     hasModuleAccess,
-    moduleRolesCount,
     roles,
   } = options;
 
-  if (isAdmin || isPlatformAdmin) return "/dashboard-admin";
+  if (isPlatformAdmin) return "/platform";
   if (isOrganizationAdmin) return "/organization/admin";
+  if (isAdmin) return "/dashboard-admin";
   if (roles.includes("admin_contrato")) return "/meu-contrato";
 
   const agil = hasModuleAccess("sala_agil");
@@ -143,7 +140,6 @@ function resolveHomePath(options: {
   if (sustentacao) return "/sustentacao";
   if (agil) return "/sala-agil/dashboard";
   if (rdm) return "/rdm";
-
   return "/modulos";
 }
 
@@ -185,7 +181,6 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
     isPlatformAdmin,
     isOrganizationAdmin,
     hasModuleAccess,
-    moduleRoles,
     moduleAccessLoading,
   } = useOrganization();
 
@@ -203,7 +198,6 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
         isPlatformAdmin,
         isOrganizationAdmin,
         hasModuleAccess,
-        moduleRolesCount: moduleRoles.length,
         roles,
       })}
       replace
@@ -218,7 +212,6 @@ function ModuleRedirect() {
     isPlatformAdmin,
     isOrganizationAdmin,
     hasModuleAccess,
-    moduleRoles,
     moduleAccessLoading,
   } = useOrganization();
 
@@ -231,7 +224,6 @@ function ModuleRedirect() {
         isPlatformAdmin,
         isOrganizationAdmin,
         hasModuleAccess,
-        moduleRolesCount: moduleRoles.length,
         roles,
       })}
       replace
@@ -266,14 +258,9 @@ function ModuleGuard({
 
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const { isAdmin, loading } = useAuth();
-  const {
-    loading: organizationLoading,
-    isPlatformAdmin: isOrganizationContextPlatformAdmin,
-  } = useOrganization();
+  const { loading: organizationLoading, isPlatformAdmin } = useOrganization();
   if (loading || organizationLoading) return <PageLoader />;
-  if (!isAdmin && !isOrganizationContextPlatformAdmin) {
-    return <Navigate to="/modulos" replace />;
-  }
+  if (!isAdmin && !isPlatformAdmin) return <Navigate to="/modulos" replace />;
   return <>{children}</>;
 }
 
@@ -303,24 +290,32 @@ function LegacyOperationalRoute({
   children: React.ReactNode;
 }) {
   const { loading, isOrganizationAdmin, isPlatformAdmin } = useOrganization();
-  const [consoleEnabled, setConsoleEnabled] = useState(false);
+  const [flags, setFlags] = useState({
+    consoleEnabled: false,
+    legacyFallbackEnabled: true,
+  });
   const [flagLoading, setFlagLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadFlag() {
-      const { data, error } = await (supabase as any).rpc(
-        "is_organization_operational_console_enabled",
-      );
+    async function loadFlags() {
+      const [consoleResult, fallbackResult] = await Promise.all([
+        (supabase as any).rpc("is_organization_operational_console_enabled"),
+        (supabase as any).rpc("is_legacy_operational_admin_fallback_enabled"),
+      ]);
+
       if (!cancelled) {
-        setConsoleEnabled(!error && data === true);
+        setFlags({
+          consoleEnabled: !consoleResult.error && consoleResult.data === true,
+          legacyFallbackEnabled:
+            fallbackResult.error || fallbackResult.data !== false,
+        });
         setFlagLoading(false);
       }
     }
 
-    void loadFlag();
-
+    void loadFlags();
     return () => {
       cancelled = true;
     };
@@ -328,12 +323,18 @@ function LegacyOperationalRoute({
 
   if (loading || flagLoading) return <PageLoader />;
 
-  if (consoleEnabled && isOrganizationAdmin && !isPlatformAdmin && organizationPath) {
-    return <Navigate to={organizationPath} replace />;
+  if (flags.consoleEnabled && isPlatformAdmin && platformPath) {
+    return <Navigate to={platformPath} replace />;
   }
 
-  if (consoleEnabled && isPlatformAdmin && platformPath) {
-    return <Navigate to={platformPath} replace />;
+  if (
+    flags.consoleEnabled &&
+    !flags.legacyFallbackEnabled &&
+    isOrganizationAdmin &&
+    !isPlatformAdmin &&
+    organizationPath
+  ) {
+    return <Navigate to={organizationPath} replace />;
   }
 
   return <>{children}</>;
@@ -344,6 +345,16 @@ function ContractAdminGuard({ children }: { children: React.ReactNode }) {
   if (loading) return null;
   if (isAdmin || roles.includes("admin_contrato")) return <>{children}</>;
   return <Navigate to="/modulos" replace />;
+}
+
+function OrganizationConsoleRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <OrganizationAdminGuard>
+        <OrganizationAdminShell>{children}</OrganizationAdminShell>
+      </OrganizationAdminGuard>
+    </ProtectedRoute>
+  );
 }
 
 function AppRoutes() {
@@ -358,114 +369,19 @@ function AppRoutes() {
           <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route
-            path="/accept-invitation"
-            element={<AcceptOrganizationInvitation />}
-          />
-          <Route
-            path="/"
-            element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>}
-          />
-          <Route
-            path="/modulos"
-            element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>}
-          />
-          <Route
-            path="/organization/admin"
-            element={
-              <ProtectedRoute>
-                <OrganizationAdminGuard>
-                  <OrganizationAdminShell>
-                    <OrganizationAdminOverviewPage />
-                  </OrganizationAdminShell>
-                </OrganizationAdminGuard>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/organization/companies"
-            element={
-              <ProtectedRoute>
-                <OrganizationAdminGuard>
-                  <OrganizationAdminShell>
-                    <AdminEmpresasPage />
-                  </OrganizationAdminShell>
-                </OrganizationAdminGuard>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/organization/contracts"
-            element={
-              <ProtectedRoute>
-                <OrganizationAdminGuard>
-                  <OrganizationAdminShell>
-                    <AdminContratosPage />
-                  </OrganizationAdminShell>
-                </OrganizationAdminGuard>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/organization/projects"
-            element={
-              <ProtectedRoute>
-                <OrganizationAdminGuard>
-                  <OrganizationAdminShell>
-                    <ProjetosAdminPanel />
-                  </OrganizationAdminShell>
-                </OrganizationAdminGuard>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/organization/teams"
-            element={
-              <ProtectedRoute>
-                <OrganizationAdminGuard>
-                  <OrganizationAdminShell>
-                    <AdminTimesPage />
-                  </OrganizationAdminShell>
-                </OrganizationAdminGuard>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/organization/members"
-            element={
-              <ProtectedRoute>
-                <OrganizationAdminGuard>
-                  <OrganizationAdminShell>
-                    <OrganizationMembersPage />
-                  </OrganizationAdminShell>
-                </OrganizationAdminGuard>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/organization/usage"
-            element={
-              <ProtectedRoute>
-                <OrganizationAdminGuard>
-                  <OrganizationAdminShell>
-                    <OrganizationUsagePage />
-                  </OrganizationAdminShell>
-                </OrganizationAdminGuard>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/organization/settings"
-            element={
-              <ProtectedRoute>
-                <OrganizationAdminGuard>
-                  <OrganizationAdminShell>
-                    <OrganizationSettingsPage />
-                  </OrganizationAdminShell>
-                </OrganizationAdminGuard>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/accept-invitation" element={<AcceptOrganizationInvitation />} />
+          <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
+          <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
+
+          <Route path="/organization/admin" element={<OrganizationConsoleRoute><OrganizationAdminOverviewPage /></OrganizationConsoleRoute>} />
+          <Route path="/organization/companies" element={<OrganizationConsoleRoute><OrganizationCompaniesPage /></OrganizationConsoleRoute>} />
+          <Route path="/organization/contracts" element={<OrganizationConsoleRoute><AdminContratosPage /></OrganizationConsoleRoute>} />
+          <Route path="/organization/projects" element={<OrganizationConsoleRoute><ProjetosAdminPanel /></OrganizationConsoleRoute>} />
+          <Route path="/organization/teams" element={<OrganizationConsoleRoute><AdminTimesPage /></OrganizationConsoleRoute>} />
+          <Route path="/organization/members" element={<OrganizationConsoleRoute><OrganizationMembersPage /></OrganizationConsoleRoute>} />
+          <Route path="/organization/usage" element={<OrganizationConsoleRoute><OrganizationUsagePage /></OrganizationConsoleRoute>} />
+          <Route path="/organization/settings" element={<OrganizationConsoleRoute><OrganizationSettingsPage /></OrganizationConsoleRoute>} />
+
           <Route
             path="/platform"
             element={<ProtectedRoute><PlatformAdminGuard><Navigate to="/platform/ai-providers" replace /></PlatformAdminGuard></ProtectedRoute>}
@@ -474,20 +390,18 @@ function AppRoutes() {
             path="/platform/ai-providers"
             element={<ProtectedRoute><PlatformAdminGuard><PlatformAIProvidersPage /></PlatformAdminGuard></ProtectedRoute>}
           />
+
           <Route
             path="/dashboard-admin"
             element={
               <ProtectedRoute>
-                <LegacyOperationalRoute organizationPath="/organization/admin">
+                <LegacyOperationalRoute organizationPath="/organization/admin" platformPath="/platform">
                   <AdminGuard><AdminDashboard /></AdminGuard>
                 </LegacyOperationalRoute>
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/meu-contrato"
-            element={<ProtectedRoute><ContractAdminGuard><MeuContratoDashboard /></ContractAdminGuard></ProtectedRoute>}
-          />
+          <Route path="/meu-contrato" element={<ProtectedRoute><ContractAdminGuard><MeuContratoDashboard /></ContractAdminGuard></ProtectedRoute>} />
           <Route
             path="/contratos"
             element={
@@ -498,40 +412,16 @@ function AppRoutes() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/okr"
-            element={<ProtectedRoute><OkrPage /></ProtectedRoute>}
-          />
+          <Route path="/okr" element={<ProtectedRoute><OkrPage /></ProtectedRoute>} />
           <Route
             path="/sala-agil"
-            element={
-              <ProtectedRoute>
-                <ModuleGuard module="sala_agil">
-                  <Navigate to="/sala-agil/dashboard" replace />
-                </ModuleGuard>
-              </ProtectedRoute>
-            }
+            element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}
           />
-          <Route
-            path="/sala-agil/planning-poker"
-            element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>}
-          />
-          <Route
-            path="/sala-agil/retrospectiva"
-            element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>}
-          />
-          <Route
-            path="/sala-agil/:section"
-            element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>}
-          />
-          <Route
-            path="/sustentacao/*"
-            element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>}
-          />
-          <Route
-            path="/rdm/*"
-            element={<ProtectedRoute><ModuleGuard module="rdm"><RdmPage /></ModuleGuard></ProtectedRoute>}
-          />
+          <Route path="/sala-agil/planning-poker" element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/retrospectiva" element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/:section" element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sustentacao/*" element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>} />
+          <Route path="/rdm/*" element={<ProtectedRoute><ModuleGuard module="rdm"><RdmPage /></ModuleGuard></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

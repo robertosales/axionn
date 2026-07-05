@@ -22,9 +22,9 @@ let legacyHandler: LegacyHandler | null = null;
   legacyHandler = candidate as LegacyHandler;
   return {
     finished: Promise.resolve(),
-    shutdown: async () => undefined,
-    ref: () => undefined,
-    unref: () => undefined,
+    shutdown: async (): Promise<void> => undefined,
+    ref: (): void => undefined,
+    unref: (): void => undefined,
   };
 };
 

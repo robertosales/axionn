@@ -41,7 +41,7 @@ export interface CreateProjetoPayload {
 
 function resolveOrganizationScope(organizationId?: string | null) {
   if (!ORGANIZATION_TENANCY_ENABLED) return organizationId ?? null;
-  return organizationId ?? localStorage.getItem("selectedOrganizationId");
+  return organizationId ?? null;
 }
 
 function normalizeProject(row: Record<string, unknown>): ProjetoAdmin {
@@ -130,15 +130,26 @@ export async function fetchProjetosForImport(
   const scope = resolveOrganizationScope(organizationId);
   if (ORGANIZATION_TENANCY_ENABLED && !scope) return [];
 
-  let query = supabase
+  if (ORGANIZATION_TENANCY_ENABLED && scope) {
+    const { data, error } = await supabase.rpc(
+      "get_accessible_projects_v2",
+      { p_org_id: scope, p_contract_id: null },
+    );
+    if (error) throw error;
+    return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      name: String(row.name ?? "Projeto"),
+      team_id: row.team_id ? String(row.team_id) : null,
+      contract_id: row.contract_id ? String(row.contract_id) : null,
+      status: String(row.status ?? "active"),
+    }));
+  }
+
+  const { data, error } = await supabase
     .from("projects")
     .select("id, name, team_id, contract_id, status")
     .neq("status", "archived")
     .order("name");
-
-  if (scope) query = query.eq("org_id", scope);
-
-  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as ProjetoImport[];
 }
@@ -148,17 +159,33 @@ export async function createProjetoAdmin(
   organizationId?: string | null,
 ): Promise<ProjetoAdmin> {
   const scope = resolveOrganizationScope(organizationId);
-  if (ORGANIZATION_TENANCY_ENABLED && !scope) {
-    throw new Error("Organização obrigatória para criar projeto");
+  if (ORGANIZATION_TENANCY_ENABLED) {
+    if (!scope) throw new Error("Selecione uma organização para continuar.");
+
+    const { data: projectId, error } = await (supabase as any).rpc(
+      "create_organization_project_v2",
+      {
+        p_org_id: scope,
+        p_contract_id: payload.contract_id,
+        p_team_id: payload.team_id,
+        p_name: payload.name,
+        p_description: payload.description ?? null,
+        p_code: payload.code ?? null,
+        p_module_type: payload.module_type,
+        p_redmine_id: payload.redmine_id ?? null,
+      },
+    );
+    if (error) throw error;
+
+    const projects = await fetchProjetosAdmin(scope);
+    const created = projects.find((project) => project.id === String(projectId));
+    if (!created) throw new Error("Projeto criado, mas não foi possível recarregá-lo.");
+    return created;
   }
 
   const { data, error } = await supabase
     .from("projects")
-    .insert({
-      ...payload,
-      status: "active",
-      ...(scope ? { org_id: scope } : {}),
-    })
+    .insert({ ...payload, status: "active" })
     .select()
     .single();
   if (error) throw error;
@@ -171,14 +198,40 @@ export async function updateProjetoAdmin(
   organizationId?: string | null,
 ): Promise<ProjetoAdmin> {
   const scope = resolveOrganizationScope(organizationId);
-  if (ORGANIZATION_TENANCY_ENABLED && !scope) {
-    throw new Error("Organização obrigatória para atualizar projeto");
+  if (ORGANIZATION_TENANCY_ENABLED) {
+    if (!scope) throw new Error("Selecione uma organização para continuar.");
+    if (!updates.contract_id || !updates.name || !updates.module_type) {
+      throw new Error("Contrato, nome e tipo do projeto são obrigatórios.");
+    }
+
+    const { error } = await (supabase as any).rpc(
+      "update_organization_project_v2",
+      {
+        p_org_id: scope,
+        p_project_id: id,
+        p_contract_id: updates.contract_id,
+        p_team_id: updates.team_id ?? null,
+        p_name: updates.name,
+        p_description: updates.description ?? null,
+        p_code: updates.code ?? null,
+        p_module_type: updates.module_type,
+        p_redmine_id: updates.redmine_id ?? null,
+      },
+    );
+    if (error) throw error;
+
+    const projects = await fetchProjetosAdmin(scope);
+    const updated = projects.find((project) => project.id === id);
+    if (!updated) throw new Error("Projeto atualizado, mas não foi possível recarregá-lo.");
+    return updated;
   }
 
-  let query = supabase.from("projects").update(updates).eq("id", id);
-  if (scope) query = query.eq("org_id", scope);
-
-  const { data, error } = await query.select().single();
+  const { data, error } = await supabase
+    .from("projects")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
   if (error) throw error;
   return normalizeProject(data as unknown as Record<string, unknown>);
 }
@@ -188,16 +241,19 @@ export async function archiveProjetoAdmin(
   organizationId?: string | null,
 ): Promise<void> {
   const scope = resolveOrganizationScope(organizationId);
-  if (ORGANIZATION_TENANCY_ENABLED && !scope) {
-    throw new Error("Organização obrigatória para arquivar projeto");
+  if (ORGANIZATION_TENANCY_ENABLED) {
+    if (!scope) throw new Error("Selecione uma organização para continuar.");
+    const { error } = await (supabase as any).rpc(
+      "archive_organization_project_v2",
+      { p_org_id: scope, p_project_id: id },
+    );
+    if (error) throw error;
+    return;
   }
 
-  let query = supabase
+  const { error } = await supabase
     .from("projects")
     .update({ status: "archived" })
     .eq("id", id);
-  if (scope) query = query.eq("org_id", scope);
-
-  const { error } = await query;
   if (error) throw error;
 }

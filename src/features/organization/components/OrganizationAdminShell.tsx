@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   Building2,
   FileText,
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ContractProvider } from "@/features/admin/contexts/ContractContext";
+import OrganizationCompaniesPage from "@/features/organization/pages/OrganizationCompaniesPage";
 
 const navItems = [
   { to: "/organization/admin", label: "Visão geral", icon: Gauge },
@@ -59,6 +60,7 @@ function ShellNav({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function OrganizationAdminShell({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const { currentOrganization, isPlatformAdmin } = useOrganization();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -120,6 +122,13 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
     </aside>
   );
 
+  const pageContent =
+    location.pathname === "/organization/companies" ? (
+      <OrganizationCompaniesPage />
+    ) : (
+      children
+    );
+
   return (
     <ContractProvider>
       <div className="min-h-screen bg-background">
@@ -166,7 +175,7 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
             </div>
           </header>
 
-          <main className="flex-1 p-4 lg:p-6">{children}</main>
+          <main className="flex-1 p-4 lg:p-6">{pageContent}</main>
         </div>
       </div>
     </ContractProvider>

@@ -101,6 +101,7 @@ export function useOrganizationMembers() {
     if (!currentOrganizationId || !isOrganizationAdmin) {
       setMembers([]);
       setInvitations([]);
+      setError(null);
       setLoading(false);
       return;
     }

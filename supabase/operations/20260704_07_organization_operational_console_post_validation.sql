@@ -61,6 +61,9 @@ runtime as (
     public.is_organization_operational_console_enabled() as console_enabled,
     public.is_legacy_operational_admin_fallback_enabled() as legacy_fallback_enabled,
     public.is_tenancy_enforced() as tenancy_enforcement_current,
+    to_regprocedure('public.is_platform_admin(uuid)') is not null as platform_admin_function_available,
+    has_function_privilege('authenticated', 'public.is_platform_admin(uuid)', 'EXECUTE') as platform_admin_authenticated_execute,
+    not has_function_privilege('anon', 'public.is_platform_admin(uuid)', 'EXECUTE') as platform_admin_anon_revoked,
     to_regprocedure('public.is_organization_operational_console_enabled()') is not null as console_read_function_available,
     to_regprocedure('public.set_organization_operational_console(boolean)') is not null as console_toggle_function_available,
     to_regprocedure('public.is_legacy_operational_admin_fallback_enabled()') is not null as fallback_read_function_available,
@@ -96,6 +99,9 @@ select
   *,
   (
     console_enabled
+    and platform_admin_function_available
+    and platform_admin_authenticated_execute
+    and platform_admin_anon_revoked
     and console_read_function_available
     and console_toggle_function_available
     and fallback_read_function_available

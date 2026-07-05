@@ -1,1 +1,8 @@
 project_id = "rgikyyazotqapaxijwui"
+
+[functions.apf-generate]
+entrypoint = "./functions/apf-generate/hardened.ts"
+verify_jwt = true
+
+[functions.platform-ai-provider-test]
+verify_jwt = true

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { resolveOrganizationOperationalError } from "@/features/organization/utils/operationalErrors";
 import {
   resolveContractTeamIds,
   compareTeamNames,
@@ -13,8 +14,10 @@ export interface TeamAdmin {
   name: string;
   module: string;
   company_id: string | null;
+  contract_id?: string | null;
   created_at: string;
   org_id?: string | null;
+  is_active?: boolean;
   memberCount?: number;
 }
 
@@ -33,12 +36,6 @@ export function useTeamsAdmin(contractId?: string | null) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const contractTeamIds = await resolveContractTeamIds(contractId);
-      if (contractTeamIds !== null && contractTeamIds.length === 0) {
-        setTeams([]);
-        return;
-      }
-
       let teamList: TeamAdmin[] = [];
 
       if (enabled) {
@@ -47,29 +44,39 @@ export function useTeamsAdmin(contractId?: string | null) {
           return;
         }
 
-        const { data, error } = await supabase.rpc(
-          "get_accessible_teams_v2",
+        const { data, error } = await (supabase as any).rpc(
+          "get_organization_teams_admin_v2",
           { p_org_id: currentOrganizationId },
         );
         if (error) throw error;
 
-        const allowedIds = contractTeamIds
-          ? new Set(contractTeamIds)
-          : null;
         teamList = ((data ?? []) as Array<Record<string, unknown>>)
-          .filter((team) => !allowedIds || allowedIds.has(String(team.id)))
+          .filter(
+            (team) =>
+              !contractId ||
+              String(team.contract_id ?? "") === contractId,
+          )
           .map((team) => ({
             id: String(team.id),
             name: String(team.name ?? "Time"),
             module: String(team.module ?? ""),
-            company_id: null,
-            created_at: "",
+            company_id: team.company_id ? String(team.company_id) : null,
+            contract_id: team.contract_id ? String(team.contract_id) : null,
+            created_at: String(team.created_at ?? ""),
             org_id: String(team.org_id ?? currentOrganizationId),
+            is_active: Boolean(team.is_active ?? true),
+            memberCount: Number(team.member_count ?? 0),
           }));
       } else {
+        const contractTeamIds = await resolveContractTeamIds(contractId);
+        if (contractTeamIds !== null && contractTeamIds.length === 0) {
+          setTeams([]);
+          return;
+        }
+
         let query = supabase
           .from("teams")
-          .select("id, name, module, company_id, created_at")
+          .select("id, name, module, company_id, contract_id, created_at")
           .order("name", { ascending: true });
 
         if (contractTeamIds) query = query.in("id", contractTeamIds);
@@ -77,32 +84,31 @@ export function useTeamsAdmin(contractId?: string | null) {
         const { data, error } = await query;
         if (error) throw error;
         teamList = ((data ?? []) as TeamAdmin[]).slice();
+
+        const teamIds = teamList.map((team) => team.id);
+        const countMap: Record<string, number> = {};
+        if (teamIds.length > 0) {
+          const { data: membersData, error: membersError } = await supabase
+            .from("team_members")
+            .select("team_id")
+            .in("team_id", teamIds);
+          if (membersError) throw membersError;
+
+          (membersData ?? []).forEach((member: { team_id: string | null }) => {
+            if (member.team_id) {
+              countMap[member.team_id] = (countMap[member.team_id] ?? 0) + 1;
+            }
+          });
+        }
+
+        teamList = teamList.map((team) => ({
+          ...team,
+          memberCount: countMap[team.id] ?? 0,
+        }));
       }
 
       teamList.sort((a, b) => compareTeamNames(a.name, b.name));
-
-      const teamIds = teamList.map((team) => team.id);
-      const countMap: Record<string, number> = {};
-      if (teamIds.length > 0) {
-        const { data: membersData, error: membersError } = await supabase
-          .from("team_members")
-          .select("team_id")
-          .in("team_id", teamIds);
-        if (membersError) throw membersError;
-
-        (membersData ?? []).forEach((member: { team_id: string | null }) => {
-          if (member.team_id) {
-            countMap[member.team_id] = (countMap[member.team_id] ?? 0) + 1;
-          }
-        });
-      }
-
-      setTeams(
-        teamList.map((team) => ({
-          ...team,
-          memberCount: countMap[team.id] ?? 0,
-        })),
-      );
+      setTeams(teamList);
     } catch (error) {
       console.error("[useTeamsAdmin] load:", error);
       setTeams([]);
@@ -135,17 +141,24 @@ export function useTeamsAdmin(contractId?: string | null) {
   const create = async (data: TeamFormValues) => {
     if (!canWrite()) return false;
 
-    const payload = {
-      name: data.name,
-      module: data.module,
-      ...(data.company_id ? { company_id: data.company_id } : {}),
-      ...(enabled && currentOrganizationId
-        ? { org_id: currentOrganizationId }
-        : {}),
-    };
-    const { error } = await supabase.from("teams").insert(payload);
+    const { error } =
+      enabled && currentOrganizationId
+        ? await (supabase as any).rpc("create_organization_team_v2", {
+            p_org_id: currentOrganizationId,
+            p_name: data.name,
+            p_module: data.module,
+            p_company_id: data.company_id,
+            p_contract_id: contractId ?? null,
+          })
+        : await supabase.from("teams").insert({
+            name: data.name,
+            module: data.module,
+            ...(data.company_id ? { company_id: data.company_id } : {}),
+            ...(contractId ? { contract_id: contractId } : {}),
+          });
+
     if (error) {
-      toast.error("Erro ao criar time");
+      toast.error(resolveOrganizationOperationalError(error, "Erro ao criar time"));
       return false;
     }
     toast.success("Time criado com sucesso");
@@ -157,19 +170,33 @@ export function useTeamsAdmin(contractId?: string | null) {
   const update = async (id: string, data: Partial<TeamFormValues>) => {
     if (!canWrite()) return false;
 
-    const payload: Record<string, unknown> = {};
-    if (data.name !== undefined) payload.name = data.name;
-    if (data.module !== undefined) payload.module = data.module;
-    if ("company_id" in data) payload.company_id = data.company_id ?? null;
+    const current = teams.find((team) => team.id === id);
+    const nextName = data.name ?? current?.name ?? "";
+    const nextModule = data.module ?? current?.module ?? "sala_agil";
+    const nextCompany =
+      "company_id" in data ? data.company_id ?? null : current?.company_id ?? null;
 
-    let query = supabase.from("teams").update(payload).eq("id", id);
-    if (enabled && currentOrganizationId) {
-      query = query.eq("org_id", currentOrganizationId);
-    }
+    const { error } =
+      enabled && currentOrganizationId
+        ? await (supabase as any).rpc("update_organization_team_v2", {
+            p_org_id: currentOrganizationId,
+            p_team_id: id,
+            p_name: nextName,
+            p_module: nextModule,
+            p_company_id: nextCompany,
+            p_contract_id: contractId ?? current?.contract_id ?? null,
+          })
+        : await supabase
+            .from("teams")
+            .update({
+              name: nextName,
+              module: nextModule,
+              company_id: nextCompany,
+            })
+            .eq("id", id);
 
-    const { error } = await query;
     if (error) {
-      toast.error("Erro ao atualizar time");
+      toast.error(resolveOrganizationOperationalError(error, "Erro ao atualizar time"));
       return false;
     }
     toast.success("Time atualizado");
@@ -181,32 +208,41 @@ export function useTeamsAdmin(contractId?: string | null) {
   const remove = async (id: string) => {
     if (!canWrite()) return false;
 
-    const [{ count: huCount }, { count: demCount }] = await Promise.all([
-      supabase
-        .from("user_stories")
-        .select("id", { count: "exact", head: true })
-        .eq("team_id", id),
-      supabase
-        .from("demandas")
-        .select("id", { count: "exact", head: true })
-        .eq("team_id", id),
-    ]);
-    if ((huCount ?? 0) > 0 || (demCount ?? 0) > 0) {
-      toast.error("Não é possível excluir: time possui dados ativos (HUs ou demandas)");
-      return false;
+    if (!enabled) {
+      const [{ count: huCount }, { count: demCount }] = await Promise.all([
+        supabase
+          .from("user_stories")
+          .select("id", { count: "exact", head: true })
+          .eq("team_id", id),
+        supabase
+          .from("demandas")
+          .select("id", { count: "exact", head: true })
+          .eq("team_id", id),
+      ]);
+      if ((huCount ?? 0) > 0 || (demCount ?? 0) > 0) {
+        toast.error("Não é possível excluir: time possui dados ativos (HUs ou demandas)");
+        return false;
+      }
     }
 
-    let query = supabase.from("teams").delete().eq("id", id);
-    if (enabled && currentOrganizationId) {
-      query = query.eq("org_id", currentOrganizationId);
-    }
+    const { error } =
+      enabled && currentOrganizationId
+        ? await (supabase as any).rpc("deactivate_organization_team_v2", {
+            p_org_id: currentOrganizationId,
+            p_team_id: id,
+          })
+        : await supabase.from("teams").delete().eq("id", id);
 
-    const { error } = await query;
     if (error) {
-      toast.error("Erro ao excluir time");
+      toast.error(
+        resolveOrganizationOperationalError(
+          error,
+          enabled ? "Erro ao inativar time" : "Erro ao excluir time",
+        ),
+      );
       return false;
     }
-    toast.success("Time excluído");
+    toast.success(enabled ? "Time inativado" : "Time excluído");
     await load();
     await refreshAuthTeams();
     return true;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { resolveOrganizationOperationalError } from "@/features/organization/utils/operationalErrors";
 import { toast } from "sonner";
 
 export type CompanyStatus = "active" | "trial" | "suspended" | "inactive";
@@ -139,24 +140,31 @@ export function useCompanies() {
       if (!assertWritableOrganization()) return false;
 
       try {
-        const { error } = await supabase.from("companies").insert({
-          name: form.name,
-          cnpj: form.cnpj || null,
-          email: form.email || null,
-          phone: form.phone || null,
-          logo_url: form.logo_url || null,
-          status: form.status,
-          ...(enabled && currentOrganizationId
-            ? { org_id: currentOrganizationId }
-            : {}),
-        });
+        const { error } =
+          enabled && currentOrganizationId
+            ? await (supabase as any).rpc("create_organization_company_v2", {
+                p_org_id: currentOrganizationId,
+                p_name: form.name,
+                p_cnpj: form.cnpj || null,
+                p_email: form.email || null,
+                p_phone: form.phone || null,
+                p_logo_url: form.logo_url || null,
+                p_status: form.status,
+              })
+            : await supabase.from("companies").insert({
+                name: form.name,
+                cnpj: form.cnpj || null,
+                email: form.email || null,
+                phone: form.phone || null,
+                logo_url: form.logo_url || null,
+                status: form.status,
+              });
         if (error) throw error;
         toast.success("Empresa criada");
         await load();
         return true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        toast.error(message || "Erro ao criar empresa");
+        toast.error(resolveOrganizationOperationalError(error, "Erro ao criar empresa"));
         return false;
       }
     },
@@ -168,30 +176,35 @@ export function useCompanies() {
       if (!assertWritableOrganization()) return false;
 
       try {
-        let query = supabase
-          .from("companies")
-          .update({
-            name: form.name,
-            cnpj: form.cnpj || null,
-            email: form.email || null,
-            phone: form.phone || null,
-            logo_url: form.logo_url || null,
-            status: form.status,
-          })
-          .eq("id", id);
-
-        if (enabled && currentOrganizationId) {
-          query = query.eq("org_id", currentOrganizationId);
-        }
-
-        const { error } = await query;
+        const { error } =
+          enabled && currentOrganizationId
+            ? await (supabase as any).rpc("update_organization_company_v2", {
+                p_org_id: currentOrganizationId,
+                p_company_id: id,
+                p_name: form.name,
+                p_cnpj: form.cnpj || null,
+                p_email: form.email || null,
+                p_phone: form.phone || null,
+                p_logo_url: form.logo_url || null,
+                p_status: form.status,
+              })
+            : await supabase
+                .from("companies")
+                .update({
+                  name: form.name,
+                  cnpj: form.cnpj || null,
+                  email: form.email || null,
+                  phone: form.phone || null,
+                  logo_url: form.logo_url || null,
+                  status: form.status,
+                })
+                .eq("id", id);
         if (error) throw error;
         toast.success("Empresa atualizada");
         await load();
         return true;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        toast.error(message || "Erro ao atualizar empresa");
+        toast.error(resolveOrganizationOperationalError(error, "Erro ao atualizar empresa"));
         return false;
       }
     },
@@ -203,18 +216,18 @@ export function useCompanies() {
       if (!assertWritableOrganization()) return;
 
       try {
-        let query = supabase.from("companies").delete().eq("id", id);
-        if (enabled && currentOrganizationId) {
-          query = query.eq("org_id", currentOrganizationId);
-        }
-
-        const { error } = await query;
+        const { error } =
+          enabled && currentOrganizationId
+            ? await (supabase as any).rpc("archive_organization_company_v2", {
+                p_org_id: currentOrganizationId,
+                p_company_id: id,
+              })
+            : await supabase.from("companies").delete().eq("id", id);
         if (error) throw error;
         toast.success("Empresa excluída");
         await load();
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        toast.error(message || "Erro ao excluir empresa");
+        toast.error(resolveOrganizationOperationalError(error, "Erro ao inativar empresa"));
       }
     },
     [assertWritableOrganization, currentOrganizationId, enabled, load],

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { resolveOrganizationOperationalError } from "@/features/organization/utils/operationalErrors";
 import { toast } from "sonner";
 
 export interface Contract {
@@ -271,19 +272,40 @@ export function useContracts() {
   const create = async (data: ContractFormData): Promise<boolean> => {
     if (!assertWritableOrganization()) return false;
 
-    const { data: inserted, error } = await supabase
-      .from("contracts")
-      .insert(buildPayload(data))
-      .select("id")
-      .single();
+    const { data: inserted, error } =
+      enabled && currentOrganizationId
+        ? await (supabase as any).rpc("create_organization_contract_v2", {
+            p_org_id: currentOrganizationId,
+            p_name: data.name,
+            p_company_id: data.company_id,
+            p_status: data.status,
+            p_starts_at: data.starts_at || null,
+            p_ends_at: data.ends_at || null,
+            p_number: data.number || null,
+            p_object: data.object || null,
+            p_value_per_pfus: data.value_per_pfus
+              ? Number.parseFloat(data.value_per_pfus)
+              : null,
+            p_currency: data.currency || "BRL",
+          })
+        : await supabase
+            .from("contracts")
+            .insert(buildPayload(data))
+            .select("id")
+            .single();
 
-    if (error || !inserted) {
-      toast.error("Erro ao criar contrato");
+    const contractId =
+      typeof inserted === "string"
+        ? inserted
+        : (inserted as { id?: string } | null)?.id;
+
+    if (error || !contractId) {
+      toast.error(resolveOrganizationOperationalError(error, "Erro ao criar contrato"));
       return false;
     }
 
     try {
-      await persistRelations(inserted.id, data);
+      await persistRelations(contractId, data);
     } catch (relationError) {
       console.error("[useContracts] persistRelations(create):", relationError);
       toast.error("Contrato criado, mas houve erro nos vínculos");
@@ -309,7 +331,7 @@ export function useContracts() {
 
     const { error } = await query;
     if (error) {
-      toast.error("Erro ao atualizar contrato");
+      toast.error(resolveOrganizationOperationalError(error, "Erro ao atualizar contrato"));
       return false;
     }
 
@@ -330,14 +352,15 @@ export function useContracts() {
   const remove = async (id: string): Promise<boolean> => {
     if (!assertWritableOrganization()) return false;
 
-    let query = supabase.from("contracts").delete().eq("id", id);
-    if (enabled && currentOrganizationId) {
-      query = query.eq("org_id", currentOrganizationId);
-    }
-
-    const { error } = await query;
+    const { error } =
+      enabled && currentOrganizationId
+        ? await (supabase as any).rpc("archive_organization_contract_v2", {
+            p_org_id: currentOrganizationId,
+            p_contract_id: id,
+          })
+        : await supabase.from("contracts").delete().eq("id", id);
     if (error) {
-      toast.error("Erro ao excluir contrato");
+      toast.error(resolveOrganizationOperationalError(error, "Erro ao arquivar contrato"));
       return false;
     }
 

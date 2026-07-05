@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import {
@@ -24,6 +24,7 @@ import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAl
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useAppResilience } from "@/hooks/useAppResilience";
+import { supabase } from "@/integrations/supabase/client";
 
 import Auth from "./pages/Auth.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
@@ -292,6 +293,52 @@ function PlatformAdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function LegacyOperationalRoute({
+  organizationPath,
+  platformPath,
+  children,
+}: {
+  organizationPath?: string;
+  platformPath?: string;
+  children: React.ReactNode;
+}) {
+  const { loading, isOrganizationAdmin, isPlatformAdmin } = useOrganization();
+  const [consoleEnabled, setConsoleEnabled] = useState(false);
+  const [flagLoading, setFlagLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFlag() {
+      const { data, error } = await (supabase as any).rpc(
+        "is_organization_operational_console_enabled",
+      );
+      if (!cancelled) {
+        setConsoleEnabled(!error && data === true);
+        setFlagLoading(false);
+      }
+    }
+
+    void loadFlag();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading || flagLoading) return <PageLoader />;
+
+  if (consoleEnabled && isOrganizationAdmin && !isPlatformAdmin && organizationPath) {
+    return <Navigate to={organizationPath} replace />;
+  }
+
+  if (consoleEnabled && isPlatformAdmin && platformPath) {
+    return <Navigate to={platformPath} replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function ContractAdminGuard({ children }: { children: React.ReactNode }) {
   const { isAdmin, roles, loading } = useAuth();
   if (loading) return null;
@@ -429,7 +476,13 @@ function AppRoutes() {
           />
           <Route
             path="/dashboard-admin"
-            element={<ProtectedRoute><AdminGuard><AdminDashboard /></AdminGuard></ProtectedRoute>}
+            element={
+              <ProtectedRoute>
+                <LegacyOperationalRoute organizationPath="/organization/admin">
+                  <AdminGuard><AdminDashboard /></AdminGuard>
+                </LegacyOperationalRoute>
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/meu-contrato"
@@ -437,7 +490,13 @@ function AppRoutes() {
           />
           <Route
             path="/contratos"
-            element={<ProtectedRoute><AdminGuard><ContractsPage /></AdminGuard></ProtectedRoute>}
+            element={
+              <ProtectedRoute>
+                <LegacyOperationalRoute organizationPath="/organization/contracts">
+                  <AdminGuard><ContractsPage /></AdminGuard>
+                </LegacyOperationalRoute>
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/okr"

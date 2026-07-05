@@ -67,12 +67,18 @@ Implementado nesta etapa:
 - rota `/platform/ai-providers` separada;
 - operacoes manuais de rollout, enable, disable fallback, rollback e
   post-validation;
-- audit log operacional generico.
+- audit log operacional generico;
+- RPCs tenant-scoped para criar, editar e inativar empresas;
+- RPCs tenant-scoped para criar e arquivar contratos;
+- redirecionamento das rotas legadas quando
+  `organization_operational_console_enabled` estiver ativa;
+- traducao de erros tecnicos de limites/cross-tenant para mensagens de
+  negocio no console operacional.
 
 Ainda requer hardening nos lotes seguintes:
 
-- substituir mutations diretas de empresas, contratos, projetos e times por
-  RPCs tenant-scoped especificas;
+- substituir as mutations restantes de projetos, times e vinculos auxiliares
+  por RPCs tenant-scoped especificas;
 - ampliar pgTAP;
 - ampliar testes frontend;
 - sanitizar totalmente operacoes de IA no backend com RPCs/platform policies.
@@ -90,6 +96,11 @@ O rollout cria funcoes seguras:
 - `set_organization_operational_console(boolean)`
 - `is_legacy_operational_admin_fallback_enabled()`
 - `set_legacy_operational_admin_fallback(boolean)`
+- `create_organization_company_v2(...)`
+- `update_organization_company_v2(...)`
+- `archive_organization_company_v2(...)`
+- `create_organization_contract_v2(...)`
+- `archive_organization_contract_v2(...)`
 
 Somente `service_role`, `platform_admin` ou SQL Editor administrativo podem
 alterar essas flags.
@@ -126,7 +137,8 @@ operacional como admin/owner da organizacao ou como `platform_admin`.
 
 ## Riscos Conhecidos
 
-- Hooks legados ainda possuem mutations diretas em tabelas operacionais.
+- Projetos, times e alguns vinculos auxiliares ainda dependem de policies/RLS
+  e precisam de RPCs especificas para fechar o hardening completo.
 - Algumas telas reutilizadas ainda mostram textos de "excluir"; o backend/RLS
   deve impedir operacoes inseguras durante o fallback.
 - Provedores de IA foram separados por rota/guard, mas o hardening completo

@@ -65,6 +65,11 @@ runtime as (
     to_regprocedure('public.set_organization_operational_console(boolean)') is not null as console_toggle_function_available,
     to_regprocedure('public.is_legacy_operational_admin_fallback_enabled()') is not null as fallback_read_function_available,
     to_regprocedure('public.set_legacy_operational_admin_fallback(boolean)') is not null as fallback_toggle_function_available,
+    to_regprocedure('public.create_organization_company_v2(uuid,text,text,text,text,text,text)') is not null as company_create_function_available,
+    to_regprocedure('public.update_organization_company_v2(uuid,uuid,text,text,text,text,text,text)') is not null as company_update_function_available,
+    to_regprocedure('public.archive_organization_company_v2(uuid,uuid)') is not null as company_archive_function_available,
+    to_regprocedure('public.create_organization_contract_v2(uuid,text,uuid,text,date,date,text,text,numeric,text)') is not null as contract_create_function_available,
+    to_regprocedure('public.archive_organization_contract_v2(uuid,uuid)') is not null as contract_archive_function_available,
     to_regclass('public.organization_operational_audit_log') is not null as audit_log_available
 ),
 limits as (
@@ -94,6 +99,11 @@ select
     and console_toggle_function_available
     and fallback_read_function_available
     and fallback_toggle_function_available
+    and company_create_function_available
+    and company_update_function_available
+    and company_archive_function_available
+    and contract_create_function_available
+    and contract_archive_function_available
     and audit_log_available
     and companies_without_org = 0
     and contracts_without_org = 0

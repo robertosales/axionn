@@ -65,6 +65,7 @@ runtime as (
     to_regprocedure('public.set_organization_operational_console(boolean)') is not null as console_toggle_function_available,
     to_regprocedure('public.is_legacy_operational_admin_fallback_enabled()') is not null as fallback_read_function_available,
     to_regprocedure('public.set_legacy_operational_admin_fallback(boolean)') is not null as fallback_toggle_function_available,
+    to_regprocedure('public.get_organization_members_v2(uuid)') is not null as member_query_function_available,
     to_regprocedure('public.create_organization_company_v2(uuid,text,text,text,text,text,text)') is not null as company_create_function_available,
     to_regprocedure('public.update_organization_company_v2(uuid,uuid,text,text,text,text,text,text)') is not null as company_update_function_available,
     to_regprocedure('public.archive_organization_company_v2(uuid,uuid)') is not null as company_archive_function_available,
@@ -99,6 +100,7 @@ select
     and console_toggle_function_available
     and fallback_read_function_available
     and fallback_toggle_function_available
+    and member_query_function_available
     and company_create_function_available
     and company_update_function_available
     and company_archive_function_available

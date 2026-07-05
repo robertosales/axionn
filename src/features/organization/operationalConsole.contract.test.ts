@@ -44,7 +44,7 @@ describe("platform AI security contract", () => {
     "src/features/admin/pages/AdminIAsPage.ts",
   );
   const edgeWrapper = source(
-    "supabase/functions/apf-generate/hardened.ts",
+    "supabase/functions/apf-generate/index.ts",
   );
   const edgeTest = source(
     "supabase/functions/platform-ai-provider-test/index.ts",
@@ -65,13 +65,13 @@ describe("platform AI security contract", () => {
     expect(edgeWrapper).toContain('from("platform_user_roles")');
     expect(edgeTest).toContain('from("platform_user_roles")');
     expect(edgeWrapper).toContain("sanitizeTestResponse");
+    expect(edgeWrapper).toContain('await import("./legacy.ts")');
     expect(edgeTest).not.toContain("rawError");
   });
 
-  it("uses the hardened APF entrypoint", () => {
-    expect(config).toContain(
-      'entrypoint = "./functions/apf-generate/hardened.ts"',
-    );
+  it("keeps JWT verification enabled for both functions", () => {
+    expect(config).toContain("[functions.apf-generate]");
     expect(config).toContain("[functions.platform-ai-provider-test]");
+    expect(config.match(/verify_jwt = true/g)).toHaveLength(2);
   });
 });

@@ -29,7 +29,13 @@ const STATUS_LABELS = {
   cancelled: "Cancelada",
 } as const;
 
-export function OrganizationSwitcher() {
+interface OrganizationSwitcherProps {
+  variant?: "floating" | "inline";
+}
+
+export function OrganizationSwitcher({
+  variant = "floating",
+}: OrganizationSwitcherProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { session } = useAuth();
@@ -47,10 +53,19 @@ export function OrganizationSwitcher() {
 
   if (!enabled || !session) return null;
 
-  if (location.pathname.startsWith("/organization/")) return null;
+  if (
+    variant === "floating" &&
+    (location.pathname === "/modulos" ||
+      location.pathname.startsWith("/organization/") ||
+      location.pathname.startsWith("/platform/"))
+  ) {
+    return null;
+  }
 
   const baseClass =
-    "fixed z-[70] flex h-8 max-w-[210px] items-center gap-2 rounded-lg border bg-background/95 px-2.5 text-xs shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:right-[5.5rem] sm:top-2 max-sm:bottom-4 max-sm:right-4";
+    variant === "inline"
+      ? "flex h-10 min-w-[180px] max-w-[240px] items-center gap-2 rounded-xl border bg-background px-3 text-sm shadow-sm"
+      : "fixed z-[70] flex h-8 max-w-[210px] items-center gap-2 rounded-lg border bg-background/95 px-2.5 text-xs shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:right-[5.5rem] sm:top-2 max-sm:bottom-4 max-sm:right-4";
 
   if (loading) {
     return (
@@ -100,7 +115,7 @@ export function OrganizationSwitcher() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className={cn(baseClass, "cursor-pointer hover:bg-accent")}
+          className={cn(baseClass, "cursor-pointer transition-colors hover:bg-accent")}
           aria-label="Opções da organização"
           title={`${organizationLabel} · ${roleLabel}`}
         >
@@ -191,7 +206,7 @@ export function OrganizationSwitcher() {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer gap-3 py-2.5"
-              onClick={() => navigate("/organization/usage?view=settings")}
+              onClick={() => navigate("/organization/settings")}
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <Settings2 className="h-4 w-4 text-primary" />

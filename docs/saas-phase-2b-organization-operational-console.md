@@ -1,22 +1,18 @@
-# Fase 2B - Console Operacional Tenant-Scoped
+# Fase 2B — Console Operacional Tenant-Scoped
 
 ## Objetivo
 
-A Fase 2B separa a administracao da organizacao da administracao global da
-plataforma. O console organizacional passa a concentrar operacoes do tenant
-ativo, enquanto recursos globais, como provedores de IA e futuras operacoes
-financeiras, ficam restritos a `platform_admin`.
+A Fase 2B separa a administração da organização da administração global da plataforma. O console organizacional concentra operações do tenant ativo, enquanto provedores globais de IA e futuras operações comerciais permanecem restritos a `platform_admin`.
 
 ## Conceitos
 
 - `organizations`: tenant SaaS. Exemplo preservado: SALES CONSULTORIA.
-- `companies`: empresas clientes cadastradas dentro de uma organizacao.
+- `companies`: empresas clientes cadastradas dentro de uma organização.
 - `organization_members`: autoridade para owner, admin e member do tenant.
-- `organization_member_modules`: modulos permitidos dentro do tenant.
+- `organization_member_modules`: módulos permitidos dentro do tenant.
 - `platform_user_roles`: autoridade global da plataforma.
 
-`profiles.module_access`, `user_roles` e `user_module_roles` nao devem ser
-fonte de autoridade para administracao global ou operacional no cutover.
+`profiles.module_access`, `user_roles` e `user_module_roles` não são fontes de autoridade para o console operacional tenant-scoped.
 
 ## Rotas
 
@@ -31,118 +27,164 @@ Console organizacional:
 - `/organization/usage`
 - `/organization/settings`
 
-Console global da plataforma:
+Console global:
 
 - `/platform`
 - `/platform/ai-providers`
 
-O `/dashboard-admin` permanece como fallback temporario ate o desligamento
-controlado da flag `legacy_operational_admin_fallback_enabled`.
+O `/dashboard-admin` permanece como fallback temporário enquanto `legacy_operational_admin_fallback_enabled = true`.
 
-## Autorizacao
+## Autorização
 
-Administracao da organizacao:
+Administração da organização:
 
-- `organization_members.role = owner`
-- `organization_members.role = admin`
-- `platform_admin`
+- `organization_members.role = owner`;
+- `organization_members.role = admin`;
+- `platform_admin` no contexto explicitamente selecionado.
 
-Administracao global:
+Administração global:
 
-- somente `platform_user_roles.role = platform_admin`
-- ou `public.is_platform_admin(auth.uid())`
+- somente `platform_user_roles.role = platform_admin`;
+- ou `public.is_platform_admin(auth.uid())`.
 
-O guard do console organizacional falha fechado quando nao existe organizacao
-ativa. O guard de plataforma nao aceita admin organizacional comum.
+Os guards falham fechados quando a organização, membership ou autoridade global não podem ser confirmados.
 
-## Estado Atual Da Implementacao
+## Implementação consolidada
 
-Implementado nesta etapa:
+### Shell e navegação
 
-- preflight somente leitura;
-- shell inicial do console organizacional;
-- visao geral operacional tenant-scoped;
-- rotas organizacionais para empresas, contratos, projetos, times, membros,
-  uso e configuracoes;
-- rota `/platform/ai-providers` separada;
-- operacoes manuais de rollout, enable, disable fallback, rollback e
-  post-validation;
-- audit log operacional generico;
-- RPCs tenant-scoped para criar, editar e inativar empresas;
-- RPCs tenant-scoped para criar e arquivar contratos;
-- redirecionamento das rotas legadas quando
-  `organization_operational_console_enabled` estiver ativa;
-- traducao de erros tecnicos de limites/cross-tenant para mensagens de
-  negocio no console operacional.
+- shell responsivo com navegação lateral;
+- contexto da organização à esquerda;
+- seletor de organização, menu da conta e tema agrupados no topo;
+- logout dentro do menu da conta;
+- limpeza de estado ao trocar de tenant pelo `OrganizationContext`;
+- platform admin direcionado ao console global;
+- owner/admin direcionado ao console organizacional;
+- fallback legado controlado por flag operacional.
 
-Ainda requer hardening nos lotes seguintes:
+### Empresas clientes
 
-- substituir as mutations restantes de projetos, times e vinculos auxiliares
-  por RPCs tenant-scoped especificas;
-- ampliar pgTAP;
-- ampliar testes frontend;
-- sanitizar totalmente operacoes de IA no backend com RPCs/platform policies.
+- página tenant-scoped específica;
+- criação, edição e inativação por RPC;
+- `org_id` definido pelo backend;
+- CNPJ validado;
+- sem hard delete no modo organizacional;
+- licença legada removida da edição organizacional;
+- plano e cotas direcionados para **Plano e uso**.
 
-## Feature Flags
+### Contratos
 
-As flags ficam em `public.saas_runtime_settings`:
+- leitura tenant-scoped;
+- criação e atualização transacionais por `save_organization_contract_v3`;
+- validação de empresa, times e projetos do mesmo tenant;
+- atualização dos vínculos na mesma transação;
+- arquivamento sem hard delete;
+- `contracts.max` preservado pelo trigger existente;
+- mensagens de limite convertidas para linguagem de negócio.
 
-- `organization_operational_console_enabled`: inicia como `false`.
+### Projetos
+
+- leitura tenant-scoped;
+- criação, edição e arquivamento por RPC;
+- contrato e time validados no backend;
+- `projects.max` preservado;
+- projeto arquivado não consome o limite.
+
+### Times
+
+- leitura administrativa tenant-scoped;
+- criação e edição por RPC;
+- empresa e contrato validados no backend;
+- inativação por `is_active`, sem hard delete;
+- `contract_teams` preservada e não recriada.
+
+### Usuários
+
+A navegação reutiliza `/organization/members` e mantém como autoridade:
+
+- `organization_members.role`;
+- `organization_member_modules`;
+- `platform_user_roles` apenas para administração global.
+
+### IA global
+
+- rota separada `/platform/ai-providers`;
+- guard exclusivo de `platform_admin`;
+- listagem sem `vault_secret_id` ou valor de chave;
+- criação, edição, arquivamento e atualização de chave por RPC;
+- chave nunca é devolvida ao frontend;
+- auditoria global sem armazenar o segredo.
+
+## Banco e migrations
+
+Base do console:
+
+- `supabase/operations/20260704_07_organization_operational_console_rollout.sql`
+
+Hardening complementar:
+
+- `supabase/migrations/20260704080000_organization_operational_console_hardening.sql`
+- `supabase/migrations/20260704080100_platform_ai_provider_hardening.sql`
+- `supabase/operations/20260704_08_organization_operational_console_hardening_validation.sql`
+
+As migrations complementares não alteram `tenancy_enforcement`, assinaturas, quotas, APF, contratos existentes ou memberships existentes.
+
+## Feature flags
+
+Em `public.saas_runtime_settings`:
+
+- `organization_operational_console_enabled`: inicia como `false`;
 - `legacy_operational_admin_fallback_enabled`: inicia como `true`.
-- O rollout preserva o valor atual das duas flags quando reexecutado. Se o
-  console ja estiver ativo por execucao anterior do enable, o rollout nao deve
-  tentar voltar a flag para `false`.
 
-O rollout cria funcoes seguras:
+Fluxo:
 
-- `is_organization_operational_console_enabled()`
-- `set_organization_operational_console(boolean)`
-- `is_legacy_operational_admin_fallback_enabled()`
-- `set_legacy_operational_admin_fallback(boolean)`
-- `create_organization_company_v2(...)`
-- `update_organization_company_v2(...)`
-- `archive_organization_company_v2(...)`
-- `create_organization_contract_v2(...)`
-- `archive_organization_contract_v2(...)`
-
-Somente `service_role`, `platform_admin` ou SQL Editor administrativo podem
-alterar essas flags.
+1. instalar backend;
+2. publicar frontend;
+3. validar com fallback ligado;
+4. ativar o console;
+5. fazer canary com SALES CONSULTORIA;
+6. desligar o fallback somente depois da validação;
+7. manter rollback disponível.
 
 ## Auditoria
 
-O rollout cria `public.organization_operational_audit_log` para eventos:
+`organization_operational_audit_log` registra:
 
-- `company_created`, `company_updated`, `company_archived`
-- `contract_created`, `contract_updated`, `contract_archived`
-- `project_created`, `project_updated`, `project_archived`
-- `team_created`, `team_updated`, `team_deactivated`
+- `company_created`, `company_updated`, `company_archived`;
+- `contract_created`, `contract_updated`, `contract_archived`;
+- `project_created`, `project_updated`, `project_archived`;
+- `team_created`, `team_updated`, `team_deactivated`.
 
-Nao armazenar API keys, tokens, secrets ou payloads sensiveis.
+`platform_operational_audit_log` registra operações globais de provedores de IA sem armazenar API keys, tokens ou `vault_secret_id`.
 
-## Fail-Closed
+## Testes
 
-Erros de RPC, ausencia de organizacao ativa ou ausencia de membership/admin
-nao concedem acesso. O frontend deve transformar erros tecnicos em mensagens de
-negocio antes de exibir ao usuario.
+O repositório contém:
+
+- pgTAP para isolamento do console, projetos, times e administração global de IA;
+- teste frontend para tradução de erros tenant-scoped;
+- replay integral de migrations pelo workflow de startup;
+- builds separados para modo legado e tenant.
 
 ## SALES CONSULTORIA
 
 Preservar:
 
-- `org_id`: `d7f226d9-9f08-43a7-b565-482cca58f00d`
-- nome: `SALES CONSULTORIA`
-- slug: `sales-consultoria`
-- plano: `enterprise`
-- status: `active`
+- `org_id`: `d7f226d9-9f08-43a7-b565-482cca58f00d`;
+- nome: `SALES CONSULTORIA`;
+- slug: `sales-consultoria`;
+- plano: `enterprise`;
+- status: `active`.
 
-Roberto (`3c472f37-eabb-4a95-a859-1a1cf89f5d37`) deve manter acesso
-operacional como admin/owner da organizacao ou como `platform_admin`.
+Roberto (`3c472f37-eabb-4a95-a859-1a1cf89f5d37`) deve permanecer owner/admin ativo da organização ou `platform_admin`.
 
-## Riscos Conhecidos
+## Pendências operacionais, não de código
 
-- Projetos, times e alguns vinculos auxiliares ainda dependem de policies/RLS
-  e precisam de RPCs especificas para fechar o hardening completo.
-- Algumas telas reutilizadas ainda mostram textos de "excluir"; o backend/RLS
-  deve impedir operacoes inseguras durante o fallback.
-- Provedores de IA foram separados por rota/guard, mas o hardening completo
-  de mutations deve ser concluido em lote posterior.
+- executar os SQLs manualmente no Lovable Cloud;
+- publicar o frontend da `develop`;
+- executar smoke test com SALES CONSULTORIA e Roberto;
+- validar cadastros controlados de empresa, contrato, projeto e time;
+- desligar o fallback somente depois do canary;
+- executar post-validation.
+
+Nenhum SQL remoto é executado pelo repositório ou pelos workflows.

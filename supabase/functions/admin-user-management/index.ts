@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// Redeploy bump: 2026-06-08 — fix CORS Allow-Origin for axionn.lovable.app
+// Redeploy bump: 2026-07-06 — fix reset_password via admin-user-management
 
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:8080";
 const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
@@ -17,11 +17,12 @@ const DEFAULT_ALLOWED_ORIGINS = [
 function buildAllowedOrigins(): Set<string> {
   const envOrigins = Deno.env.get("ALLOWED_ORIGINS");
   if (envOrigins) {
-    const parsed = envOrigins
-      .split(",")
-      .map((o) => o.trim())
-      .filter(Boolean);
-    if (parsed.length > 0) return new Set(parsed);
+    return new Set(
+      envOrigins
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean),
+    );
   }
   const defaults = new Set(DEFAULT_ALLOWED_ORIGINS);
   if (SITE_URL && SITE_URL !== "*") defaults.add(SITE_URL);
@@ -252,7 +253,11 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "reset_password") {
-      const { data: profile } = await adminClient.from("profiles").select("email").eq("user_id", user_id).maybeSingle();
+      const { data: profile } = await adminClient
+        .from("profiles")
+        .select("email")
+        .eq("user_id", user_id)
+        .maybeSingle();
       const targetEmail = profile?.email;
 
       if (mode === "send_link") {
@@ -272,16 +277,13 @@ Deno.serve(async (req: Request) => {
           cleanOrigin = PUBLIC_SITE_URL;
         }
 
-        const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
+        const { error: linkErr } = await adminClient.auth.admin.generateLink({
           type: "recovery",
           email: targetEmail,
           options: { redirectTo: `${cleanOrigin}/reset-password` },
         });
         if (linkErr) throw linkErr;
 
-        // SECURITY: jamais retornar o action_link no corpo da resposta —
-        // ele é uma URL one-time que autentica o usuário sem senha.
-        // O Supabase já dispara o e-mail de recuperação via generateLink.
         await auditLog("reset_password", { mode: "send_link", email: targetEmail });
 
         return new Response(
@@ -294,6 +296,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // mode: "temp_password" (default)
       const tempPassword = generateTempPassword();
       const { error: updErr } = await adminClient.auth.admin.updateUserById(user_id, { password: tempPassword });
       if (updErr) throw updErr;

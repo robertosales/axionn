@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Building2,
   Crown,
+  KeyRound,
   Loader2,
   MailPlus,
   MoreHorizontal,
@@ -15,6 +16,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useOrganizationMembers,
@@ -62,26 +64,23 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 
-const MODULES: Array<{
-  key: OrganizationModuleKey;
-  label: string;
-}> = [
-  { key: "sala_agil", label: "Sala Ágil" },
+const MODULES: Array<{ key: OrganizationModuleKey; label: string }> = [
+  { key: "sala_agil",    label: "Sala Ágil" },
   { key: "sustentacao", label: "Sustentação" },
-  { key: "rdm", label: "RDM" },
+  { key: "rdm",         label: "RDM" },
 ];
 
 const ROLE_LABELS = {
-  owner: "Proprietário",
-  admin: "Administrador",
+  owner:  "Proprietário",
+  admin:  "Administrador",
   member: "Membro",
 } as const;
 
 const INVITATION_STATUS_LABELS = {
-  pending: "Pendente",
+  pending:  "Pendente",
   accepted: "Aceito",
-  expired: "Expirado",
-  revoked: "Revogado",
+  expired:  "Expirado",
+  revoked:  "Revogado",
 } as const;
 
 function formatDate(value: string) {
@@ -91,6 +90,7 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+// ─── ModuleSelector ─────────────────────────────────────────────────
 function ModuleSelector({
   value,
   onChange,
@@ -102,28 +102,32 @@ function ModuleSelector({
 }) {
   return (
     <div className="grid gap-2 sm:grid-cols-3">
-      {MODULES.map((module) => {
-        const checked = value.includes(module.key);
+      {MODULES.map((mod) => {
+        const checked = value.includes(mod.key);
         return (
           <label
-            key={module.key}
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            key={mod.key}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+              disabled
+                ? "cursor-not-allowed opacity-50"
+                : checked
+                  ? "cursor-pointer border-primary/40 bg-primary/5"
+                  : "cursor-pointer hover:bg-muted/50"
             }`}
           >
             <Checkbox
               checked={checked}
               disabled={disabled}
-              onCheckedChange={(nextChecked) => {
+              onCheckedChange={(next) => {
                 if (disabled) return;
                 onChange(
-                  nextChecked
-                    ? [...value, module.key]
-                    : value.filter((item) => item !== module.key),
+                  next
+                    ? [...value, mod.key]
+                    : value.filter((k) => k !== mod.key),
                 );
               }}
             />
-            {module.label}
+            {mod.label}
           </label>
         );
       })}
@@ -131,7 +135,7 @@ function ModuleSelector({
   );
 }
 
-// ─── BUG-003: Transfer Ownership Confirmation Dialog ────────────────────────
+// ─── TransferOwnershipConfirmDialog ────────────────────────────────
 function TransferOwnershipConfirmDialog({
   open,
   memberName,
@@ -154,10 +158,9 @@ function TransferOwnershipConfirmDialog({
             Transferir propriedade
           </DialogTitle>
           <DialogDescription>
-            Você está prestes a transferir a propriedade da organização para{" "}
+            Você está prestes a transferir a propriedade para{" "}
             <strong>{memberName}</strong>. Esta ação é{" "}
-            <strong>irreversível</strong> — você perderá o papel de Proprietário
-            e não poderá desfazê-la sem a ajuda do novo proprietário.
+            <strong>irreversível</strong> — você perderá o papel de Proprietário.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2">
@@ -174,6 +177,7 @@ function TransferOwnershipConfirmDialog({
   );
 }
 
+// ─── InviteMemberDialog ───────────────────────────────────────────────
 function InviteMemberDialog({
   open,
   busy,
@@ -189,11 +193,9 @@ function InviteMemberDialog({
     moduleKeys: OrganizationModuleKey[];
   }) => Promise<void>;
 }) {
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "member">("member");
-  const [moduleKeys, setModuleKeys] = useState<OrganizationModuleKey[]>([
-    "sala_agil",
-  ]);
+  const [email, setEmail]         = useState("");
+  const [role, setRole]           = useState<"admin" | "member">("member");
+  const [moduleKeys, setModuleKeys] = useState<OrganizationModuleKey[]>(["sala_agil"]);
 
   const reset = () => {
     setEmail("");
@@ -202,13 +204,7 @@ function InviteMemberDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        onOpenChange(nextOpen);
-        if (!nextOpen) reset();
-      }}
-    >
+    <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) reset(); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Convidar membro</DialogTitle>
@@ -218,50 +214,38 @@ function InviteMemberDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="organization-invite-email">E-mail</Label>
             <Input
               id="organization-invite-email"
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="nome@empresa.com"
               autoComplete="email"
             />
           </div>
-
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label>Papel na organização</Label>
-            <Select
-              value={role}
-              onValueChange={(value) => setRole(value as "admin" | "member")}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+            <Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="member">Membro</SelectItem>
                 <SelectItem value="admin">Administrador</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label>Módulos iniciais</Label>
             <ModuleSelector value={moduleKeys} onChange={setModuleKeys} />
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
             disabled={busy || !email.trim()}
-            onClick={async () => {
-              await onSubmit({ email: email.trim(), role, moduleKeys });
-              reset();
-            }}
+            onClick={async () => { await onSubmit({ email: email.trim(), role, moduleKeys }); reset(); }}
           >
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Enviar convite
@@ -272,7 +256,7 @@ function InviteMemberDialog({
   );
 }
 
-// ─── BUG-001, BUG-002, BUG-004, BUG-005: EditMemberDialog ──────────────────
+// ─── EditMemberDialog ─────────────────────────────────────────────────
 function EditMemberDialog({
   member,
   busy,
@@ -297,14 +281,13 @@ function EditMemberDialog({
   onDeactivate: () => Promise<void>;
   onTransferOwnership: () => Promise<void>;
 }) {
-  const [role, setRole] = useState<"admin" | "member">("member");
-  const [isActive, setIsActive] = useState(true);
+  const [role, setRole]             = useState<"admin" | "member">("member");
+  const [isActive, setIsActive]     = useState(true);
   const [moduleKeys, setModuleKeys] = useState<OrganizationModuleKey[]>([]);
-  // BUG-004: email migration state
-  const [newEmail, setNewEmail] = useState("");
-  const [showEmailField, setShowEmailField] = useState(false);
-  // BUG-002: transfer ownership confirmation
+  const [newEmail, setNewEmail]     = useState("");
+  const [showEmailField, setShowEmailField]       = useState(false);
   const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
+  const [sendingReset, setSendingReset]           = useState(false);
 
   const memberKey = member?.userId;
   useMemo(() => {
@@ -315,180 +298,239 @@ function EditMemberDialog({
     setNewEmail("");
     setShowEmailField(false);
     setTransferConfirmOpen(false);
+    setSendingReset(false);
   }, [memberKey]);
 
-  const isOwner = member?.membershipRole === "owner";
-  const isSelf = member?.userId === currentUserId;
-  // BUG-003: warn if member is inactive
+  const isOwner   = member?.membershipRole === "owner";
+  const isSelf    = member?.userId === currentUserId;
   const isInactive = member && !member.isActive;
+
+  // BUG-003: envia reset de senha pelo Supabase Auth
+  const handleSendPasswordReset = async () => {
+    if (!member?.email) return;
+    setSendingReset(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setSendingReset(false);
+    if (error) {
+      toast.error("Não foi possível enviar o link de reset. Tente novamente.");
+    } else {
+      toast.success(`Link de redefinição enviado para ${member.email}.`);
+    }
+  };
 
   return (
     <>
-      {/* BUG-005: max-height + overflow for small viewports */}
       <Dialog open={Boolean(member)} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="flex max-h-[90vh] flex-col overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            {/* BUG-005: dynamic subtitle */}
+        {/* BUG-005: max-height + scroll para viewports menores */}
+        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+
+          {/* Cabeçalho */}
+          <DialogHeader className="px-6 pb-3 pt-6">
             <DialogTitle>Gerenciar membro</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs">
               {member?.displayName} · {member?.email}
             </DialogDescription>
           </DialogHeader>
 
-          {member && (
-            <div className="space-y-4 py-2">
-              {/* BUG-003: alert when member is inactive */}
-              {isInactive && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription className="text-xs">
-                    Este membro está <strong>inativo</strong>. Reset de senha
-                    não será possível até que o acesso seja reativado.
-                  </AlertDescription>
-                </Alert>
-              )}
+          <Separator />
 
-              {/* Papel */}
-              <div className="space-y-2">
-                <Label>Papel</Label>
-                {isOwner ? (
-                  // BUG-005: use Badge component for owner — consistent with design system
-                  <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                    <Crown className="h-4 w-4 text-amber-500" />
-                    <span className="font-medium">Proprietário da organização</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px]">
-                      read-only
-                    </Badge>
-                  </div>
-                ) : (
-                  <Select
-                    value={role}
-                    onValueChange={(value) =>
-                      setRole(value as "admin" | "member")
-                    }
+          {/* Corpo rolável */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {member && (
+              <div className="space-y-5">
+
+                {/* BUG-003: alerta se membro inativo */}
+                {isInactive && (
+                  <Alert variant="destructive" className="py-2 text-xs">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <AlertDescription>
+                      Membro <strong>inativo</strong>. Reative o acesso antes de
+                      enviar o link de reset de senha.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* ─── Papel ─── */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Papel
+                  </Label>
+                  {isOwner ? (
+                    <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                      <Crown className="h-4 w-4 shrink-0 text-amber-500" />
+                      <span className="font-medium">Proprietário da organização</span>
+                      <Badge variant="secondary" className="ml-auto text-[10px]">read-only</Badge>
+                    </div>
+                  ) : (
+                    <Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="member">Membro</SelectItem>
+                        <SelectItem value="admin">Administrador</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* ─── Módulos ─── */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Módulos
+                  </Label>
+                  <ModuleSelector
+                    value={moduleKeys}
+                    onChange={setModuleKeys}
+                    disabled={isOwner}
+                  />
+                </div>
+
+                <Separator />
+
+                {/* ─── Acesso ativo ─── */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Status de acesso
+                  </Label>
+                  <label
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                      isOwner || isSelf ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted/50"
+                    }`}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="member">Membro</SelectItem>
-                      <SelectItem value="admin">Administrador</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
+                    <Checkbox
+                      checked={isOwner ? true : isActive}
+                      disabled={isOwner || isSelf}
+                      onCheckedChange={(checked) => {
+                        if (!isOwner && !isSelf) setIsActive(Boolean(checked));
+                      }}
+                    />
+                    <span>Acesso ativo</span>
+                    {isOwner && (
+                      <span className="ml-auto text-xs text-muted-foreground">Sempre ativo</span>
+                    )}
+                  </label>
+                </div>
 
-              {/* Módulos — BUG-001: owner modules are read-only, not editable */}
-              <div className="space-y-2">
-                <Label>Módulos</Label>
-                <ModuleSelector
-                  value={moduleKeys}
-                  onChange={setModuleKeys}
-                  disabled={isOwner}
-                />
-              </div>
+                <Separator />
 
-              {/* BUG-005: Separator between modules and active toggle */}
-              <Separator />
-
-              {/* BUG-002: "Acesso ativo" shown for ALL roles (read-only for owner) */}
-              <label
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                  isOwner || isSelf ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-                }`}
-              >
-                <Checkbox
-                  checked={isOwner ? true : isActive}
-                  disabled={isOwner || isSelf}
-                  onCheckedChange={(checked) => {
-                    if (!isOwner && !isSelf) setIsActive(Boolean(checked));
-                  }}
-                />
-                Acesso ativo
-                {isOwner && (
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    Proprietário sempre ativo
-                  </span>
-                )}
-              </label>
-
-              {/* BUG-004: Email migration — shown for non-owner, non-self members */}
-              {!isOwner && !isSelf && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm">Migração de e-mail</Label>
+                {/* ─── Reset de senha (BUG-003) ─── */}
+                {!isOwner && !isSelf && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Segurança
+                    </Label>
+                    <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">Reset de senha</p>
+                        <p className="text-xs text-muted-foreground">
+                          {isInactive
+                            ? "Reative o membro antes de enviar o link."
+                            : "Envia link de redefinição para o e-mail do membro."}
+                        </p>
+                      </div>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="h-6 text-xs"
-                        onClick={() => setShowEmailField((prev) => !prev)}
+                        disabled={sendingReset || busy || Boolean(isInactive)}
+                        onClick={handleSendPasswordReset}
+                        className="ml-3 shrink-0"
                       >
-                        {showEmailField ? "Cancelar" : "Alterar e-mail"}
+                        {sendingReset
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <KeyRound className="h-3.5 w-3.5" />}
+                        <span className="ml-1.5">
+                          {sendingReset ? "Enviando..." : "Enviar link"}
+                        </span>
                       </Button>
                     </div>
-                    {showEmailField && (
-                      <>
-                        <Input
-                          type="email"
-                          placeholder="novo@email.com"
-                          value={newEmail}
-                          onChange={(e) => setNewEmail(e.target.value)}
-                          autoComplete="email"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Um e-mail de confirmação será enviado para o endereço
-                          atual e o novo. Sessões existentes serão invalidadas.
-                        </p>
-                      </>
-                    )}
                   </div>
-                </>
-              )}
-            </div>
-          )}
+                )}
 
-          {/* BUG-005: Footer reorganized — destructive actions left, positive right */}
-          <DialogFooter className="mt-auto gap-2 sm:justify-between">
+                {/* ─── Migração de e-mail (BUG-004) ─── */}
+                {!isOwner && !isSelf && (
+                  <>
+                    <Separator />
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Migração de e-mail
+                        </Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() => setShowEmailField((p) => !p)}
+                        >
+                          {showEmailField ? "Cancelar" : "Alterar e-mail"}
+                        </Button>
+                      </div>
+                      {showEmailField && (
+                        <>
+                          <Input
+                            type="email"
+                            placeholder="novo@email.com"
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                            autoComplete="email"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Confirmação enviada para o e-mail antigo e o novo.
+                            Sessões existentes serão invalidadas.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Rodapé: ações destrutivas à esquerda, positivas à direita */}
+          <DialogFooter className="flex-row justify-between gap-2 px-6 py-4">
             <div className="flex gap-2">
               {member && !isOwner && !isSelf && member.isActive && (
-                // BUG-005: destructive uses outline variant to reduce visual weight
                 <Button
                   variant="outline"
-                  className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  size="sm"
+                  className="border-destructive text-destructive hover:bg-destructive/10"
                   disabled={busy}
                   onClick={onDeactivate}
                 >
-                  <UserMinus className="mr-2 h-4 w-4" />
+                  <UserMinus className="mr-1.5 h-4 w-4" />
                   Desativar
                 </Button>
               )}
-              {/* BUG-002: Transfer ownership now opens confirmation dialog */}
               {member && !isOwner && canTransferOwnership && member.isActive && (
                 <Button
                   variant="outline"
+                  size="sm"
                   disabled={busy}
                   onClick={() => setTransferConfirmOpen(true)}
                 >
-                  <Crown className="mr-2 h-4 w-4" />
+                  <Crown className="mr-1.5 h-4 w-4" />
                   Tornar proprietário
                 </Button>
               )}
             </div>
-
             <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
+              <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
               <Button
+                size="sm"
                 disabled={busy || isOwner}
                 onClick={() =>
                   onSave({
                     role,
                     isActive,
                     moduleKeys,
-                    newEmail: showEmailField && newEmail.trim() ? newEmail.trim() : undefined,
+                    newEmail:
+                      showEmailField && newEmail.trim() ? newEmail.trim() : undefined,
                   })
                 }
               >
@@ -497,24 +539,22 @@ function EditMemberDialog({
               </Button>
             </div>
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
 
-      {/* BUG-002: Transfer ownership confirmation dialog */}
       <TransferOwnershipConfirmDialog
         open={transferConfirmOpen}
         memberName={member?.displayName ?? ""}
         busy={busy}
-        onConfirm={async () => {
-          setTransferConfirmOpen(false);
-          await onTransferOwnership();
-        }}
+        onConfirm={async () => { setTransferConfirmOpen(false); await onTransferOwnership(); }}
         onCancel={() => setTransferConfirmOpen(false)}
       />
     </>
   );
 }
 
+// ─── OrganizationMembersPage ────────────────────────────────────────────
 export default function OrganizationMembersPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -533,20 +573,18 @@ export default function OrganizationMembersPage() {
     deactivateMember,
     transferOwnership,
   } = useOrganizationMembers();
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [editingMember, setEditingMember] = useState<OrganizationMember | null>(
-    null,
-  );
+  const [inviteOpen, setInviteOpen]       = useState(false);
+  const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
 
   const currentMembership = useMemo(
-    () => members.find((member) => member.userId === user?.id),
+    () => members.find((m) => m.userId === user?.id),
     [members, user?.id],
   );
   const canTransferOwnership =
     organization?.isPlatformAdmin === true ||
     currentMembership?.membershipRole === "owner";
   const pendingInvitations = invitations.filter(
-    (invitation) => invitation.invitationStatus === "pending",
+    (inv) => inv.invitationStatus === "pending",
   );
 
   const handleInvite = async (input: {
@@ -558,10 +596,8 @@ export default function OrganizationMembersPage() {
       await inviteMember(input);
       toast.success("Convite enviado com sucesso.");
       setInviteOpen(false);
-    } catch (inviteError) {
-      const message =
-        inviteError instanceof Error ? inviteError.message : "Erro ao enviar convite.";
-      toast.error(message);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar convite.");
     }
   };
 
@@ -577,12 +613,8 @@ export default function OrganizationMembersPage() {
         await revokeInvitation(invitation.invitationId);
         toast.success("Convite revogado.");
       }
-    } catch (invitationError) {
-      toast.error(
-        invitationError instanceof Error
-          ? invitationError.message
-          : "Não foi possível atualizar o convite.",
-      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível atualizar o convite.");
     }
   };
 
@@ -590,9 +622,7 @@ export default function OrganizationMembersPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <Alert className="max-w-xl">
-          <AlertDescription>
-            Selecione uma organização para gerenciar seus membros.
-          </AlertDescription>
+          <AlertDescription>Selecione uma organização para gerenciar seus membros.</AlertDescription>
         </Alert>
       </div>
     );
@@ -611,20 +641,15 @@ export default function OrganizationMembersPage() {
             </div>
             <div className="min-w-0">
               <h1 className="truncate text-lg font-semibold">Membros da organização</h1>
-              <p className="truncate text-sm text-muted-foreground">
-                {organization.name}
-              </p>
+              <p className="truncate text-sm text-muted-foreground">{organization.name}</p>
             </div>
           </div>
-
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void refresh()}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Atualizar
+              <RefreshCw className="mr-2 h-4 w-4" />Atualizar
             </Button>
             <Button size="sm" onClick={() => setInviteOpen(true)}>
-              <MailPlus className="mr-2 h-4 w-4" />
-              Convidar
+              <MailPlus className="mr-2 h-4 w-4" />Convidar
             </Button>
           </div>
         </div>
@@ -632,9 +657,7 @@ export default function OrganizationMembersPage() {
 
       <main className="mx-auto max-w-7xl space-y-5 px-4 py-6 lg:px-8">
         {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>
         )}
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -651,9 +674,7 @@ export default function OrganizationMembersPage() {
             <CardContent className="flex items-center gap-3 p-5">
               <UserCheck className="h-5 w-5 text-emerald-500" />
               <div>
-                <p className="text-2xl font-semibold">
-                  {members.filter((member) => member.isActive).length}
-                </p>
+                <p className="text-2xl font-semibold">{members.filter((m) => m.isActive).length}</p>
                 <p className="text-xs text-muted-foreground">Acessos ativos</p>
               </div>
             </CardContent>
@@ -675,18 +696,14 @@ export default function OrganizationMembersPage() {
             <TabsTrigger value="invitations">
               Convites
               {pendingInvitations.length > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {pendingInvitations.length}
-                </Badge>
+                <Badge variant="secondary" className="ml-2">{pendingInvitations.length}</Badge>
               )}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="members">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Acessos da organização</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Acessos da organização</CardTitle></CardHeader>
               <CardContent className="p-0">
                 {loading ? (
                   <div className="flex items-center justify-center p-12">
@@ -707,50 +724,31 @@ export default function OrganizationMembersPage() {
                       {members.map((member) => (
                         <TableRow key={member.userId}>
                           <TableCell>
-                            <div>
-                              <p className="font-medium">{member.displayName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {member.email}
-                              </p>
-                            </div>
+                            <p className="font-medium">{member.displayName}</p>
+                            <p className="text-xs text-muted-foreground">{member.email}</p>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant={
-                                member.membershipRole === "owner"
-                                  ? "default"
-                                  : "secondary"
-                              }
-                            >
-                              {member.membershipRole === "owner" && (
-                                <Crown className="mr-1 h-3 w-3" />
-                              )}
-                              {member.membershipRole === "admin" && (
-                                <ShieldCheck className="mr-1 h-3 w-3" />
-                              )}
+                            <Badge variant={member.membershipRole === "owner" ? "default" : "secondary"}>
+                              {member.membershipRole === "owner" && <Crown className="mr-1 h-3 w-3" />}
+                              {member.membershipRole === "admin" && <ShieldCheck className="mr-1 h-3 w-3" />}
                               {ROLE_LABELS[member.membershipRole]}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {member.moduleKeys.length === 0 ? (
-                                <span className="text-xs text-muted-foreground">
-                                  Nenhum módulo
-                                </span>
+                                <span className="text-xs text-muted-foreground">Nenhum módulo</span>
                               ) : (
-                                member.moduleKeys.map((moduleKey) => (
-                                  <Badge key={moduleKey} variant="outline">
-                                    {MODULES.find((module) => module.key === moduleKey)
-                                      ?.label ?? moduleKey}
+                                member.moduleKeys.map((k) => (
+                                  <Badge key={k} variant="outline">
+                                    {MODULES.find((m) => m.key === k)?.label ?? k}
                                   </Badge>
                                 ))
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant={member.isActive ? "secondary" : "destructive"}
-                            >
+                            <Badge variant={member.isActive ? "secondary" : "destructive"}>
                               {member.isActive ? "Ativo" : "Desativado"}
                             </Badge>
                           </TableCell>
@@ -762,35 +760,26 @@ export default function OrganizationMembersPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => setEditingMember(member)}
-                                >
+                                <DropdownMenuItem onClick={() => setEditingMember(member)}>
                                   Gerenciar acesso
                                 </DropdownMenuItem>
-                                {member.userId !== user?.id &&
-                                  member.membershipRole !== "owner" && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        className="text-destructive"
-                                        onClick={() => {
-                                          void deactivateMember(member.userId)
-                                            .then(() =>
-                                              toast.success("Membro desativado."),
-                                            )
-                                            .catch((memberError) =>
-                                              toast.error(
-                                                memberError instanceof Error
-                                                  ? memberError.message
-                                                  : "Falha ao desativar membro.",
-                                              ),
-                                            );
-                                        }}
-                                      >
-                                        Desativar
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
+                                {member.userId !== user?.id && member.membershipRole !== "owner" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="text-destructive"
+                                      onClick={() => {
+                                        void deactivateMember(member.userId)
+                                          .then(() => toast.success("Membro desativado."))
+                                          .catch((err) =>
+                                            toast.error(err instanceof Error ? err.message : "Falha ao desativar membro."),
+                                          );
+                                      }}
+                                    >
+                                      Desativar
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -805,9 +794,7 @@ export default function OrganizationMembersPage() {
 
           <TabsContent value="invitations">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Histórico de convites</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Histórico de convites</CardTitle></CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
@@ -823,9 +810,7 @@ export default function OrganizationMembersPage() {
                     {invitations.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="py-10 text-center">
-                          <span className="text-sm text-muted-foreground">
-                            Nenhum convite criado.
-                          </span>
+                          <span className="text-sm text-muted-foreground">Nenhum convite criado.</span>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -834,28 +819,18 @@ export default function OrganizationMembersPage() {
                           <TableCell>
                             <p className="font-medium">{invitation.email}</p>
                             <p className="text-xs text-muted-foreground">
-                              Enviado por {invitation.invitedByName} · tentativa{" "}
-                              {invitation.sendCount}
+                              Enviado por {invitation.invitedByName} · tentativa {invitation.sendCount}
                             </p>
                           </TableCell>
-                          <TableCell>
-                            {ROLE_LABELS[invitation.invitationRole]}
-                          </TableCell>
+                          <TableCell>{ROLE_LABELS[invitation.invitationRole]}</TableCell>
                           <TableCell>
                             <Badge
                               variant={
-                                invitation.invitationStatus === "pending"
-                                  ? "secondary"
-                                  : invitation.invitationStatus === "accepted"
-                                    ? "default"
-                                    : "outline"
+                                invitation.invitationStatus === "pending" ? "secondary" :
+                                invitation.invitationStatus === "accepted" ? "default" : "outline"
                               }
                             >
-                              {
-                                INVITATION_STATUS_LABELS[
-                                  invitation.invitationStatus
-                                ]
-                              }
+                              {INVITATION_STATUS_LABELS[invitation.invitationStatus]}
                             </Badge>
                           </TableCell>
                           <TableCell>{formatDate(invitation.expiresAt)}</TableCell>
@@ -869,24 +844,14 @@ export default function OrganizationMembersPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      void handleInvitationAction(
-                                        invitation,
-                                        "resend",
-                                      )
-                                    }
+                                    onClick={() => void handleInvitationAction(invitation, "resend")}
                                   >
                                     Reenviar convite
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     className="text-destructive"
-                                    onClick={() =>
-                                      void handleInvitationAction(
-                                        invitation,
-                                        "revoke",
-                                      )
-                                    }
+                                    onClick={() => void handleInvitationAction(invitation, "revoke")}
                                   >
                                     Revogar convite
                                   </DropdownMenuItem>
@@ -924,12 +889,8 @@ export default function OrganizationMembersPage() {
             await updateMember({ userId: editingMember.userId, ...input });
             toast.success("Acesso atualizado.");
             setEditingMember(null);
-          } catch (memberError) {
-            toast.error(
-              memberError instanceof Error
-                ? memberError.message
-                : "Não foi possível atualizar o membro.",
-            );
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Não foi possível atualizar o membro.");
           }
         }}
         onDeactivate={async () => {
@@ -938,12 +899,8 @@ export default function OrganizationMembersPage() {
             await deactivateMember(editingMember.userId);
             toast.success("Membro desativado.");
             setEditingMember(null);
-          } catch (memberError) {
-            toast.error(
-              memberError instanceof Error
-                ? memberError.message
-                : "Não foi possível desativar o membro.",
-            );
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Não foi possível desativar o membro.");
           }
         }}
         onTransferOwnership={async () => {
@@ -952,12 +909,8 @@ export default function OrganizationMembersPage() {
             await transferOwnership(editingMember.userId);
             toast.success("Propriedade transferida.");
             setEditingMember(null);
-          } catch (memberError) {
-            toast.error(
-              memberError instanceof Error
-                ? memberError.message
-                : "Não foi possível transferir a propriedade.",
-            );
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Não foi possível transferir a propriedade.");
           }
         }}
       />

@@ -12,6 +12,7 @@ import {
   UserCheck,
   UserMinus,
   Users,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -59,6 +60,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 
 const MODULES: Array<{
   key: OrganizationModuleKey;
@@ -92,9 +94,11 @@ function formatDate(value: string) {
 function ModuleSelector({
   value,
   onChange,
+  disabled,
 }: {
   value: OrganizationModuleKey[];
   onChange: (value: OrganizationModuleKey[]) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="grid gap-2 sm:grid-cols-3">
@@ -103,11 +107,15 @@ function ModuleSelector({
         return (
           <label
             key={module.key}
-            className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            }`}
           >
             <Checkbox
               checked={checked}
+              disabled={disabled}
               onCheckedChange={(nextChecked) => {
+                if (disabled) return;
                 onChange(
                   nextChecked
                     ? [...value, module.key]
@@ -120,6 +128,49 @@ function ModuleSelector({
         );
       })}
     </div>
+  );
+}
+
+// ─── BUG-003: Transfer Ownership Confirmation Dialog ────────────────────────
+function TransferOwnershipConfirmDialog({
+  open,
+  memberName,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  memberName: string;
+  busy: boolean;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Transferir propriedade
+          </DialogTitle>
+          <DialogDescription>
+            Você está prestes a transferir a propriedade da organização para{" "}
+            <strong>{memberName}</strong>. Esta ação é{" "}
+            <strong>irreversível</strong> — você perderá o papel de Proprietário
+            e não poderá desfazê-la sem a ajuda do novo proprietário.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onCancel} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={busy}>
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Confirmar transferência
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -221,6 +272,7 @@ function InviteMemberDialog({
   );
 }
 
+// ─── BUG-001, BUG-002, BUG-004, BUG-005: EditMemberDialog ──────────────────
 function EditMemberDialog({
   member,
   busy,
@@ -240,6 +292,7 @@ function EditMemberDialog({
     role: "admin" | "member";
     isActive: boolean;
     moduleKeys: OrganizationModuleKey[];
+    newEmail?: string;
   }) => Promise<void>;
   onDeactivate: () => Promise<void>;
   onTransferOwnership: () => Promise<void>;
@@ -247,6 +300,11 @@ function EditMemberDialog({
   const [role, setRole] = useState<"admin" | "member">("member");
   const [isActive, setIsActive] = useState(true);
   const [moduleKeys, setModuleKeys] = useState<OrganizationModuleKey[]>([]);
+  // BUG-004: email migration state
+  const [newEmail, setNewEmail] = useState("");
+  const [showEmailField, setShowEmailField] = useState(false);
+  // BUG-002: transfer ownership confirmation
+  const [transferConfirmOpen, setTransferConfirmOpen] = useState(false);
 
   const memberKey = member?.userId;
   useMemo(() => {
@@ -254,105 +312,206 @@ function EditMemberDialog({
     setRole(member.membershipRole === "admin" ? "admin" : "member");
     setIsActive(member.isActive);
     setModuleKeys(member.moduleKeys);
+    setNewEmail("");
+    setShowEmailField(false);
+    setTransferConfirmOpen(false);
   }, [memberKey]);
 
   const isOwner = member?.membershipRole === "owner";
   const isSelf = member?.userId === currentUserId;
+  // BUG-003: warn if member is inactive
+  const isInactive = member && !member.isActive;
 
   return (
-    <Dialog open={Boolean(member)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Gerenciar membro</DialogTitle>
-          <DialogDescription>
-            {member?.displayName} · {member?.email}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      {/* BUG-005: max-height + overflow for small viewports */}
+      <Dialog open={Boolean(member)} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            {/* BUG-005: dynamic subtitle */}
+            <DialogTitle>Gerenciar membro</DialogTitle>
+            <DialogDescription>
+              {member?.displayName} · {member?.email}
+            </DialogDescription>
+          </DialogHeader>
 
-        {member && (
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Papel</Label>
-              {isOwner ? (
-                <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                  <Crown className="h-4 w-4 text-amber-500" />
-                  Proprietário da organização
-                </div>
-              ) : (
-                <Select
-                  value={role}
-                  onValueChange={(value) =>
-                    setRole(value as "admin" | "member")
-                  }
+          {member && (
+            <div className="space-y-4 py-2">
+              {/* BUG-003: alert when member is inactive */}
+              {isInactive && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    Este membro está <strong>inativo</strong>. Reset de senha
+                    não será possível até que o acesso seja reativado.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Papel */}
+              <div className="space-y-2">
+                <Label>Papel</Label>
+                {isOwner ? (
+                  // BUG-005: use Badge component for owner — consistent with design system
+                  <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                    <Crown className="h-4 w-4 text-amber-500" />
+                    <span className="font-medium">Proprietário da organização</span>
+                    <Badge variant="secondary" className="ml-auto text-[10px]">
+                      read-only
+                    </Badge>
+                  </div>
+                ) : (
+                  <Select
+                    value={role}
+                    onValueChange={(value) =>
+                      setRole(value as "admin" | "member")
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">Membro</SelectItem>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* Módulos — BUG-001: owner modules are read-only, not editable */}
+              <div className="space-y-2">
+                <Label>Módulos</Label>
+                <ModuleSelector
+                  value={moduleKeys}
+                  onChange={setModuleKeys}
+                  disabled={isOwner}
+                />
+              </div>
+
+              {/* BUG-005: Separator between modules and active toggle */}
+              <Separator />
+
+              {/* BUG-002: "Acesso ativo" shown for ALL roles (read-only for owner) */}
+              <label
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                  isOwner || isSelf ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                }`}
+              >
+                <Checkbox
+                  checked={isOwner ? true : isActive}
+                  disabled={isOwner || isSelf}
+                  onCheckedChange={(checked) => {
+                    if (!isOwner && !isSelf) setIsActive(Boolean(checked));
+                  }}
+                />
+                Acesso ativo
+                {isOwner && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Proprietário sempre ativo
+                  </span>
+                )}
+              </label>
+
+              {/* BUG-004: Email migration — shown for non-owner, non-self members */}
+              {!isOwner && !isSelf && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Migração de e-mail</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => setShowEmailField((prev) => !prev)}
+                      >
+                        {showEmailField ? "Cancelar" : "Alterar e-mail"}
+                      </Button>
+                    </div>
+                    {showEmailField && (
+                      <>
+                        <Input
+                          type="email"
+                          placeholder="novo@email.com"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          autoComplete="email"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Um e-mail de confirmação será enviado para o endereço
+                          atual e o novo. Sessões existentes serão invalidadas.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* BUG-005: Footer reorganized — destructive actions left, positive right */}
+          <DialogFooter className="mt-auto gap-2 sm:justify-between">
+            <div className="flex gap-2">
+              {member && !isOwner && !isSelf && member.isActive && (
+                // BUG-005: destructive uses outline variant to reduce visual weight
+                <Button
+                  variant="outline"
+                  className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                  disabled={busy}
+                  onClick={onDeactivate}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="member">Membro</SelectItem>
-                    <SelectItem value="admin">Administrador</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <UserMinus className="mr-2 h-4 w-4" />
+                  Desativar
+                </Button>
+              )}
+              {/* BUG-002: Transfer ownership now opens confirmation dialog */}
+              {member && !isOwner && canTransferOwnership && member.isActive && (
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setTransferConfirmOpen(true)}
+                >
+                  <Crown className="mr-2 h-4 w-4" />
+                  Tornar proprietário
+                </Button>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label>Módulos</Label>
-              <ModuleSelector value={moduleKeys} onChange={setModuleKeys} />
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              <Button
+                disabled={busy || isOwner}
+                onClick={() =>
+                  onSave({
+                    role,
+                    isActive,
+                    moduleKeys,
+                    newEmail: showEmailField && newEmail.trim() ? newEmail.trim() : undefined,
+                  })
+                }
+              >
+                {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar
+              </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-            {!isOwner && (
-              <label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                <Checkbox
-                  checked={isActive}
-                  disabled={isSelf}
-                  onCheckedChange={(checked) => setIsActive(Boolean(checked))}
-                />
-                Acesso ativo
-              </label>
-            )}
-          </div>
-        )}
-
-        <DialogFooter className="gap-2 sm:justify-between">
-          <div className="flex gap-2">
-            {member && !isOwner && !isSelf && member.isActive && (
-              <Button
-                variant="destructive"
-                disabled={busy}
-                onClick={onDeactivate}
-              >
-                <UserMinus className="mr-2 h-4 w-4" />
-                Desativar
-              </Button>
-            )}
-            {member && !isOwner && canTransferOwnership && member.isActive && (
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={onTransferOwnership}
-              >
-                <Crown className="mr-2 h-4 w-4" />
-                Tornar proprietário
-              </Button>
-            )}
-          </div>
-
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button
-              disabled={busy || isOwner}
-              onClick={() => onSave({ role, isActive, moduleKeys })}
-            >
-              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salvar
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* BUG-002: Transfer ownership confirmation dialog */}
+      <TransferOwnershipConfirmDialog
+        open={transferConfirmOpen}
+        memberName={member?.displayName ?? ""}
+        busy={busy}
+        onConfirm={async () => {
+          setTransferConfirmOpen(false);
+          await onTransferOwnership();
+        }}
+        onCancel={() => setTransferConfirmOpen(false)}
+      />
+    </>
   );
 }
 
@@ -675,7 +834,7 @@ export default function OrganizationMembersPage() {
                           <TableCell>
                             <p className="font-medium">{invitation.email}</p>
                             <p className="text-xs text-muted-foreground">
-                              Enviado por {invitation.invitedByName} · tentativa {" "}
+                              Enviado por {invitation.invitedByName} · tentativa{" "}
                               {invitation.sendCount}
                             </p>
                           </TableCell>

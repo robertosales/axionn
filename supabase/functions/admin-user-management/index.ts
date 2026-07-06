@@ -46,8 +46,9 @@ function getCorsHeaders(origin: string | null): Record<string, string> | null {
   if (allowed.has(origin) || isLovableDomain(origin)) {
     return {
       "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      "Access-Control-Allow-Headers": "authorization, x-client-info, x-supabase-api-version, apikey, content-type",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Max-Age": "86400",
       Vary: "Origin",
     };
   }
@@ -80,8 +81,8 @@ if (_publishKeys) {
   }
 }
 
-if (!SERVICE_KEY || !ANON_KEY) {
-  throw new Error("Credenciais do Supabase (SERVICE_KEY/ANON_KEY) não encontradas.");
+if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) {
+  console.error("[admin-user-management] Credenciais do Supabase ausentes na inicialização.");
 }
 
 function generateTempPassword(): string {
@@ -127,6 +128,13 @@ Deno.serve(async (req: Request) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autenticado" }), {
         status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) {
+      return new Response(JSON.stringify({ error: "Credenciais do Supabase não configuradas" }), {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

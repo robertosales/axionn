@@ -63,6 +63,12 @@ function clearKanbanSession() {
   } catch {}
 }
 
+function hasSavedExpandedCols(): boolean {
+  try {
+    return sessionStorage.getItem(SS_EXPANDED_KEY) !== null;
+  } catch { return false; }
+}
+
 function loadExpandedCols(allKeys: string[]): Set<string> {
   try {
     const raw = sessionStorage.getItem(SS_EXPANDED_KEY);
@@ -95,6 +101,10 @@ function saveExpandedCols(expanded: Set<string>, allKeys: string[]) {
     ];
     sessionStorage.setItem(SS_EXPANDED_KEY, JSON.stringify(payload));
   } catch {}
+}
+
+function buildDefaultExpandedCols(allKeys: string[], colItemsMap: Record<string, any[]>): Set<string> {
+  return new Set(allKeys.filter((key) => (colItemsMap[key]?.length ?? 0) > 0));
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -188,6 +198,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     updateUserStoryStatus,
     reorderUserStories,
     refreshAll,
+    loadingSlices,
   } = useSprint() as any;
 
   const { isAdmin, roles, currentTeamId } = useAuth();
@@ -225,7 +236,8 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
       clearKanbanSession();
       const fresh = { ...KANBAN_FILTROS_DEFAULT, sprintId: "all" };
       setFiltros(fresh);
-      setExpandedCols(new Set(allColKeys));
+      setHasColumnPreference(false);
+      setExpandedCols(new Set());
     }
   }, [currentTeamId]);
 
@@ -272,16 +284,22 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
   const [expandedCols, setExpandedCols] = useState<Set<string>>(
     () => loadExpandedCols(allColKeys),
   );
+  const [hasColumnPreference, setHasColumnPreference] = useState(() => hasSavedExpandedCols());
 
   useEffect(() => {
     if (allColKeys.length === 0) return;
+    if (hasColumnPreference) {
+      setExpandedCols(loadExpandedCols(allColKeys));
+      return;
+    }
     setExpandedCols((prev) => {
       if (prev.size > 0) return prev;
       return loadExpandedCols(allColKeys);
     });
-  }, [allColKeys.join(",")]);
+  }, [allColKeys.join(","), hasColumnPreference]);
 
   const toggleCol = useCallback((key: string) => {
+    setHasColumnPreference(true);
     setExpandedCols((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -354,6 +372,13 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     });
     return map;
   }, [workflowColumns, sprintStories]);
+
+  const kanbanLoading = Boolean(loadingSlices?.userStories || loadingSlices?.workflowColumns);
+
+  useEffect(() => {
+    if (hasColumnPreference || kanbanLoading || allColKeys.length === 0) return;
+    setExpandedCols(buildDefaultExpandedCols(allColKeys, colItemsMap));
+  }, [allColKeys.join(","), colItemsMap, hasColumnPreference, kanbanLoading]);
 
   const colHexMap = useMemo(() => {
     const map: Record<string, string> = {};

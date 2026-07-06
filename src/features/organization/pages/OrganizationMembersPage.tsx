@@ -75,8 +75,8 @@ import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Tokens (escala 8px)
-// gap-2=8px | gap-3=12px | gap-4=16px | gap-6=24px | gap-8=32px
-// p-3=12px  | p-4=16px   | p-5=20px   | p-6=24px
+// Modal width: 560px | Botões footer: h-11 (44px) px-5
+// gap-2=8px | gap-3=12px | gap-4=16px | gap-6=24px
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MODULES: Array<{
@@ -144,7 +144,6 @@ function generateTempPassword(): string {
 
 // ─── Componentes base ─────────────────────────────────────────────────────────
 
-/** Label de seção: linha horizontal decorativa + texto */
 function SectionDivider({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
@@ -156,13 +155,9 @@ function SectionDivider({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Label de campo: tamanho xs, peso medium, cinza */
 function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
   return (
-    <label
-      htmlFor={htmlFor}
-      className="block text-xs font-medium text-muted-foreground"
-    >
+    <label htmlFor={htmlFor} className="block text-xs font-medium text-muted-foreground">
       {children}
     </label>
   );
@@ -234,8 +229,8 @@ function TransferOwnershipConfirmDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2">
-          <Button variant="outline" className="h-10" onClick={onCancel} disabled={busy}>Cancelar</Button>
-          <Button variant="destructive" className="h-10" onClick={onConfirm} disabled={busy}>
+          <Button variant="outline" className="h-11 px-5" onClick={onCancel} disabled={busy}>Cancelar</Button>
+          <Button variant="destructive" className="h-11 px-5" onClick={onConfirm} disabled={busy}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Confirmar transferência
           </Button>
@@ -286,8 +281,8 @@ function InviteMemberDialog({
           </div>
         </div>
         <DialogFooter className="gap-2">
-          <Button variant="outline" className="h-10" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button className="h-10" disabled={busy || !email.trim()} onClick={async () => { await onSubmit({ email: email.trim(), role, moduleKeys }); reset(); }}>
+          <Button variant="outline" className="h-11 px-5" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button className="h-11 px-5" disabled={busy || !email.trim()} onClick={async () => { await onSubmit({ email: email.trim(), role, moduleKeys }); reset(); }}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Enviar convite
           </Button>
         </DialogFooter>
@@ -367,7 +362,6 @@ function EditMemberDialog({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Iniciais para o avatar
   const initials = member?.displayName
     ?.split(" ")
     .filter(Boolean)
@@ -379,39 +373,27 @@ function EditMemberDialog({
     <>
       <Dialog open={Boolean(member)} onOpenChange={(open) => !open && onClose()}>
         {/*
-          Largura: 480px. max-h: 92vh com scroll interno no body.
-          Layout: flex-col com header fixo + body rolável + footer fixo.
+          ✦ Modal: 560px (era 480px) — mais respiração para o footer com 4 botões
+          ✦ Botões footer: h-11 px-5 text-sm font-medium (era h-10)
         */}
-        <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[480px]">
+        <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]">
 
-          {/* ══════════════════════════════════════════════════════
-              HEADER — Avatar + Nome + Email + Badges
-              Padding: 24px horizontal, 24px top, 16px bottom
-          ══════════════════════════════════════════════════════ */}
+          {/* HEADER */}
           <div className="px-6 pt-6 pb-4">
-            {/* Linha 1: avatar + identidade */}
             <div className="flex items-start gap-4">
-              {/* Avatar com iniciais — 48×48px */}
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary ring-2 ring-primary/20">
                 {initials}
               </div>
-
               <div className="min-w-0 flex-1 pt-0.5">
                 <h2 className="text-base font-semibold leading-tight text-foreground">
                   {member?.displayName}
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">{member?.email}</p>
               </div>
-
-              {/* Botão fechar — já injetado pelo DialogContent, mas garantimos o espaço */}
             </div>
-
-            {/* Linha 2: seção label + divisor horizontal */}
             <div className="mt-4">
               <SectionDivider>Dados do membro</SectionDivider>
             </div>
-
-            {/* Linha 3: badges de papel + módulos — gap-2 (8px) */}
             <div className="mt-3 flex flex-wrap gap-2">
               {isOwner && (
                 <Badge className="h-6 gap-1.5 rounded-full border-amber-400/40 bg-amber-500/10 px-3 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
@@ -446,15 +428,12 @@ function EditMemberDialog({
 
           <Separator />
 
-          {/* ══════════════════════════════════════════════════════
-              BODY — rolável, padding 24px horizontal, 24px vertical
-              Espaçamento entre seções: space-y-6 (24px)
-          ══════════════════════════════════════════════════════ */}
+          {/* BODY */}
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {member && (
               <div className="space-y-6">
 
-                {/* ─── SEÇÃO 1: PAPEL E FUNÇÃO ─────────────────────── */}
+                {/* SEÇÃO 1: PAPEL E FUNÇÃO */}
                 <div className="space-y-3">
                   <SectionDivider>Papel e função</SectionDivider>
                   {isOwner ? (
@@ -479,11 +458,9 @@ function EditMemberDialog({
                   )}
                 </div>
 
-                {/* ─── SEÇÃO 2: MÓDULOS PERMITIDOS ─────────────────── */}
+                {/* SEÇÃO 2: MÓDULOS PERMITIDOS */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <SectionDivider>Módulos permitidos</SectionDivider>
-                  </div>
+                  <SectionDivider>Módulos permitidos</SectionDivider>
                   {!isOwner && (
                     <p className="text-[11px] text-muted-foreground">
                       {moduleKeys.length === 0
@@ -494,7 +471,7 @@ function EditMemberDialog({
                   <ModuleSelector value={moduleKeys} onChange={setModuleKeys} disabled={isOwner} />
                 </div>
 
-                {/* ─── SEÇÃO 3: STATUS DA CONTA ─────────────────────── */}
+                {/* SEÇÃO 3: STATUS DA CONTA */}
                 <div className="space-y-3">
                   <SectionDivider>Status da conta</SectionDivider>
                   <div
@@ -528,7 +505,7 @@ function EditMemberDialog({
                   </div>
                 </div>
 
-                {/* ─── SEÇÃO 4: SEGURANÇA (reset de senha) ────────── */}
+                {/* SEÇÃO 4: SEGURANÇA */}
                 {!isOwner && !isSelf && (
                   <div className="space-y-3">
                     <SectionDivider>Segurança</SectionDivider>
@@ -542,7 +519,6 @@ function EditMemberDialog({
                       </Alert>
                     )}
 
-                    {/* idle: dois botões de escolha */}
                     {resetMode === "idle" && (
                       <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
                         <div>
@@ -574,7 +550,6 @@ function EditMemberDialog({
                       </div>
                     )}
 
-                    {/* email mode */}
                     {resetMode === "email" && (
                       <div className="rounded-lg border p-4 space-y-3">
                         <div className="flex items-center justify-between">
@@ -597,7 +572,6 @@ function EditMemberDialog({
                       </div>
                     )}
 
-                    {/* temp mode */}
                     {resetMode === "temp" && (
                       <div className="rounded-lg border p-4 space-y-3">
                         <div className="flex items-center justify-between">
@@ -658,7 +632,7 @@ function EditMemberDialog({
                   </div>
                 )}
 
-                {/* ─── SEÇÃO 5: MIGRAÇÃO DE E-MAIL ─────────────────── */}
+                {/* SEÇÃO 5: MIGRAÇÃO DE E-MAIL */}
                 {!isOwner && !isSelf && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
@@ -699,19 +673,19 @@ function EditMemberDialog({
           <Separator />
 
           {/* ══════════════════════════════════════════════════════
-              FOOTER — altura uniforme h-10 nos botões
-              Padding: 16px horizontal e vertical
-              Layout: justify-between
-                Esquerda: ações destrutivas/críticas
-                Direita:  Cancelar + Salvar (primário)
+              FOOTER
+              ✦ Botões: h-11 (44px) + px-5 + text-sm font-medium
+              ✦ Padding container: px-6 py-4
+              ✦ Esquerda: ações destrutivas | Direita: Cancelar + Salvar
           ══════════════════════════════════════════════════════ */}
           <DialogFooter className="flex-row items-center justify-between gap-3 px-6 py-4">
-            {/* Zona esquerda — destrutivo */}
+
+            {/* Zona esquerda — destrutivo/crítico */}
             <div className="flex items-center gap-2">
               {member && !isOwner && !isSelf && member.isActive && (
                 <Button
                   variant="outline"
-                  className="h-10 gap-2 border-rose-300 text-rose-600 hover:bg-rose-50 hover:border-rose-400 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                  className="h-11 gap-2 px-5 text-sm font-medium border-rose-300 text-rose-600 hover:bg-rose-50 hover:border-rose-400 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30"
                   disabled={busy}
                   onClick={onDeactivate}
                 >
@@ -722,7 +696,7 @@ function EditMemberDialog({
               {member && !isOwner && canTransferOwnership && member.isActive && (
                 <Button
                   variant="outline"
-                  className="h-10 gap-2"
+                  className="h-11 gap-2 px-5 text-sm font-medium"
                   disabled={busy}
                   onClick={() => setTransferConfirmOpen(true)}
                 >
@@ -733,16 +707,16 @@ function EditMemberDialog({
             </div>
 
             {/* Zona direita — fluxo */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
-                className="h-10"
+                className="h-11 px-5 text-sm font-medium"
                 onClick={onClose}
               >
                 Cancelar
               </Button>
               <Button
-                className="h-10 gap-2"
+                className="h-11 gap-2 px-5 text-sm font-medium"
                 disabled={busy || isOwner}
                 onClick={() =>
                   onSave({

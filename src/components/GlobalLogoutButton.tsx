@@ -133,11 +133,42 @@ function PremiumShellHeaderControls({ pathname }: { pathname: string }) {
   );
 }
 
+function PremiumAdminCompanyContext({ pathname }: { pathname: string }) {
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const header = document.querySelector<HTMLElement>("header.sticky");
+    const nativeActions = header?.lastElementChild;
+    if (!header || !nativeActions) return;
+
+    const mount = document.createElement("div");
+    mount.dataset.premiumAdminCompanyContext = "true";
+    mount.className =
+      "flex min-w-[110px] max-w-[220px] shrink-0 items-center overflow-hidden sm:min-w-[150px]";
+
+    header.insertBefore(mount, nativeActions);
+    setTarget(mount);
+
+    return () => {
+      setTarget(null);
+      mount.remove();
+    };
+  }, [pathname]);
+
+  return target
+    ? createPortal(<OrganizationSwitcher variant="context" />, target)
+    : null;
+}
+
 export function GlobalLogoutButton() {
   const location = useLocation();
 
   if (isModuleShellRoute(location.pathname)) {
     return <PremiumShellHeaderControls pathname={location.pathname} />;
+  }
+
+  if (location.pathname === "/dashboard-admin") {
+    return <PremiumAdminCompanyContext pathname={location.pathname} />;
   }
 
   return <UserAccountMenu />;

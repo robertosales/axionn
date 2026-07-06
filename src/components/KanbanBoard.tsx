@@ -139,7 +139,7 @@ const DroppableColumn = React.memo(function DroppableColumn({
     <SortableContext items={colItems.map((h: any) => h.id)} strategy={verticalListSortingStrategy}>
       <div
         ref={setNodeRef}
-        className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-300px)] overflow-y-auto"
+        className="flex flex-col gap-2 p-2 min-h-[80px] max-h-[calc(100vh-320px)] overflow-y-auto"
       >
         {colItems.map((hu: any) => {
           const isDragging = hu.id === activeId;
@@ -522,7 +522,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
         </div>
       )}
 
-      <div className="rounded-xl border border-border/60 bg-card px-4 py-3 mb-4">
+      <div className="rounded-xl border border-border bg-card px-4 py-3 mb-4 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <KanbanFilterBar
@@ -567,7 +567,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4 items-start">
+        <div className="flex gap-4 overflow-x-auto pb-4 items-start">
           {(workflowColumns ?? []).map((col: WorkflowColumn) => {
             const colHex   = colHexMap[col.key] ?? "#6b7280";
             const colItems = colItemsMap[col.key] ?? [];
@@ -611,23 +611,23 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
                 key={col.key}
                 className={`flex flex-col rounded-xl border transition-all duration-200 shrink-0 ${ isOver ? "ring-2 ring-offset-1" : "ring-0" }`}
                 style={{
-                  width: 260,
+                  width: 288,
                   background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
                   borderColor: `color-mix(in srgb, ${colHex} 30%, transparent)`,
                   ...(isOver ? { "--tw-ring-color": colHex } as React.CSSProperties : {}),
                 }}
               >
                 <div
-                  className="flex items-center justify-between px-3 py-2.5 rounded-t-xl cursor-pointer select-none"
+                  className="flex items-center justify-between px-3 py-2.5 rounded-t-xl cursor-pointer select-none bg-card/80"
                   style={{ borderBottom: `2px solid ${colHex}` }}
                   onClick={() => toggleCol(col.key)}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <ChevronRight className="h-3 w-3 shrink-0 rotate-90" style={{ color: colHex }} />
-                    <span className="text-xs font-semibold truncate uppercase tracking-wider" style={{ color: colHex }}>{col.label}</span>
+                    <span className="font-display text-xs font-bold truncate uppercase tracking-wider" style={{ color: colHex }}>{col.label}</span>
                   </div>
                   <span
-                    className="text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ml-2 shrink-0"
+                    className="font-mono text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ml-2 shrink-0"
                     style={{ background: `color-mix(in srgb, ${colHex} 18%, transparent)`, color: colHex }}
                   >
                     {colItems.length}

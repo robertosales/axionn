@@ -1,0 +1,53 @@
+name: 🔐 Phase 2B hardening
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+concurrency:
+  group: phase-2b-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Console and AI hardening
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check hardened Edge Functions
+        run: |
+          deno check --config supabase/functions/deno.json \
+            supabase/functions/apf-generate/index.ts \
+            supabase/functions/platform-ai-provider-test/index.ts
+
+      - name: Validate Phase 2B security contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f supabase/migrations/20260704080000_organization_operational_console_hardening.sql
+          test -f supabase/migrations/20260704080100_platform_ai_provider_hardening.sql
+          test -f supabase/migrations/20260704080200_organization_team_contract_links.sql
+          test -f supabase/functions/apf-generate/legacy.ts
+          test -f supabase/functions/platform-ai-provider-test/index.ts
+          test -f src/features/platform/components/PlatformAIProvidersConsole.tsx
+
+          grep -Fq "save_organization_contract_v3" supabase/migrations/20260704080000_organization_operational_console_hardening.sql
+          grep -Fq "create_organization_project_v2" supabase/migrations/20260704080000_organization_operational_console_hardening.sql
+          grep -Fq "deactivate_organization_team_v2" supabase/migrations/20260704080000_organization_operational_console_hardening.sql
+          grep -Fq "list_platform_ai_providers_v2" supabase/migrations/20260704080100_platform_ai_provider_hardening.sql
+          grep -Fq "set_platform_ai_provider_key_v2" supabase/migrations/20260704080100_platform_ai_provider_hardening.sql
+          grep -Fq "contract_link_reconciled" supabase/migrations/20260704080200_organization_team_contract_links.sql
+
+          grep -Fq 'from("platform_user_roles")' supabase/functions/apf-generate/index.ts
+          grep -Fq "sanitizeTestResponse" supabase/functions/apf-generate/index.ts
+          grep -Fq 'from("platform_user_roles")' supabase/functions/platform-ai-provider-test/index.ts
+          ! grep -Fq "rawError" supabase/functions/platform-ai-provider-test/index.ts
+          grep -Fq '"platform-ai-provider-test"' src/features/platform/components/PlatformAIProvidersConsole.tsx
+          ! grep -Fq "rawError" src/features/platform/components/PlatformAIProvidersConsole.tsx

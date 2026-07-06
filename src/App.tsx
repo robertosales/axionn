@@ -127,13 +127,20 @@ function resolveHomePath(options: {
   } = options;
 
   if (isPlatformAdmin) return "/platform";
-  if (isOrganizationAdmin) return "/organization/admin";
-  if (isAdmin) return "/dashboard-admin";
-  if (roles.includes("admin_contrato")) return "/meu-contrato";
 
+  // Admins de organização que também têm acesso a módulos operacionais
+  // devem ir para o dashboard de módulos, não para o console administrativo.
+  // Apenas admins sem nenhum módulo operacional vão direto para /organization/admin.
   const agil = hasModuleAccess("sala_agil");
   const sustentacao = hasModuleAccess("sustentacao");
   const rdm = hasModuleAccess("rdm");
+  const hasAnyModule = agil || sustentacao || rdm;
+
+  if (isOrganizationAdmin && !hasAnyModule) return "/organization/admin";
+
+  if (isAdmin) return "/dashboard-admin";
+  if (roles.includes("admin_contrato")) return "/meu-contrato";
+
   const count = [agil, sustentacao, rdm].filter(Boolean).length;
 
   if (count >= 2) return "/modulos";

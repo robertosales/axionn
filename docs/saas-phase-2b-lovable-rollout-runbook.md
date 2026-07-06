@@ -27,19 +27,25 @@ Todas as operações devem ser executadas manualmente no SQL Editor suportado pe
    - `organization_operational_console_enabled = false`;
    - `legacy_operational_admin_fallback_enabled = true`.
 
-4. Aplicar o hardening operacional copiando integralmente para o SQL Editor:
+4. Aplicar o hardening operacional:
 
    `supabase/migrations/20260704080000_organization_operational_console_hardening.sql`
 
-   Esse passo instala as mutations tenant-scoped de contratos, projetos e times e adiciona `teams.is_active`.
+   Instala as mutations tenant-scoped de contratos, projetos e times e adiciona `teams.is_active`.
 
 5. Aplicar o hardening global de IA:
 
    `supabase/migrations/20260704080100_platform_ai_provider_hardening.sql`
 
-   Esse passo instala os RPCs exclusivos de `platform_admin`. Nenhuma chave é retornada ao frontend.
+   Instala RPCs exclusivos de `platform_admin`. Chaves e `vault_secret_id` não são retornados ao frontend.
 
-6. Executar a validação do hardening:
+6. Aplicar a reconciliação de vínculos entre times e contratos:
+
+   `supabase/migrations/20260704080200_organization_team_contract_links.sql`
+
+   Ao trocar ou remover o contrato de um time, o vínculo antigo em `contract_teams` é removido e o vínculo atual é mantido de forma transacional.
+
+7. Executar a validação principal do hardening:
 
    `supabase/operations/20260704_08_organization_operational_console_hardening_validation.sql`
 
@@ -47,19 +53,45 @@ Todas as operações devem ser executadas manualmente no SQL Editor suportado pe
 
    `organization_operational_console_hardening_ok = true`
 
-7. Publicar o frontend da `develop`.
+8. Executar a validação dos vínculos de times:
 
-8. Com as flags ainda no estado inicial, confirmar que o fallback permanece disponível para uma reversão controlada.
-
-9. Ativar o console organizacional:
-
-   `supabase/operations/20260704_07_enable_organization_operational_console.sql`
+   `supabase/operations/20260704_09_team_contract_links_validation.sql`
 
    Esperado:
 
-   `organization_operational_console_activation_ok = true`
+   `team_contract_links_hardening_ok = true`
 
-10. Validar SALES CONSULTORIA:
+9. Publicar ou republicar as Edge Functions usando a versão atual da `develop`:
+
+   - `apf-generate`;
+   - `platform-ai-provider-test`;
+   - `organization-invitations`, caso ainda não esteja na versão atual.
+
+   Manter JWT obrigatório nas funções. Confirmar as variáveis e secrets:
+
+   - `SUPABASE_URL`;
+   - `SUPABASE_ANON_KEY`;
+   - `SUPABASE_SERVICE_ROLE_KEY`;
+   - `SITE_URL`;
+   - secrets dos provedores que continuarem sendo utilizadas como fallback.
+
+10. Publicar o frontend da `develop` com:
+
+    `VITE_ORG_TENANCY_ENABLED=true`
+
+11. Fazer logout, limpar a sessão anterior e entrar novamente.
+
+12. Com as flags ainda no estado inicial, confirmar que o fallback continua disponível.
+
+13. Ativar o console organizacional:
+
+    `supabase/operations/20260704_07_enable_organization_operational_console.sql`
+
+    Esperado:
+
+    `organization_operational_console_activation_ok = true`
+
+14. Validar SALES CONSULTORIA:
 
     - organização ativa;
     - plano enterprise;
@@ -67,7 +99,7 @@ Todas as operações devem ser executadas manualmente no SQL Editor suportado pe
     - empresas, contratos, projetos e times tenant-scoped;
     - nenhum recurso de outro tenant visível.
 
-11. Validar Roberto:
+15. Validar Roberto:
 
     - login com `roberto.sales@gmail.com`;
     - acesso a `/organization/admin`;
@@ -76,28 +108,68 @@ Todas as operações devem ser executadas manualmente no SQL Editor suportado pe
     - acesso a `/organization/projects`;
     - acesso a `/organization/teams`;
     - acesso a `/organization/members`;
+    - acesso a `/organization/usage`;
+    - acesso a `/organization/settings`;
     - acesso aos módulos permitidos.
 
-12. Criar uma empresa cliente controlada no tenant ativo e depois inativá-la. Confirmar que não ocorreu hard delete.
+16. Validar empresas:
 
-13. Criar um contrato controlado usando somente empresa, times e projetos do mesmo tenant.
+    - criar uma empresa controlada;
+    - editar dados e CNPJ;
+    - inativar;
+    - confirmar que não ocorreu hard delete.
 
-14. Validar `contracts.max` com mensagem de negócio quando aplicável.
+17. Validar contratos:
 
-15. Criar e arquivar um projeto controlado. Validar `projects.max` quando aplicável.
+    - criar usando empresa do mesmo tenant;
+    - vincular times e projetos do mesmo tenant;
+    - editar;
+    - arquivar;
+    - validar mensagem de negócio para `contracts.max` quando aplicável.
 
-16. Criar, editar e inativar um time. Confirmar que `contract_teams` foi preservada.
+18. Validar projetos:
 
-17. Validar IA como `platform_admin` em `/platform/ai-providers`:
+    - criar;
+    - editar contrato, time e tipo;
+    - arquivar;
+    - validar mensagem de negócio para `projects.max` quando aplicável.
+
+19. Validar times:
+
+    - criar ligado a um contrato;
+    - trocar o contrato;
+    - confirmar que o vínculo antigo em `contract_teams` desapareceu;
+    - confirmar que o novo vínculo foi criado;
+    - remover o contrato;
+    - inativar o time.
+
+20. Validar usuários:
+
+    - convidar;
+    - aceitar o convite;
+    - alterar papel e módulos;
+    - revogar ou inativar;
+    - confirmar que membro comum não acessa o console administrativo.
+
+21. Validar IA como `platform_admin` em `/platform/ai-providers`:
 
     - listar metadados;
     - criar ou editar um provedor controlado;
-    - configurar chave sem exibição posterior do valor;
+    - configurar chave;
+    - testar o provedor pela função `platform-ai-provider-test`;
+    - confirmar que a resposta não contém chave, `vault_secret_id` ou `rawError`;
     - arquivar o provedor controlado.
 
-18. Validar que um admin organizacional comum não acessa `/platform/ai-providers` nem os RPCs globais.
+22. Validar que um admin organizacional comum não acessa `/platform/ai-providers`, não testa provedores e não executa RPCs globais.
 
-19. Desligar o fallback operacional legado:
+23. Verificar auditoria:
+
+    - `organization_operational_audit_log`;
+    - `platform_operational_audit_log`.
+
+    Não deve existir chave, token ou segredo em `before_values`, `after_values` ou `metadata`.
+
+24. Desligar o fallback operacional legado somente depois de todos os testes anteriores passarem:
 
     `supabase/operations/20260704_07_disable_legacy_operational_admin_fallback.sql`
 
@@ -105,7 +177,7 @@ Todas as operações devem ser executadas manualmente no SQL Editor suportado pe
 
     `legacy_operational_admin_fallback_disable_ok = true`
 
-20. Executar post-validation:
+25. Executar post-validation:
 
     `supabase/operations/20260704_07_organization_operational_console_post_validation.sql`
 
@@ -113,9 +185,9 @@ Todas as operações devem ser executadas manualmente no SQL Editor suportado pe
 
     `organization_operational_console_post_validation_ok = true`
 
-21. Monitorar erros de autorização, limite e cross-tenant.
+26. Monitorar erros de autorização, limite, Edge Functions e cross-tenant.
 
-22. Em falha crítica, executar rollback:
+27. Em falha crítica, executar rollback:
 
     `supabase/operations/20260704_07_organization_operational_console_rollback.sql`
 
@@ -133,13 +205,16 @@ O rollback:
 - não remove funções;
 - não altera memberships;
 - não altera contratos, projetos, empresas ou times;
-- não remove o hardening; apenas retorna o tráfego ao caminho legado.
+- mantém o hardening instalado e apenas devolve o tráfego ao caminho legado.
+
+Caso a falha esteja em uma Edge Function, republicar também a última versão estável da função afetada.
 
 ## Booleans esperados
 
 - Preflight: `organization_operational_console_preflight_ok`
 - Rollout: `organization_operational_console_rollout_ok`
 - Hardening: `organization_operational_console_hardening_ok`
+- Vínculos de times: `team_contract_links_hardening_ok`
 - Enable: `organization_operational_console_activation_ok`
 - Disable fallback: `legacy_operational_admin_fallback_disable_ok`
 - Post-validation: `organization_operational_console_post_validation_ok`
@@ -155,7 +230,9 @@ O rollback:
 - ausência de `platform_admin`;
 - memberships inativos com módulos ativos;
 - função de armazenamento seguro da chave de IA ausente;
-- organização acima dos limites atuais.
+- organização acima dos limites atuais;
+- Edge Function publicada em versão anterior;
+- `VITE_ORG_TENANCY_ENABLED` ausente no build.
 
 ## Não executar nesta fase
 

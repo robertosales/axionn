@@ -17,6 +17,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { Button }  from "@/components/ui/button";
 import { Badge }   from "@/components/ui/badge";
 import { Input }   from "@/components/ui/input";
@@ -50,6 +51,7 @@ import {
   Copy, CheckCircle2, Save, History, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
 import { getInitials, formatPersonName } from "@/lib/personName";
 import { PaginationControls } from "@/shared/components/common/Pagination";
 import { usePagination }      from "@/shared/hooks/usePagination";
@@ -218,8 +220,11 @@ const TOG0: ToggleState = { user: null, saving: false };
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function UserRolesManager() {
+  const { currentOrganizationId, isOrganizationAdmin } = useOrganization();
   const [users,         setUsers]         = useState<UserRow[]>([]);
   const [loading,       setLoading]       = useState(false);
+  const [organizationAuthorityLocked, setOrganizationAuthorityLocked] =
+    useState(false);
   const [searchFilter,  setSearchFilter]  = useState("");
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
   const debouncedSearch = useDebounce(searchFilter);
@@ -241,6 +246,75 @@ export function UserRolesManager() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
+      if (ORGANIZATION_TENANCY_ENABLED) {
+        const { data: fallbackEnabled, error: fallbackError } =
+          await (supabase as any).rpc(
+            "is_organization_legacy_permission_fallback_enabled",
+          );
+
+        if (!fallbackError && fallbackEnabled !== true) {
+          setOrganizationAuthorityLocked(true);
+          setIsCurrentUserAdmin(isOrganizationAdmin);
+
+          if (!currentOrganizationId || !isOrganizationAdmin) {
+            setUsers([]);
+            return;
+          }
+
+          const [membersRes, contractRolesRes] = await Promise.all([
+            (supabase as any).rpc("get_organization_members_v2", {
+              p_org_id: currentOrganizationId,
+            }),
+            supabase.from("user_contracts").select("user_id, role"),
+          ]);
+
+          if (membersRes.error) {
+            throw membersRes.error;
+          }
+
+          const contractRoleMap: Record<string, "admin_contrato" | "member"> = {};
+          (contractRolesRes.error ? [] : contractRolesRes.data || []).forEach(
+            (contractRole: any) => {
+              if (contractRole.user_id) {
+                contractRoleMap[contractRole.user_id] = contractRole.role;
+              }
+            },
+          );
+
+          setUsers(
+            ((membersRes.data ?? []) as any[]).map((member) => {
+              const moduleKeys = ((member.module_keys ?? []) as string[])
+                .filter((moduleKey) =>
+                  ["sala_agil", "sustentacao", "rdm"].includes(moduleKey),
+                ) as ModuleKey[];
+              const roleName =
+                member.membership_role === "owner" ||
+                member.membership_role === "admin"
+                  ? "admin"
+                  : "member";
+
+              return {
+                user_id:              String(member.user_id),
+                display_name:         String(member.display_name || "—"),
+                email:                String(member.email || ""),
+                module_access:        moduleKeys[0] || "sala_agil",
+                is_active:            Boolean(member.is_active),
+                must_change_password: false,
+                teams:                [],
+                moduleRoles:          moduleKeys.map((moduleKey) => ({
+                  module: moduleKey,
+                  role: roleName,
+                })),
+                contract_role:        contractRoleMap[member.user_id] ?? null,
+              };
+            }),
+          );
+          return;
+        }
+      }
+
+      setOrganizationAuthorityLocked(false);
+
       // Verifica se o usuário atual é admin_master
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
@@ -300,7 +374,7 @@ export function UserRolesManager() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentOrganizationId, isOrganizationAdmin]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -359,6 +433,10 @@ export function UserRolesManager() {
     if (!trimmed) { toast.error("O nome não pode estar vazio"); return; }
     const enabled = MODULES.filter(m => pendingModules[m.key]?.enabled);
     if (enabled.length === 0) { toast.error("Selecione pelo menos um módulo"); return; }
+    if (organizationAuthorityLocked) {
+      toast.error("Use a administracao de membros da organizacao para alterar acessos.");
+      return;
+    }
 
     setSaving(true);
     try {

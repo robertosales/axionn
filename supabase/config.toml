@@ -1,1 +1,7 @@
 project_id = "rgikyyazotqapaxijwui"
+
+[functions.apf-generate]
+verify_jwt = true
+
+[functions.platform-ai-provider-test]
+verify_jwt = true

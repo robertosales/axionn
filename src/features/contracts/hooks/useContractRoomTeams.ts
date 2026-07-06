@@ -27,7 +27,7 @@ export function useContractRoomTeams(contractId: string | null) {
     setLoading(true);
     try {
       const data = await fetchContractRoomTeams(contractId);
-      setRoomTeams(data);
+      setRoomTeams(data as RoomTeamEntry[]);
     } finally {
       setLoading(false);
     }

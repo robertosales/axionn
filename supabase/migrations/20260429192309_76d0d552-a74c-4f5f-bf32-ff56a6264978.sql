@@ -1,5 +1,9 @@
 -- Consolidar perfis duplicados @globalweb mantendo o mais antigo (canônico)
 -- e remapeando todas as referências do duplicado para o canônico.
+--
+-- A coluna developers.user_id foi introduzida depois em alguns ambientes.
+-- O bloco correspondente é condicional para manter o replay integral das
+-- migrations em bancos limpos sem alterar o saneamento dos demais recursos.
 
 DO $$
 DECLARE
@@ -14,7 +18,17 @@ DECLARE
   par jsonb;
   dup_id uuid;
   canon_id uuid;
+  developers_has_user_id boolean;
 BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'developers'
+      AND column_name = 'user_id'
+  )
+  INTO developers_has_user_id;
+
   FOR par IN SELECT * FROM jsonb_array_elements(pares) LOOP
     dup_id := (par->>'dup')::uuid;
     canon_id := (par->>'canon')::uuid;
@@ -73,12 +87,14 @@ BEGIN
                      WHERE rp2.session_id = rp1.session_id AND rp2.user_id = canon_id);
     UPDATE retro_participants SET user_id = canon_id WHERE user_id = dup_id;
 
-    -- impediments / developers / team_members / user_roles
-    DELETE FROM developers d1
-      WHERE d1.user_id = dup_id
-        AND EXISTS (SELECT 1 FROM developers d2
-                     WHERE d2.team_id = d1.team_id AND d2.user_id = canon_id);
-    UPDATE developers SET user_id = canon_id WHERE user_id = dup_id;
+    -- developers: coluna ausente no schema inicial de alguns ambientes.
+    IF developers_has_user_id THEN
+      DELETE FROM developers d1
+        WHERE d1.user_id = dup_id
+          AND EXISTS (SELECT 1 FROM developers d2
+                       WHERE d2.team_id = d1.team_id AND d2.user_id = canon_id);
+      UPDATE developers SET user_id = canon_id WHERE user_id = dup_id;
+    END IF;
 
     DELETE FROM team_members tm1
       WHERE tm1.user_id = dup_id

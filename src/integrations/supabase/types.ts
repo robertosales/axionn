@@ -215,43 +215,79 @@ export type Database = {
           baseline_id: string
           category_sigla: string | null
           complexity: string
+          contribution_pct: number
           created_at: string
           description: string
+          factor_sigla: string | null
           function_sigla: string
           id: string
+          is_measurable: boolean
           item_ref: string
+          measurement_reference: string | null
           module: string | null
+          normalized_key: string | null
           notes: string | null
           pf_bruto: number | null
+          pf_fs: number
+          process_name: string | null
+          process_ref: string | null
+          product_reference: string | null
+          project_reference: string | null
           sort_order: number
+          source_payload: Json
+          source_row: number | null
         }
         Insert: {
           baseline_id: string
           category_sigla?: string | null
           complexity?: string
+          contribution_pct?: number
           created_at?: string
           description: string
+          factor_sigla?: string | null
           function_sigla: string
           id?: string
+          is_measurable?: boolean
           item_ref: string
+          measurement_reference?: string | null
           module?: string | null
+          normalized_key?: string | null
           notes?: string | null
           pf_bruto?: number | null
+          pf_fs?: number
+          process_name?: string | null
+          process_ref?: string | null
+          product_reference?: string | null
+          project_reference?: string | null
           sort_order?: number
+          source_payload?: Json
+          source_row?: number | null
         }
         Update: {
           baseline_id?: string
           category_sigla?: string | null
           complexity?: string
+          contribution_pct?: number
           created_at?: string
           description?: string
+          factor_sigla?: string | null
           function_sigla?: string
           id?: string
+          is_measurable?: boolean
           item_ref?: string
+          measurement_reference?: string | null
           module?: string | null
+          normalized_key?: string | null
           notes?: string | null
           pf_bruto?: number | null
+          pf_fs?: number
+          process_name?: string | null
+          process_ref?: string | null
+          product_reference?: string | null
+          project_reference?: string | null
           sort_order?: number
+          source_payload?: Json
+          source_row?: number | null
         }
         Relationships: [
           {
@@ -300,6 +336,8 @@ export type Database = {
       }
       apf_counting_items: {
         Row: {
+          absorbed_by_item_id: string | null
+          ai_confidence_score: number | null
           analyst_note: string | null
           baseline_item_id: string | null
           category_sigla: string | null
@@ -309,24 +347,43 @@ export type Database = {
           corrected_function_sigla: string | null
           corrected_pf_bruto: number | null
           corrected_pf_fs: number | null
+          counting_decision: string
           created_at: string
           ef_description: string
+          elementary_process_id: string | null
+          elementary_process_key: string | null
+          elementary_process_name: string | null
           evidence_literal: string | null
           factor_sigla: string
           function_sigla: string
           hu_ref: string | null
+          hu_refs: string[]
           id: string
           is_validated: boolean
           justification: string | null
+          match_confidence: number | null
+          match_type: string | null
+          normalized_key: string | null
           pf_bruto: number
           pf_fs: number
           precedent_ref: string | null
+          process_is_complete: boolean
+          process_is_independent: boolean
+          process_reasoning: string | null
+          process_role: string
+          separation_precedent_ref: string | null
           session_id: string
           sort_order: number | null
+          source_payload: Json
+          story_id: string | null
+          story_ids: string[]
+          updated_at: string
           validated_at: string | null
           validated_by: string | null
         }
         Insert: {
+          absorbed_by_item_id?: string | null
+          ai_confidence_score?: number | null
           analyst_note?: string | null
           baseline_item_id?: string | null
           category_sigla?: string | null
@@ -336,24 +393,43 @@ export type Database = {
           corrected_function_sigla?: string | null
           corrected_pf_bruto?: number | null
           corrected_pf_fs?: number | null
+          counting_decision?: string
           created_at?: string
           ef_description: string
+          elementary_process_id?: string | null
+          elementary_process_key?: string | null
+          elementary_process_name?: string | null
           evidence_literal?: string | null
           factor_sigla: string
           function_sigla: string
           hu_ref?: string | null
+          hu_refs?: string[]
           id?: string
           is_validated?: boolean
           justification?: string | null
+          match_confidence?: number | null
+          match_type?: string | null
+          normalized_key?: string | null
           pf_bruto?: number
           pf_fs?: number
           precedent_ref?: string | null
+          process_is_complete?: boolean
+          process_is_independent?: boolean
+          process_reasoning?: string | null
+          process_role?: string
+          separation_precedent_ref?: string | null
           session_id: string
           sort_order?: number | null
+          source_payload?: Json
+          story_id?: string | null
+          story_ids?: string[]
+          updated_at?: string
           validated_at?: string | null
           validated_by?: string | null
         }
         Update: {
+          absorbed_by_item_id?: string | null
+          ai_confidence_score?: number | null
           analyst_note?: string | null
           baseline_item_id?: string | null
           category_sigla?: string | null
@@ -363,24 +439,48 @@ export type Database = {
           corrected_function_sigla?: string | null
           corrected_pf_bruto?: number | null
           corrected_pf_fs?: number | null
+          counting_decision?: string
           created_at?: string
           ef_description?: string
+          elementary_process_id?: string | null
+          elementary_process_key?: string | null
+          elementary_process_name?: string | null
           evidence_literal?: string | null
           factor_sigla?: string
           function_sigla?: string
           hu_ref?: string | null
+          hu_refs?: string[]
           id?: string
           is_validated?: boolean
           justification?: string | null
+          match_confidence?: number | null
+          match_type?: string | null
+          normalized_key?: string | null
           pf_bruto?: number
           pf_fs?: number
           precedent_ref?: string | null
+          process_is_complete?: boolean
+          process_is_independent?: boolean
+          process_reasoning?: string | null
+          process_role?: string
+          separation_precedent_ref?: string | null
           session_id?: string
           sort_order?: number | null
+          source_payload?: Json
+          story_id?: string | null
+          story_ids?: string[]
+          updated_at?: string
           validated_at?: string | null
           validated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "apf_counting_items_absorbed_by_item_id_fkey"
+            columns: ["absorbed_by_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "apf_counting_items_baseline_item_id_fkey"
             columns: ["baseline_item_id"]
@@ -389,10 +489,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "apf_counting_items_elementary_process_id_fkey"
+            columns: ["elementary_process_id"]
+            isOneToOne: false
+            referencedRelation: "apf_elementary_processes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "apf_counting_items_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_counting_items_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
             referencedColumns: ["id"]
           },
         ]
@@ -579,6 +693,74 @@ export type Database = {
           },
         ]
       }
+      apf_elementary_processes: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          decision: string
+          decision_reason: string | null
+          id: string
+          is_complete: boolean
+          is_independent: boolean
+          objective: string | null
+          precedent_ref: string | null
+          process_key: string
+          process_name: string
+          process_role: string
+          session_id: string
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          decision?: string
+          decision_reason?: string | null
+          id?: string
+          is_complete?: boolean
+          is_independent?: boolean
+          objective?: string | null
+          precedent_ref?: string | null
+          process_key: string
+          process_name: string
+          process_role?: string
+          session_id: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          decision?: string
+          decision_reason?: string | null
+          id?: string
+          is_complete?: boolean
+          is_independent?: boolean
+          objective?: string | null
+          precedent_ref?: string | null
+          process_key?: string
+          process_name?: string
+          process_role?: string
+          session_id?: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_elementary_processes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_embedding_queue: {
         Row: {
           attempts: number
@@ -613,6 +795,44 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "apf_validation_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_function_type_weights: {
+        Row: {
+          complexity: string
+          created_at: string
+          function_sigla: string
+          id: string
+          model_id: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          complexity: string
+          created_at?: string
+          function_sigla: string
+          id?: string
+          model_id: string
+          updated_at?: string
+          weight: number
+        }
+        Update: {
+          complexity?: string
+          created_at?: string
+          function_sigla?: string
+          id?: string
+          model_id?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_function_type_weights_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_models"
             referencedColumns: ["id"]
           },
         ]
@@ -1100,6 +1320,51 @@ export type Database = {
           },
         ]
       }
+      apf_metric_factor_history: {
+        Row: {
+          created_at: string
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id: string
+          is_measurable: boolean
+          notes: string | null
+          pf_bruto: number
+          pf_fs: number
+          reference_code: string
+          source_measurement: string | null
+          system_key: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id?: string
+          is_measurable?: boolean
+          notes?: string | null
+          pf_bruto?: number
+          pf_fs?: number
+          reference_code: string
+          source_measurement?: string | null
+          system_key: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          factor_sigla?: string
+          function_sigla?: string
+          id?: string
+          is_measurable?: boolean
+          notes?: string | null
+          pf_bruto?: number
+          pf_fs?: number
+          reference_code?: string
+          source_measurement?: string | null
+          system_key?: string
+        }
+        Relationships: []
+      }
       apf_modules: {
         Row: {
           created_at: string | null
@@ -1156,41 +1421,624 @@ export type Database = {
           },
         ]
       }
+      apf_process_analysis_absorbed_items: {
+        Row: {
+          absorption_reason: string
+          analysis_run_id: string
+          created_at: string
+          description: string
+          id: string
+        }
+        Insert: {
+          absorption_reason: string
+          analysis_run_id: string
+          created_at?: string
+          description: string
+          id?: string
+        }
+        Update: {
+          absorption_reason?: string
+          analysis_run_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_absorbed_items_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_analogs: {
+        Row: {
+          adherence: string
+          adherence_reason: string | null
+          analysis_process_id: string
+          baseline_item_id: string | null
+          baseline_item_name: string
+          created_at: string
+          function_type: string
+          id: string
+          is_primary: boolean
+        }
+        Insert: {
+          adherence?: string
+          adherence_reason?: string | null
+          analysis_process_id: string
+          baseline_item_id?: string | null
+          baseline_item_name: string
+          created_at?: string
+          function_type?: string
+          id?: string
+          is_primary?: boolean
+        }
+        Update: {
+          adherence?: string
+          adherence_reason?: string | null
+          analysis_process_id?: string
+          baseline_item_id?: string | null
+          baseline_item_name?: string
+          created_at?: string
+          function_type?: string
+          id?: string
+          is_primary?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_analogs_analysis_process_id_fkey"
+            columns: ["analysis_process_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_analogs_baseline_item_id_fkey"
+            columns: ["baseline_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_baseline_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_items: {
+        Row: {
+          analysis_run_id: string
+          baseline_precedent_found: boolean
+          business_action: string | null
+          business_object: string | null
+          candidate_function_type: string
+          confidence: number | null
+          counter_signals: Json
+          counting_item_id: string | null
+          created_at: string
+          decision_source: string
+          functional_result: string | null
+          id: string
+          is_central: boolean
+          is_complete: boolean
+          is_independent: boolean
+          process_name: string
+          recommendation: string
+          review_required: boolean
+          risks: Json
+          selected_baseline_item_id: string | null
+          selected_by_default: boolean
+          separation_reason: string | null
+          should_count: boolean
+          sort_order: number
+          temporary_id: string
+          updated_at: string
+        }
+        Insert: {
+          analysis_run_id: string
+          baseline_precedent_found?: boolean
+          business_action?: string | null
+          business_object?: string | null
+          candidate_function_type?: string
+          confidence?: number | null
+          counter_signals?: Json
+          counting_item_id?: string | null
+          created_at?: string
+          decision_source?: string
+          functional_result?: string | null
+          id?: string
+          is_central?: boolean
+          is_complete?: boolean
+          is_independent?: boolean
+          process_name: string
+          recommendation?: string
+          review_required?: boolean
+          risks?: Json
+          selected_baseline_item_id?: string | null
+          selected_by_default?: boolean
+          separation_reason?: string | null
+          should_count?: boolean
+          sort_order?: number
+          temporary_id: string
+          updated_at?: string
+        }
+        Update: {
+          analysis_run_id?: string
+          baseline_precedent_found?: boolean
+          business_action?: string | null
+          business_object?: string | null
+          candidate_function_type?: string
+          confidence?: number | null
+          counter_signals?: Json
+          counting_item_id?: string | null
+          created_at?: string
+          decision_source?: string
+          functional_result?: string | null
+          id?: string
+          is_central?: boolean
+          is_complete?: boolean
+          is_independent?: boolean
+          process_name?: string
+          recommendation?: string
+          review_required?: boolean
+          risks?: Json
+          selected_baseline_item_id?: string | null
+          selected_by_default?: boolean
+          separation_reason?: string | null
+          should_count?: boolean
+          sort_order?: number
+          temporary_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_items_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_items_counting_item_id_fkey"
+            columns: ["counting_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_items_selected_baseline_item_id_fkey"
+            columns: ["selected_baseline_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_baseline_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_logical_files: {
+        Row: {
+          analysis_process_id: string
+          baseline_item_id: string | null
+          created_at: string
+          file_name: string
+          file_type: string
+          id: string
+          process_role: string
+        }
+        Insert: {
+          analysis_process_id: string
+          baseline_item_id?: string | null
+          created_at?: string
+          file_name: string
+          file_type?: string
+          id?: string
+          process_role?: string
+        }
+        Update: {
+          analysis_process_id?: string
+          baseline_item_id?: string | null
+          created_at?: string
+          file_name?: string
+          file_type?: string
+          id?: string
+          process_role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_logical_files_analysis_process_id_fkey"
+            columns: ["analysis_process_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_logical_files_baseline_item_id_fkey"
+            columns: ["baseline_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_baseline_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_non_countable_items: {
+        Row: {
+          analysis_run_id: string
+          created_at: string
+          description: string
+          id: string
+          reason: string
+        }
+        Insert: {
+          analysis_run_id: string
+          created_at?: string
+          description: string
+          id?: string
+          reason: string
+        }
+        Update: {
+          analysis_run_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_non_countable_items_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_pending_details: {
+        Row: {
+          analysis_run_id: string
+          created_at: string
+          description: string
+          id: string
+        }
+        Insert: {
+          analysis_run_id: string
+          created_at?: string
+          description: string
+          id?: string
+        }
+        Update: {
+          analysis_run_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_pending_details_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_analysis_runs: {
+        Row: {
+          baseline_id: string
+          central_process_name: string | null
+          central_process_reasoning: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          confirmed_factor_sigla: string | null
+          confirmed_factor_source: string | null
+          countable_process_count: number
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          factor_confidence: number | null
+          factor_override_notes: string | null
+          factor_override_reason: string | null
+          factor_reasoning: string | null
+          factor_review_required: boolean
+          factor_source: string
+          finished_at: string | null
+          hu_summary: string | null
+          id: string
+          inferred_factor_sigla: string
+          input_hash: string
+          materialized_at: string | null
+          model_name: string | null
+          normalized_response: Json | null
+          process_count: number
+          project_id: string
+          prompt_version: string
+          provider_id: string | null
+          provider_name: string | null
+          raw_response: string | null
+          requested_by: string | null
+          review_process_count: number
+          schema_version: string
+          started_at: string
+          status: string
+          status_reason: string | null
+          story_id: string
+          suggested_factor_sigla: string | null
+          updated_at: string
+          validation_mode: string
+        }
+        Insert: {
+          baseline_id: string
+          central_process_name?: string | null
+          central_process_reasoning?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_factor_sigla?: string | null
+          confirmed_factor_source?: string | null
+          countable_process_count?: number
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          factor_confidence?: number | null
+          factor_override_notes?: string | null
+          factor_override_reason?: string | null
+          factor_reasoning?: string | null
+          factor_review_required?: boolean
+          factor_source?: string
+          finished_at?: string | null
+          hu_summary?: string | null
+          id?: string
+          inferred_factor_sigla: string
+          input_hash: string
+          materialized_at?: string | null
+          model_name?: string | null
+          normalized_response?: Json | null
+          process_count?: number
+          project_id: string
+          prompt_version: string
+          provider_id?: string | null
+          provider_name?: string | null
+          raw_response?: string | null
+          requested_by?: string | null
+          review_process_count?: number
+          schema_version: string
+          started_at?: string
+          status?: string
+          status_reason?: string | null
+          story_id: string
+          suggested_factor_sigla?: string | null
+          updated_at?: string
+          validation_mode?: string
+        }
+        Update: {
+          baseline_id?: string
+          central_process_name?: string | null
+          central_process_reasoning?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          confirmed_factor_sigla?: string | null
+          confirmed_factor_source?: string | null
+          countable_process_count?: number
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          factor_confidence?: number | null
+          factor_override_notes?: string | null
+          factor_override_reason?: string | null
+          factor_reasoning?: string | null
+          factor_review_required?: boolean
+          factor_source?: string
+          finished_at?: string | null
+          hu_summary?: string | null
+          id?: string
+          inferred_factor_sigla?: string
+          input_hash?: string
+          materialized_at?: string | null
+          model_name?: string | null
+          normalized_response?: Json | null
+          process_count?: number
+          project_id?: string
+          prompt_version?: string
+          provider_id?: string | null
+          provider_name?: string | null
+          raw_response?: string | null
+          requested_by?: string | null
+          review_process_count?: number
+          schema_version?: string
+          started_at?: string
+          status?: string
+          status_reason?: string | null
+          story_id?: string
+          suggested_factor_sigla?: string | null
+          updated_at?: string
+          validation_mode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_analysis_runs_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "apf_project_baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_analysis_runs_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_process_learning_events: {
+        Row: {
+          analysis_run_id: string
+          confirmed_factor_sigla: string | null
+          confirmed_pf_fs: number | null
+          confirmed_process_count: number
+          corrected: boolean | null
+          created_at: string
+          decided_by: string | null
+          default_selected_process_count: number
+          event_type: string
+          factor_confidence: number | null
+          factor_override_notes: string | null
+          factor_override_reason: string | null
+          factor_source: string | null
+          id: string
+          identified_process_count: number
+          process_decisions: Json
+          project_id: string
+          proposed_factor_sigla: string | null
+          story_id: string
+          suggested_factor_sigla: string | null
+          suggested_pf_fs: number | null
+          suggested_process_count: number
+          team_id: string
+        }
+        Insert: {
+          analysis_run_id: string
+          confirmed_factor_sigla?: string | null
+          confirmed_pf_fs?: number | null
+          confirmed_process_count?: number
+          corrected?: boolean | null
+          created_at?: string
+          decided_by?: string | null
+          default_selected_process_count?: number
+          event_type?: string
+          factor_confidence?: number | null
+          factor_override_notes?: string | null
+          factor_override_reason?: string | null
+          factor_source?: string | null
+          id?: string
+          identified_process_count?: number
+          process_decisions?: Json
+          project_id: string
+          proposed_factor_sigla?: string | null
+          story_id: string
+          suggested_factor_sigla?: string | null
+          suggested_pf_fs?: number | null
+          suggested_process_count?: number
+          team_id: string
+        }
+        Update: {
+          analysis_run_id?: string
+          confirmed_factor_sigla?: string | null
+          confirmed_pf_fs?: number | null
+          confirmed_process_count?: number
+          corrected?: boolean | null
+          created_at?: string
+          decided_by?: string | null
+          default_selected_process_count?: number
+          event_type?: string
+          factor_confidence?: number | null
+          factor_override_notes?: string | null
+          factor_override_reason?: string | null
+          factor_source?: string | null
+          id?: string
+          identified_process_count?: number
+          process_decisions?: Json
+          project_id?: string
+          proposed_factor_sigla?: string | null
+          story_id?: string
+          suggested_factor_sigla?: string | null
+          suggested_pf_fs?: number | null
+          suggested_process_count?: number
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_learning_events_analysis_run_id_fkey"
+            columns: ["analysis_run_id"]
+            isOneToOne: false
+            referencedRelation: "apf_process_analysis_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_learning_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_learning_events_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_learning_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_project_baselines: {
         Row: {
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           id: string
           imported_at: string | null
           imported_by: string | null
           label: string | null
           model_id: string
           project_id: string
+          scope_type: string
+          source_checksum: string | null
+          source_file_name: string | null
+          source_summary: Json
           status: Database["public"]["Enums"]["apf_baseline_status"]
           updated_at: string
+          validation_report: Json
+          validation_status: string
           version: string
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           id?: string
           imported_at?: string | null
           imported_by?: string | null
           label?: string | null
           model_id: string
           project_id: string
+          scope_type?: string
+          source_checksum?: string | null
+          source_file_name?: string | null
+          source_summary?: Json
           status?: Database["public"]["Enums"]["apf_baseline_status"]
           updated_at?: string
+          validation_report?: Json
+          validation_status?: string
           version: string
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           id?: string
           imported_at?: string | null
           imported_by?: string | null
           label?: string | null
           model_id?: string
           project_id?: string
+          scope_type?: string
+          source_checksum?: string | null
+          source_file_name?: string | null
+          source_summary?: Json
           status?: Database["public"]["Enums"]["apf_baseline_status"]
           updated_at?: string
+          validation_report?: Json
+          validation_status?: string
           version?: string
         }
         Relationships: [
@@ -1206,6 +2054,71 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_recalculation_events: {
+        Row: {
+          baseline_id: string | null
+          created_at: string
+          id: string
+          previous_snapshot: Json
+          project_id: string
+          reason: string | null
+          requested_by: string | null
+          session_id: string | null
+          story_id: string
+        }
+        Insert: {
+          baseline_id?: string | null
+          created_at?: string
+          id?: string
+          previous_snapshot?: Json
+          project_id: string
+          reason?: string | null
+          requested_by?: string | null
+          session_id?: string | null
+          story_id: string
+        }
+        Update: {
+          baseline_id?: string | null
+          created_at?: string
+          id?: string
+          previous_snapshot?: Json
+          project_id?: string
+          reason?: string | null
+          requested_by?: string | null
+          session_id?: string | null
+          story_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_recalculation_events_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "apf_project_baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_recalculation_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_recalculation_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_recalculation_events_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
             referencedColumns: ["id"]
           },
         ]
@@ -1325,9 +2238,13 @@ export type Database = {
         Row: {
           ai_complexity: string
           ai_confidence_score: number | null
+          ai_factor_sigla: string | null
           ai_functional_type: string
           ai_pf_bruto: number | null
+          ai_pf_bruto_exact: number | null
+          ai_pf_fs: number | null
           ai_reasoning: string | null
+          baseline_item_id: string | null
           corrected_by: string | null
           correction_notes: string | null
           correction_reason_code:
@@ -1349,16 +2266,24 @@ export type Database = {
           session_id: string
           team_id: string | null
           validated_complexity: string
+          validated_factor_sigla: string | null
           validated_functional_type: string
           validated_pf_bruto: number | null
+          validated_pf_bruto_exact: number | null
+          validated_pf_fs: number | null
           was_corrected: boolean | null
+          was_corrected_contractual: boolean
         }
         Insert: {
           ai_complexity: string
           ai_confidence_score?: number | null
+          ai_factor_sigla?: string | null
           ai_functional_type: string
           ai_pf_bruto?: number | null
+          ai_pf_bruto_exact?: number | null
+          ai_pf_fs?: number | null
           ai_reasoning?: string | null
+          baseline_item_id?: string | null
           corrected_by?: string | null
           correction_notes?: string | null
           correction_reason_code?:
@@ -1380,16 +2305,24 @@ export type Database = {
           session_id: string
           team_id?: string | null
           validated_complexity: string
+          validated_factor_sigla?: string | null
           validated_functional_type: string
           validated_pf_bruto?: number | null
+          validated_pf_bruto_exact?: number | null
+          validated_pf_fs?: number | null
           was_corrected?: boolean | null
+          was_corrected_contractual?: boolean
         }
         Update: {
           ai_complexity?: string
           ai_confidence_score?: number | null
+          ai_factor_sigla?: string | null
           ai_functional_type?: string
           ai_pf_bruto?: number | null
+          ai_pf_bruto_exact?: number | null
+          ai_pf_fs?: number | null
           ai_reasoning?: string | null
+          baseline_item_id?: string | null
           corrected_by?: string | null
           correction_notes?: string | null
           correction_reason_code?:
@@ -1411,11 +2344,22 @@ export type Database = {
           session_id?: string
           team_id?: string | null
           validated_complexity?: string
+          validated_factor_sigla?: string | null
           validated_functional_type?: string
           validated_pf_bruto?: number | null
+          validated_pf_bruto_exact?: number | null
+          validated_pf_fs?: number | null
           was_corrected?: boolean | null
+          was_corrected_contractual?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "apf_validation_events_baseline_item_id_fkey"
+            columns: ["baseline_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_baseline_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "apf_validation_events_counting_item_id_fkey"
             columns: ["counting_item_id"]
@@ -1518,6 +2462,48 @@ export type Database = {
           mime_type?: string
           team_id?: string
           uploaded_by?: string
+        }
+        Relationships: []
+      }
+      audit_log: {
+        Row: {
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          new_data: Json | null
+          old_data: Json | null
+          operation: string
+          record_id: string | null
+          table_name: string
+          user_agent: string | null
+        }
+        Insert: {
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_data?: Json | null
+          old_data?: Json | null
+          operation: string
+          record_id?: string | null
+          table_name: string
+          user_agent?: string | null
+        }
+        Update: {
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_data?: Json | null
+          old_data?: Json | null
+          operation?: string
+          record_id?: string | null
+          table_name?: string
+          user_agent?: string | null
         }
         Relationships: []
       }
@@ -1626,6 +2612,7 @@ export type Database = {
           id: string
           logo_url: string | null
           name: string
+          org_id: string | null
           phone: string | null
           status: string
           updated_at: string
@@ -1637,6 +2624,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name: string
+          org_id?: string | null
           phone?: string | null
           status?: string
           updated_at?: string
@@ -1648,11 +2636,20 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          org_id?: string | null
           phone?: string | null
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "companies_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contract_audit_log: {
         Row: {
@@ -3134,26 +4131,194 @@ export type Database = {
           },
         ]
       }
+      organization_entitlement_overrides: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          enabled: boolean | null
+          feature_key: string
+          id: string
+          limit_value: number | null
+          metadata: Json
+          org_id: string
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean | null
+          feature_key: string
+          id?: string
+          limit_value?: number | null
+          metadata?: Json
+          org_id: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean | null
+          feature_key?: string
+          id?: string
+          limit_value?: number | null
+          metadata?: Json
+          org_id?: string
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_entitlement_overrides_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          last_sent_at: string
+          metadata: Json
+          module_keys: string[]
+          org_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          role: Database["public"]["Enums"]["org_member_role"]
+          send_count: number
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          invited_by: string
+          last_sent_at?: string
+          metadata?: Json
+          module_keys?: string[]
+          org_id: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          role?: Database["public"]["Enums"]["org_member_role"]
+          send_count?: number
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          last_sent_at?: string
+          metadata?: Json
+          module_keys?: string[]
+          org_id?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          role?: Database["public"]["Enums"]["org_member_role"]
+          send_count?: number
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_invitations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_member_modules: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          id: string
+          module_key: string
+          org_id: string
+          role_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          module_key: string
+          org_id: string
+          role_name?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          module_key?: string
+          org_id?: string
+          role_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_member_modules_org_id_user_id_fkey"
+            columns: ["org_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["org_id", "user_id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           created_at: string
           id: string
+          is_active: boolean
           org_id: string
           role: Database["public"]["Enums"]["org_member_role"]
+          updated_at: string
+          updated_by: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          is_active?: boolean
           org_id: string
           role?: Database["public"]["Enums"]["org_member_role"]
+          updated_at?: string
+          updated_by?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          is_active?: boolean
           org_id?: string
           role?: Database["public"]["Enums"]["org_member_role"]
+          updated_at?: string
+          updated_by?: string | null
           user_id?: string
         }
         Relationships: [
@@ -3162,6 +4327,214 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_membership_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          details: Json
+          id: string
+          invitation_id: string | null
+          org_id: string
+          subject_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          invitation_id?: string | null
+          org_id: string
+          subject_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          details?: Json
+          id?: string
+          invitation_id?: string | null
+          org_id?: string
+          subject_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_membership_audit_log_invitation_id_fkey"
+            columns: ["invitation_id"]
+            isOneToOne: false
+            referencedRelation: "organization_invitations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_membership_audit_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_operational_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after_values: Json
+          before_values: Json
+          changed_fields: string[]
+          created_at: string
+          id: string
+          metadata: Json
+          org_id: string
+          resource_id: string | null
+          resource_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after_values?: Json
+          before_values?: Json
+          changed_fields?: string[]
+          created_at?: string
+          id?: string
+          metadata?: Json
+          org_id: string
+          resource_id?: string | null
+          resource_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after_values?: Json
+          before_values?: Json
+          changed_fields?: string[]
+          created_at?: string
+          id?: string
+          metadata?: Json
+          org_id?: string
+          resource_id?: string | null
+          resource_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_operational_audit_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_settings_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after_values: Json
+          before_values: Json
+          changed_fields: string[]
+          created_at: string
+          id: string
+          org_id: string
+        }
+        Insert: {
+          action?: string
+          actor_id?: string | null
+          after_values?: Json
+          before_values?: Json
+          changed_fields?: string[]
+          created_at?: string
+          id?: string
+          org_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after_values?: Json
+          before_values?: Json
+          changed_fields?: string[]
+          created_at?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_settings_audit_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_subscriptions: {
+        Row: {
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          external_customer_id: string | null
+          external_subscription_id: string | null
+          id: string
+          metadata: Json
+          org_id: string
+          plan_id: string
+          source: string
+          starts_at: string
+          status: string
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          external_customer_id?: string | null
+          external_subscription_id?: string | null
+          id?: string
+          metadata?: Json
+          org_id: string
+          plan_id: string
+          source?: string
+          starts_at?: string
+          status: string
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          external_customer_id?: string | null
+          external_subscription_id?: string | null
+          id?: string
+          metadata?: Json
+          org_id?: string
+          plan_id?: string
+          source?: string
+          starts_at?: string
+          status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_subscriptions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -3465,6 +4838,63 @@ export type Database = {
           },
         ]
       }
+      platform_operational_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after_values: Json
+          before_values: Json
+          created_at: string
+          id: string
+          metadata: Json
+          resource_id: string | null
+          resource_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after_values?: Json
+          before_values?: Json
+          created_at?: string
+          id?: string
+          metadata?: Json
+          resource_id?: string | null
+          resource_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after_values?: Json
+          before_values?: Json
+          created_at?: string
+          id?: string
+          metadata?: Json
+          resource_id?: string | null
+          resource_type?: string
+        }
+        Relationships: []
+      }
+      platform_user_roles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          role: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -3616,6 +5046,7 @@ export type Database = {
           legacy_projetos_id: string | null
           module_type: string
           name: string
+          org_id: string | null
           redmine_id: number | null
           room_type: string
           sla_id: string | null
@@ -3633,6 +5064,7 @@ export type Database = {
           legacy_projetos_id?: string | null
           module_type?: string
           name: string
+          org_id?: string | null
           redmine_id?: number | null
           room_type?: string
           sla_id?: string | null
@@ -3650,6 +5082,7 @@ export type Database = {
           legacy_projetos_id?: string | null
           module_type?: string
           name?: string
+          org_id?: string | null
           redmine_id?: number | null
           room_type?: string
           sla_id?: string | null
@@ -3663,6 +5096,13 @@ export type Database = {
             columns: ["contract_id"]
             isOneToOne: false
             referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -4690,6 +6130,101 @@ export type Database = {
           },
         ]
       }
+      saas_plan_entitlements: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          feature_key: string
+          id: string
+          limit_value: number | null
+          metadata: Json
+          plan_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          feature_key: string
+          id?: string
+          limit_value?: number | null
+          metadata?: Json
+          plan_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          feature_key?: string
+          id?: string
+          limit_value?: number | null
+          metadata?: Json
+          plan_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_plan_entitlements_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_plans: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      saas_runtime_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       slas: {
         Row: {
           created_at: string
@@ -4874,8 +6409,10 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          is_active: boolean
           module: string
           name: string
+          org_id: string | null
           project_id: string | null
           team_type: string | null
           updated_at: string
@@ -4887,8 +6424,10 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          is_active?: boolean
           module?: string
           name: string
+          org_id?: string | null
           project_id?: string | null
           team_type?: string | null
           updated_at?: string
@@ -4900,8 +6439,10 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          is_active?: boolean
           module?: string
           name?: string
+          org_id?: string | null
           project_id?: string | null
           team_type?: string | null
           updated_at?: string
@@ -4919,6 +6460,13 @@ export type Database = {
             columns: ["contract_id"]
             isOneToOne: false
             referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -5041,6 +6589,11 @@ export type Database = {
           ai_fp_breakdown: Json | null
           ai_fp_confidence: number | null
           ai_fp_validated: boolean
+          apf_counting_session_id: string | null
+          apf_factor_sigla: string | null
+          apf_function_sigla: string | null
+          apf_pf_bruto: number | null
+          apf_pf_fs: number | null
           assignee_id: string | null
           backlog_order: number | null
           code: string
@@ -5051,6 +6604,7 @@ export type Database = {
           end_date: string | null
           epic_id: string | null
           estimated_hours: number | null
+          external_reference: string | null
           function_points: number | null
           id: string
           planning_status: string | null
@@ -5075,6 +6629,11 @@ export type Database = {
           ai_fp_breakdown?: Json | null
           ai_fp_confidence?: number | null
           ai_fp_validated?: boolean
+          apf_counting_session_id?: string | null
+          apf_factor_sigla?: string | null
+          apf_function_sigla?: string | null
+          apf_pf_bruto?: number | null
+          apf_pf_fs?: number | null
           assignee_id?: string | null
           backlog_order?: number | null
           code: string
@@ -5085,6 +6644,7 @@ export type Database = {
           end_date?: string | null
           epic_id?: string | null
           estimated_hours?: number | null
+          external_reference?: string | null
           function_points?: number | null
           id?: string
           planning_status?: string | null
@@ -5109,6 +6669,11 @@ export type Database = {
           ai_fp_breakdown?: Json | null
           ai_fp_confidence?: number | null
           ai_fp_validated?: boolean
+          apf_counting_session_id?: string | null
+          apf_factor_sigla?: string | null
+          apf_function_sigla?: string | null
+          apf_pf_bruto?: number | null
+          apf_pf_fs?: number | null
           assignee_id?: string | null
           backlog_order?: number | null
           code?: string
@@ -5119,6 +6684,7 @@ export type Database = {
           end_date?: string | null
           epic_id?: string | null
           estimated_hours?: number | null
+          external_reference?: string | null
           function_points?: number | null
           id?: string
           planning_status?: string | null
@@ -5138,6 +6704,13 @@ export type Database = {
           voted_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "user_stories_apf_counting_session_id_fkey"
+            columns: ["apf_counting_session_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_stories_contract_id_fkey"
             columns: ["contract_id"]
@@ -5188,6 +6761,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_story_code_repair_log: {
+        Row: {
+          external_reference: string | null
+          id: string
+          migration_key: string
+          new_code: string
+          old_code: string
+          repaired_at: string
+          story_id: string
+          team_id: string
+        }
+        Insert: {
+          external_reference?: string | null
+          id?: string
+          migration_key: string
+          new_code: string
+          old_code: string
+          repaired_at?: string
+          story_id: string
+          team_id: string
+        }
+        Update: {
+          external_reference?: string | null
+          id?: string
+          migration_key?: string
+          new_code?: string
+          old_code?: string
+          repaired_at?: string
+          story_id?: string
+          team_id?: string
+        }
+        Relationships: []
       }
       workflow_columns: {
         Row: {
@@ -5322,6 +6928,41 @@ export type Database = {
         }
         Relationships: []
       }
+      v_apf_process_learning_accuracy: {
+        Row: {
+          candidate_fragmentation_mean_absolute_error: number | null
+          default_selection_accuracy_pct: number | null
+          default_selection_mean_absolute_error: number | null
+          exact_default_selection: number | null
+          factor_confirmation_accuracy_pct: number | null
+          factor_override_count: number | null
+          mean_absolute_pf_adjustment: number | null
+          over_fragmented_analyses: number | null
+          project_id: string | null
+          team_id: string | null
+          total_analyses: number | null
+          under_fragmented_analyses: number | null
+          user_added_processes: number | null
+          user_removed_default_processes: number | null
+          week: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_process_learning_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_process_learning_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_sustentacao_orfas: {
         Row: {
           created_at: string | null
@@ -5343,6 +6984,23 @@ export type Database = {
           },
           {
             foreignKeyName: "demandas_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_user_story_code_duplicates: {
+        Row: {
+          code: string | null
+          duplicate_count: number | null
+          story_ids: string[] | null
+          team_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_stories_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -5442,13 +7100,80 @@ export type Database = {
         Args: { p_team_ids: string[] }
         Returns: undefined
       }
+      accept_organization_invitation: {
+        Args: { p_token: string }
+        Returns: {
+          accepted: boolean
+          membership_role: string
+          organization_id: string
+          organization_name: string
+          result_status: string
+        }[]
+      }
       apf_create_dpf_globalweb_model: {
         Args: { p_contract_id: string }
         Returns: string
       }
+      apf_import_baseline: {
+        Args: {
+          p_activate?: boolean
+          p_function_types?: Json
+          p_impact_factors?: Json
+          p_items?: Json
+          p_label?: string
+          p_project_id: string
+          p_source_name?: string
+          p_source_summary?: Json
+          p_version: string
+        }
+        Returns: Json
+      }
+      apf_import_project_baseline: {
+        Args: {
+          p_activate?: boolean
+          p_function_types?: Json
+          p_impact_factors?: Json
+          p_items?: Json
+          p_label?: string
+          p_project_id: string
+          p_source_name?: string
+          p_source_summary?: Json
+          p_version: string
+        }
+        Returns: Json
+      }
+      archive_organization_company_v2: {
+        Args: { p_company_id: string; p_org_id: string }
+        Returns: undefined
+      }
+      archive_organization_contract_v2: {
+        Args: { p_contract_id: string; p_org_id: string }
+        Returns: undefined
+      }
+      archive_organization_project_v2: {
+        Args: { p_org_id: string; p_project_id: string }
+        Returns: undefined
+      }
+      archive_platform_ai_provider_v2: {
+        Args: { p_provider_id: string }
+        Returns: undefined
+      }
+      assert_organization_entitlement: {
+        Args: { p_feature_key: string; p_org_id: string }
+        Returns: undefined
+      }
+      assert_organization_operational_admin: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
+      assert_organization_resource_capacity: {
+        Args: { p_feature_key: string; p_org_id: string }
+        Returns: undefined
+      }
+      assert_platform_admin_v2: { Args: never; Returns: undefined }
       build_apf_prompt:
         | { Args: { p_contract_id: string; p_hu_text?: string }; Returns: Json }
-        | { Args: { p_session_id: string }; Returns: string }
+        | { Args: { p_session_id: string }; Returns: Json }
       calc_horas_uteis: {
         Args: {
           p_fim: string
@@ -5495,6 +7220,16 @@ export type Database = {
           pf_fs: number
         }[]
       }
+      can_operate_contract_v2: {
+        Args: { p_contract_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      can_operate_organization: { Args: { p_org_id: string }; Returns: boolean }
+      can_read_contract_v2: {
+        Args: { p_contract_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      can_read_organization: { Args: { p_org_id: string }; Returns: boolean }
       can_view_team: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
@@ -5538,7 +7273,101 @@ export type Database = {
         }
         Returns: Json
       }
+      create_organization_company_v2: {
+        Args: {
+          p_cnpj?: string
+          p_email?: string
+          p_logo_url?: string
+          p_name: string
+          p_org_id: string
+          p_phone?: string
+          p_status?: string
+        }
+        Returns: string
+      }
+      create_organization_contract_v2: {
+        Args: {
+          p_company_id?: string
+          p_currency?: string
+          p_ends_at?: string
+          p_name: string
+          p_number?: string
+          p_object?: string
+          p_org_id: string
+          p_starts_at?: string
+          p_status?: string
+          p_value_per_pfus?: number
+        }
+        Returns: string
+      }
+      create_organization_invitation: {
+        Args: {
+          p_email: string
+          p_expires_at?: string
+          p_invited_by: string
+          p_module_keys: string[]
+          p_org_id: string
+          p_role: string
+        }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          normalized_email: string
+          raw_token: string
+        }[]
+      }
+      create_organization_project_v2: {
+        Args: {
+          p_code?: string
+          p_contract_id: string
+          p_description?: string
+          p_module_type?: string
+          p_name: string
+          p_org_id: string
+          p_redmine_id?: number
+          p_team_id: string
+        }
+        Returns: string
+      }
+      create_organization_team_v2: {
+        Args: {
+          p_company_id?: string
+          p_contract_id?: string
+          p_module: string
+          p_name: string
+          p_org_id: string
+        }
+        Returns: string
+      }
+      create_platform_ai_provider_v2: {
+        Args: {
+          p_api_base_url?: string
+          p_is_active?: boolean
+          p_is_recommended?: boolean
+          p_model?: string
+          p_name: string
+          p_provider_type: string
+          p_request_format?: string
+        }
+        Returns: string
+      }
+      deactivate_organization_member_v2: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      deactivate_organization_team_v2: {
+        Args: { p_org_id: string; p_team_id: string }
+        Returns: undefined
+      }
       delete_ai_provider_key: { Args: { p_id: string }; Returns: undefined }
+      delete_apf_project_baseline: {
+        Args: { p_baseline_id: string }
+        Returns: Json
+      }
+      extract_user_story_external_reference: {
+        Args: { p_title: string }
+        Returns: string
+      }
       fn_audit_log_insert: {
         Args: {
           p_action: string
@@ -5641,15 +7470,170 @@ export type Database = {
         Args: { p_contract_id?: string; p_project_id?: string }
         Returns: Json
       }
+      get_accessible_companies_v2: {
+        Args: { p_org_id: string }
+        Returns: {
+          cnpj: string
+          created_at: string
+          email: string
+          id: string
+          logo_url: string
+          name: string
+          org_id: string
+          phone: string
+          status: string
+          team_count: number
+        }[]
+      }
+      get_accessible_contracts_v2: {
+        Args: { p_org_id: string }
+        Returns: {
+          company_id: string
+          currency: string
+          description: string
+          ends_at: string
+          id: string
+          name: string
+          number: string
+          object: string
+          org_id: string
+          project_count: number
+          room_mode: string
+          sla_count: number
+          starts_at: string
+          status: string
+          value_per_pfus: number
+        }[]
+      }
+      get_accessible_projects_v2: {
+        Args: { p_contract_id: string; p_org_id: string }
+        Returns: {
+          code: string
+          contract_id: string
+          contract_name: string
+          created_at: string
+          description: string
+          id: string
+          legacy_projetos_id: string
+          module_type: string
+          name: string
+          org_id: string
+          redmine_id: number
+          sla_id: string
+          status: string
+          team_id: string
+          team_name: string
+          updated_at: string
+        }[]
+      }
+      get_accessible_teams_v2: {
+        Args: { p_org_id: string }
+        Returns: {
+          id: string
+          module: string
+          name: string
+          org_id: string
+        }[]
+      }
+      get_active_apf_context: { Args: { p_project_id: string }; Returns: Json }
       get_admin_kpis: {
         Args: { p_sla_dias?: number; p_team_ids: string[] }
         Returns: Json
       }
       get_ai_provider_key: { Args: { p_provider: string }; Returns: string }
       get_ai_provider_key_by_id: { Args: { p_id: string }; Returns: string }
+      get_apf_baseline_candidates: {
+        Args: { p_limit?: number; p_project_id: string; p_story_text: string }
+        Returns: {
+          category_sigla: string
+          complexity: string
+          contribution_pct: number
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id: string
+          is_measurable: boolean
+          item_ref: string
+          match_score: number
+          module: string
+          notes: string
+          pf_bruto: number
+          pf_fs: number
+        }[]
+      }
+      get_apf_baseline_exact_items: {
+        Args: { p_item_refs: string[]; p_project_id: string }
+        Returns: {
+          category_sigla: string
+          complexity: string
+          contribution_pct: number
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id: string
+          is_measurable: boolean
+          item_ref: string
+          match_score: number
+          module: string
+          notes: string
+          pf_bruto: number
+          pf_fs: number
+        }[]
+      }
+      get_apf_metric_history_for_story: {
+        Args: { p_project_id: string; p_story_id: string }
+        Returns: {
+          created_at: string
+          description: string
+          factor_sigla: string
+          function_sigla: string
+          id: string
+          is_measurable: boolean
+          notes: string | null
+          pf_bruto: number
+          pf_fs: number
+          reference_code: string
+          source_measurement: string | null
+          system_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "apf_metric_factor_history"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_apf_model_by_contract: {
         Args: { p_contract_id: string }
         Returns: Json
+      }
+      get_apf_process_analysis: {
+        Args: { p_analysis_id: string }
+        Returns: Json
+      }
+      get_apf_project_process_candidates: {
+        Args: { p_limit?: number; p_project_id: string; p_story_text: string }
+        Returns: {
+          baseline_id: string
+          item_count: number
+          items: Json
+          match_score: number
+          process_name: string
+          process_ref: string
+          total_pf_bruto: number
+        }[]
+      }
+      get_apf_project_process_candidates_unfiltered: {
+        Args: { p_limit?: number; p_project_id: string; p_story_text: string }
+        Returns: {
+          baseline_id: string
+          item_count: number
+          items: Json
+          match_score: number
+          process_name: string
+          process_ref: string
+          total_pf_bruto: number
+        }[]
       }
       get_apf_session_summary: { Args: { p_session_id: string }; Returns: Json }
       get_capacity_planner: {
@@ -5676,6 +7660,18 @@ export type Database = {
         Args: { p_cursor?: string; p_limit?: number; p_team_id: string }
         Returns: Json[]
       }
+      get_effective_organization_entitlements: {
+        Args: { p_org_id: string }
+        Returns: {
+          enabled: boolean
+          feature_key: string
+          limit_value: number
+          org_id: string
+          plan_code: string
+          source: string
+          subscription_status: string
+        }[]
+      }
       get_my_contract_id: { Args: { _user_id?: string }; Returns: string }
       get_my_contracts: {
         Args: { _user_id?: string }
@@ -5685,11 +7681,159 @@ export type Database = {
         }[]
       }
       get_my_module_access: { Args: never; Returns: string }
+      get_my_organization_entitlements: {
+        Args: { p_org_id: string }
+        Returns: {
+          enabled: boolean
+          feature_key: string
+          limit_value: number
+          org_id: string
+          plan_code: string
+          source: string
+          subscription_status: string
+        }[]
+      }
+      get_my_organization_module_roles: {
+        Args: { p_org_id: string }
+        Returns: {
+          module: string
+          role_name: string
+        }[]
+      }
+      get_my_organizations_v2: {
+        Args: never
+        Returns: {
+          id: string
+          is_platform_admin: boolean
+          membership_role: string
+          name: string
+          plan: Database["public"]["Enums"]["org_plan"]
+          slug: string
+          status: Database["public"]["Enums"]["org_status"]
+        }[]
+      }
+      get_organization_contract_form_options_v2: {
+        Args: { p_org_id: string }
+        Returns: Json
+      }
+      get_organization_contract_v2: {
+        Args: { p_contract_id: string; p_org_id: string }
+        Returns: Json
+      }
+      get_organization_invitation_preview: {
+        Args: { p_token: string }
+        Returns: {
+          expires_at: string
+          invitation_role: string
+          invitation_status: string
+          masked_email: string
+          organization_name: string
+        }[]
+      }
+      get_organization_invitations_v2: {
+        Args: { p_org_id: string }
+        Returns: {
+          created_at: string
+          email: string
+          expires_at: string
+          invitation_id: string
+          invitation_role: string
+          invitation_status: string
+          invited_by_name: string
+          module_keys: string[]
+          send_count: number
+        }[]
+      }
+      get_organization_members_v2: {
+        Args: { p_org_id: string }
+        Returns: {
+          display_name: string
+          email: string
+          is_active: boolean
+          joined_at: string
+          membership_role: string
+          module_keys: string[]
+          user_id: string
+        }[]
+      }
+      get_organization_settings_audit_v2: {
+        Args: { p_limit?: number; p_org_id: string }
+        Returns: {
+          action: string
+          actor_email: string
+          actor_id: string
+          actor_name: string
+          after_values: Json
+          audit_id: string
+          before_values: Json
+          changed_fields: string[]
+          created_at: string
+        }[]
+      }
+      get_organization_settings_v2: {
+        Args: { p_org_id: string }
+        Returns: {
+          contact_email: string
+          contact_name: string
+          logo_url: string
+          name: string
+          organization_id: string
+          plan: string
+          slug: string
+          status: string
+          updated_at: string
+        }[]
+      }
+      get_organization_teams_admin_v2: {
+        Args: { p_org_id: string }
+        Returns: {
+          company_id: string
+          contract_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          member_count: number
+          module: string
+          name: string
+          org_id: string
+        }[]
+      }
+      get_organization_usage_summary: {
+        Args: { p_org_id: string }
+        Returns: {
+          ai_calls_limit: number
+          ai_calls_used: number
+          apf_countings_limit: number
+          apf_countings_used: number
+          contracts_limit: number
+          contracts_used: number
+          organization_id: string
+          plan_code: string
+          projects_limit: number
+          projects_used: number
+          quota_reset_at: string
+          subscription_status: string
+          users_limit: number
+          users_used: number
+        }[]
+      }
       get_project_api_url: { Args: never; Returns: string }
       get_service_role_key: { Args: never; Returns: string }
       get_sprint_history: {
         Args: { p_cutoff?: string; p_team_id?: string; p_team_ids: string[] }
         Returns: Json
+      }
+      get_tenancy_readiness_report: {
+        Args: never
+        Returns: {
+          affected_rows: number
+          issue: string
+          resource: string
+        }[]
+      }
+      has_organization_entitlement: {
+        Args: { p_feature_key: string; p_org_id: string }
+        Returns: boolean
       }
       has_role: {
         Args: {
@@ -5703,6 +7847,7 @@ export type Database = {
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
+      is_apf_auxiliary_action: { Args: { p_text: string }; Returns: boolean }
       is_contract_admin: {
         Args: { _contract_id: string; _user_id: string }
         Returns: boolean
@@ -5719,6 +7864,32 @@ export type Database = {
       is_feriado:
         | { Args: { p_data: string; p_team_id?: string }; Returns: boolean }
         | { Args: { p_data: string; p_uf?: string }; Returns: boolean }
+      is_legacy_operational_admin_fallback_enabled: {
+        Args: never
+        Returns: boolean
+      }
+      is_organization_admin: {
+        Args: { p_org_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      is_organization_legacy_permission_fallback_enabled: {
+        Args: never
+        Returns: boolean
+      }
+      is_organization_member: {
+        Args: { p_org_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      is_organization_operational_console_enabled: {
+        Args: never
+        Returns: boolean
+      }
+      is_organization_owner: {
+        Args: { p_org_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      is_organization_resource_limit_enforced: { Args: never; Returns: boolean }
+      is_platform_admin: { Args: { p_user_id?: string }; Returns: boolean }
       is_team_admin: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
@@ -5734,6 +7905,36 @@ export type Database = {
       is_team_member: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
+      }
+      is_tenancy_enforced: { Args: never; Returns: boolean }
+      list_platform_ai_providers_v2: {
+        Args: { p_only_active?: boolean }
+        Returns: {
+          api_base_url: string
+          created_at: string
+          has_key: boolean
+          id: string
+          is_active: boolean
+          is_recommended: boolean
+          model: string
+          name: string
+          provider_type: string
+          request_format: string
+          updated_at: string
+        }[]
+      }
+      log_organization_operational_event: {
+        Args: {
+          p_action: string
+          p_after_values?: Json
+          p_before_values?: Json
+          p_changed_fields?: string[]
+          p_metadata?: Json
+          p_org_id: string
+          p_resource_id: string
+          p_resource_type: string
+        }
+        Returns: undefined
       }
       match_similar_apf_cases:
         | {
@@ -5775,15 +7976,59 @@ export type Database = {
               similarity: number
             }[]
           }
+      materialize_apf_process_analysis: {
+        Args: { p_analysis_id: string; p_session_id: string }
+        Returns: Json
+      }
       my_org_ids: { Args: never; Returns: string[] }
-      open_counting_session: {
+      normalize_apf_contractual_function_sigla: {
+        Args: { p_sigla: string }
+        Returns: string
+      }
+      normalize_apf_metric_reference: {
+        Args: { p_value: string }
+        Returns: string
+      }
+      normalize_apf_process_key: { Args: { p_text: string }; Returns: string }
+      normalize_apf_ref: { Args: { p_text: string }; Returns: string }
+      normalize_apf_text: { Args: { p_text: string }; Returns: string }
+      open_counting_session:
+        | {
+            Args: {
+              p_baseline_id?: string
+              p_contract_id: string
+              p_project_id?: string
+              p_redmine_ref?: string
+              p_release_ref?: string
+              p_sprint_ref?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_baseline_id?: string
+              p_project_id: string
+              p_redmine_ref?: string
+              p_release_ref?: string
+              p_sprint_ref?: string
+            }
+            Returns: string
+          }
+      persist_apf_process_analysis: {
         Args: {
-          p_baseline_id?: string
-          p_contract_id: string
-          p_project_id?: string
-          p_redmine_ref?: string
-          p_release_ref?: string
-          p_sprint_ref?: string
+          p_analysis: Json
+          p_baseline_id: string
+          p_factor_sigla: string
+          p_input_hash: string
+          p_model_name: string
+          p_project_id: string
+          p_prompt_version: string
+          p_provider_id: string
+          p_provider_name: string
+          p_raw_response: string
+          p_schema_version: string
+          p_story_id: string
+          p_validation_mode: string
         }
         Returns: string
       }
@@ -5791,14 +8036,119 @@ export type Database = {
         Args: { p_contract_id: string; p_model_name?: string }
         Returns: string
       }
+      recalculate_apf_session_totals: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       recalculate_session_totals: {
         Args: { p_session_id: string }
         Returns: undefined
       }
       reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
+      resend_organization_invitation: {
+        Args: {
+          p_actor_id: string
+          p_expires_at?: string
+          p_invitation_id: string
+        }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          normalized_email: string
+          org_id: string
+          raw_token: string
+        }[]
+      }
+      reset_apf_story_counting: {
+        Args: { p_reason?: string; p_session_id: string; p_story_id: string }
+        Returns: Json
+      }
+      resolve_apf_elementary_process_item: {
+        Args: {
+          p_is_complete: boolean
+          p_is_independent: boolean
+          p_item_id: string
+          p_precedent_ref?: string
+          p_process_role: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      resolve_apf_factor_decision: {
+        Args: {
+          p_project_id: string
+          p_proposed_factor?: string
+          p_story_id: string
+        }
+        Returns: Json
+      }
+      resolve_apf_item_weight: {
+        Args: {
+          p_baseline_item_id: string
+          p_complexity?: string
+          p_function_sigla: string
+          p_model_id: string
+        }
+        Returns: number
+      }
+      resolve_apf_process_analysis: {
+        Args: { p_analysis_id: string; p_decisions: Json; p_session_id: string }
+        Returns: Json
+      }
+      resolve_apf_process_analysis_v2: {
+        Args: {
+          p_analysis_id: string
+          p_decisions: Json
+          p_factor_override_notes?: string
+          p_factor_override_reason?: string
+          p_factor_sigla: string
+          p_session_id: string
+        }
+        Returns: Json
+      }
+      resolve_contract_org_id: {
+        Args: { p_contract_id: string }
+        Returns: string
+      }
+      resolve_project_org_id: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
+      resolve_team_org_id: { Args: { p_team_id: string }; Returns: string }
+      revoke_organization_invitation_v2: {
+        Args: { p_invitation_id: string }
+        Returns: boolean
+      }
+      save_contractual_counting_items: {
+        Args: {
+          p_ai_model?: string
+          p_items: Json
+          p_session_id: string
+          p_story_id: string
+        }
+        Returns: Json
+      }
       save_counting_items: {
         Args: { p_ai_model?: string; p_items: Json; p_session_id: string }
         Returns: Json
+      }
+      save_organization_contract_v3: {
+        Args: {
+          p_company_id?: string
+          p_contract_id: string
+          p_currency?: string
+          p_ends_at?: string
+          p_name: string
+          p_number?: string
+          p_object?: string
+          p_org_id: string
+          p_project_ids?: string[]
+          p_starts_at?: string
+          p_status?: string
+          p_team_ids?: string[]
+          p_value_per_pfus?: number
+        }
+        Returns: string
       }
       set_ai_provider_key: {
         Args: { p_key: string; p_provider: string }
@@ -5808,7 +8158,119 @@ export type Database = {
         Args: { p_id: string; p_key: string }
         Returns: undefined
       }
+      set_legacy_operational_admin_fallback: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      set_organization_legacy_permission_fallback: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      set_organization_operational_console: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      set_organization_resource_limit_enforcement: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      set_platform_ai_provider_key_v2: {
+        Args: { p_key: string; p_provider_id: string }
+        Returns: undefined
+      }
+      set_tenancy_enforcement: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       status_concluidos: { Args: never; Returns: string[] }
+      transfer_organization_ownership_v2: {
+        Args: { p_new_owner_id: string; p_org_id: string }
+        Returns: boolean
+      }
+      update_organization_company_v2: {
+        Args: {
+          p_cnpj?: string
+          p_company_id: string
+          p_email?: string
+          p_logo_url?: string
+          p_name: string
+          p_org_id: string
+          p_phone?: string
+          p_status?: string
+        }
+        Returns: string
+      }
+      update_organization_member_v2: {
+        Args: {
+          p_is_active?: boolean
+          p_module_keys?: string[]
+          p_org_id: string
+          p_role?: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      update_organization_project_v2: {
+        Args: {
+          p_code?: string
+          p_contract_id: string
+          p_description?: string
+          p_module_type?: string
+          p_name: string
+          p_org_id: string
+          p_project_id: string
+          p_redmine_id?: number
+          p_team_id: string
+        }
+        Returns: string
+      }
+      update_organization_settings_v2: {
+        Args: {
+          p_contact_email?: string
+          p_contact_name?: string
+          p_logo_url?: string
+          p_name: string
+          p_org_id: string
+        }
+        Returns: {
+          changed_fields: string[]
+          contact_email: string
+          contact_name: string
+          logo_url: string
+          name: string
+          organization_id: string
+          plan: string
+          slug: string
+          status: string
+          updated_at: string
+        }[]
+      }
+      update_organization_team_v2: {
+        Args: {
+          p_company_id?: string
+          p_contract_id?: string
+          p_module: string
+          p_name: string
+          p_org_id: string
+          p_team_id: string
+        }
+        Returns: string
+      }
+      update_platform_ai_provider_v2: {
+        Args: {
+          p_api_base_url?: string
+          p_is_active?: boolean
+          p_is_recommended?: boolean
+          p_model?: string
+          p_name: string
+          p_provider_id: string
+          p_provider_type: string
+          p_request_format?: string
+        }
+        Returns: undefined
+      }
       upsert_demandas_batch: {
         Args: { p_rows: Json; p_team_id: string }
         Returns: Json
@@ -5816,6 +8278,16 @@ export type Database = {
       users_share_contract: {
         Args: { _a: string; _b: string }
         Returns: boolean
+      }
+      validate_apf_counting_item: {
+        Args: {
+          p_factor_sigla: string
+          p_function_sigla: string
+          p_item_id: string
+          p_notes?: string
+          p_reason?: string
+        }
+        Returns: Json
       }
     }
     Enums: {
@@ -5831,6 +8303,12 @@ export type Database = {
         | "merge_required"
         | "already_counted"
         | "not_countable"
+        | "wrong_impact_factor"
+        | "wrong_baseline_match"
+        | "wrong_pf_value"
+        | "missing_function"
+        | "extra_function"
+        | "other"
       apf_function_class: "transactional" | "data"
       apf_session_status:
         | "in_progress"
@@ -5996,6 +8474,12 @@ export const Constants = {
         "merge_required",
         "already_counted",
         "not_countable",
+        "wrong_impact_factor",
+        "wrong_baseline_match",
+        "wrong_pf_value",
+        "missing_function",
+        "extra_function",
+        "other",
       ],
       apf_function_class: ["transactional", "data"],
       apf_session_status: [

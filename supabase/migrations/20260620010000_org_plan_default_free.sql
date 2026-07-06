@@ -1,0 +1,2 @@
+-- Normalização adiada para 20260621000000_org_plan_default_free.sql,
+-- após a migration legada 20260620_001 criar public.organizations.

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { TeamSelectionModal } from "@/shared/components/common/TeamSelectionModal";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -172,9 +173,55 @@ function AccessDenied() {
   );
 }
 
+const ORGANIZATION_ADMIN_PERMISSIONS = new Set([
+  "manage_teams",
+  "manage_users",
+  "manage_roles",
+  "manage_workflow",
+  "manage_custom_fields",
+  "manage_automations",
+]);
+
+const MODULE_MEMBER_PERMISSIONS = new Set([
+  "view_kanban",
+  "view_backlog",
+  "report_impediment",
+  "view_dashboard",
+  "manage_activities",
+]);
+
 function SectionGuard({ permission, children }: { permission: string; children: React.ReactNode }) {
   const { hasPermission } = useAuth();
-  return hasPermission(permission) ? <>{children}</> : <AccessDenied />;
+  const {
+    enabled: organizationTenancyEnabled,
+    hasModuleAccess,
+    getModuleRole,
+    isOrganizationAdmin,
+  } = useOrganization();
+
+  if (hasPermission(permission)) return <>{children}</>;
+
+  if (organizationTenancyEnabled) {
+    const roleName = getModuleRole("sala_agil");
+    const hasSalaAgil = hasModuleAccess("sala_agil");
+    const isModuleAdmin = roleName === "admin";
+
+    if (
+      ORGANIZATION_ADMIN_PERMISSIONS.has(permission) &&
+      (isOrganizationAdmin || isModuleAdmin)
+    ) {
+      return <>{children}</>;
+    }
+
+    if (
+      MODULE_MEMBER_PERMISSIONS.has(permission) &&
+      (hasSalaAgil || isOrganizationAdmin || isModuleAdmin)
+    ) {
+      return <>{children}</>;
+    }
+  }
+
+  return <AccessDenied />;
 }
 
 const Index = () => {

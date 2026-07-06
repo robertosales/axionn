@@ -1,95 +1,136 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from "react";
 import {
-  fetchContracts,
-  fetchContractById,
   createContract,
+  fetchActiveContracts,
+  fetchContractById,
+  fetchContracts,
   updateContract,
   upsertContractSlas,
-  fetchActiveContracts,
-} from '../services/contracts.service';
-import type { Contract, ContractFormData, SlaRow } from '../types/contract';
+} from "../services/contracts.service";
+import type { Contract, ContractFormData, SlaRow } from "../types/contract";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
-// ── Lista completa de contratos ───────────────────────────────────────────────
 export function useContracts() {
+  const { enabled, currentOrganizationId } = useOrganization();
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchContracts();
+      if (enabled && !currentOrganizationId) {
+        setContracts([]);
+        return;
+      }
+      const data = await fetchContracts(
+        enabled ? currentOrganizationId : undefined,
+      );
       setContracts(data as Contract[]);
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro ao carregar contratos');
+    } catch (loadError) {
+      setContracts([]);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Erro ao carregar contratos",
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentOrganizationId, enabled]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   return { contracts, loading, error, reload: load };
 }
 
-// ── Detalhe de um contrato ────────────────────────────────────────────────────
 export function useContractDetail(contractId: string) {
+  const { enabled, currentOrganizationId } = useOrganization();
   const [contract, setContract] = useState<Contract | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!contractId) return;
+    if (enabled && !currentOrganizationId) {
+      setContract(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-    fetchContractById(contractId)
-      .then((d) => setContract(d as Contract))
+    void fetchContractById(
+      contractId,
+      enabled ? currentOrganizationId : undefined,
+    )
+      .then((data) => setContract(data as Contract))
       .catch(() => setContract(null))
       .finally(() => setLoading(false));
-  }, [contractId]);
+  }, [contractId, currentOrganizationId, enabled]);
 
   return { contract, loading };
 }
 
-// ── Salvar (criar ou editar) contrato + SLAs ─────────────────────────────────
 export function useSaveContract() {
+  const { enabled, currentOrganizationId, canOperate } = useOrganization();
   const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const save = useCallback(async (
-    form: ContractFormData,
-    slas: SlaRow[],
-    existingId?: string,
-  ): Promise<string | null> => {
-    setSaving(true);
-    setError(null);
-    try {
-      const id = existingId
-        ? (await updateContract(existingId, form), existingId)
-        : await createContract(form);
-      await upsertContractSlas(id, slas);
-      return id;
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro desconhecido');
-      return null;
-    } finally {
-      setSaving(false);
-    }
-  }, []);
+  const save = useCallback(
+    async (
+      form: ContractFormData,
+      slas: SlaRow[],
+      existingId?: string,
+    ): Promise<string | null> => {
+      if (enabled && (!currentOrganizationId || !canOperate)) {
+        setError("A organização atual não permite alterações");
+        return null;
+      }
+
+      setSaving(true);
+      setError(null);
+      try {
+        const organizationId = enabled ? currentOrganizationId : undefined;
+        const id = existingId
+          ? (await updateContract(existingId, form, organizationId), existingId)
+          : await createContract(form, organizationId);
+        await upsertContractSlas(id, slas);
+        return id;
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error ? saveError.message : "Erro desconhecido",
+        );
+        return null;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [canOperate, currentOrganizationId, enabled],
+  );
 
   return { save, saving, error };
 }
 
-// ── Contratos ativos para selects ─────────────────────────────────────────────
 export function useActiveContracts() {
+  const { enabled, currentOrganizationId } = useOrganization();
   const [contracts, setContracts] = useState<{ id: string; name: string }[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchActiveContracts()
+    if (enabled && !currentOrganizationId) {
+      setContracts([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    void fetchActiveContracts(enabled ? currentOrganizationId : undefined)
       .then(setContracts)
       .catch(() => setContracts([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [currentOrganizationId, enabled]);
 
   return { contracts, loading };
 }

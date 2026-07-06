@@ -294,7 +294,7 @@ export function AgilView() {
           {recentHUs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
               <CheckCircle2 className="h-10 w-10 text-muted-foreground/30" />
-              <p className="text-sm font-medium text-foreground">Tudo conclufdo!</p>
+              <p className="text-sm font-medium text-foreground">Tudo concluído!</p>
               <p className="text-xs">Todas as HUs do sprint estão finalizadas.</p>
             </div>
           ) : (

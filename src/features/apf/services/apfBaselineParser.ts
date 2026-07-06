@@ -116,7 +116,11 @@ function findHeaderRow(rows: SheetMatrix, required: string[][]): number {
 }
 
 function columnMap(row: CellValue[]): Map<string, number> {
-  return new Map(row.map((value, index) => [normalized(value), index]).filter(([key]) => Boolean(key)));
+  return new Map(
+    row
+      .map((value, index): [string, number] => [normalized(value), index])
+      .filter(([key]) => Boolean(key)),
+  );
 }
 
 function column(columns: Map<string, number>, aliases: string[]): number {

@@ -1,17 +1,10 @@
-# .github/workflows/ci.yml
-# CI rodado em todo PR aberto ou atualizado contra develop ou main.
-# Jobs: lint (ESLint), test (Vitest) e build.
-
 name: ✅ CI
 
 on:
   pull_request:
-    branches:
-      - develop
-      - main
+    branches: [develop, main]
   push:
-    branches:
-      - develop
+    branches: [develop]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -22,37 +15,24 @@ jobs:
     name: 🔍 ESLint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Instala dependências
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
+      - run: npm ci
+      - run: npm run lint
 
   test:
     name: 🧪 Vitest
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Instala dependências
-        run: npm ci
-
+      - run: npm ci
       - name: Testes unitários
         id: vitest
         continue-on-error: true
@@ -64,7 +44,6 @@ jobs:
           echo "$code" > vitest.exit
           tail -n 160 vitest.log
           exit "$code"
-
       - name: Publica log do Vitest
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,32 +53,156 @@ jobs:
             vitest.log
             vitest.exit
           retention-days: 3
-
       - name: Falha quando os testes falharem
         if: always()
-        shell: bash
-        run: |
-          code=$(cat vitest.exit 2>/dev/null || echo 1)
-          exit "$code"
+        run: exit "$(cat vitest.exit 2>/dev/null || echo 1)"
 
   build-check:
-    name: 📦 Vite build check
+    name: 📦 Vite build (${{ matrix.tenancy == 'true' && 'tenant' || 'legacy' }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tenancy: ["false", "true"]
     env:
-      VITE_SUPABASE_URL:      ${{ secrets.VITE_SUPABASE_URL      || 'https://placeholder.supabase.co' }}
-      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+      VITE_ORG_TENANCY_ENABLED: ${{ matrix.tenancy }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+      - run: npm ci
+      - run: npm run build
 
-      - name: Instala dependências
-        run: npm ci
+  edge-functions:
+    name: 🛡️ Edge Functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Verifica Edge Functions críticas
+        id: deno-check
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          deno check --config supabase/functions/deno.json \
+            supabase/functions/apf-generate/index.ts \
+            supabase/functions/organization-invitations/index.ts \
+            > deno-check.log 2>&1
+          code=$?
+          echo "$code" > deno-check.exit
+          tail -n 200 deno-check.log
+          exit "$code"
+      - name: Publica diagnóstico do Deno
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deno-check-log
+          path: |
+            deno-check.log
+            deno-check.exit
+          retention-days: 3
+      - name: Falha quando o Deno check falhar
+        if: always()
+        run: exit "$(cat deno-check.exit 2>/dev/null || echo 1)"
 
-      - name: Build
-        run: npm run build
+  security-contract:
+    name: 🔐 SaaS security contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Valida controles críticos das Fases 0, 1 e 2A
+        shell: bash
+        run: |
+          set -euo pipefail
+          governance="supabase/migrations/20260630010000_ai_usage_governance.sql"
+          rate_limits="supabase/migrations/20260630011000_ai_rate_limits.sql"
+          multitenant="supabase/migrations/20260630020000_multitenant_foundation.sql"
+          wrappers="supabase/migrations/20260630021000_org_access_wrappers.sql"
+          isolation="supabase/migrations/20260630022000_org_resource_isolation.sql"
+          hardening="supabase/migrations/20260630023000_org_resource_isolation_hardening.sql"
+          entitlements="supabase/migrations/20260704010000_saas_entitlements_domain.sql"
+          memberships="supabase/migrations/20260704020000_organization_member_invitations.sql"
+          membership_hardening="supabase/migrations/20260704020001_invitation_crypto_hardening.sql"
+          apf_edge="supabase/functions/apf-generate/index.ts"
+          invitation_edge="supabase/functions/organization-invitations/index.ts"
+          feature_flags="src/lib/featureFlags.ts"
+          org_context="src/contexts/OrganizationContext.tsx"
+          auth_context="src/contexts/AuthContext.tsx"
+          org_switcher="src/components/OrganizationSwitcher.tsx"
+          org_guard="src/components/OrganizationOperationalGuard.tsx"
+          admin_contracts="src/features/admin/hooks/useContracts.ts"
+          admin_projects="src/features/admin/services/projects.service.ts"
+
+          for file in \
+            "$governance" "$rate_limits" "$multitenant" "$wrappers" \
+            "$isolation" "$hardening" "$entitlements" "$memberships" \
+            "$membership_hardening" "$apf_edge" "$invitation_edge" \
+            "$feature_flags" "$org_context" "$auth_context" \
+            "$org_switcher" "$org_guard" "$admin_contracts" \
+            "$admin_projects"; do
+            test -f "$file"
+          done
+
+          grep -Fq "create table if not exists public.ai_usage_events" "$governance"
+          grep -Fq "create or replace function public.reserve_ai_usage" "$governance"
+          grep -Fq "revoke all on function public.reserve_ai_usage" "$governance"
+          grep -Fq "get_service_role_key" "$governance"
+          grep -Fq "create table if not exists public.ai_usage_rate_limits" "$rate_limits"
+          grep -Fq "create trigger trg_ai_usage_rate_limit" "$rate_limits"
+
+          grep -Fq "create table if not exists public.platform_user_roles" "$multitenant"
+          grep -Fq "add column if not exists org_id" "$multitenant"
+          grep -Fq "create or replace function public.get_my_organizations_v2" "$multitenant"
+          grep -Fq "create or replace function public.get_accessible_teams_v2" "$multitenant"
+          grep -Fq "p_user_id uuid default auth.uid()" "$multitenant"
+          grep -Fq "revoke all on function public.is_platform_admin(uuid)" "$wrappers"
+
+          grep -Fq "create table if not exists public.saas_runtime_settings" "$isolation"
+          grep -Fq "create or replace function public.set_tenancy_enforcement" "$isolation"
+          grep -Fq "create policy contracts_tenant_boundary" "$isolation"
+          grep -Fq "create policy projects_tenant_boundary" "$isolation"
+          grep -Fq "create policy teams_tenant_boundary" "$isolation"
+          grep -Fq "create or replace function public.get_accessible_contracts_v2" "$isolation"
+          grep -Fq "create or replace function public.get_accessible_projects_v2" "$isolation"
+          grep -Fq "grant execute on function public.is_tenancy_enforced() to authenticated" "$hardening"
+          grep -Fq "create trigger trg_contract_team_org_consistency" "$hardening"
+          grep -Fq "create trigger trg_contract_room_team_org_consistency" "$hardening"
+          grep -Fq "create or replace function public.get_tenancy_readiness_report" "$hardening"
+
+          grep -Fq "create table if not exists public.organization_subscriptions" "$entitlements"
+          grep -Fq "create table if not exists public.organization_invitations" "$memberships"
+          grep -Fq "create table if not exists public.organization_member_modules" "$memberships"
+          grep -Fq "create or replace function public.accept_organization_invitation" "$memberships"
+          grep -Fq "extensions.digest" "$membership_hardening"
+          grep -Fq "drop function public.digest(text, text)" "$membership_hardening"
+          grep -Fq "inviteUserByEmail" "$invitation_edge"
+          grep -Fq "shouldCreateUser: false" "$invitation_edge"
+
+          grep -Fq "VITE_ORG_TENANCY_ENABLED" "$feature_flags"
+          grep -Fq "operationBlockReason" "$org_context"
+          grep -Fq "get_accessible_teams_v2" "$auth_context"
+          grep -Fq "is_platform_admin" "$auth_context"
+          grep -Fq "Gerenciar membros" "$org_switcher"
+          grep -Fq "Operações temporariamente bloqueadas" "$org_guard"
+          grep -Fq "get_accessible_contracts_v2" "$admin_contracts"
+          grep -Fq "get_accessible_projects_v2" "$admin_projects"
+          ! grep -Fq 'isAdmin || moduleAccess === "admin"' src/App.tsx
+
+          grep -Fq "AI_USAGE_ENFORCEMENT_MODE" "$apf_edge"
+          grep -Fq "reserve_ai_usage" "$apf_edge"
+          grep -Fq "finalize_ai_usage" "$apf_edge"
+          grep -Fq "AI_MAX_PROMPT_CHARS" "$apf_edge"
+
+          ! grep -Fq "signUp" src/pages/Auth.tsx

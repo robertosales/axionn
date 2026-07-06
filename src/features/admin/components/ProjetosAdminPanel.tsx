@@ -86,7 +86,7 @@ export function ProjetosAdminPanel() {
     const payload = {
       contract_id: form.contract_id, team_id: form.team_id || null,
       name: form.name.trim(), description: form.description || null,
-      code: form.code || null, module_type: form.module_type,
+      code: form.code || null, module_type: form.module_type as ProjetoAdmin['module_type'],
       redmine_id: form.redmine_id ? Number(form.redmine_id) : null,
     };
     try {

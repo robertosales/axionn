@@ -1,82 +1,93 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 import {
+  fetchProjetosAdmin,
   createProjetoAdmin,
   updateProjetoAdmin,
   archiveProjetoAdmin,
+  type CreateProjetoPayload,
   type ProjetoAdmin,
-} from '../services/projects.service';
-import { supabase } from '@/integrations/supabase/client';
+} from "../services/projects.service";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
-/**
- * contractId: quando fornecido, retorna apenas projetos desse contrato.
- * null/undefined = todos os projetos.
- */
 export function useProjetosAdmin(contractId?: string | null) {
+  const { enabled, currentOrganizationId, canOperate } = useOrganization();
   const [projetos, setProjetos] = useState<ProjetoAdmin[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
-      // Busca projetos SEM o join de teams para evitar o erro de relação ambígua
-      let query = (supabase as any)
-        .from('projects')
-        .select(`
-          id, name, description, code, status, module_type,
-          contract_id, team_id, redmine_id, legacy_projetos_id,
-          contracts(name)
-        `)
-        .neq('status', 'archived')
-        .order('name');
-
-      if (contractId) query = query.eq('contract_id', contractId);
-
-      const { data, error: err } = await query;
-      if (err) throw err;
-
-      const rows = (data ?? []) as any[];
-
-      // Busca nomes dos times em lote separado
-      const teamIds = [...new Set(rows.map((p: any) => p.team_id).filter(Boolean))] as string[];
-      let teamMap: Record<string, string> = {};
-      if (teamIds.length > 0) {
-        const { data: teamsData } = await (supabase as any)
-          .from('teams')
-          .select('id, name')
-          .in('id', teamIds);
-        (teamsData ?? []).forEach((t: any) => { teamMap[t.id] = t.name; });
+      if (enabled && !currentOrganizationId) {
+        setProjetos([]);
+        return;
       }
 
-      setProjetos(rows.map((p: any) => ({
-        id:                 p.id,
-        name:               p.name,
-        description:        p.description,
-        code:               p.code,
-        status:             p.status,
-        module_type:        p.module_type,
-        contract_id:        p.contract_id,
-        contract_name:      p.contracts?.name ?? null,
-        team_id:            p.team_id,
-        team_name:          teamMap[p.team_id] ?? null,
-        redmine_id:         p.redmine_id,
-        legacy_projetos_id: p.legacy_projetos_id,
-        created_at:         p.created_at,
-        updated_at:         p.updated_at,
-        sla_id:             p.sla_id ?? null,
-      })));
-    } catch (e: any) {
-      setError(e?.message ?? 'Erro ao carregar projetos');
+      const rows = await fetchProjetosAdmin(
+        enabled ? currentOrganizationId : undefined,
+      );
+      setProjetos(
+        contractId
+          ? rows.filter((project) => project.contract_id === contractId)
+          : rows,
+      );
+    } catch (loadError) {
+      console.error("[useProjetosAdmin] load:", loadError);
+      setProjetos([]);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Erro ao carregar projetos",
+      );
     } finally {
       setLoading(false);
     }
-  }, [contractId]);
+  }, [contractId, currentOrganizationId, enabled]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const create  = (payload: any) => createProjetoAdmin(payload).then(() => load());
-  const update  = (id: string, payload: any) => updateProjetoAdmin(id, payload).then(() => load());
-  const archive = (id: string) => archiveProjetoAdmin(id).then(() => load());
+  const assertWritableOrganization = () => {
+    if (!enabled) return;
+    if (!currentOrganizationId || !canOperate) {
+      throw new Error("A organização atual não permite alterações");
+    }
+  };
+
+  const create = async (payload: CreateProjetoPayload) => {
+    assertWritableOrganization();
+    const result = await createProjetoAdmin(
+      payload,
+      enabled ? currentOrganizationId : undefined,
+    );
+    await load();
+    return result;
+  };
+
+  const update = async (
+    id: string,
+    payload: Partial<ProjetoAdmin>,
+  ) => {
+    assertWritableOrganization();
+    const result = await updateProjetoAdmin(
+      id,
+      payload,
+      enabled ? currentOrganizationId : undefined,
+    );
+    await load();
+    return result;
+  };
+
+  const archive = async (id: string) => {
+    assertWritableOrganization();
+    await archiveProjetoAdmin(
+      id,
+      enabled ? currentOrganizationId : undefined,
+    );
+    await load();
+  };
 
   return { projetos, loading, error, reload: load, create, update, archive };
 }

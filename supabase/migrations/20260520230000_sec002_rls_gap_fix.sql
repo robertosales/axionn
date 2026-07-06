@@ -1,217 +1,139 @@
--- ============================================================
--- SEC-002 — RLS GAP FIX
---
--- Corrige lacunas encontradas na query de auditoria:
---
---   TABELAS SEM RLS ENCONTRADAS:
---     1. teams                        — RLS foi desfeito pelo rollback 20260516134201
---     2. user_roles                   — idem
---     3. app_roles                    — tabela de sistema, nunca teve RLS
---     4. app_permissions              — tabela de sistema, nunca teve RLS
---     5. role_permissions             — tabela de sistema, nunca teve RLS
---     6. rdm_checklist_templates      — migration SEC-002 ainda não aplicada no banco
---     7. _backup_demanda_hours_p5     — tabela de backup, deve ser bloqueada
---     8. demanda_hours_backup_20260511 — tabela de backup, deve ser bloqueada
---     9. demanda_hours_backup_minutos  — tabela de backup, deve ser bloqueada
---    10. migration_demanda_hours_log   — log interno de migração, admin-only
---
--- ESTRATÉGIA:
---   • Backups e logs internos: RLS habilitado SEM policies
---     → PostgreSQL bloqueia 100% o acesso via anon/authenticated
---     → Apenas roles de serviço (service_role) conseguem acessar
---   • Tabelas de sistema (app_roles, app_permissions, role_permissions):
---     → Leitura: qualquer autenticado
---     → Escrita: apenas admin
---   • teams e user_roles: replicar policies da migration 20260516134200
---     (que foi desfeita pelo rollback)
---
--- SEGURANÇA:
---   • Atômica (BEGIN/COMMIT)
---   • Idempotente (DROP IF EXISTS antes de cada CREATE)
---   • Não toca em tabelas já com RLS correto
--- ============================================================
+-- SEC-002 — RLS gap fix aligned with clean database replay.
 
-BEGIN;
+begin;
 
--- ────────────────────────────────────────────────────────────
--- 1. TABELAS DE BACKUP — RLS sem policies = bloqueio total
---    Apenas service_role (backend/migrations) consegue acessar.
--- ────────────────────────────────────────────────────────────
-DO $$
-DECLARE
-  tbl text;
-BEGIN
-  FOREACH tbl IN ARRAY ARRAY[
+-- Backup tables are installation-dependent. When present, RLS without
+-- authenticated policies blocks direct client access while preserving service access.
+do $$
+declare
+  relation_name text;
+begin
+  foreach relation_name in array array[
     '_backup_demanda_hours_p5',
     'demanda_hours_backup_20260511',
     'demanda_hours_backup_minutos'
   ]
-  LOOP
-    -- Habilita RLS (sem nenhuma policy = bloqueio total para anon e authenticated)
-    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tbl);
-    EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY',  tbl);
-  END LOOP;
-END;
+  loop
+    if to_regclass('public.' || relation_name) is not null then
+      execute format('alter table public.%I enable row level security', relation_name);
+      execute format('alter table public.%I force row level security', relation_name);
+    end if;
+  end loop;
+end;
 $$;
 
--- ────────────────────────────────────────────────────────────
--- 2. MIGRATION_DEMANDA_HOURS_LOG — log interno, admin-only
--- ────────────────────────────────────────────────────────────
-ALTER TABLE public.migration_demanda_hours_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.migration_demanda_hours_log FORCE ROW LEVEL SECURITY;
+alter table public.migration_demanda_hours_log enable row level security;
+alter table public.migration_demanda_hours_log force row level security;
+drop policy if exists mig_log_admin_select on public.migration_demanda_hours_log;
+create policy mig_log_admin_select on public.migration_demanda_hours_log
+for select to authenticated
+using (public.is_admin());
 
-DROP POLICY IF EXISTS "mig_log_admin_select" ON public.migration_demanda_hours_log;
-CREATE POLICY "mig_log_admin_select"
-ON public.migration_demanda_hours_log FOR SELECT
-USING (public.is_admin());
--- INSERT/UPDATE/DELETE: sem policy = bloqueado (escrita apenas via service_role)
-
--- ────────────────────────────────────────────────────────────
--- 3. TABELAS DE SISTEMA: app_roles, app_permissions, role_permissions
---    Leitura: qualquer autenticado (necessário para RBAC funcionar)
---    Escrita: apenas admin
--- ────────────────────────────────────────────────────────────
-DO $$
-DECLARE
-  tbl text;
-BEGIN
-  FOREACH tbl IN ARRAY ARRAY[
+-- RBAC catalog: authenticated read, administrative writes.
+do $$
+declare
+  relation_name text;
+begin
+  foreach relation_name in array array[
     'app_roles',
     'app_permissions',
     'role_permissions'
   ]
-  LOOP
-    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tbl);
+  loop
+    if to_regclass('public.' || relation_name) is null then
+      continue;
+    end if;
 
-    EXECUTE format('DROP POLICY IF EXISTS "%s_auth_select" ON public.%I', tbl, tbl);
-    EXECUTE format('DROP POLICY IF EXISTS "%s_admin_insert" ON public.%I', tbl, tbl);
-    EXECUTE format('DROP POLICY IF EXISTS "%s_admin_update" ON public.%I', tbl, tbl);
-    EXECUTE format('DROP POLICY IF EXISTS "%s_admin_delete" ON public.%I', tbl, tbl);
+    execute format('alter table public.%I enable row level security', relation_name);
+    execute format('drop policy if exists %I on public.%I', relation_name || '_auth_select', relation_name);
+    execute format('drop policy if exists %I on public.%I', relation_name || '_admin_insert', relation_name);
+    execute format('drop policy if exists %I on public.%I', relation_name || '_admin_update', relation_name);
+    execute format('drop policy if exists %I on public.%I', relation_name || '_admin_delete', relation_name);
 
-    -- Qualquer autenticado pode LER (necessário para RBAC no frontend)
-    EXECUTE format(
-      'CREATE POLICY "%s_auth_select" ON public.%I FOR SELECT USING (auth.uid() IS NOT NULL)',
-      tbl, tbl
+    execute format(
+      'create policy %I on public.%I for select to authenticated using (auth.uid() is not null)',
+      relation_name || '_auth_select', relation_name
     );
-    -- Apenas admin pode ESCREVER
-    EXECUTE format(
-      'CREATE POLICY "%s_admin_insert" ON public.%I FOR INSERT WITH CHECK (public.is_admin())',
-      tbl, tbl
+    execute format(
+      'create policy %I on public.%I for insert to authenticated with check (public.is_admin())',
+      relation_name || '_admin_insert', relation_name
     );
-    EXECUTE format(
-      'CREATE POLICY "%s_admin_update" ON public.%I FOR UPDATE USING (public.is_admin()) WITH CHECK (public.is_admin())',
-      tbl, tbl
+    execute format(
+      'create policy %I on public.%I for update to authenticated using (public.is_admin()) with check (public.is_admin())',
+      relation_name || '_admin_update', relation_name
     );
-    EXECUTE format(
-      'CREATE POLICY "%s_admin_delete" ON public.%I FOR DELETE USING (public.is_admin())',
-      tbl, tbl
+    execute format(
+      'create policy %I on public.%I for delete to authenticated using (public.is_admin())',
+      relation_name || '_admin_delete', relation_name
     );
-  END LOOP;
-END;
+  end loop;
+end;
 $$;
 
--- ────────────────────────────────────────────────────────────
--- 4. TEAMS — reabilitar RLS (desfeito pelo rollback 20260516134201)
---    Replica as policies da migration 20260516134200
--- ────────────────────────────────────────────────────────────
-ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
+-- Teams
+alter table public.teams enable row level security;
+drop policy if exists teams_select on public.teams;
+drop policy if exists teams_insert on public.teams;
+drop policy if exists teams_update on public.teams;
+drop policy if exists teams_delete on public.teams;
 
-DROP POLICY IF EXISTS "teams_select" ON public.teams;
-DROP POLICY IF EXISTS "teams_insert" ON public.teams;
-DROP POLICY IF EXISTS "teams_update" ON public.teams;
-DROP POLICY IF EXISTS "teams_delete" ON public.teams;
-
-CREATE POLICY "teams_select"
-ON public.teams FOR SELECT
-USING (
+create policy teams_select on public.teams
+for select to authenticated
+using (
   public.is_admin()
-  OR EXISTS (
-    SELECT 1 FROM public.team_members tm
-    WHERE tm.team_id = teams.id
-      AND tm.user_id = auth.uid()
+  or exists (
+    select 1
+    from public.team_members member
+    where member.team_id = teams.id
+      and member.user_id = auth.uid()
   )
 );
 
-CREATE POLICY "teams_insert"
-ON public.teams FOR INSERT
-WITH CHECK (public.is_admin());
+create policy teams_insert on public.teams
+for insert to authenticated with check (public.is_admin());
+create policy teams_update on public.teams
+for update to authenticated
+using (public.is_admin()) with check (public.is_admin());
+create policy teams_delete on public.teams
+for delete to authenticated using (public.is_admin());
 
-CREATE POLICY "teams_update"
-ON public.teams FOR UPDATE
-USING (public.is_admin())
-WITH CHECK (public.is_admin());
+-- Global legacy roles
+alter table public.user_roles enable row level security;
+drop policy if exists user_roles_select on public.user_roles;
+drop policy if exists user_roles_insert on public.user_roles;
+drop policy if exists user_roles_update on public.user_roles;
+drop policy if exists user_roles_delete on public.user_roles;
 
-CREATE POLICY "teams_delete"
-ON public.teams FOR DELETE
-USING (public.is_admin());
+create policy user_roles_select on public.user_roles
+for select to authenticated
+using (public.is_admin() or user_id = auth.uid());
+create policy user_roles_insert on public.user_roles
+for insert to authenticated with check (public.is_admin());
+create policy user_roles_update on public.user_roles
+for update to authenticated
+using (public.is_admin()) with check (public.is_admin());
+create policy user_roles_delete on public.user_roles
+for delete to authenticated using (public.is_admin());
 
--- ────────────────────────────────────────────────────────────
--- 5. USER_ROLES — reabilitar RLS (desfeito pelo rollback 20260516134201)
---    Replica as policies da migration 20260516134200
--- ────────────────────────────────────────────────────────────
-ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+-- RDM checklist catalog
+alter table public.rdm_checklist_templates enable row level security;
+drop policy if exists rdm_checklist_templates_auth_select on public.rdm_checklist_templates;
+drop policy if exists rdm_checklist_templates_admin_insert on public.rdm_checklist_templates;
+drop policy if exists rdm_checklist_templates_admin_update on public.rdm_checklist_templates;
+drop policy if exists rdm_checklist_templates_admin_delete on public.rdm_checklist_templates;
 
-DROP POLICY IF EXISTS "user_roles_select" ON public.user_roles;
-DROP POLICY IF EXISTS "user_roles_insert" ON public.user_roles;
-DROP POLICY IF EXISTS "user_roles_update" ON public.user_roles;
-DROP POLICY IF EXISTS "user_roles_delete" ON public.user_roles;
+create policy rdm_checklist_templates_auth_select
+on public.rdm_checklist_templates
+for select to authenticated using (auth.uid() is not null);
+create policy rdm_checklist_templates_admin_insert
+on public.rdm_checklist_templates
+for insert to authenticated with check (public.is_admin());
+create policy rdm_checklist_templates_admin_update
+on public.rdm_checklist_templates
+for update to authenticated
+using (public.is_admin()) with check (public.is_admin());
+create policy rdm_checklist_templates_admin_delete
+on public.rdm_checklist_templates
+for delete to authenticated using (public.is_admin());
 
-CREATE POLICY "user_roles_select"
-ON public.user_roles FOR SELECT
-USING (
-  public.is_admin()
-  OR user_id = auth.uid()
-);
-
-CREATE POLICY "user_roles_insert"
-ON public.user_roles FOR INSERT
-WITH CHECK (public.is_admin());
-
-CREATE POLICY "user_roles_update"
-ON public.user_roles FOR UPDATE
-USING (public.is_admin())
-WITH CHECK (public.is_admin());
-
-CREATE POLICY "user_roles_delete"
-ON public.user_roles FOR DELETE
-USING (public.is_admin());
-
--- ────────────────────────────────────────────────────────────
--- 6. RDM_CHECKLIST_TEMPLATES — garantir RLS (migration SEC-002 pode não ter aplicado)
---    Já tratado pelo DO $$ loop da SEC-002, mas reforça idempotência
--- ────────────────────────────────────────────────────────────
-ALTER TABLE public.rdm_checklist_templates ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "rdm_checklist_templates_auth_select" ON public.rdm_checklist_templates;
-DROP POLICY IF EXISTS "rdm_checklist_templates_admin_insert" ON public.rdm_checklist_templates;
-DROP POLICY IF EXISTS "rdm_checklist_templates_admin_update" ON public.rdm_checklist_templates;
-DROP POLICY IF EXISTS "rdm_checklist_templates_admin_delete" ON public.rdm_checklist_templates;
-
-CREATE POLICY "rdm_checklist_templates_auth_select"
-ON public.rdm_checklist_templates FOR SELECT
-USING (auth.uid() IS NOT NULL);
-
-CREATE POLICY "rdm_checklist_templates_admin_insert"
-ON public.rdm_checklist_templates FOR INSERT
-WITH CHECK (public.is_admin());
-
-CREATE POLICY "rdm_checklist_templates_admin_update"
-ON public.rdm_checklist_templates FOR UPDATE
-USING (public.is_admin()) WITH CHECK (public.is_admin());
-
-CREATE POLICY "rdm_checklist_templates_admin_delete"
-ON public.rdm_checklist_templates FOR DELETE
-USING (public.is_admin());
-
-COMMIT;
-
--- ============================================================
--- VERIFICAÇÃO PÓS-MIGRATION
--- Execute no Supabase SQL Editor para confirmar resultado zero:
---
--- SELECT tablename FROM pg_tables
--- WHERE schemaname = 'public' AND NOT rowsecurity
--- ORDER BY tablename;
---
--- Resultado esperado: 0 linhas
--- ============================================================
+commit;

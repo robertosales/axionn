@@ -1,95 +1,55 @@
 -- ============================================================
--- MIGRATION: Backfill teams.contract_id → CONTRATO DE FABRICA PF
--- Data: 2026-06-11
--- Ambiente: PRODUÇÃO
---
--- CONTEXTO:
---   A tabela `teams` possui a coluna `contract_id` (adicionada na
---   Fase 3 do SLA Engine), porém todos os times cadastrados estão
---   com contract_id = NULL.
---
---   Todos os times ativos pertencem ao contrato:
---     id:   d59ab6dc-421f-41b4-b415-ae0bc072ebd4
---     name: CONTRATO DE FABRICA PF
---     mode: hibrido (Sala Ágil + Sustentação)
---
--- O QUE MUDA:
---   UPDATE em `teams` definindo contract_id para todos os registros
---   que ainda não possuem vínculo.
---
--- SEGURANÇA:
---   ✅ UPDATE simples — sem lock de tabela (não altera schema)
---   ✅ WHERE contract_id IS NULL — idempotente, pode rodar N vezes
---   ✅ Não afeta demandas, sprints ou qualquer outra tabela
---   ✅ fn_resolve_sla_limits() já usa t.contract_id — melhora SLA automático
---
--- ROLLBACK (se necessário):
---   UPDATE public.teams SET contract_id = NULL
---   WHERE contract_id = 'd59ab6dc-421f-41b4-b415-ae0bc072ebd4';
+-- Backfill teams.contract_id → CONTRATO DE FABRICA PF
+-- Executa somente quando existem times legados sem contrato.
+-- Bancos novos, sem dados legados, seguem o replay normalmente.
 -- ============================================================
 
-BEGIN;
+DO $$
+DECLARE
+  v_contract_id constant uuid := 'd59ab6dc-421f-41b4-b415-ae0bc072ebd4';
+  v_contract_status text;
+  v_pending_teams integer;
+  v_updated_teams integer;
+BEGIN
+  SELECT count(*)
+    INTO v_pending_teams
+    FROM public.teams
+   WHERE contract_id IS NULL;
 
-  -- ──────────────────────────────────────────────────────────
-  -- VALIDAÇÃO PRÉ-UPDATE: confirma que o contrato existe
-  -- e está ativo antes de vincular qualquer time.
-  -- ──────────────────────────────────────────────────────────
-  DO $$
-  DECLARE
-    v_contract_status TEXT;
-  BEGIN
-    SELECT status INTO v_contract_status
-    FROM   public.contracts
-    WHERE  id = 'd59ab6dc-421f-41b4-b415-ae0bc072ebd4';
+  IF v_pending_teams = 0 THEN
+    RAISE NOTICE 'Backfill Fábrica PF ignorado: nenhum time legado sem contrato.';
+    RETURN;
+  END IF;
 
-    IF NOT FOUND THEN
-      RAISE EXCEPTION
-        'ABORT: Contrato d59ab6dc não encontrado. Migration cancelada.';
-    END IF;
+  SELECT contract.status
+    INTO v_contract_status
+    FROM public.contracts contract
+   WHERE contract.id = v_contract_id;
 
-    IF v_contract_status != 'active' THEN
-      RAISE EXCEPTION
-        'ABORT: Contrato d59ab6dc está com status = %. Esperado: active. Migration cancelada.',
-        v_contract_status;
-    END IF;
-  END;
-  $$;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'ABORT: existem % times sem contrato, mas o contrato Fábrica PF % não foi encontrado.',
+      v_pending_teams,
+      v_contract_id;
+  END IF;
 
-  -- ──────────────────────────────────────────────────────────
-  -- BACKFILL: vincula todos os times sem contrato
-  -- ──────────────────────────────────────────────────────────
+  IF v_contract_status <> 'active' THEN
+    RAISE EXCEPTION
+      'ABORT: contrato Fábrica PF % está com status %. Esperado: active.',
+      v_contract_id,
+      v_contract_status;
+  END IF;
+
   UPDATE public.teams
-  SET
-    contract_id = 'd59ab6dc-421f-41b4-b415-ae0bc072ebd4',
-    updated_at  = NOW()
-  WHERE contract_id IS NULL;
+     SET contract_id = v_contract_id,
+         updated_at = now()
+   WHERE contract_id IS NULL;
 
-  -- ──────────────────────────────────────────────────────────
-  -- LOG: registra quantos times foram vinculados
-  -- ──────────────────────────────────────────────────────────
-  DO $$
-  DECLARE
-    v_total   INT;
-    v_sem_contrato INT;
-  BEGIN
-    SELECT COUNT(*) INTO v_total       FROM public.teams;
-    SELECT COUNT(*) INTO v_sem_contrato FROM public.teams WHERE contract_id IS NULL;
+  GET DIAGNOSTICS v_updated_teams = ROW_COUNT;
 
-    RAISE NOTICE
-      'Backfill concluído — Total de times: %, Times ainda sem contrato: %',
-      v_total, v_sem_contrato;
-  END;
-  $$;
-
-COMMIT;
-
--- ============================================================
--- PÓS-MIGRATION: Verificação manual recomendada
---
---   SELECT id, name, module, contract_id
---   FROM   public.teams
---   ORDER  BY module, name;
---
--- Todos os times devem exibir:
---   contract_id = d59ab6dc-421f-41b4-b415-ae0bc072ebd4
--- ============================================================
+  RAISE NOTICE
+    'Backfill Fábrica PF concluído: % times vinculados ao contrato %.',
+    v_updated_teams,
+    v_contract_id;
+END;
+$$;

@@ -15,7 +15,7 @@ import {
   AlertTriangle, FileText, Upload, Repeat, Activity, ShieldCheck,
   ChevronRight, Building2, ChevronsUpDown, Check, PanelLeftClose,
   PanelLeftOpen, Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight,
-  Target,
+  Target, Menu, Search, X,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { AxionLogo } from "@/components/AxionLogo";
@@ -23,14 +23,14 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
 const SB = {
-  bg:       "#0f1a18",
-  fg:       "#c0d4d0",
-  muted:    "#3d5a56",
-  acc:      "#182e2a",
-  active:   "#0c3d38",
-  teal:     "#0bbcaf",
-  border:   "rgba(192,212,208,0.08)",
-  tealA:    (a: number) => `rgba(11,188,175,${a})`,
+  bg:       "#0F172A",
+  fg:       "#E2E8F0",
+  muted:    "#94A3B8",
+  acc:      "rgba(99,102,241,0.12)",
+  active:   "rgba(99,102,241,0.18)",
+  teal:     "#6366F1",
+  border:   "rgba(148,163,184,0.16)",
+  tealA:    (a: number) => `rgba(99,102,241,${a})`,
 } as const;
 
 type ActiveModule = "sala_agil" | "sustentacao" | "rdm";
@@ -118,9 +118,9 @@ const NAV_RDM: NavItem[] = [
 ];
 
 const ACCENT = {
-  sala_agil:   { hex: "#0bbcaf", hexAlpha: (a: number) => `rgba(11,188,175,${a})`,  avatarBg: "#0a8f85",  label: "Sala Ágil",    icon: Zap,          textCls: "text-[#0bbcaf]", bgCls: "bg-[rgba(11,188,175,0.12)]" },
-  sustentacao: { hex: "#d97706", hexAlpha: (a: number) => `rgba(217,119,6,${a})`,   avatarBg: "#b45309",  label: "Sustentação",  icon: Wrench,       textCls: "text-amber-500", bgCls: "bg-amber-500/10" },
-  rdm:         { hex: "#7c3aed", hexAlpha: (a: number) => `rgba(124,58,237,${a})`,  avatarBg: "#6d28d9",  label: "RDM",          icon: ClipboardList, textCls: "text-violet-500", bgCls: "bg-violet-500/10" },
+  sala_agil:   { hex: "#6366F1", hexAlpha: (a: number) => `rgba(99,102,241,${a})`,  avatarBg: "#4f46e5",  label: "Sala Ágil",    icon: Zap,          textCls: "text-indigo-500", bgCls: "bg-indigo-500/15" },
+  sustentacao: { hex: "#0EA5E9", hexAlpha: (a: number) => `rgba(14,165,233,${a})`,  avatarBg: "#0284c7",  label: "Sustentação",  icon: Wrench,       textCls: "text-sky-500", bgCls: "bg-sky-500/15" },
+  rdm:         { hex: "#14B8A6", hexAlpha: (a: number) => `rgba(20,184,166,${a})`,  avatarBg: "#0f766e",  label: "RDM",          icon: ClipboardList, textCls: "text-teal-500", bgCls: "bg-teal-500/15" },
 } as const;
 
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
@@ -362,7 +362,15 @@ function DarkModeToggle() {
   );
 }
 
-function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: string }) {
+function Topbar({
+  module,
+  activeKey,
+  onOpenMobileSidebar,
+}: {
+  module: ActiveModule;
+  activeKey?: string;
+  onOpenMobileSidebar: () => void;
+}) {
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
@@ -381,38 +389,110 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   const Icon = activeItem?.icon;
 
   return (
-    <header className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-border overflow-hidden" style={{ background: "hsl(var(--background))" }}>
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">{accent.label}</span>
-        <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
-        <div className="flex items-center gap-2 min-w-0">
-          {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}
-          <span className="text-[13px] font-semibold text-foreground truncate">{pageLabel}</span>
+    <header className="sticky top-0 z-30 min-h-16 shrink-0 border-b border-white/70 bg-slate-100/80 px-3 shadow-sm shadow-slate-200/70 backdrop-blur-xl lg:px-6">
+      <div className="flex h-16 items-center justify-between gap-3 overflow-hidden">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <button
+            type="button"
+            onClick={onOpenMobileSidebar}
+            aria-label="Abrir navegação"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-300 hover:border-indigo-200 hover:text-indigo-600 hover:shadow-md lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="hidden items-center gap-2 text-xs font-semibold text-slate-500 sm:flex">
+            <span className="font-display text-slate-600">{accent.label}</span>
+            <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            {Icon && (
+              <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", accent.bgCls)}>
+                <Icon className={cn("h-4 w-4", accent.textCls)} />
+              </span>
+            )}
+            <span className="truncate font-display text-base font-bold text-slate-950">{pageLabel}</span>
+          </div>
+        </div>
+        <div className="hidden min-w-[260px] max-w-md flex-1 items-center rounded-lg border border-slate-200 bg-white/85 px-3 py-2 text-sm text-slate-500 shadow-sm transition-all duration-300 focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-500/10 md:flex">
+          <Search className="mr-2 h-4 w-4 text-slate-400" />
+          <span className="flex-1 truncate">Buscar histórias, sprints, membros...</span>
+          <kbd className="font-mono rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">⌘K</kbd>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {module === "sala_agil" && activeSprint && (
+            <div className="hidden items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold sm:flex"
+              style={{ backgroundColor: accent.hexAlpha(0.12), color: accent.hex, borderColor: accent.hexAlpha(0.25) }}>
+              <GitBranch className="h-3 w-3" />
+              <span className="max-w-[120px] truncate">{activeSprint.name}</span>
+            </div>
+          )}
+          <DarkModeToggle />
+          <NotificationBell />
         </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        {module === "sala_agil" && activeSprint && (
-          <div className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border shrink-0"
-            style={{ backgroundColor: accent.hexAlpha(0.12), color: accent.hex, borderColor: accent.hexAlpha(0.25) }}>
-            <GitBranch className="h-2.5 w-2.5" />
-            <span className="truncate max-w-[120px]">{activeSprint.name}</span>
-          </div>
-        )}
-        <DarkModeToggle />
-        <NotificationBell />
-      </div>
     </header>
+  );
+}
+
+function SprintStatusBanner({ module }: { module: ActiveModule }) {
+  const { activeSprint } = useSprint();
+  if (module !== "sala_agil" || !activeSprint) return null;
+
+  const rawProgress =
+    (activeSprint as any).progress ??
+    (activeSprint as any).completionRate ??
+    (activeSprint as any).completion_rate;
+  const startDate = (activeSprint as any).startDate ?? (activeSprint as any).start_date;
+  const endDate = (activeSprint as any).endDate ?? (activeSprint as any).end_date;
+  const dateProgress = (() => {
+    if (!startDate || !endDate) return 0;
+    const start = new Date(startDate).getTime();
+    const end = new Date(endDate).getTime();
+    const now = Date.now();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+    return Math.round(((now - start) / (end - start)) * 100);
+  })();
+  const progress = Math.max(0, Math.min(100, Number(rawProgress ?? dateProgress) || 0));
+
+  return (
+    <div className="shrink-0 border-b border-indigo-100 bg-white/75 px-3 py-3 backdrop-blur-xl lg:px-6">
+      <div className="flex flex-col gap-3 rounded-lg border border-indigo-100 bg-white px-4 py-3 shadow-sm shadow-indigo-100/60 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-indigo-500" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-display text-sm font-bold text-slate-950">Sprint ativa</p>
+            <p className="truncate text-xs font-medium text-slate-500">{activeSprint.name}</p>
+          </div>
+        </div>
+        <div className="flex min-w-[180px] items-center gap-3">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-indigo-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="font-mono text-xs font-bold text-indigo-600">{progress}%</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
   const { profile, isAdmin, signOut, isSigningOut } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const location = useLocation();
   const moduleAccess = profile?.module_access ?? "sala_agil";
   const canSwitch = isAdmin || moduleAccess === "admin";
   const accent = ACCENT[module];
   const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
-  const sidebarWidth = collapsed ? "w-[56px]" : "w-[220px]";
+  const sidebarWidth = collapsed ? "lg:w-16" : "lg:w-60";
+  const sidebarCollapsed = collapsed && !mobileSidebarOpen;
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [location.pathname]);
 
   const handleSignOut = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -421,12 +501,23 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
 
   return (
     <TooltipProvider delayDuration={80}>
-      <div className="flex h-screen w-screen overflow-hidden bg-background" data-module={module}>
-        <aside className={cn("flex flex-col h-full shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden", sidebarWidth)}
-          style={{ background: SB.bg, boxShadow: "2px 0 16px rgba(0,0,0,0.4)" }}>
-          <div className={cn("flex items-center h-14 shrink-0 px-3", collapsed ? "justify-center" : "justify-between")}
+      <div className="flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-950" data-module={module}>
+        <div
+          className={cn(
+            "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
+            mobileSidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          )}
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+        <aside className={cn(
+          "fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[86vw] shrink-0 flex-col overflow-hidden shadow-2xl shadow-slate-950/30 transition-all duration-300 ease-in-out lg:static lg:z-auto lg:max-w-none lg:translate-x-0",
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full",
+          sidebarWidth,
+        )}
+          style={{ background: SB.bg }}>
+          <div className={cn("flex items-center h-14 shrink-0 px-3", sidebarCollapsed ? "justify-center" : "justify-between")}
             style={{ borderBottom: `1px solid ${SB.border}` }}>
-            {collapsed ? (
+            {sidebarCollapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button onClick={() => setCollapsed(false)} aria-label="Expandir sidebar"
@@ -448,39 +539,44 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                     <p className="text-[9px] uppercase tracking-widest leading-none mt-0.5" style={{ color: SB.teal }}>{accent.label}</p>
                   </div>
                 </div>
-                <button onClick={() => setCollapsed(true)} aria-label="Recolher sidebar"
+                <button
+                  onClick={() => {
+                    if (mobileSidebarOpen) setMobileSidebarOpen(false);
+                    else setCollapsed(true);
+                  }}
+                  aria-label={mobileSidebarOpen ? "Fechar navegação" : "Recolher sidebar"}
                   className="flex h-6 w-6 items-center justify-center rounded-md shrink-0 transition-colors"
                   style={{ color: SB.muted }}
                   onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                  <PanelLeftClose className="h-3.5 w-3.5" />
+                  {mobileSidebarOpen ? <X className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
                 </button>
               </>
             )}
           </div>
 
-          {canSwitch && <div className="shrink-0"><ModuleSwitcher module={module} collapsed={collapsed} /></div>}
-          {!canSwitch && !collapsed && (
+          {canSwitch && <div className="shrink-0"><ModuleSwitcher module={module} collapsed={sidebarCollapsed} /></div>}
+          {!canSwitch && !sidebarCollapsed && (
             <div className="mx-2 mt-2 flex items-center rounded-lg px-3 py-2 text-[12px] font-semibold gap-2" style={{ background: SB.active, color: SB.teal }}>
               <accent.icon className="h-3.5 w-3.5 shrink-0" />
               {accent.label}
             </div>
           )}
 
-          <div className="px-2 mt-1 shrink-0"><TeamSwitcher module={module} collapsed={collapsed} /></div>
+          <div className="px-2 mt-1 shrink-0"><TeamSwitcher module={module} collapsed={sidebarCollapsed} /></div>
           <div className="h-px mx-2 mb-1 shrink-0" style={{ background: SB.border }} />
-          <SidebarNav module={module} activeKey={activeKey} collapsed={collapsed} onNavigate={onNavigate} />
+          <SidebarNav module={module} activeKey={activeKey} collapsed={sidebarCollapsed} onNavigate={onNavigate} />
 
           <div className="shrink-0 px-2 pb-3 pt-1" style={{ borderTop: `1px solid ${SB.border}` }}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className={cn("w-full flex items-center gap-2.5 rounded-lg p-2 mt-1 transition-colors", collapsed && "justify-center")}
+                <button className={cn("w-full flex items-center gap-2.5 rounded-lg p-2 mt-1 transition-colors", sidebarCollapsed && "justify-center")}
                   onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarFallback className="text-[11px] font-bold text-white" style={{ backgroundColor: accent.avatarBg }}>{userInitials}</AvatarFallback>
                   </Avatar>
-                  {!collapsed && (
+                  {!sidebarCollapsed && (
                     <div className="flex-1 text-left min-w-0">
                       <p className="text-[12px] font-semibold truncate leading-none" style={{ color: "#ffffff" }}>
                         {profile?.full_name ?? profile?.display_name ?? profile?.email?.split("@")[0] ?? "Usuário"}
@@ -492,7 +588,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                   )}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align={collapsed ? "center" : "end"} className="w-52">
+              <DropdownMenuContent side="top" align={sidebarCollapsed ? "center" : "end"} className="w-52">
                 <DropdownMenuLabel className="font-normal">
                   <p className="font-semibold text-sm">{profile?.full_name ?? profile?.display_name ?? "Usuário"}</p>
                   <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
@@ -508,13 +604,14 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <VersionBadge collapsed={collapsed} />
+            <VersionBadge collapsed={sidebarCollapsed} />
           </div>
         </aside>
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Topbar module={module} activeKey={activeKey} />
-          <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
+          <Topbar module={module} activeKey={activeKey} onOpenMobileSidebar={() => setMobileSidebarOpen(true)} />
+          <SprintStatusBanner module={module} />
+          <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-100">{children}</main>
         </div>
       </div>
     </TooltipProvider>

@@ -522,7 +522,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
         </div>
       )}
 
-      <div className="rounded-xl border border-border/60 bg-card px-4 py-3 mb-4">
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm shadow-slate-200/70 transition-all duration-300 hover:border-indigo-200">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <KanbanFilterBar
@@ -567,7 +567,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4 items-start">
+        <div className="flex snap-x gap-3 overflow-x-auto pb-4 items-start">
           {(workflowColumns ?? []).map((col: WorkflowColumn) => {
             const colHex   = colHexMap[col.key] ?? "#6b7280";
             const colItems = colItemsMap[col.key] ?? [];
@@ -580,7 +580,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
                   key={col.key}
                   onClick={() => toggleCol(col.key)}
                   title={`Expandir ${col.label}`}
-                  className="flex flex-col items-center rounded-xl border cursor-pointer select-none transition-all duration-200 hover:opacity-80 shrink-0"
+                  className="flex shrink-0 snap-start flex-col items-center rounded-lg border cursor-pointer select-none transition-all duration-300 hover:-translate-y-0.5 hover:opacity-90 hover:shadow-lg"
                   style={{
                     width: 44, minHeight: 180,
                     background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,
@@ -609,7 +609,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
             return (
               <div
                 key={col.key}
-                className={`flex flex-col rounded-xl border transition-all duration-200 shrink-0 ${ isOver ? "ring-2 ring-offset-1" : "ring-0" }`}
+                className={`flex shrink-0 snap-start flex-col rounded-lg border shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${ isOver ? "ring-2 ring-offset-1" : "ring-0" }`}
                 style={{
                   width: 260,
                   background: `color-mix(in srgb, ${colHex} 5%, var(--background))`,

@@ -35,7 +35,7 @@ export function KanbanColumnItem({
       ref={ref}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      className="flex flex-col min-w-[220px] max-w-[260px] w-full"
+      className="flex w-full min-w-[240px] max-w-[280px] snap-start flex-col"
     >
       {/* Column header */}
       <div className="flex items-center justify-between px-2 py-2 mb-2">
@@ -60,7 +60,7 @@ export function KanbanColumnItem({
       </div>
 
       {/* Drop zone */}
-      <div className="flex-1 space-y-2 rounded-xl bg-muted/40 p-2 min-h-[120px] transition-colors">
+      <div className="min-h-[120px] flex-1 space-y-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm transition-all duration-300 hover:border-indigo-200">
         {cards.map(card => (
           <KanbanCardItem
             key={card.id}

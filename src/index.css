@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,10 +8,9 @@
    ============================================================ */
 :root,
 [data-theme="light"] {
-  /* Fundo neutro suave #f7f5f2 */
-  --background:           30 13% 96%;
-  --background-2:         30 10% 92%;
-  --foreground:           25 60% 9%;
+  --background:           210 40% 96%;
+  --background-2:         214 32% 91%;
+  --foreground:           222 47% 11%;
 
   /* Cards — branco quente mínimo */
   --card:                 0 0% 100%;
@@ -20,32 +19,31 @@
   --popover:              0 0% 100%;
   --popover-foreground:   25 60% 9%;
 
-  --primary:              176 89% 40%;
+  --primary:              239 84% 67%;
   --primary-foreground:   0 0% 100%;
 
-  --secondary:            30 10% 92%;
-  --secondary-foreground: 25 60% 9%;
+  --secondary:            214 32% 91%;
+  --secondary-foreground: 222 47% 11%;
 
-  --muted:                30 10% 92%;
-  --muted-foreground:     30 13% 49%;
+  --muted:                214 32% 91%;
+  --muted-foreground:     215 16% 47%;
 
-  --accent:               176 40% 90%;
-  --accent-foreground:    176 89% 25%;
+  --accent:               239 84% 94%;
+  --accent-foreground:    239 84% 57%;
 
   --destructive:          0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --border:               30 12% 88%;
-  --input:                30 12% 88%;
-  --ring:                 176 89% 40%;
+  --border:               214 32% 86%;
+  --input:                214 32% 86%;
+  --ring:                 239 84% 67%;
   --radius:               0.5rem;
 
-  /* ── Sidebar escura verde profundo ── */
-  --sidebar:              168 30% 8%;
-  --sidebar-foreground:   172 19% 79%;
-  --sidebar-muted:        168 19% 30%;
-  --sidebar-accent:       168 28% 14%;
-  --sidebar-active:       172 57% 15%;
+  --sidebar:              222 47% 11%;
+  --sidebar-foreground:   214 32% 91%;
+  --sidebar-muted:        215 20% 65%;
+  --sidebar-accent:       224 42% 18%;
+  --sidebar-active:       239 84% 67%;
 
   /* Status */
   --teal:                 176 89% 40%;
@@ -124,6 +122,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 250ms ease, color 250ms ease;
   margin: 0;
+}
+
+h1, h2, h3, h4,
+.font-display {
+  font-family: "Plus Jakarta Sans", "Inter", sans-serif;
+}
+
+.font-mono {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* ── Scrollbar global (área de conteúdo) ── */

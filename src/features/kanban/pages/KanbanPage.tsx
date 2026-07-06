@@ -111,7 +111,7 @@ export function KanbanPage() {
   );
 
   const renderBoard = (devFilter?: string) => (
-    <div className="flex gap-3 overflow-x-auto pb-4">
+    <div className="flex snap-x gap-3 overflow-x-auto pb-4">
       {columns.map(col => {
         let colCards = filteredCards.filter(c => c.status === col.key);
         if (devFilter !== undefined) {
@@ -137,7 +137,7 @@ export function KanbanPage() {
   );
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 p-3 sm:p-4 lg:p-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">

@@ -79,19 +79,19 @@ function KpiCard({
   return (
     <div
       className={cn(
-        "bg-card rounded-xl border border-border shadow-sm overflow-hidden",
-        "hover:-translate-y-0.5 hover:shadow-md transition-all duration-200",
+        "overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm shadow-slate-200/70",
+        "transition-all duration-300 hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-100/60",
         ACCENT_TOP[accent],
       )}
     >
       <div className="px-5 pt-4 pb-4 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">{label}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">{label}</p>
           <div className={cn("shrink-0 rounded-lg p-2", ICON_CLASS[accent])}>
             <Icon className="h-4 w-4" />
           </div>
         </div>
-        <p className="text-2xl font-bold tabular-nums leading-none text-foreground">{value}</p>
+        <p className="font-display text-2xl font-bold tabular-nums leading-none text-slate-950">{value}</p>
         {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
         {statusBadge && <div className="mt-0.5">{statusBadge}</div>}
         {trendLabel && (
@@ -140,10 +140,10 @@ function SprintProgressBar({
       : `${daysLeft}d restantes`;
 
   return (
-    <div className="bg-card rounded-xl border border-border border-t-[3px] border-t-primary shadow-sm px-5 py-4">
+    <div className="rounded-lg border border-slate-200 border-t-[3px] border-t-indigo-500 bg-white px-5 py-4 shadow-sm shadow-slate-200/70 transition-all duration-300 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-100/60">
       <div className="flex items-center gap-2 flex-wrap">
         <Target className="h-4 w-4 text-primary shrink-0" />
-        <span className="text-sm font-semibold text-foreground flex-1 truncate">{sprint.name}</span>
+        <span className="font-display flex-1 truncate text-sm font-bold text-slate-950">{sprint.name}</span>
         <Badge variant={isOverdue ? "destructive" : "secondary"} className="text-xs shrink-0 whitespace-nowrap">
           {badgeLabel}
         </Badge>
@@ -216,11 +216,11 @@ export function AgilView() {
   const firstName = displayName.split(" ")[0];
 
   return (
-    <div className="flex flex-col gap-5 px-4 sm:px-6 py-6 w-full overflow-x-hidden">
+    <div className="flex w-full flex-col gap-5 overflow-x-hidden px-3 py-4 sm:px-4 lg:px-6 lg:py-6">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-foreground">
+          <h1 className="font-display text-xl font-bold text-slate-950">
             {greeting()}, <span className="text-primary">{firstName}</span> 👋
           </h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -241,7 +241,7 @@ export function AgilView() {
       {activeSprint && <SprintProgressBar sprint={activeSprint as any} />}
 
       {/* KPI Grid principal */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="HUs Concluídas"
           value={
@@ -284,8 +284,8 @@ export function AgilView() {
       </div>
 
       {/* HUs em Aberto + Equipe */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm shadow-slate-200/70 transition-all duration-300 hover:border-indigo-200 lg:col-span-2">
           <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
             <BookOpen className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">HUs em Aberto</span>
@@ -331,7 +331,7 @@ export function AgilView() {
           )}
         </div>
 
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm shadow-slate-200/70 transition-all duration-300 hover:border-indigo-200">
           <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">Equipe</span>
@@ -379,7 +379,7 @@ export function AgilView() {
       </div>
 
       {/* KPIs inferiores */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Total Sprints" value={sprints.length} sub="histórico" icon={Zap} accent="violet" />
         <KpiCard
           label="Horas Registradas"

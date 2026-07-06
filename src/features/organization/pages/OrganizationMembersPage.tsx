@@ -76,7 +76,6 @@ import { cn } from "@/lib/utils";
 // ─────────────────────────────────────────────────────────────────────────────
 // Design Tokens (escala 8px)
 // Modal width: 560px | Botões footer: h-11 (44px) px-5
-// gap-2=8px | gap-3=12px | gap-4=16px | gap-6=24px
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MODULES: Array<{
@@ -372,23 +371,21 @@ function EditMemberDialog({
   return (
     <>
       <Dialog open={Boolean(member)} onOpenChange={(open) => !open && onClose()}>
-        {/*
-          ✦ Modal: 560px (era 480px) — mais respiração para o footer com 4 botões
-          ✦ Botões footer: h-11 px-5 text-sm font-medium (era h-10)
-        */}
         <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]">
 
           {/* HEADER */}
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-start gap-4">
+              {/* Avatar — shrink-0 garante que nunca será comprimido */}
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary ring-2 ring-primary/20">
                 {initials}
               </div>
+              {/* min-w-0 + truncate evitam que nome/email longo empurre o avatar pra fora */}
               <div className="min-w-0 flex-1 pt-0.5">
-                <h2 className="text-base font-semibold leading-tight text-foreground">
+                <h2 className="truncate text-base font-semibold leading-tight text-foreground">
                   {member?.displayName}
                 </h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">{member?.email}</p>
+                <p className="truncate mt-0.5 text-xs text-muted-foreground">{member?.email}</p>
               </div>
             </div>
             <div className="mt-4">
@@ -672,20 +669,29 @@ function EditMemberDialog({
 
           <Separator />
 
-          {/* ══════════════════════════════════════════════════════
-              FOOTER
-              ✦ Botões: h-11 (44px) + px-5 + text-sm font-medium
-              ✦ Padding container: px-6 py-4
-              ✦ Esquerda: ações destrutivas | Direita: Cancelar + Salvar
-          ══════════════════════════════════════════════════════ */}
-          <DialogFooter className="flex-row items-center justify-between gap-3 px-6 py-4">
+          {/*
+            ╔═══════════════════════════════════════════════════════╗
+            FOOTER — Layout bulletproof:
+
+            ✦ flex-wrap + gap-y-2: quando não há espaço, a zona esquerda
+              (destrutivos) quebra para uma segunda linha acima da direita,
+              sem overflow nem scroll horizontal.
+            ✦ Zona esquerda: min-w-0 + flex-wrap para que os próprios
+              botões também possam quebrar entre si se necessário.
+            ✦ Zona direita: shrink-0 garante que Cancelar + Salvar nunca
+              sejam espremidos.
+            ✦ Cada botão tem shrink-0 explícito.
+            ╔═══════════════════════════════════════════════════════╗
+          */}
+          <DialogFooter className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-2 px-6 py-4">
 
             {/* Zona esquerda — destrutivo/crítico */}
-            <div className="flex items-center gap-2">
+            {/* min-w-0 + flex-wrap: os botões desta zona podem quebrar entre si */}
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               {member && !isOwner && !isSelf && member.isActive && (
                 <Button
                   variant="outline"
-                  className="h-11 gap-2 px-5 text-sm font-medium border-rose-300 text-rose-600 hover:bg-rose-50 hover:border-rose-400 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                  className="h-11 shrink-0 gap-2 px-5 text-sm font-medium border-rose-300 text-rose-600 hover:bg-rose-50 hover:border-rose-400 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30"
                   disabled={busy}
                   onClick={onDeactivate}
                 >
@@ -696,7 +702,7 @@ function EditMemberDialog({
               {member && !isOwner && canTransferOwnership && member.isActive && (
                 <Button
                   variant="outline"
-                  className="h-11 gap-2 px-5 text-sm font-medium"
+                  className="h-11 shrink-0 gap-2 px-5 text-sm font-medium"
                   disabled={busy}
                   onClick={() => setTransferConfirmOpen(true)}
                 >
@@ -706,8 +712,8 @@ function EditMemberDialog({
               )}
             </div>
 
-            {/* Zona direita — fluxo */}
-            <div className="flex items-center gap-3">
+            {/* Zona direita — fluxo | shrink-0 para nunca ser espremida */}
+            <div className="flex shrink-0 items-center gap-3">
               <Button
                 variant="ghost"
                 className="h-11 px-5 text-sm font-medium"
@@ -793,11 +799,18 @@ export default function OrganizationMembersPage() {
 
   return (
     <div className="min-h-screen bg-muted/20">
+      {/*
+        HEADER DA PÁGINA
+        ✦ min-w-0 no bloco do título: truncate funciona corretamente
+        ✦ shrink-0 no bloco de botões: nunca será espremido/cortado
+      */}
       <header className="border-b bg-background">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+            <Button variant="ghost" size="icon" className="shrink-0" onClick={() => navigate(-1)}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
               <Building2 className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
@@ -805,7 +818,8 @@ export default function OrganizationMembersPage() {
               <p className="truncate text-sm text-muted-foreground">{organization.name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          {/* shrink-0: os botões de ação nunca encolhem nem são cortados */}
+          <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void refresh()}>
               <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
             </Button>
@@ -893,9 +907,9 @@ export default function OrganizationMembersPage() {
                               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                                 {member.displayName?.slice(0, 2).toUpperCase()}
                               </div>
-                              <div>
-                                <p className="text-sm font-medium">{member.displayName}</p>
-                                <p className="text-xs text-muted-foreground">{member.email}</p>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">{member.displayName}</p>
+                                <p className="truncate text-xs text-muted-foreground">{member.email}</p>
                               </div>
                             </div>
                           </TableCell>

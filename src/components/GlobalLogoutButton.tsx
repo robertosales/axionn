@@ -1,8 +1,14 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Loader2, LogOut } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserAvatar } from "@/shared/components/common/UserAvatar";
-import { hasManagedApplicationChrome } from "@/lib/layoutRoutes";
+import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
+import {
+  hasManagedApplicationChrome,
+  isModuleShellRoute,
+} from "@/lib/layoutRoutes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,6 +79,50 @@ export function UserAccountMenu({ variant = "floating" }: UserAccountMenuProps) 
   );
 }
 
+function ModuleShellHeaderControls() {
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const moduleRoot = document.querySelector<HTMLElement>("[data-module]");
+    const header = moduleRoot?.querySelector<HTMLElement>("header");
+    if (!header) return;
+
+    const mount = document.createElement("div");
+    mount.dataset.moduleHeaderControls = "true";
+    mount.className = "hidden min-w-0 shrink-0 items-center gap-2 xl:flex";
+
+    const nativeActions = header.lastElementChild;
+    if (nativeActions) {
+      header.insertBefore(mount, nativeActions);
+    } else {
+      header.appendChild(mount);
+    }
+
+    setTarget(mount);
+    return () => {
+      setTarget(null);
+      mount.remove();
+    };
+  }, []);
+
+  if (!target) return null;
+
+  return createPortal(
+    <>
+      <OrganizationSwitcher variant="compact" />
+      <UserAccountMenu variant="compact" />
+      <div className="mx-0.5 h-5 w-px bg-border" aria-hidden="true" />
+    </>,
+    target,
+  );
+}
+
 export function GlobalLogoutButton() {
+  const location = useLocation();
+
+  if (isModuleShellRoute(location.pathname)) {
+    return <ModuleShellHeaderControls />;
+  }
+
   return <UserAccountMenu />;
 }

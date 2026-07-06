@@ -5,7 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import {
   Bug, Clock, AlertTriangle, Tag, Zap, CheckCircle2,
-  Timer, TrendingUp, ArrowRight, ArrowLeft, ExternalLink, Plus,
+  Timer, TrendingUp, ArrowRight, ArrowLeft, ExternalLink, Plus, ShieldAlert,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDisplayName } from "@/lib/nameUtils";
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/context-menu";
 import type { HU, Activity, WorkflowColumn } from "@/types/sprint";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
+import { ImpedimentDialog } from "@/components/ImpedimentManager";
+import { useSalaAgilPermission } from "@/hooks/useSalaAgilPermissions";
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
@@ -426,6 +428,7 @@ export const KanbanCard = memo(function KanbanCard({
   colHex,
 }: KanbanCardProps) {
   const { activities: allActivities, impediments: allImpediments } = useSprint();
+  const canReportImpediment = useSalaAgilPermission("report_impediment");
 
   const activities = useMemo(
     () => allActivities.filter((a) => a.huId === hu.id),
@@ -494,6 +497,11 @@ export const KanbanCard = memo(function KanbanCard({
   );
 
   const [quickActivityOpen, setQuickActivityOpen] = useState(false);
+  const [impedimentOpen, setImpedimentOpen] = useState(false);
+
+  const handleOpenImpediment = useCallback(() => {
+    setImpedimentOpen(true);
+  }, []);
 
   const cardContent = (
     <div
@@ -532,6 +540,25 @@ export const KanbanCard = memo(function KanbanCard({
 
           {/* Alertas no canto direito */}
           <div className="flex items-center gap-1 shrink-0">
+            {canReportImpediment && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-500/15"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleOpenImpediment();
+                    }}
+                    aria-label="Adicionar impedimento"
+                  >
+                    <ShieldAlert className="w-3 h-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top"><p className="text-xs">Adicionar impedimento</p></TooltipContent>
+              </Tooltip>
+            )}
             {isOverBudget && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -615,6 +642,14 @@ export const KanbanCard = memo(function KanbanCard({
     />
   );
 
+  const impedimentDialog = (
+    <ImpedimentDialog
+      huId={hu.id}
+      open={impedimentOpen}
+      onClose={() => setImpedimentOpen(false)}
+    />
+  );
+
   // Se não há colunas configuradas ou sem handler de mover, mantém apenas
   // o item "Nova Atividade" no menu de contexto.
   if (workflowColumns.length === 0 || !onMoveCard) {
@@ -634,9 +669,19 @@ export const KanbanCard = memo(function KanbanCard({
               <Plus className="w-3.5 h-3.5 text-primary" />
               Nova Atividade
             </ContextMenuItem>
+            {canReportImpediment && (
+              <ContextMenuItem
+                onSelect={handleOpenImpediment}
+                className="gap-2"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                Adicionar impedimento
+              </ContextMenuItem>
+            )}
           </ContextMenuContent>
         </ContextMenu>
         {quickActivityDialog}
+        {impedimentDialog}
       </>
     );
   }
@@ -665,6 +710,16 @@ export const KanbanCard = memo(function KanbanCard({
           <Plus className="w-3.5 h-3.5 text-primary" />
           Nova Atividade
         </ContextMenuItem>
+
+        {canReportImpediment && (
+          <ContextMenuItem
+            onSelect={handleOpenImpediment}
+            className="gap-2"
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+            Adicionar impedimento
+          </ContextMenuItem>
+        )}
 
         <ContextMenuSeparator />
 
@@ -720,6 +775,7 @@ export const KanbanCard = memo(function KanbanCard({
       </ContextMenuContent>
     </ContextMenu>
     {quickActivityDialog}
+    {impedimentDialog}
     </>
   );
 }, huPropsAreEqual);

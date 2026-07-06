@@ -12,7 +12,7 @@
  *   • Badge contador 'N arquivadas' quando showArchived=false e há filtradas.
  *   • STATUS_FINAIS configurável via constante.
  */
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -563,6 +563,7 @@ export function SustentacaoBoard({
   const demandas = demandasProp ?? [];
 
   const [collapsed,     setCollapsed]     = useState<Set<string>>(new Set());
+  const [hasColumnPreference, setHasColumnPreference] = useState(false);
   const [search,        setSearch]        = useState("");
   const [selectedResp,  setSelectedResp]  = useState<string[]>([]);
   const [selectedProjetos, setSelectedProjetos] = useState<string[]>([]);
@@ -597,8 +598,10 @@ export function SustentacaoBoard({
     return base;
   }, [workflowColumns]);
 
-  const toggle = (key: string) =>
+  const toggle = (key: string) => {
+    setHasColumnPreference(true);
     setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  };
 
   const projetosDisponiveis = useMemo<string[]>(() => {
     // Dedupe case-insensitive (preserva a primeira forma encontrada como rótulo canônico)
@@ -657,6 +660,11 @@ export function SustentacaoBoard({
     });
     return map;
   }, [filtered, visibleCols]);
+
+  useEffect(() => {
+    if (hasColumnPreference) return;
+    setCollapsed(new Set(visibleCols.filter((key) => (byStatus[key]?.length ?? 0) === 0)));
+  }, [byStatus, hasColumnPreference, visibleCols]);
 
   const hasActiveFilters = selectedProjetos.length > 0 || selectedResp.length > 0;
 

@@ -282,7 +282,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
   );
 
   const [expandedCols, setExpandedCols] = useState<Set<string>>(
-    () => loadExpandedCols(allColKeys),
+    () => hasSavedExpandedCols() ? loadExpandedCols(allColKeys) : new Set(),
   );
   const [hasColumnPreference, setHasColumnPreference] = useState(() => hasSavedExpandedCols());
 
@@ -290,12 +290,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     if (allColKeys.length === 0) return;
     if (hasColumnPreference) {
       setExpandedCols(loadExpandedCols(allColKeys));
-      return;
     }
-    setExpandedCols((prev) => {
-      if (prev.size > 0) return prev;
-      return loadExpandedCols(allColKeys);
-    });
   }, [allColKeys.join(","), hasColumnPreference]);
 
   const toggleCol = useCallback((key: string) => {

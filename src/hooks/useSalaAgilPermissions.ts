@@ -1,9 +1,12 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
 
-const ORGANIZATION_BACKLOG_WRITE_PERMISSIONS = new Set([
+const ORGANIZATION_SALA_AGIL_WRITE_PERMISSIONS = new Set([
   "create_backlog",
   "edit_backlog",
+  "create_sprint",
+  "edit_sprint",
+  "delete_sprint",
 ]);
 
 export function useSalaAgilPermission(permission: string) {
@@ -22,7 +25,7 @@ export function useSalaAgilPermission(permission: string) {
   const isModuleAdmin = getModuleRole("sala_agil") === "admin";
 
   if (
-    ORGANIZATION_BACKLOG_WRITE_PERMISSIONS.has(permission) &&
+    ORGANIZATION_SALA_AGIL_WRITE_PERMISSIONS.has(permission) &&
     (hasSalaAgil || isOrganizationAdmin || isModuleAdmin)
   ) {
     return true;

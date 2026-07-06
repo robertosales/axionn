@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useSalaAgilPermission } from "@/hooks/useSalaAgilPermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,11 +26,10 @@ function todayISO(): string {
 
 export function SprintManager() {
   const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, closeSprint, userStories, workflowColumns, addImpediment } = useSprint() as any;
-  const { hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
-  const canCreate = hasPermission('create_sprint');
-  const canEdit   = hasPermission('edit_sprint');
-  const canDelete = hasPermission('delete_sprint');
+  const canCreate = useSalaAgilPermission("create_sprint");
+  const canEdit   = useSalaAgilPermission("edit_sprint");
+  const canDelete = useSalaAgilPermission("delete_sprint");
 
   const [editId, setEditId]       = useState<string | null>(null);
   const [name, setName]           = useState("");

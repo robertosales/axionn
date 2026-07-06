@@ -114,8 +114,8 @@ interface SprintContextType {
   removeActivity: (id: string) => Promise<void>;
   closeActivity: (id: string) => Promise<void>;
   reopenActivity: (id: string) => Promise<void>;
-  addImpediment: (target: ImpedimentTarget | string, data: AddImpedimentData) => Promise<void>;
-  addSprintImpediment: (sprintId: string, data: AddImpedimentData) => Promise<void>;
+  addImpediment: (target: ImpedimentTarget | string, data: AddImpedimentData) => Promise<boolean>;
+  addSprintImpediment: (sprintId: string, data: AddImpedimentData) => Promise<boolean>;
   resolveImpediment: (huIdOrNull: string | null, impedimentId: string, resolution?: string) => Promise<void>;
   addSprint: (sprint: Omit<Sprint, "id" | "createdAt" | "isActive">) => Promise<void>;
   updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id" | "createdAt">>) => Promise<void>;
@@ -826,10 +826,10 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   // ── IMPEDIMENTS ───────────────────────────────────────────────────────────────
   const addImpediment = useCallback(async (target: ImpedimentTarget | string, data: AddImpedimentData) => {
-    if (!teamId) return;
+    if (!teamId) return false;
     const huId     = typeof target === "string" ? target : (target.huId    ?? null);
     const sprintId = typeof target === "string" ? null   : (target.sprintId ?? null);
-    if (!huId && !sprintId) { toast.error("Informe uma HU ou Sprint para o impedimento"); return; }
+    if (!huId && !sprintId) { toast.error("Informe uma HU ou Sprint para o impedimento"); return false; }
     const { data: row, error } = await supabase
       .from("impediments")
       .insert({
@@ -840,7 +840,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       })
       .select()
       .single();
-    if (error) { toast.error("Erro ao adicionar impedimento: " + error.message); return; }
+    if (error) { toast.error("Erro ao adicionar impedimento: " + error.message); return false; }
     if (row) {
       const newImp = mapImpediment(row);
       setImpediments((prev) => prev.some((imp) => imp.id === row.id) ? prev : [...prev, newImp]);
@@ -852,6 +852,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         ));
       }
     }
+    return true;
   }, [teamId]);
 
   const addSprintImpediment = useCallback(

@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { BookOpen, Save } from "lucide-react";
+import { BookOpen, Save, ShieldAlert } from "lucide-react";
 import { useSprint } from "@/contexts/SprintContext";
 import { UserStory } from "@/types/sprint";
 import { toast } from "sonner";
@@ -26,6 +26,8 @@ import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useTeamAssignees } from "@/hooks/useTeamAssignees";
+import { useSalaAgilPermission } from "@/hooks/useSalaAgilPermissions";
+import { ImpedimentDialog } from "@/components/ImpedimentManager";
 
 interface Props {
   huId: string | null;
@@ -52,6 +54,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     developers,
   } = useSprint() as any;
   const { currentTeamId } = useAuth();
+  const canReportImpediment = useSalaAgilPermission("report_impediment");
 
   const [title, setTitle]             = useState("");
   const [description, setDescription] = useState("");
@@ -68,6 +71,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   const [customFieldValues, setCFV]   = useState<Record<string, string | number>>({});
   const [errors, setErrors]           = useState<Record<string, string>>({});
   const [submitting, setSubmitting]   = useState(false);
+  const [impedimentOpen, setImpedimentOpen] = useState(false);
 
   const assigneeOptions = useTeamAssignees(currentTeamId, developers ?? [], assigneeId || null);
 
@@ -506,26 +510,47 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
           </div>
 
           {/* FOOTER */}
-          <DialogFooter className="px-5 py-3 border-t bg-muted/10 shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" className="gap-2" disabled={submitting}>
-              {submitting ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
-              ) : (
-                <Save className="h-4 w-4" />
+          <DialogFooter className="px-5 py-3 border-t bg-muted/10 shrink-0 sm:justify-between">
+            <div>
+              {canReportImpediment && huId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 border-amber-500/40 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/30"
+                  onClick={() => setImpedimentOpen(true)}
+                  disabled={submitting}
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  Registrar impedimento
+                </Button>
               )}
-              Salvar HU
-            </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={submitting}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" className="gap-2" disabled={submitting}>
+                {submitting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Salvar HU
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>
+      <ImpedimentDialog
+        huId={huId}
+        open={impedimentOpen}
+        onClose={() => setImpedimentOpen(false)}
+      />
     </Dialog>
   );
 });

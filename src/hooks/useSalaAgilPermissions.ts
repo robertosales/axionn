@@ -7,6 +7,7 @@ const ORGANIZATION_SALA_AGIL_WRITE_PERMISSIONS = new Set([
   "create_sprint",
   "edit_sprint",
   "delete_sprint",
+  "report_impediment",
 ]);
 
 export function useSalaAgilPermission(permission: string) {

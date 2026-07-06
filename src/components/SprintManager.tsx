@@ -30,6 +30,7 @@ export function SprintManager() {
   const canCreate = useSalaAgilPermission("create_sprint");
   const canEdit   = useSalaAgilPermission("edit_sprint");
   const canDelete = useSalaAgilPermission("delete_sprint");
+  const canReportImpediment = useSalaAgilPermission("report_impediment");
 
   const [editId, setEditId]       = useState<string | null>(null);
   const [name, setName]           = useState("");
@@ -105,9 +106,20 @@ export function SprintManager() {
     const reason = impedimentReason.trim();
     if (!reason) { toast.error("Informe o motivo do impedimento."); return; }
     try {
+      let saved = false;
       if (typeof addImpediment === "function") {
-        await addImpediment({ sprintId: impedimentSprintId }, { reason, startedAt: impedimentStartedAt || undefined });
+        saved = await addImpediment(
+          { sprintId: impedimentSprintId },
+          {
+            reason,
+            type: "outro",
+            criticality: "media",
+            hasTicket: false,
+            startedAt: impedimentStartedAt || undefined,
+          },
+        );
       }
+      if (!saved) return;
       toast.success("Impedimento registrado na sprint.");
       setImpedimentSprintId(null); setImpedimentReason(""); setImpedimentStartedAt(todayISO());
     } catch (err: any) {
@@ -274,7 +286,7 @@ export function SprintManager() {
                     </ContextMenuItem>
                   </>
                 )}
-                {sprint.isActive && (
+                {sprint.isActive && canReportImpediment && (
                   <>
                     <ContextMenuSeparator />
                     <ContextMenuItem onClick={(e) => {

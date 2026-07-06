@@ -125,22 +125,6 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
-function generateTempPassword(): string {
-  const upper  = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lower  = "abcdefghjkmnpqrstuvwxyz";
-  const digits = "23456789";
-  const syms   = "@#!$";
-  const pool   = upper + lower + digits + syms;
-  const pwd = [
-    upper[Math.floor(Math.random() * upper.length)],
-    lower[Math.floor(Math.random() * lower.length)],
-    digits[Math.floor(Math.random() * digits.length)],
-    syms[Math.floor(Math.random() * syms.length)],
-  ];
-  for (let i = 4; i < 12; i++) pwd.push(pool[Math.floor(Math.random() * pool.length)]);
-  return pwd.sort(() => Math.random() - 0.5).join("");
-}
-
 // ─── Componentes base ─────────────────────────────────────────────────────────
 
 function SectionDivider({ children }: { children: React.ReactNode }) {
@@ -343,16 +327,40 @@ function EditMemberDialog({
     else { toast.success(`Link de redefinição enviado para ${member.email}.`); setResetMode("idle"); }
   };
 
+  // ✔ Corrigido: chama action "reset_password" com mode "temp_password" na Edge Function
+  // e exibe a senha retornada no campo temp_password da resposta.
+  // A versão anterior usava action "set_temp_password" (não existe na Edge Function atual)
+  // e gerava a senha localmente — o que nunca aplicava a senha no Supabase Auth.
   const handleGenerateTemp = useCallback(async () => {
     if (!member?.userId) return;
     setSendingReset(true);
-    const pwd = generateTempPassword();
-    const { error: fnError } = await supabase.functions.invoke("admin-user-management", {
-      body: { action: "set_temp_password", userId: member.userId, password: pwd },
-    });
-    if (fnError) { toast.warning("Senha gerada localmente. Copie e envie ao usuário manualmente."); }
-    else { await supabase.from("profiles").update({ must_change_password: true }).eq("user_id", member.userId); }
-    setTempPwd(pwd); setShowTempPwd(true); setSendingReset(false);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke<{
+        success: boolean;
+        temp_password?: string;
+        message?: string;
+      }>("admin-user-management", {
+        body: { action: "reset_password", user_id: member.userId, mode: "temp_password" },
+      });
+
+      if (fnError) throw fnError;
+      if (!data?.success) throw new Error(data?.message ?? "Falha ao gerar senha temporária.");
+
+      const pwd = data.temp_password;
+      if (!pwd) {
+        // EXPOSE_TEMP_PASSWORD=false no servidor: informa o admin sem exibir a senha
+        toast.success("Senha temporária definida. O usuário deverá trocar no próximo login.");
+        setResetMode("idle");
+        return;
+      }
+
+      setTempPwd(pwd);
+      setShowTempPwd(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar senha temporária.");
+    } finally {
+      setSendingReset(false);
+    }
   }, [member?.userId]);
 
   const handleCopyTempPwd = () => {
@@ -376,11 +384,9 @@ function EditMemberDialog({
           {/* HEADER */}
           <div className="px-6 pt-6 pb-4">
             <div className="flex items-start gap-4">
-              {/* Avatar — shrink-0 garante que nunca será comprimido */}
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary ring-2 ring-primary/20">
                 {initials}
               </div>
-              {/* min-w-0 + truncate evitam que nome/email longo empurre o avatar pra fora */}
               <div className="min-w-0 flex-1 pt-0.5">
                 <h2 className="truncate text-base font-semibold leading-tight text-foreground">
                   {member?.displayName}
@@ -578,7 +584,7 @@ function EditMemberDialog({
                         {!tempPwd ? (
                           <>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
-                              Uma senha forte será gerada e o membro será obrigado a trocá-la no próximo login.
+                              Uma senha forte será gerada pelo servidor e o membro será obrigado a trocá-la no próximo login.
                             </p>
                             <Button
                               className="h-10 w-full gap-2"
@@ -669,24 +675,7 @@ function EditMemberDialog({
 
           <Separator />
 
-          {/*
-            ╔═══════════════════════════════════════════════════════╗
-            FOOTER — Layout bulletproof:
-
-            ✦ flex-wrap + gap-y-2: quando não há espaço, a zona esquerda
-              (destrutivos) quebra para uma segunda linha acima da direita,
-              sem overflow nem scroll horizontal.
-            ✦ Zona esquerda: min-w-0 + flex-wrap para que os próprios
-              botões também possam quebrar entre si se necessário.
-            ✦ Zona direita: shrink-0 garante que Cancelar + Salvar nunca
-              sejam espremidos.
-            ✦ Cada botão tem shrink-0 explícito.
-            ╔═══════════════════════════════════════════════════════╗
-          */}
           <DialogFooter className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-2 px-6 py-4">
-
-            {/* Zona esquerda — destrutivo/crítico */}
-            {/* min-w-0 + flex-wrap: os botões desta zona podem quebrar entre si */}
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               {member && !isOwner && !isSelf && member.isActive && (
                 <Button
@@ -711,8 +700,6 @@ function EditMemberDialog({
                 </Button>
               )}
             </div>
-
-            {/* Zona direita — fluxo | shrink-0 para nunca ser espremida */}
             <div className="flex shrink-0 items-center gap-3">
               <Button
                 variant="ghost"
@@ -799,11 +786,6 @@ export default function OrganizationMembersPage() {
 
   return (
     <div className="min-h-screen bg-muted/20">
-      {/*
-        HEADER DA PÁGINA
-        ✦ min-w-0 no bloco do título: truncate funciona corretamente
-        ✦ shrink-0 no bloco de botões: nunca será espremido/cortado
-      */}
       <header className="border-b bg-background">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
@@ -818,7 +800,6 @@ export default function OrganizationMembersPage() {
               <p className="truncate text-sm text-muted-foreground">{organization.name}</p>
             </div>
           </div>
-          {/* shrink-0: os botões de ação nunca encolhem nem são cortados */}
           <div className="flex shrink-0 items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void refresh()}>
               <RefreshCw className="mr-2 h-4 w-4" /> Atualizar

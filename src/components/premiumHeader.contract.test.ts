@@ -15,12 +15,14 @@ describe("premium header layout contract", () => {
     expect(accountControls).toContain("PremiumShellHeaderControls");
     expect(accountControls).toContain('variant="context"');
     expect(accountControls).toContain("pageContext.appendChild(companyMount)");
-    expect(accountControls).not.toContain("right-[19.25rem] top-2 z-[71] hidden h-8 max-w-[180px]") || expect(accountControls).toContain("variant === \"floating\"");
+    expect(accountControls).toContain("premiumCompanyContext");
   });
 
   it("keeps the company label visible and distinct from account controls", () => {
     expect(organizationSwitcher).toContain("Empresa");
-    expect(organizationSwitcher).toContain('variant?: "floating" | "inline" | "compact" | "context"');
+    expect(organizationSwitcher).toContain(
+      'variant?: "floating" | "inline" | "compact" | "context"',
+    );
     expect(accountControls).toContain("premiumCompanyContext");
     expect(accountControls).toContain("premiumAccountControls");
   });

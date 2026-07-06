@@ -95,7 +95,7 @@ function PremiumShellHeaderControls({ pathname }: { pathname: string }) {
     const companyMount = document.createElement("div");
     companyMount.dataset.premiumCompanyContext = "true";
     companyMount.className =
-      "flex min-w-0 max-w-[220px] shrink items-center overflow-hidden";
+      "flex min-w-[120px] max-w-[220px] shrink-0 items-center overflow-hidden sm:min-w-[150px]";
 
     const accountMount = document.createElement("div");
     accountMount.dataset.premiumAccountControls = "true";

@@ -15,11 +15,11 @@ import {
   AlertTriangle, FileText, Upload, Repeat, Activity, ShieldCheck,
   ChevronRight, ChevronLeft, Building2, ChevronsUpDown, Check,
   Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight, Target,
-  Menu, Search, Plus, Shield,
+  Menu, Search, Shield,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 
 const SB = {
   bg:       "#0F172A",
@@ -366,7 +366,6 @@ function DarkModeToggle() {
 function Topbar({ module, activeKey, onOpenMobile }: { module: ActiveModule; activeKey?: string; onOpenMobile: () => void }) {
   const { activeSprint } = useSprint();
   const location = useLocation();
-  const navigate = useNavigate();
   const accent = ACCENT[module];
   const items = module === "sala_agil" ? NAV_SALA_AGIL : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
 
@@ -381,9 +380,6 @@ function Topbar({ module, activeKey, onOpenMobile }: { module: ActiveModule; act
 
   const pageLabel = activeItem?.label ?? "Dashboard";
   const Icon = activeItem?.icon;
-
-  // Botão "Nova HU" visível somente na seção Backlog da Sala Ágil
-  const showNovaHU = module === "sala_agil" && activeKey === "backlog";
 
   return (
     <header className="sticky top-0 z-20 h-14 shrink-0 flex items-center justify-between gap-3 px-3 sm:px-4 border-b border-border overflow-hidden bg-card/80 backdrop-blur-md">
@@ -407,15 +403,6 @@ function Topbar({ module, activeKey, onOpenMobile }: { module: ActiveModule; act
         <span className="font-mono text-[10px]">⌘K</span>
       </button>
       <div className="flex items-center gap-1 shrink-0">
-        {showNovaHU && (
-          <button
-            onClick={() => navigate("/sala-agil/backlog")}
-            className="hidden h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-500 focus-visible:ring-2 focus-visible:ring-ring sm:flex"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Nova HU
-          </button>
-        )}
         {module === "sala_agil" && activeSprint && (
           <div className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border shrink-0"
             style={{ backgroundColor: accent.hexAlpha(0.12), color: accent.hex, borderColor: accent.hexAlpha(0.25) }}>

@@ -1,5 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+/**
+ * The wrapped legacy module remains responsible for these enforced controls:
+ * AI_USAGE_ENFORCEMENT_MODE, reserve_ai_usage, finalize_ai_usage and
+ * AI_MAX_PROMPT_CHARS. This entrypoint adds platform-admin authorization and
+ * response sanitization without bypassing the existing governance pipeline.
+ */
+
 type LegacyHandler = (
   request: Request,
   info?: Deno.ServeHandlerInfo,

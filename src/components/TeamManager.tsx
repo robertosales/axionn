@@ -52,13 +52,27 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
   };
 
   const loadTeams = async () => {
-    let query = supabase.from("teams").select("*");
+    let query = supabase
+      .from("teams")
+      .select("*")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+
     if (moduleFilter) {
       query = query.eq("module", moduleFilter);
     }
-    const { data } = await query;
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("[TeamManager] loadTeams:", error);
+      setAllTeams([]);
+      setTeamMembers({});
+      return;
+    }
+
     setAllTeams(data || []);
     if (data && data.length > 0) loadTeamMembers(data.map((t: any) => t.id));
+    else setTeamMembers({});
   };
 
   const loadTeamMembers = async (teamIds: string[]) => {
@@ -66,8 +80,45 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
       setTeamMembers({});
       return;
     }
-    const { data: tmData } = await supabase.from("team_members").select("*").in("team_id", teamIds);
-    if (!tmData || tmData.length === 0) {
+    const { data: tmData, error: tmError } = await supabase
+      .from("team_members")
+      .select("team_id, user_id, role")
+      .in("team_id", teamIds);
+
+    if (tmError) {
+      console.error("[TeamManager] loadTeamMembers:", tmError);
+    }
+
+    if (tmError || !tmData || tmData.length === 0) {
+      const { data: profileMembers, error: profileError } = await supabase
+        .from("profiles")
+        .select("team_id, user_id, display_name, email")
+        .in("team_id", teamIds)
+        .eq("is_active", true);
+
+      if (profileError || !profileMembers || profileMembers.length === 0) {
+        if (profileError) console.error("[TeamManager] loadProfileMembers:", profileError);
+        setTeamMembers({});
+        return;
+      }
+
+      const result: Record<string, TeamMemberInfo[]> = {};
+      for (const profile of profileMembers as any[]) {
+        if (!profile.team_id || !profile.user_id) continue;
+        if (!result[profile.team_id]) result[profile.team_id] = [];
+        result[profile.team_id].push({
+          user_id: profile.user_id,
+          role: "member",
+          display_name: profile.display_name || "Usuario",
+          email: profile.email || "",
+        });
+      }
+
+      setTeamMembers(result);
+      return;
+    }
+
+    if (tmData.length === 0) {
       setTeamMembers({});
       return;
     }

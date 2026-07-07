@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ interface TeamManagerProps {
 
 export function TeamManager({ moduleFilter }: TeamManagerProps) {
   const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin, hasPermission } = useAuth();
+  const { currentOrganizationId } = useOrganization();
   const canManage = hasPermission("manage_teams");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -52,15 +54,26 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
   };
 
   const loadTeams = async () => {
+    const accessibleTeams = teams
+      .filter((team) => !moduleFilter || team.module === moduleFilter)
+      .slice()
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+      );
+
+    if (accessibleTeams.length > 0) {
+      setAllTeams(accessibleTeams);
+      loadTeamMembers(accessibleTeams.map((team) => team.id));
+      return;
+    }
+
     let query = supabase
       .from("teams")
       .select("*")
       .eq("is_active", true)
       .order("name", { ascending: true });
 
-    if (moduleFilter) {
-      query = query.eq("module", moduleFilter);
-    }
+    if (moduleFilter) query = query.eq("module", moduleFilter);
 
     const { data, error } = await query;
     if (error) {
@@ -80,6 +93,35 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
       setTeamMembers({});
       return;
     }
+
+    if (currentOrganizationId) {
+      const { data: rpcMembers, error: rpcError } = await (supabase as any).rpc(
+        "get_team_members_for_teams_v2",
+        {
+          p_org_id: currentOrganizationId,
+          p_team_ids: teamIds,
+        },
+      );
+
+      if (!rpcError && rpcMembers) {
+        const result: Record<string, TeamMemberInfo[]> = {};
+        for (const member of rpcMembers as any[]) {
+          if (!member.team_id || !member.user_id) continue;
+          if (!result[member.team_id]) result[member.team_id] = [];
+          result[member.team_id].push({
+            user_id: member.user_id,
+            role: member.role || "member",
+            display_name: member.display_name || member.email || "Usuario",
+            email: member.email || "",
+          });
+        }
+        setTeamMembers(result);
+        return;
+      }
+
+      console.error("[TeamManager] get_team_members_for_teams_v2:", rpcError);
+    }
+
     const { data: tmData, error: tmError } = await supabase
       .from("team_members")
       .select("team_id, user_id, role")
@@ -147,7 +189,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
 
   useEffect(() => {
     loadTeams();
-  }, [moduleFilter]);
+  }, [moduleFilter, teams, currentOrganizationId]);
 
   const handleCreate = async () => {
     if (!name.trim()) {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Edit3, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PlatformShell } from "@/features/platform/components/PlatformShell";
+import { useSearchParams } from "react-router-dom";
 import {
   deletePlatformOrganizationOverride,
   listPlatformOrganizationSubscriptions,
@@ -136,7 +137,12 @@ function toOverrideForm(
   };
 }
 
-export default function PlatformSubscriptionsPage() {
+export default function PlatformSubscriptionsPage({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [plans, setPlans] = useState<PlatformPlan[]>([]);
   const [subscriptions, setSubscriptions] = useState<
     PlatformOrganizationSubscription[]
@@ -171,6 +177,22 @@ export default function PlatformSubscriptionsPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    const organizationId = searchParams.get("organization");
+    if (loading || !organizationId || subscriptionForm) return;
+    const subscription = subscriptions.find((item) => item.orgId === organizationId);
+    if (!subscription) return;
+    setSubscriptionForm(toSubscriptionForm(subscription, activePlans));
+    setSearchParams({}, { replace: true });
+  }, [
+    activePlans,
+    loading,
+    searchParams,
+    setSearchParams,
+    subscriptionForm,
+    subscriptions,
+  ]);
 
   const saveSubscription = async () => {
     if (!subscriptionForm) return;
@@ -235,8 +257,7 @@ export default function PlatformSubscriptionsPage() {
     }
   };
 
-  return (
-    <PlatformShell>
+  const content = (
       <div className="space-y-5">
         <div>
           <h1 className="text-xl font-semibold">Assinaturas</h1>
@@ -622,6 +643,7 @@ export default function PlatformSubscriptionsPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </PlatformShell>
   );
+
+  return embedded ? content : <PlatformShell>{content}</PlatformShell>;
 }

@@ -68,6 +68,7 @@ const PlatformPlansPage = lazy(
 const PlatformSubscriptionsPage = lazy(
   () => import("./features/platform/pages/PlatformSubscriptionsPage"),
 );
+const BOClientes = lazy(() => import("./backoffice/pages/BOClientes"));
 const BODashboard = lazy(() => import("./backoffice/pages/BODashboard"));
 const BOEquipe = lazy(() => import("./backoffice/pages/BOEquipe"));
 const BOPlaceholderPage = lazy(
@@ -434,7 +435,8 @@ function AppRoutes() {
           <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
 
           <Route path="/backoffice" element={<BackofficeRoute><BODashboard /></BackofficeRoute>} />
-          <Route path="/backoffice/clientes" element={<BackofficeRoute requiredRoles={["admin", "comercial", "financeiro"]}><BOPlaceholderPage kind="clientes" /></BackofficeRoute>} />
+          <Route path="/backoffice/clientes" element={<BackofficeRoute requiredRoles={["admin", "comercial", "financeiro"]}><BOClientes /></BackofficeRoute>} />
+          <Route path="/backoffice/assinaturas" element={<BackofficeRoute requiredRoles={["admin", "financeiro", "comercial"]}><PlatformSubscriptionsPage embedded /></BackofficeRoute>} />
           <Route path="/backoffice/financeiro" element={<BackofficeRoute requiredRoles={["admin", "financeiro"]}><BOPlaceholderPage kind="financeiro" /></BackofficeRoute>} />
           <Route path="/backoffice/equipe" element={<BackofficeRoute requiredRoles={["admin"]}><BOEquipe /></BackofficeRoute>} />
           <Route path="/backoffice/suporte" element={<BackofficeRoute requiredRoles={["admin", "suporte", "comercial"]}><BOPlaceholderPage kind="suporte" /></BackofficeRoute>} />

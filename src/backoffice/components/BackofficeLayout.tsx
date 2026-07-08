@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   BarChart3,
   Building2,
+  CreditCard,
   Headphones,
   LayoutDashboard,
   Receipt,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { to: "/backoffice", label: "Dashboard", icon: LayoutDashboard },
   { to: "/backoffice/clientes", label: "Clientes", icon: Building2 },
+  { to: "/backoffice/assinaturas", label: "Assinaturas", icon: CreditCard },
   { to: "/backoffice/financeiro", label: "Financeiro", icon: Receipt },
   { to: "/backoffice/equipe", label: "Equipe", icon: Users },
   { to: "/backoffice/suporte", label: "Suporte", icon: Headphones },

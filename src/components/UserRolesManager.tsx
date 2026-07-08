@@ -252,8 +252,12 @@ export function UserRolesManager() {
             "is_organization_legacy_permission_fallback_enabled",
           );
 
-        if (!fallbackError && fallbackEnabled !== true) {
-          setOrganizationAuthorityLocked(true);
+        if (currentOrganizationId && isOrganizationAdmin) {
+          // O fallback controla a autoridade de escrita, não o escopo de
+          // leitura. Admins da organização sempre listam pelo RPC tenant-scoped.
+          setOrganizationAuthorityLocked(
+            !fallbackError && fallbackEnabled !== true,
+          );
           setIsCurrentUserAdmin(isOrganizationAdmin);
 
           if (!currentOrganizationId || !isOrganizationAdmin) {

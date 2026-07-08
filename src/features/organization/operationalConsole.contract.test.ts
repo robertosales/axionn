@@ -43,6 +43,9 @@ describe("operational console routing contract", () => {
 
 describe("backoffice routing contract", () => {
   const app = source("src/App.tsx");
+  const organizationShell = source(
+    "src/features/organization/components/OrganizationAdminShell.tsx",
+  );
   const migration = source(
     "supabase/migrations/20260708143000_backoffice_foundation.sql",
   );
@@ -64,6 +67,10 @@ describe("backoffice routing contract", () => {
     expect(app).toContain("function AuthenticatedRoute");
     expect(app).toContain("function BackofficeRoute");
     expect(app).toContain("<BackofficeGuard requiredRoles={requiredRoles}>");
+  });
+
+  it("opens the backoffice from the platform administration menu", () => {
+    expect(organizationShell).toContain('<Link to="/backoffice">');
   });
 
   it("uses owner staff membership as the backoffice authority", () => {

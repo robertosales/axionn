@@ -30,6 +30,9 @@ describe("operational console routing contract", () => {
     expect(app).toContain("function PlatformAdminGuard");
     expect(app).toContain("isOrganizationAdmin");
     expect(app).toContain("isPlatformAdmin");
+    expect(app).toContain(
+      "const { loading: organizationLoading, isPlatformAdmin } = useOrganization();",
+    );
   });
 
   it("keeps the legacy fallback under runtime flags", () => {

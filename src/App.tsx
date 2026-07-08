@@ -287,8 +287,9 @@ function OrganizationAdminGuard({ children }: { children: React.ReactNode }) {
 }
 
 function PlatformAdminGuard({ children }: { children: React.ReactNode }) {
-  const { loading, isPlatformAdmin } = useAuth();
-  if (loading) return <PageLoader />;
+  const { loading: authLoading } = useAuth();
+  const { loading: organizationLoading, isPlatformAdmin } = useOrganization();
+  if (authLoading || organizationLoading) return <PageLoader />;
   if (!isPlatformAdmin) return <Navigate to="/organization/admin" replace />;
   return <>{children}</>;
 }

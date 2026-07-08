@@ -46,7 +46,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
 
           <Badge variant="outline" className="hidden gap-1.5 sm:flex">
             <ShieldCheck className="h-3.5 w-3.5" />
-            platform_admin
+            Admin da plataforma
           </Badge>
           <UserAccountMenu variant="compact" />
         </div>

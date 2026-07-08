@@ -14,7 +14,7 @@ Expor para owners e administradores a assinatura corrente, os limites efetivos e
 - data de renovação das cotas quando disponível;
 - lista de recursos habilitados e respectiva origem;
 - atualização manual dos dados;
-- acesso restrito a owner, admin da organização e platform admin.
+- acesso restrito a owner, admin da organização e Admin da plataforma.
 
 ## Fontes de dados
 
@@ -50,5 +50,6 @@ console global de plataforma:
 - `/platform/subscriptions`: plano aplicado por organização, status da
   assinatura e overrides específicos.
 
-As mutações usam RPCs `security definer` exclusivas de `platform_admin` e
-registram auditoria em `platform_operational_audit_log`.
+As mutações usam RPCs `security definer` exclusivas do Admin da plataforma
+(`platform_admin` no banco) e registram auditoria em
+`platform_operational_audit_log`.

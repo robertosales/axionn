@@ -97,7 +97,7 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
           )}
           {isPlatformAdmin && (
             <Badge variant="outline" className="border-primary/50 text-[10px] text-primary">
-              platform_admin
+              Admin da plataforma
             </Badge>
           )}
         </div>

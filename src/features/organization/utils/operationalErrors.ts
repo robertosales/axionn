@@ -64,5 +64,25 @@ export function resolveOrganizationOperationalError(
     return "Esta operação é exclusiva da administração da plataforma.";
   }
 
+  if (message.includes("organization_member_inactive")) {
+    return "Usuário não é membro ativo da organização.";
+  }
+
+  if (message.includes("team_member_user_required")) {
+    return "Selecione um usuário para adicionar ao time.";
+  }
+
+  if (message.includes("team_member_role_required")) {
+    return "Informe a função do membro no time.";
+  }
+
+  if (message.includes("team_name_required")) {
+    return "Informe o nome do time.";
+  }
+
+  if (message.includes("team_module_invalid")) {
+    return "Tipo de time inválido.";
+  }
+
   return fallback;
 }

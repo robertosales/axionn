@@ -288,18 +288,32 @@ function ModuleSwitcher({
   module,
   collapsed,
   allowedModules,
+  administrationPath,
 }: {
   module: ActiveModule;
   collapsed: boolean;
   allowedModules: ActiveModule[];
+  administrationPath: string | null;
 }) {
   const navigate = useNavigate();
-  const modules = [
+  const operationalModules = [
     { key: "sala_agil" as ActiveModule, path: "/sala-agil", label: "Sala Ágil", Icon: Zap },
     { key: "sustentacao" as ActiveModule, path: "/sustentacao", label: "Sustentação", Icon: Wrench },
     { key: "rdm" as ActiveModule, path: "/rdm", label: "RDM", Icon: ClipboardList },
   ].filter(({ key }) => allowedModules.includes(key));
-  const activeModule = modules.find(({ key }) => key === module) ?? modules[0];
+  const modules = administrationPath
+    ? [
+        ...operationalModules,
+        {
+          key: "administracao",
+          path: administrationPath,
+          label: "Administrador",
+          Icon: Shield,
+        },
+      ]
+    : operationalModules;
+  const activeModule =
+    operationalModules.find(({ key }) => key === module) ?? operationalModules[0];
 
   if (!activeModule) return null;
 
@@ -517,7 +531,7 @@ function SprintBanner() {
 
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
   const { profile, isAdmin, signOut, isSigningOut } = useAuth();
-  const { isPlatformAdmin, hasModuleAccess } = useOrganization();
+  const { isPlatformAdmin, isOrganizationAdmin, hasModuleAccess } = useOrganization();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -525,7 +539,15 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
   const allowedModules = (["sala_agil", "sustentacao", "rdm"] as ActiveModule[]).filter(
     (moduleKey) => isAdmin || isPlatformAdmin || hasModuleAccess(moduleKey),
   );
-  const canSwitch = allowedModules.length > 1 || isAdmin || isPlatformAdmin;
+  const administrationPath = isOrganizationAdmin
+    ? "/organization/admin"
+    : isAdmin
+      ? "/dashboard-admin"
+      : null;
+  const canSwitch =
+    allowedModules.length > 1 ||
+    Boolean(administrationPath) ||
+    isPlatformAdmin;
   const accent = ACCENT[module];
   const ModuleIcon = accent.icon;
   const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
@@ -599,6 +621,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                 module={module}
                 collapsed={collapsed}
                 allowedModules={allowedModules}
+                administrationPath={administrationPath}
               />
             </div>
           )}

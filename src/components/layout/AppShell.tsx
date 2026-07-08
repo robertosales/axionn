@@ -288,61 +288,103 @@ function ModuleSwitcher({
   module,
   collapsed,
   allowedModules,
-  showAdminShortcuts,
 }: {
   module: ActiveModule;
   collapsed: boolean;
   allowedModules: ActiveModule[];
-  showAdminShortcuts: boolean;
 }) {
   const navigate = useNavigate();
-  const operationalModules = [
-    { key: "sala_agil"   as ActiveModule, path: "/sala-agil",  label: "Ágil",  Icon: Zap },
-    { key: "sustentacao" as ActiveModule, path: "/sustentacao", label: "Sust.", Icon: Wrench },
-    { key: "rdm"         as ActiveModule, path: "/rdm",         label: "RDM",   Icon: ClipboardList },
+  const modules = [
+    { key: "sala_agil" as ActiveModule, path: "/sala-agil", label: "Sala Ágil", Icon: Zap },
+    { key: "sustentacao" as ActiveModule, path: "/sustentacao", label: "Sustentação", Icon: Wrench },
+    { key: "rdm" as ActiveModule, path: "/rdm", label: "RDM", Icon: ClipboardList },
   ].filter(({ key }) => allowedModules.includes(key));
-  const modules = showAdminShortcuts
-    ? [
-        ...operationalModules,
-        { key: "okr" as const, path: "/okr", label: "OKR", Icon: Target },
-        { key: "admin" as const, path: "/dashboard-admin", label: "Admin", Icon: Shield },
-      ]
-    : operationalModules;
+  const activeModule = modules.find(({ key }) => key === module) ?? modules[0];
+
+  if (!activeModule) return null;
 
   if (collapsed) return (
-    <div className="flex flex-col items-center gap-1 w-full px-2 py-1">
-      {modules.map(({ key, path, label, Icon }) => (
-        <Tooltip key={key}>
-          <TooltipTrigger asChild>
-            <button onClick={() => navigate(path)} className="flex w-full items-center justify-center rounded-md p-2 transition-all"
-              style={{ color: module === key ? SB.teal : SB.muted, background: module === key ? SB.active : "transparent" }}
-              onMouseEnter={e => { if (module !== key) e.currentTarget.style.background = SB.acc; }}
-              onMouseLeave={e => { if (module !== key) e.currentTarget.style.background = "transparent"; }}>
-              <Icon className="h-3.5 w-3.5" />
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="mx-auto my-1 flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
+              style={{ color: SB.teal, background: SB.active }}
+              aria-label={`Trocar módulo. Atual: ${activeModule.label}`}
+            >
+              <activeModule.Icon className="h-4 w-4" />
             </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">{label}</TooltipContent>
-        </Tooltip>
-      ))}
-    </div>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          {activeModule.label}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent side="right" align="start" className="w-52">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Trocar módulo</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {modules.map(({ key, path, label, Icon }) => (
+          <DropdownMenuItem
+            key={key}
+            onClick={() => navigate(path)}
+            className="cursor-pointer justify-between gap-2 text-xs"
+          >
+            <span className="flex items-center gap-2">
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </span>
+            {key === module && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   return (
-    <div className="flex items-stretch" style={{ borderBottom: `1px solid ${SB.border}` }}>
-      {modules.map(({ key, path, label, Icon }) => {
-        const isActive = module === key;
-        return (
-          <button key={key} onClick={() => navigate(path)} className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-all relative"
-            style={{ color: isActive ? SB.teal : SB.muted, background: isActive ? SB.active : "transparent" }}
-            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = SB.acc; }}
-            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
-            <Icon className="h-3 w-3 shrink-0" />
-            {label}
-            {isActive && <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full" style={{ background: SB.teal }} />}
-          </button>
-        );
-      })}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex w-full items-center gap-2.5 px-3 py-2 transition-colors"
+          style={{ color: SB.fg, borderBottom: `1px solid ${SB.border}` }}
+          onMouseEnter={(event) => (event.currentTarget.style.background = SB.acc)}
+          onMouseLeave={(event) => (event.currentTarget.style.background = "transparent")}
+        >
+          <div
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: SB.active, color: SB.teal }}
+          >
+            <activeModule.Icon className="h-3.5 w-3.5" />
+          </div>
+          <div className="min-w-0 flex-1 text-left">
+            <p className="mb-0.5 text-[10px] uppercase leading-none tracking-wider" style={{ color: SB.muted }}>
+              Módulo ativo
+            </p>
+            <p className="truncate text-[12px] font-semibold leading-none" style={{ color: SB.fg }}>
+              {activeModule.label}
+            </p>
+          </div>
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0" style={{ color: SB.muted }} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="start" className="w-52">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Trocar módulo</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {modules.map(({ key, path, label, Icon }) => (
+          <DropdownMenuItem
+            key={key}
+            onClick={() => navigate(path)}
+            className="cursor-pointer justify-between gap-2 text-xs"
+          >
+            <span className="flex items-center gap-2">
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </span>
+            {key === module && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -557,7 +599,6 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                 module={module}
                 collapsed={collapsed}
                 allowedModules={allowedModules}
-                showAdminShortcuts={isAdmin || isPlatformAdmin}
               />
             </div>
           )}

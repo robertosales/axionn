@@ -7823,6 +7823,16 @@ export type Database = {
         Args: { p_cutoff?: string; p_team_id?: string; p_team_ids: string[] }
         Returns: Json
       }
+      get_team_members_for_teams_v2: {
+        Args: { p_org_id: string; p_team_ids: string[] }
+        Returns: {
+          display_name: string
+          email: string
+          role: string
+          team_id: string
+          user_id: string
+        }[]
+      }
       get_tenancy_readiness_report: {
         Args: never
         Returns: {

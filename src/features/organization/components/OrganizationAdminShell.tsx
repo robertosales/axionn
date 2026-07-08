@@ -115,7 +115,7 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
             size="sm"
             className="w-full justify-start text-[hsl(var(--sidebar-foreground))]/70 hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"
           >
-            <Link to="/platform/ai-providers">Administração da plataforma</Link>
+            <Link to="/platform/plans">Administração da plataforma</Link>
           </Button>
         </div>
       )}

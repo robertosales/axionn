@@ -59,6 +59,12 @@ const OrganizationAdminShell = lazy(() =>
 const PlatformAIProvidersPage = lazy(
   () => import("./features/platform/pages/PlatformAIProvidersPage"),
 );
+const PlatformPlansPage = lazy(
+  () => import("./features/platform/pages/PlatformPlansPage"),
+);
+const PlatformSubscriptionsPage = lazy(
+  () => import("./features/platform/pages/PlatformSubscriptionsPage"),
+);
 const AdminContratosPage = lazy(() =>
   import("./features/admin/pages/AdminContratosPage").then((module) => ({
     default: module.AdminContratosPage,
@@ -391,7 +397,15 @@ function AppRoutes() {
 
           <Route
             path="/platform"
-            element={<ProtectedRoute><PlatformAdminGuard><Navigate to="/platform/ai-providers" replace /></PlatformAdminGuard></ProtectedRoute>}
+            element={<ProtectedRoute><PlatformAdminGuard><Navigate to="/platform/plans" replace /></PlatformAdminGuard></ProtectedRoute>}
+          />
+          <Route
+            path="/platform/plans"
+            element={<ProtectedRoute><PlatformAdminGuard><PlatformPlansPage /></PlatformAdminGuard></ProtectedRoute>}
+          />
+          <Route
+            path="/platform/subscriptions"
+            element={<ProtectedRoute><PlatformAdminGuard><PlatformSubscriptionsPage /></PlatformAdminGuard></ProtectedRoute>}
           />
           <Route
             path="/platform/ai-providers"

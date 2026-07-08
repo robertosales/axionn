@@ -39,3 +39,16 @@ Nenhum contador é alterado por esta tela.
 - Lote 4: enforcement transacional de `users.max`, `projects.max` e `contracts.max`;
 - Lote 5: configurações editáveis da organização e auditoria;
 - Lote 6: migração final e retirada controlada das permissões legadas.
+
+## Complemento: administração global de planos
+
+O console organizacional continua sendo somente leitura para plano e uso. A
+gestão do catálogo de planos, recursos, assinaturas e overrides pertence ao
+console global de plataforma:
+
+- `/platform/plans`: cadastro, edição, arquivamento e recursos do plano;
+- `/platform/subscriptions`: plano aplicado por organização, status da
+  assinatura e overrides específicos.
+
+As mutações usam RPCs `security definer` exclusivas de `platform_admin` e
+registram auditoria em `platform_operational_audit_log`.

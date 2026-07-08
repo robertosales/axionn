@@ -18,6 +18,8 @@ describe("operational console routing contract", () => {
     "/organization/members",
     "/organization/usage",
     "/organization/settings",
+    "/platform/plans",
+    "/platform/subscriptions",
     "/platform/ai-providers",
   ])("keeps the protected route %s registered", (route) => {
     expect(app).toContain(`path=\"${route}\"`);
@@ -33,6 +35,37 @@ describe("operational console routing contract", () => {
   it("keeps the legacy fallback under runtime flags", () => {
     expect(app).toContain("is_organization_operational_console_enabled");
     expect(app).toContain("is_legacy_operational_admin_fallback_enabled");
+  });
+});
+
+describe("platform plan management contract", () => {
+  const app = source("src/App.tsx");
+  const migration = source(
+    "supabase/migrations/20260708133000_platform_plan_management.sql",
+  );
+  const planService = source("src/features/platform/services/plans.service.ts");
+
+  it("routes the platform home to plan management", () => {
+    expect(app).toContain('Navigate to="/platform/plans"');
+  });
+
+  it("exposes only platform-admin RPCs for plan and subscription mutations", () => {
+    expect(migration).toContain("perform public.assert_platform_admin_v2()");
+    expect(migration).toContain("create_platform_saas_plan_v1");
+    expect(migration).toContain("update_platform_saas_plan_v1");
+    expect(migration).toContain("set_platform_organization_subscription_v1");
+    expect(migration).toContain(
+      "upsert_platform_organization_entitlement_override_v1",
+    );
+    expect(migration).toContain("resource_type");
+    expect(migration).not.toContain("entity_type");
+  });
+
+  it("keeps the frontend on RPC access instead of direct table writes", () => {
+    expect(planService).toContain("list_platform_saas_plans_v1");
+    expect(planService).toContain("set_platform_organization_subscription_v1");
+    expect(planService).not.toContain('.from("saas_plans")');
+    expect(planService).not.toContain('.from("organization_subscriptions")');
   });
 });
 

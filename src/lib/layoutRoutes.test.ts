@@ -30,6 +30,8 @@ describe("hasManagedApplicationChrome", () => {
     "/dashboard-admin",
     "/organization/admin",
     "/organization/members",
+    "/platform/plans",
+    "/platform/subscriptions",
     "/platform/ai-providers",
     "/sustentacao/dashboard",
   ])("suppresses floating controls on %s", (pathname) => {

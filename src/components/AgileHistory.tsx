@@ -339,6 +339,7 @@ export function AgileHistory() {
   const [planningSessions, setPlanningSessions] = useState<PlanningSessionHistory[]>([]);
   const [retroSessions, setRetroSessions] = useState<RetroSessionHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [sprintFilter, setSprintFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [profiles, setProfiles] = useState<Record<string, string>>({});
@@ -353,10 +354,11 @@ export function AgileHistory() {
   // ─── Loaders ──────────────────────────────────────────────────────────────
 
   const loadProfiles = useCallback(async () => {
-    const { data } = await (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("profiles")
       .select("user_id, display_name")
       .eq("is_active", true);
+    if (error) throw error;
     if (data) {
       const map: Record<string, string> = {};
       (data as Array<{ user_id: string; display_name: string }>).forEach((p) => {
@@ -368,12 +370,13 @@ export function AgileHistory() {
 
   const loadPlanningSessions = useCallback(async () => {
     if (!currentTeamId) return;
-    const { data } = await (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("planning_sessions")
       .select("*")
       .eq("team_id", currentTeamId)
       .eq("status", "finished") // ✅ só finished — canceladas não são exibidas
       .order("created_at", { ascending: false });
+    if (error) throw error;
     if (!data) return;
 
     const sessions: PlanningSessionHistory[] = [];
@@ -443,12 +446,13 @@ export function AgileHistory() {
 
   const loadRetroSessions = useCallback(async () => {
     if (!currentTeamId) return;
-    const { data } = await (supabase as any)
+    const { data, error } = await (supabase as any)
       .from("retro_sessions")
       .select("*")
       .eq("team_id", currentTeamId)
       .in("status", ["finished", "cancelled"])
       .order("created_at", { ascending: false });
+    if (error) throw error;
     if (!data) return;
 
     const sessions: RetroSessionHistory[] = [];
@@ -476,7 +480,15 @@ export function AgileHistory() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadProfiles(), loadPlanningSessions(), loadRetroSessions()]).finally(() => setLoading(false));
+    setLoadError(null);
+    Promise.all([loadProfiles(), loadPlanningSessions(), loadRetroSessions()])
+      .catch((error) => {
+        console.error("[AgileHistory] falha ao carregar histórico", error);
+        setLoadError(
+          "Não foi possível carregar o histórico. Verifique sua permissão para o time e tente novamente.",
+        );
+      })
+      .finally(() => setLoading(false));
   }, [loadProfiles, loadPlanningSessions, loadRetroSessions]);
 
   // ─── Filtros ──────────────────────────────────────────────────────────────
@@ -655,6 +667,12 @@ export function AgileHistory() {
         </h2>
         <p className="text-sm text-muted-foreground">Sessões passadas de Planning Poker e Retrospectiva</p>
       </div>
+
+      {loadError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {loadError}
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex items-center gap-3">

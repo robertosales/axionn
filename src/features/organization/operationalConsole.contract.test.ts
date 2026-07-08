@@ -41,6 +41,40 @@ describe("operational console routing contract", () => {
   });
 });
 
+describe("backoffice routing contract", () => {
+  const app = source("src/App.tsx");
+  const migration = source(
+    "supabase/migrations/20260708143000_backoffice_foundation.sql",
+  );
+  const guard = source("src/backoffice/guards/BackofficeGuard.tsx");
+
+  it.each([
+    "/backoffice",
+    "/backoffice/clientes",
+    "/backoffice/financeiro",
+    "/backoffice/equipe",
+    "/backoffice/suporte",
+    "/backoffice/analitico",
+    "/backoffice/configuracoes",
+  ])("keeps the backoffice route %s registered", (route) => {
+    expect(app).toContain(`path=\"${route}\"`);
+  });
+
+  it("keeps backoffice outside the organization operational guard", () => {
+    expect(app).toContain("function AuthenticatedRoute");
+    expect(app).toContain("function BackofficeRoute");
+    expect(app).toContain("<BackofficeGuard requiredRoles={requiredRoles}>");
+  });
+
+  it("uses owner staff membership as the backoffice authority", () => {
+    expect(migration).toContain("create table if not exists public.owner_staff_members");
+    expect(migration).toContain("get_my_backoffice_staff_profile");
+    expect(migration).toContain("assert_backoffice_staff");
+    expect(guard).toContain("useBackofficeAuth");
+    expect(guard).toContain("requiredRoles");
+  });
+});
+
 describe("platform plan management contract", () => {
   const app = source("src/App.tsx");
   const migration = source(

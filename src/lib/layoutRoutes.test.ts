@@ -28,6 +28,8 @@ describe("hasManagedApplicationChrome", () => {
   it.each([
     "/modulos",
     "/dashboard-admin",
+    "/backoffice",
+    "/backoffice/equipe",
     "/organization/admin",
     "/organization/members",
     "/platform/plans",

@@ -17,6 +17,8 @@ export function hasManagedApplicationChrome(pathname: string) {
   return (
     pathname === "/modulos" ||
     pathname === "/dashboard-admin" ||
+    pathname === "/backoffice" ||
+    pathname.startsWith("/backoffice/") ||
     pathname.startsWith("/organization/") ||
     pathname.startsWith("/platform/") ||
     isModuleShellRoute(pathname)

@@ -25,6 +25,9 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useAppResilience } from "@/hooks/useAppResilience";
 import { supabase } from "@/integrations/supabase/client";
+import { BackofficeGuard } from "@/backoffice/guards/BackofficeGuard";
+import { BackofficeLayout } from "@/backoffice/components/BackofficeLayout";
+import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
 
 import Auth from "./pages/Auth.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
@@ -64,6 +67,11 @@ const PlatformPlansPage = lazy(
 );
 const PlatformSubscriptionsPage = lazy(
   () => import("./features/platform/pages/PlatformSubscriptionsPage"),
+);
+const BODashboard = lazy(() => import("./backoffice/pages/BODashboard"));
+const BOEquipe = lazy(() => import("./backoffice/pages/BOEquipe"));
+const BOPlaceholderPage = lazy(
+  () => import("./backoffice/pages/BOPlaceholderPage"),
 );
 const AdminContratosPage = lazy(() =>
   import("./features/admin/pages/AdminContratosPage").then((module) => ({
@@ -294,6 +302,28 @@ function PlatformAdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
+  const { session, loading, profile, refreshProfile } = useAuth();
+  useAppResilience();
+
+  if (loading) return <PageLoader />;
+  if (!session) return <Navigate to="/auth" replace />;
+  if (profile?.must_change_password) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <ForcePasswordChange onDone={refreshProfile} />
+      </Suspense>
+    );
+  }
+
+  return (
+    <>
+      {children}
+      <SessionTimeoutAlert />
+    </>
+  );
+}
+
 function LegacyOperationalRoute({
   organizationPath,
   platformPath,
@@ -371,6 +401,22 @@ function OrganizationConsoleRoute({ children }: { children: React.ReactNode }) {
   );
 }
 
+function BackofficeRoute({
+  children,
+  requiredRoles,
+}: {
+  children: React.ReactNode;
+  requiredRoles?: BackofficeRole[];
+}) {
+  return (
+    <AuthenticatedRoute>
+      <BackofficeGuard requiredRoles={requiredRoles}>
+        <BackofficeLayout>{children}</BackofficeLayout>
+      </BackofficeGuard>
+    </AuthenticatedRoute>
+  );
+}
+
 function AppRoutes() {
   return (
     <SprintProvider>
@@ -386,6 +432,14 @@ function AppRoutes() {
           <Route path="/accept-invitation" element={<AcceptOrganizationInvitation />} />
           <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
           <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
+
+          <Route path="/backoffice" element={<BackofficeRoute><BODashboard /></BackofficeRoute>} />
+          <Route path="/backoffice/clientes" element={<BackofficeRoute requiredRoles={["admin", "comercial", "financeiro"]}><BOPlaceholderPage kind="clientes" /></BackofficeRoute>} />
+          <Route path="/backoffice/financeiro" element={<BackofficeRoute requiredRoles={["admin", "financeiro"]}><BOPlaceholderPage kind="financeiro" /></BackofficeRoute>} />
+          <Route path="/backoffice/equipe" element={<BackofficeRoute requiredRoles={["admin"]}><BOEquipe /></BackofficeRoute>} />
+          <Route path="/backoffice/suporte" element={<BackofficeRoute requiredRoles={["admin", "suporte", "comercial"]}><BOPlaceholderPage kind="suporte" /></BackofficeRoute>} />
+          <Route path="/backoffice/analitico" element={<BackofficeRoute requiredRoles={["admin", "financeiro", "comercial"]}><BOPlaceholderPage kind="analitico" /></BackofficeRoute>} />
+          <Route path="/backoffice/configuracoes" element={<BackofficeRoute requiredRoles={["admin"]}><BOPlaceholderPage kind="configuracoes" /></BackofficeRoute>} />
 
           <Route path="/organization/admin" element={<OrganizationConsoleRoute><OrganizationAdminOverviewPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/companies" element={<OrganizationConsoleRoute><OrganizationCompaniesPage /></OrganizationConsoleRoute>} />

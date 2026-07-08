@@ -531,7 +531,12 @@ function SprintBanner() {
 
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
   const { profile, isAdmin, signOut, isSigningOut } = useAuth();
-  const { isPlatformAdmin, isOrganizationAdmin, hasModuleAccess } = useOrganization();
+  const {
+    isPlatformAdmin,
+    isOrganizationAdmin,
+    hasModuleAccess,
+    getModuleRole,
+  } = useOrganization();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -549,6 +554,18 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
     Boolean(administrationPath) ||
     isPlatformAdmin;
   const accent = ACCENT[module];
+  const moduleRole = getModuleRole(module);
+  const roleLabel =
+    moduleRole === "admin"
+      ? "Administrador"
+      : moduleRole === "member"
+        ? "Membro"
+        : moduleRole === "viewer"
+          ? "Leitura"
+          : null;
+  const profileContextLabel = roleLabel
+    ? `${accent.label} · ${roleLabel}`
+    : accent.label;
   const ModuleIcon = accent.icon;
   const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
   const sidebarWidth = collapsed ? "w-16" : "w-60";
@@ -651,7 +668,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                         {profile?.full_name ?? profile?.display_name ?? profile?.email?.split("@")[0] ?? "Usuário"}
                       </p>
                       <p className="text-[10px] truncate leading-none mt-0.5" style={{ color: SB.teal }}>
-                        {profile?.role ?? profile?.module_access ?? "Membro"}
+                        {profileContextLabel}
                       </p>
                     </div>
                   )}

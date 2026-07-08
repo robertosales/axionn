@@ -462,6 +462,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
   const moduleAccess = profile?.module_access ?? "sala_agil";
   const canSwitch = isAdmin || moduleAccess === "admin";
   const accent = ACCENT[module];
@@ -569,6 +570,14 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                   <p className="font-semibold text-sm">{profile?.full_name ?? profile?.display_name ?? "Usuário"}</p>
                   <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => navigate("/modulos")}
+                  className="cursor-pointer gap-2"
+                >
+                  <Layers className="h-4 w-4" />
+                  Trocar ambiente
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} disabled={isSigningOut}
                   className="text-red-500 focus:text-red-500 gap-2 cursor-pointer disabled:opacity-50">

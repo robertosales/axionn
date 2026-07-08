@@ -141,7 +141,9 @@ function resolveHomePath(options: {
     roles,
   } = options;
 
-  if (isPlatformAdmin) return "/platform";
+  // O administrador global atua em vários contextos e escolhe o ambiente
+  // conscientemente na Central Axionn.
+  if (isPlatformAdmin) return "/modulos";
 
   // Admins de organização que também têm acesso a módulos operacionais
   // devem ir para o dashboard de módulos, não para o console administrativo.

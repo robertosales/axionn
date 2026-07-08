@@ -17,7 +17,6 @@ import { UserAccountMenu } from "@/components/GlobalLogoutButton";
 import { AxionLogo } from "@/components/AxionLogo";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useOrganization } from "@/contexts/OrganizationContext";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
@@ -42,7 +41,6 @@ const ROLE_LABELS: Record<string, string> = {
 export function BackofficeLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { staffMember } = useBackofficeAuth();
-  const { currentOrganizationId, isOrganizationAdmin } = useOrganization();
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-950">
@@ -93,21 +91,19 @@ export function BackofficeLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        {currentOrganizationId && isOrganizationAdmin && (
-          <div className="border-t border-white/10 p-3">
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-slate-300 hover:bg-slate-800 hover:text-white"
-            >
-              <Link to="/organization/admin">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Voltar ao Administrador
-              </Link>
-            </Button>
-          </div>
-        )}
+        <div className="border-t border-white/10 p-3">
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-slate-300 hover:bg-slate-800 hover:text-white"
+          >
+            <Link to="/modulos">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Trocar ambiente
+            </Link>
+          </Button>
+        </div>
       </aside>
 
       <div className="min-h-screen lg:pl-64">

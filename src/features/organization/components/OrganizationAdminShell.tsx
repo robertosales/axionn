@@ -109,8 +109,19 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
         <ShellNav onNavigate={() => setMobileOpen(false)} />
       </div>
 
+      <div className="border-t border-white/10 px-3 pt-3">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-[hsl(var(--sidebar-foreground))]/70 hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"
+        >
+          <Link to="/modulos">Trocar ambiente</Link>
+        </Button>
+      </div>
+
       {(isPlatformAdmin || staffMember) && (
-        <div className="border-t border-white/10 p-3">
+        <div className="p-3 pt-1">
           <Button
             asChild
             variant="ghost"

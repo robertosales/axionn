@@ -18,9 +18,9 @@ export function PlatformShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-20 border-b bg-background/95 px-4 py-3 backdrop-blur lg:px-6">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3">
           <Button asChild variant="ghost" size="sm" className="gap-2">
-            <Link to="/backoffice">
+            <Link to="/modulos">
               <ArrowLeft className="h-4 w-4" />
-              Backoffice
+              Trocar ambiente
             </Link>
           </Button>
 

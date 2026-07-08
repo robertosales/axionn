@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { getInitials } from "@/lib/personName";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { APP_VERSION, APP_BUILD_DATE } from "@/lib/constants";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -283,15 +284,30 @@ function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
   );
 }
 
-function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
+function ModuleSwitcher({
+  module,
+  collapsed,
+  allowedModules,
+  showAdminShortcuts,
+}: {
+  module: ActiveModule;
+  collapsed: boolean;
+  allowedModules: ActiveModule[];
+  showAdminShortcuts: boolean;
+}) {
   const navigate = useNavigate();
-  const modules = [
+  const operationalModules = [
     { key: "sala_agil"   as ActiveModule, path: "/sala-agil",  label: "Ágil",  Icon: Zap },
     { key: "sustentacao" as ActiveModule, path: "/sustentacao", label: "Sust.", Icon: Wrench },
     { key: "rdm"         as ActiveModule, path: "/rdm",         label: "RDM",   Icon: ClipboardList },
-    { key: "okr"         as any,          path: "/okr",         label: "OKR",   Icon: Target },
-    { key: "admin"       as any,          path: "/dashboard-admin", label: "Admin", Icon: Shield },
-  ];
+  ].filter(({ key }) => allowedModules.includes(key));
+  const modules = showAdminShortcuts
+    ? [
+        ...operationalModules,
+        { key: "okr" as const, path: "/okr", label: "OKR", Icon: Target },
+        { key: "admin" as const, path: "/dashboard-admin", label: "Admin", Icon: Shield },
+      ]
+    : operationalModules;
 
   if (collapsed) return (
     <div className="flex flex-col items-center gap-1 w-full px-2 py-1">
@@ -459,12 +475,15 @@ function SprintBanner() {
 
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
   const { profile, isAdmin, signOut, isSigningOut } = useAuth();
+  const { isPlatformAdmin, hasModuleAccess } = useOrganization();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
-  const moduleAccess = profile?.module_access ?? "sala_agil";
-  const canSwitch = isAdmin || moduleAccess === "admin";
+  const allowedModules = (["sala_agil", "sustentacao", "rdm"] as ActiveModule[]).filter(
+    (moduleKey) => isAdmin || isPlatformAdmin || hasModuleAccess(moduleKey),
+  );
+  const canSwitch = allowedModules.length > 1 || isAdmin || isPlatformAdmin;
   const accent = ACCENT[module];
   const ModuleIcon = accent.icon;
   const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
@@ -532,7 +551,16 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
             )}
           </div>
 
-          {canSwitch && <div className="shrink-0"><ModuleSwitcher module={module} collapsed={collapsed} /></div>}
+          {canSwitch && (
+            <div className="shrink-0">
+              <ModuleSwitcher
+                module={module}
+                collapsed={collapsed}
+                allowedModules={allowedModules}
+                showAdminShortcuts={isAdmin || isPlatformAdmin}
+              />
+            </div>
+          )}
           {!canSwitch && !collapsed && (
             <div className="mx-2 mt-2 flex items-center rounded-lg px-3 py-2 text-[12px] font-semibold gap-2" style={{ background: SB.active, color: SB.teal }}>
               <ModuleIcon className="h-3.5 w-3.5 shrink-0" />

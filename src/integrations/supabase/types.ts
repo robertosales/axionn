@@ -7110,6 +7110,15 @@ export type Database = {
           result_status: string
         }[]
       }
+      add_organization_team_member_v2: {
+        Args: {
+          p_org_id: string
+          p_role?: string
+          p_team_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       apf_create_dpf_globalweb_model: {
         Args: { p_contract_id: string }
         Returns: string
@@ -7784,6 +7793,19 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_organization_team_members_v2: {
+        Args: { p_org_id: string; p_team_id: string }
+        Returns: {
+          display_name: string
+          email: string
+          is_active: boolean
+          joined_at: string
+          membership_role: string
+          role: string
+          team_member_id: string
+          user_id: string
+        }[]
+      }
       get_organization_teams_admin_v2: {
         Args: { p_org_id: string }
         Returns: {
@@ -8054,6 +8076,10 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      remove_organization_team_member_v2: {
+        Args: { p_org_id: string; p_team_member_id: string }
+        Returns: undefined
+      }
       reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
       resend_organization_invitation: {
         Args: {
@@ -8256,6 +8282,10 @@ export type Database = {
           status: string
           updated_at: string
         }[]
+      }
+      update_organization_team_member_role_v2: {
+        Args: { p_org_id: string; p_role: string; p_team_member_id: string }
+        Returns: undefined
       }
       update_organization_team_v2: {
         Args: {

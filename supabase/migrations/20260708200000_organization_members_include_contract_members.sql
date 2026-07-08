@@ -28,7 +28,27 @@ begin
   end if;
 
   return query
-  with organization_scope as (
+  with team_scope as (
+    select distinct team.id as team_id
+    from public.teams team
+    left join public.contracts direct_contract
+      on direct_contract.id = team.contract_id
+    left join public.companies direct_company
+      on direct_company.id = direct_contract.company_id
+    where team.org_id = p_org_id
+       or coalesce(direct_contract.org_id, direct_company.org_id) = p_org_id
+       or exists (
+         select 1
+         from public.contract_teams contract_team
+         join public.contracts linked_contract
+           on linked_contract.id = contract_team.contract_id
+         left join public.companies linked_company
+           on linked_company.id = linked_contract.company_id
+         where contract_team.team_id = team.id
+           and coalesce(linked_contract.org_id, linked_company.org_id) = p_org_id
+       )
+  ),
+  organization_scope as (
     select
       member.user_id,
       member.role::text as membership_role,
@@ -57,6 +77,48 @@ begin
     left join public.profiles profile
       on profile.user_id = contract_member.user_id
     where coalesce(contract.org_id, company.org_id) = p_org_id
+
+    union all
+
+    select
+      team_member.user_id,
+      'member'::text as membership_role,
+      coalesce(profile.is_active, true) as is_active,
+      team_member.joined_at as joined_at,
+      2 as source_priority
+    from public.team_members team_member
+    join team_scope
+      on team_scope.team_id = team_member.team_id
+    left join public.profiles profile
+      on profile.user_id = team_member.user_id
+
+    union all
+
+    select
+      developer.user_id,
+      'member'::text as membership_role,
+      coalesce(profile.is_active, true) as is_active,
+      developer.created_at as joined_at,
+      3 as source_priority
+    from public.developers developer
+    join team_scope
+      on team_scope.team_id = developer.team_id
+    left join public.profiles profile
+      on profile.user_id = developer.user_id
+    where developer.user_id is not null
+
+    union all
+
+    select
+      profile.user_id,
+      'member'::text as membership_role,
+      coalesce(profile.is_active, true) as is_active,
+      coalesce(profile.created_at, now()) as joined_at,
+      4 as source_priority
+    from public.profiles profile
+    join team_scope
+      on team_scope.team_id = profile.team_id
+    where profile.user_id is not null
   ),
   effective_members as (
     select distinct on (scope.user_id)

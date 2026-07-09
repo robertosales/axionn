@@ -49,6 +49,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { useOrganizationUsage } from "@/features/organization/hooks/useOrganizationUsage";
+import { useTeamAssignees } from "@/hooks/useTeamAssignees";
 import { useBriefing } from "../hooks/useBriefing";
 import type { BriefingSuggestionRecord } from "../services/briefing.service";
 import {
@@ -83,7 +84,7 @@ export default function BriefingPage() {
   const navigate = useNavigate();
   const { currentTeamId, currentTeam } = useAuth();
   const { currentOrganizationId } = useOrganization();
-  const { activeSprint } = useSprint();
+  const { activeSprint, developers } = useSprint();
   const { entitlements, loading: entitlementLoading } = useOrganizationUsage();
   const {
     briefing,
@@ -94,6 +95,7 @@ export default function BriefingPage() {
     createAndProcess,
     review,
     apply,
+    confirmAssignee,
     reset,
     open,
   } = useBriefing();
@@ -117,6 +119,7 @@ export default function BriefingPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editAssignee, setEditAssignee] = useState("");
+  const [editAssigneeId, setEditAssigneeId] = useState<string>("unassigned");
   const [editDueDate, setEditDueDate] = useState("");
   const [history, setHistory] = useState<BriefingHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -143,6 +146,11 @@ export default function BriefingPage() {
         (suggestion) => suggestion.id === selectedSuggestionId,
       ) ?? briefing?.suggestions[0] ?? null,
     [briefing, selectedSuggestionId],
+  );
+  const assigneeOptions = useTeamAssignees(
+    currentTeamId,
+    developers ?? [],
+    editingSuggestion?.confirmedAssigneeId ?? null,
   );
 
   useEffect(() => {
@@ -294,6 +302,7 @@ export default function BriefingPage() {
     setEditTitle(suggestion.title);
     setEditDescription(suggestion.description);
     setEditAssignee(suggestion.assigneeName ?? "");
+    setEditAssigneeId(suggestion.confirmedAssigneeId ?? "unassigned");
     setEditDueDate(suggestion.dueDate ?? "");
   };
 
@@ -317,6 +326,10 @@ export default function BriefingPage() {
           : "absent",
         priority: editingSuggestion.priority,
       });
+      await confirmAssignee(
+        editingSuggestion.id,
+        editAssigneeId === "unassigned" ? null : editAssigneeId,
+      );
       setEditingSuggestion(null);
       toast.success("Sugestão editada e aprovada para a próxima etapa.");
     } catch {
@@ -669,11 +682,30 @@ export default function BriefingPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Responsável mencionado</Label>
-                  <Input
-                    value={editAssignee}
-                    onChange={(event) => setEditAssignee(event.target.value)}
-                  />
+                  <Label>Responsável confirmado</Label>
+                  <Select
+                    value={editAssigneeId}
+                    onValueChange={setEditAssigneeId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sem responsável" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">
+                        Sem responsável
+                      </SelectItem>
+                      {assigneeOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {editAssignee && (
+                    <p className="text-xs text-muted-foreground">
+                      Nome identificado pela IA: {editAssignee}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Prazo</Label>

@@ -27,6 +27,7 @@ export interface BriefingSuggestionRecord {
   title: string;
   description: string;
   assigneeName: string | null;
+  confirmedAssigneeId: string | null;
   dueDate: string | null;
   dateSource: "explicit" | "inferred" | "absent";
   priority: "low" | "medium" | "high" | "urgent" | null;
@@ -207,6 +208,10 @@ function normalizeSuggestion(
     title: String(reviewedValue("title", row.title) ?? ""),
     description: String(reviewedValue("description", row.description) ?? ""),
     assigneeName: assigneeName == null ? null : String(assigneeName),
+    confirmedAssigneeId:
+      row.confirmed_assignee_id == null
+        ? null
+        : String(row.confirmed_assignee_id),
     dueDate: dueDate == null ? null : String(dueDate),
     dateSource: String(
       reviewedValue("dateSource", row.date_source),
@@ -365,6 +370,22 @@ export async function reviewBriefingSuggestion(
     p_suggestion_id: suggestionId,
     p_review_status: status,
     p_reviewed_payload: reviewedPayload ?? null,
+  });
+  assertNoError(error);
+}
+
+export async function setBriefingSuggestionAssignee(
+  suggestionId: string,
+  developerId: string | null,
+) {
+  const { error } = await (
+    supabase.rpc as unknown as (
+      name: string,
+      args: Record<string, unknown>,
+    ) => Promise<{ error: { message: string } | null }>
+  )("set_ai_briefing_suggestion_assignee", {
+    p_suggestion_id: suggestionId,
+    p_developer_id: developerId,
   });
   assertNoError(error);
 }

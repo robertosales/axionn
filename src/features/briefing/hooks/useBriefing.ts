@@ -5,6 +5,7 @@ import {
   getBriefing,
   processBriefing,
   reviewBriefingSuggestion,
+  setBriefingSuggestionAssignee,
   type BriefingRecord,
   type CreateBriefingInput,
 } from "../services/briefing.service";
@@ -98,6 +99,28 @@ export function useBriefing() {
     [briefing, refresh],
   );
 
+  const confirmAssignee = useCallback(
+    async (suggestionId: string, developerId: string | null) => {
+      if (!briefing) return;
+      setReviewingId(suggestionId);
+      setError(null);
+      try {
+        await setBriefingSuggestionAssignee(suggestionId, developerId);
+        await refresh(briefing.id);
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível confirmar o responsável.",
+        );
+        throw cause;
+      } finally {
+        setReviewingId(null);
+      }
+    },
+    [briefing, refresh],
+  );
+
   return {
     briefing,
     creating,
@@ -107,6 +130,7 @@ export function useBriefing() {
     createAndProcess,
     review,
     apply,
+    confirmAssignee,
     reset,
     open: refresh,
   };

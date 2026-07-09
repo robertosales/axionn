@@ -135,6 +135,44 @@ function requiredString(
   return parsed;
 }
 
+function normalizeDate(value: unknown): string | undefined {
+  const raw = optionalString(value, "suggestion.dueDate", 20);
+  if (!raw) return undefined;
+
+  let year: number;
+  let month: number;
+  let day: number;
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const brazilian = raw.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+
+  if (iso) {
+    year = Number(iso[1]);
+    month = Number(iso[2]);
+    day = Number(iso[3]);
+  } else if (brazilian) {
+    day = Number(brazilian[1]);
+    month = Number(brazilian[2]);
+    year = Number(brazilian[3]);
+  } else {
+    throw new HttpError(422, "AI_OUTPUT_INVALID", "Data sugerida invalida");
+  }
+
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new HttpError(422, "AI_OUTPUT_INVALID", "Data sugerida invalida");
+  }
+
+  return [
+    String(year).padStart(4, "0"),
+    String(month).padStart(2, "0"),
+    String(day).padStart(2, "0"),
+  ].join("-");
+}
+
 function parseEvidence(value: unknown): Evidence {
   const item = asRecord(value);
   if (!item) throw new HttpError(422, "AI_OUTPUT_INVALID", "Evidencia invalida");
@@ -197,10 +235,7 @@ function parseSuggestion(value: unknown): Suggestion {
   if (!["explicit", "inferred", "absent"].includes(String(dateSource))) {
     throw new HttpError(422, "AI_OUTPUT_INVALID", "Origem da data invalida");
   }
-  const dueDate = optionalString(item.dueDate, "suggestion.dueDate", 10);
-  if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-    throw new HttpError(422, "AI_OUTPUT_INVALID", "Data sugerida invalida");
-  }
+  const dueDate = normalizeDate(item.dueDate);
   if (
     (dateSource === "absent" && dueDate) ||
     (dateSource !== "absent" && !dueDate)

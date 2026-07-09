@@ -209,7 +209,7 @@ export function SprintImpedimentsModal({ sprint, open, onClose }: Props) {
   const handleSave = async () => {
     if (!reason.trim()) return;
     setSaving(true);
-    await addSprintImpediment(sprint.id, {
+    const saved = await addSprintImpediment(sprint.id, {
       reason: reason.trim(),
       type,
       criticality,
@@ -218,7 +218,7 @@ export function SprintImpedimentsModal({ sprint, open, onClose }: Props) {
       ticketUrl: hasTicket ? ticketUrl : undefined,
     });
     setSaving(false);
-    resetForm();
+    if (saved) resetForm();
   };
 
   const handleResolve = async (impedimentId: string) => {

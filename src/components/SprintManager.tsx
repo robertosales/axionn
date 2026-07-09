@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useSalaAgilPermission } from "@/hooks/useSalaAgilPermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,11 +26,11 @@ function todayISO(): string {
 
 export function SprintManager() {
   const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, closeSprint, userStories, workflowColumns, addImpediment } = useSprint() as any;
-  const { hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
-  const canCreate = hasPermission('create_sprint');
-  const canEdit   = hasPermission('edit_sprint');
-  const canDelete = hasPermission('delete_sprint');
+  const canCreate = useSalaAgilPermission("create_sprint");
+  const canEdit   = useSalaAgilPermission("edit_sprint");
+  const canDelete = useSalaAgilPermission("delete_sprint");
+  const canReportImpediment = useSalaAgilPermission("report_impediment");
 
   const [editId, setEditId]       = useState<string | null>(null);
   const [name, setName]           = useState("");
@@ -106,9 +106,20 @@ export function SprintManager() {
     const reason = impedimentReason.trim();
     if (!reason) { toast.error("Informe o motivo do impedimento."); return; }
     try {
+      let saved = false;
       if (typeof addImpediment === "function") {
-        await addImpediment({ sprintId: impedimentSprintId }, { reason, startedAt: impedimentStartedAt || undefined });
+        saved = await addImpediment(
+          { sprintId: impedimentSprintId },
+          {
+            reason,
+            type: "outro",
+            criticality: "media",
+            hasTicket: false,
+            startedAt: impedimentStartedAt || undefined,
+          },
+        );
       }
+      if (!saved) return;
       toast.success("Impedimento registrado na sprint.");
       setImpedimentSprintId(null); setImpedimentReason(""); setImpedimentStartedAt(todayISO());
     } catch (err: any) {
@@ -275,7 +286,7 @@ export function SprintManager() {
                     </ContextMenuItem>
                   </>
                 )}
-                {sprint.isActive && (
+                {sprint.isActive && canReportImpediment && (
                   <>
                     <ContextMenuSeparator />
                     <ContextMenuItem onClick={(e) => {

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, ShieldCheck, Sparkles } from "lucide-react";
 import { AdminIAsPage } from "@/features/admin/pages/AdminIAsPage";
+import { UserAccountMenu } from "@/components/GlobalLogoutButton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,13 +24,14 @@ export default function PlatformAIProvidersPage() {
               </h1>
             </div>
             <p className="text-xs text-muted-foreground">
-              Administracao exclusiva da plataforma.
+              Administração exclusiva da plataforma.
             </p>
           </div>
-          <Badge variant="outline" className="gap-1.5">
+          <Badge variant="outline" className="hidden gap-1.5 sm:flex">
             <ShieldCheck className="h-3.5 w-3.5" />
-            platform_admin
+            Admin da plataforma
           </Badge>
+          <UserAccountMenu variant="compact" />
         </div>
       </header>
 

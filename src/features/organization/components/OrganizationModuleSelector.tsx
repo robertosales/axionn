@@ -9,6 +9,7 @@ import {
   Loader2,
   Settings2,
   ShieldCheck,
+  SlidersHorizontal,
   Users,
   Wrench,
 } from "lucide-react";
@@ -27,6 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useBackofficeAuth } from "@/backoffice/hooks/useBackofficeAuth";
 
 interface ModuleDefinition {
   key: "sala_agil" | "sustentacao" | "rdm";
@@ -70,6 +72,7 @@ const MODULES: ModuleDefinition[] = [
 export default function OrganizationModuleSelector() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const { staffMember, loading: backofficeLoading } = useBackofficeAuth();
   const {
     organizations,
     currentOrganization,
@@ -81,12 +84,12 @@ export default function OrganizationModuleSelector() {
     moduleAccessLoading,
   } = useOrganization();
 
-  if (moduleAccessLoading) {
+  if (moduleAccessLoading || backofficeLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
-          Carregando módulos da organização...
+          Carregando ambientes...
         </div>
       </div>
     );
@@ -184,12 +187,20 @@ export default function OrganizationModuleSelector() {
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 py-12">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold">Módulos da organização</h1>
+          <h1 className="text-2xl font-bold">Central Axionn</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Os acessos abaixo consideram a organização atualmente selecionada.
+            Escolha o ambiente em que deseja trabalhar.
           </p>
         </div>
 
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Módulos operacionais
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Os acessos consideram a organização atualmente selecionada.
+          </p>
+        </div>
         <div className="grid gap-5 md:grid-cols-3">
           {MODULES.map((module) => {
             const Icon = module.icon;
@@ -228,6 +239,80 @@ export default function OrganizationModuleSelector() {
             );
           })}
         </div>
+
+        {(isOrganizationAdmin || isAdmin || isPlatformAdmin || staffMember) && (
+          <>
+            <div className="mb-4 mt-10">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Gestão e administração
+              </h2>
+            </div>
+            <div className="grid gap-5 md:grid-cols-3">
+              {(isOrganizationAdmin || isAdmin) && (
+                <Card className="transition-shadow hover:shadow-md">
+                  <CardHeader>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10">
+                      <Building2 className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <CardTitle className="pt-3 text-lg">Administrador</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <p className="min-h-12 text-sm text-muted-foreground">
+                      Empresas, contratos, projetos, times, usuários e configurações da organização.
+                    </p>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() =>
+                        navigate(isOrganizationAdmin ? "/organization/admin" : "/dashboard-admin")
+                      }
+                    >
+                      Acessar administração
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {staffMember && (
+                <Card className="transition-shadow hover:shadow-md">
+                  <CardHeader>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10">
+                      <ShieldCheck className="h-5 w-5 text-cyan-600" />
+                    </div>
+                    <CardTitle className="pt-3 text-lg">Backoffice Axionn</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <p className="min-h-12 text-sm text-muted-foreground">
+                      Gestão interna de clientes, assinaturas, financeiro, equipe e suporte.
+                    </p>
+                    <Button className="w-full" variant="outline" onClick={() => navigate("/backoffice")}>
+                      Acessar backoffice
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {isPlatformAdmin && (
+                <Card className="transition-shadow hover:shadow-md">
+                  <CardHeader>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-500/10">
+                      <SlidersHorizontal className="h-5 w-5 text-violet-600" />
+                    </div>
+                    <CardTitle className="pt-3 text-lg">Configuração da plataforma</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <p className="min-h-12 text-sm text-muted-foreground">
+                      Catálogo de planos, assinaturas globais e provedores de inteligência artificial.
+                    </p>
+                    <Button className="w-full" variant="outline" onClick={() => navigate("/platform")}>
+                      Acessar plataforma
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

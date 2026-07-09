@@ -74,7 +74,7 @@ export function ImpedimentDialog({ huId, open, onClose }: ImpedimentDialogProps)
   const handleSubmit = async () => {
     if (!huId || !validate()) return;
 
-    await addImpediment(huId, {
+    const saved = await addImpediment(huId, {
       reason: reason.trim(),
       type,
       criticality,
@@ -82,6 +82,7 @@ export function ImpedimentDialog({ huId, open, onClose }: ImpedimentDialogProps)
       ticketUrl: ticketUrl.trim() || undefined,
       ticketId: ticketId.trim() || undefined,
     });
+    if (!saved) return;
 
     if (currentTeamId) {
       const hu = userStories.find((h) => h.id === huId);

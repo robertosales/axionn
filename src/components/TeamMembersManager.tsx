@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useTeamManagementPermissions } from "@/features/admin/hooks/useTeamManagementPermissions";
+import { resolveOrganizationOperationalError } from "@/features/organization/utils/operationalErrors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,8 +35,12 @@ interface TeamMember {
 }
 
 export function TeamMembersManager() {
-  const { currentTeamId, hasPermission, isAdmin } = useAuth();
-  const canManage = hasPermission("manage_teams");
+  const { currentTeamId, isAdmin } = useAuth();
+  const { currentOrganizationId, enabled: orgEnabled } = useOrganization();
+  const permissions = useTeamManagementPermissions();
+  const canAdd = permissions.canAddTeamMember;
+  const canRemove = permissions.canRemoveTeamMember;
+  const canManage = canAdd || canRemove;
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [allProfiles, setAllProfiles] = useState<
     { user_id: string; display_name: string; email: string }[]
@@ -51,6 +58,39 @@ export function TeamMembersManager() {
   const fetchMembers = async () => {
     if (!currentTeamId) return;
     setLoading(true);
+
+    if (orgEnabled && currentOrganizationId) {
+      const { data: rpcMembers, error: rpcError } = await (supabase as any).rpc(
+        "get_organization_team_members_v2",
+        { p_org_id: currentOrganizationId, p_team_id: currentTeamId },
+      );
+      if (!rpcError && rpcMembers) {
+        setMembers(
+          (rpcMembers as any[]).map((row) => ({
+            id: String(row.team_member_id),
+            user_id: String(row.user_id),
+            role: String(row.role ?? "member"),
+            joined_at: String(row.joined_at ?? ""),
+            profile: {
+              display_name: String(row.display_name ?? ""),
+              email: String(row.email ?? ""),
+            },
+            user_roles: row.membership_role === "owner" || row.membership_role === "admin"
+              ? (["admin"] as AppRole[])
+              : [],
+          })),
+        );
+        setLoading(false);
+        return;
+      }
+      if (rpcError) {
+        console.error(
+          "[TeamMembersManager] get_organization_team_members_v2:",
+          rpcError,
+        );
+      }
+    }
+
     const { data: tmData } = await supabase
       .from("team_members")
       .select("*")
@@ -90,22 +130,55 @@ export function TeamMembersManager() {
   };
 
   const fetchAllProfiles = async () => {
-    if (!isAdmin) return;
+    if (!canManage) return;
+
+    if (orgEnabled && currentOrganizationId) {
+      const { data: orgMembers, error: orgError } = await (supabase as any).rpc(
+        "get_organization_members_v2",
+        { p_org_id: currentOrganizationId },
+      );
+      if (!orgError && orgMembers) {
+        setAllProfiles(
+          (orgMembers as any[])
+            .filter((row) => row.is_active !== false)
+            .map((row) => ({
+              user_id: String(row.user_id),
+              display_name: String(row.display_name ?? row.email ?? "Usuário"),
+              email: String(row.email ?? ""),
+            })),
+        );
+        return;
+      }
+      if (orgError) {
+        console.error(
+          "[TeamMembersManager] get_organization_members_v2:",
+          orgError,
+        );
+      }
+    }
+
     const { data } = await supabase
       .from("profiles")
       .select("user_id, display_name, email")
-      .eq("is_active", true); // Filtra apenas ativos para novas adições
+      .eq("is_active", true);
     setAllProfiles(data || []);
   };
 
   useEffect(() => {
     fetchMembers();
     fetchAllProfiles();
-  }, [currentTeamId]);
+  }, [currentTeamId, currentOrganizationId, orgEnabled]);
 
   const handleAddMember = async () => {
     if (!currentTeamId || !selectedUserId) {
       toast.error("Selecione um usuário");
+      return;
+    }
+    if (!canAdd) {
+      toast.error(
+        permissions.writeBlockedReason ??
+          "Você não tem permissão para gerenciar membros deste time.",
+      );
       return;
     }
     const exists = members.find((m) => m.user_id === selectedUserId);
@@ -118,15 +191,36 @@ export function TeamMembersManager() {
       toast.error("Informe a função do membro");
       return;
     }
-    const { error } = await supabase.from("team_members").insert({
-      team_id: currentTeamId,
-      user_id: selectedUserId,
-      role: finalRole,
-    });
-    if (error) {
-      toast.error("Erro ao adicionar membro");
-      return;
+
+    if (orgEnabled && currentOrganizationId) {
+      const { error: rpcError } = await (supabase as any).rpc(
+        "add_organization_team_member_v2",
+        {
+          p_org_id: currentOrganizationId,
+          p_team_id: currentTeamId,
+          p_user_id: selectedUserId,
+          p_role: finalRole,
+        },
+      );
+      if (rpcError) {
+        console.error("[TeamMembersManager] add_organization_team_member_v2:", rpcError);
+        toast.error(
+          resolveOrganizationOperationalError(rpcError, "Erro ao adicionar membro"),
+        );
+        return;
+      }
+    } else {
+      const { error } = await supabase.from("team_members").insert({
+        team_id: currentTeamId,
+        user_id: selectedUserId,
+        role: finalRole,
+      });
+      if (error) {
+        toast.error("Erro ao adicionar membro");
+        return;
+      }
     }
+
     toast.success("Membro adicionado ao time!");
     setSelectedUserId("");
     setCustomRole("");
@@ -136,8 +230,34 @@ export function TeamMembersManager() {
   };
 
   const handleRemoveMember = async (id: string) => {
+    if (!canRemove) {
+      toast.error(
+        permissions.writeBlockedReason ??
+          "Você não tem permissão para gerenciar membros deste time.",
+      );
+      return;
+    }
     if (!confirm("Remover este membro do time?")) return;
-    await supabase.from("team_members").delete().eq("id", id);
+
+    if (orgEnabled && currentOrganizationId) {
+      const { error: rpcError } = await (supabase as any).rpc(
+        "remove_organization_team_member_v2",
+        { p_org_id: currentOrganizationId, p_team_member_id: id },
+      );
+      if (rpcError) {
+        console.error(
+          "[TeamMembersManager] remove_organization_team_member_v2:",
+          rpcError,
+        );
+        toast.error(
+          resolveOrganizationOperationalError(rpcError, "Erro ao remover membro"),
+        );
+        return;
+      }
+    } else {
+      await supabase.from("team_members").delete().eq("id", id);
+    }
+
     toast.success("Membro removido");
     await fetchMembers();
   };

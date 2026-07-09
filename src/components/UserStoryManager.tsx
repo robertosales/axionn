@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSalaAgilPermission } from "@/hooks/useSalaAgilPermissions";
 import { FileUploader } from "@/components/FileUploader";
 import { SizeBadge } from "@/components/SizeBadge";
 import { Button } from "@/components/ui/button";
@@ -48,9 +49,9 @@ export function UserStoryManager() {
     activities, activeSprint, sprints, epics, workflowColumns,
     customFields, developers, loading,
   } = useSprint();
-  const { hasPermission, currentTeamId } = useAuth();
-  const canCreate = hasPermission("create_backlog");
-  const canEdit   = hasPermission("edit_backlog");
+  const { currentTeamId } = useAuth();
+  const canCreate = useSalaAgilPermission("create_backlog");
+  const canEdit   = useSalaAgilPermission("edit_backlog");
 
   const [open, setOpen]                   = useState(false);
   const [title, setTitle]                 = useState("");

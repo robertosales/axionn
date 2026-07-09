@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ContractProvider } from "@/features/admin/contexts/ContractContext";
 import OrganizationCompaniesPage from "@/features/organization/pages/OrganizationCompaniesPage";
+import { useBackofficeAuth } from "@/backoffice/hooks/useBackofficeAuth";
 
 const navItems = [
   { to: "/organization/admin", label: "Visão geral", icon: Gauge },
@@ -62,6 +63,7 @@ function ShellNav({ onNavigate }: { onNavigate?: () => void }) {
 export function OrganizationAdminShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { currentOrganization, isPlatformAdmin } = useOrganization();
+  const { staffMember } = useBackofficeAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const sidebar = (
@@ -97,7 +99,7 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
           )}
           {isPlatformAdmin && (
             <Badge variant="outline" className="border-primary/50 text-[10px] text-primary">
-              platform_admin
+              Admin da plataforma
             </Badge>
           )}
         </div>
@@ -107,15 +109,26 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
         <ShellNav onNavigate={() => setMobileOpen(false)} />
       </div>
 
-      {isPlatformAdmin && (
-        <div className="border-t border-white/10 p-3">
+      <div className="border-t border-white/10 px-3 pt-3">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-[hsl(var(--sidebar-foreground))]/70 hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"
+        >
+          <Link to="/modulos">Trocar ambiente</Link>
+        </Button>
+      </div>
+
+      {(isPlatformAdmin || staffMember) && (
+        <div className="p-3 pt-1">
           <Button
             asChild
             variant="ghost"
             size="sm"
             className="w-full justify-start text-[hsl(var(--sidebar-foreground))]/70 hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"
           >
-            <Link to="/platform/ai-providers">Administração da plataforma</Link>
+            <Link to="/backoffice">Backoffice Axionn</Link>
           </Button>
         </div>
       )}

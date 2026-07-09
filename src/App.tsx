@@ -25,6 +25,9 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useAppResilience } from "@/hooks/useAppResilience";
 import { supabase } from "@/integrations/supabase/client";
+import { BackofficeGuard } from "@/backoffice/guards/BackofficeGuard";
+import { BackofficeLayout } from "@/backoffice/components/BackofficeLayout";
+import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
 
 import Auth from "./pages/Auth.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
@@ -59,6 +62,19 @@ const OrganizationAdminShell = lazy(() =>
 const PlatformAIProvidersPage = lazy(
   () => import("./features/platform/pages/PlatformAIProvidersPage"),
 );
+const PlatformPlansPage = lazy(
+  () => import("./features/platform/pages/PlatformPlansPage"),
+);
+const PlatformSubscriptionsPage = lazy(
+  () => import("./features/platform/pages/PlatformSubscriptionsPage"),
+);
+const BOClientes = lazy(() => import("./backoffice/pages/BOClientes"));
+const BODashboard = lazy(() => import("./backoffice/pages/BODashboard"));
+const BOEquipe = lazy(() => import("./backoffice/pages/BOEquipe"));
+const BOFinanceiro = lazy(() => import("./backoffice/pages/BOFinanceiro"));
+const BOSuporte = lazy(() => import("./backoffice/pages/BOSuporte"));
+const BOAnalitico = lazy(() => import("./backoffice/pages/BOAnalitico"));
+const BOConfiguracoes = lazy(() => import("./backoffice/pages/BOConfiguracoes"));
 const AdminContratosPage = lazy(() =>
   import("./features/admin/pages/AdminContratosPage").then((module) => ({
     default: module.AdminContratosPage,
@@ -126,14 +142,23 @@ function resolveHomePath(options: {
     roles,
   } = options;
 
-  if (isPlatformAdmin) return "/platform";
-  if (isOrganizationAdmin) return "/organization/admin";
-  if (isAdmin) return "/dashboard-admin";
-  if (roles.includes("admin_contrato")) return "/meu-contrato";
+  // O administrador global atua em vários contextos e escolhe o ambiente
+  // conscientemente na Central Axionn.
+  if (isPlatformAdmin) return "/modulos";
 
+  // Admins de organização que também têm acesso a módulos operacionais
+  // devem ir para o dashboard de módulos, não para o console administrativo.
+  // Apenas admins sem nenhum módulo operacional vão direto para /organization/admin.
   const agil = hasModuleAccess("sala_agil");
   const sustentacao = hasModuleAccess("sustentacao");
   const rdm = hasModuleAccess("rdm");
+  const hasAnyModule = agil || sustentacao || rdm;
+
+  if (isOrganizationAdmin && !hasAnyModule) return "/organization/admin";
+
+  if (isAdmin) return "/dashboard-admin";
+  if (roles.includes("admin_contrato")) return "/meu-contrato";
+
   const count = [agil, sustentacao, rdm].filter(Boolean).length;
 
   if (count >= 2) return "/modulos";
@@ -274,10 +299,33 @@ function OrganizationAdminGuard({ children }: { children: React.ReactNode }) {
 }
 
 function PlatformAdminGuard({ children }: { children: React.ReactNode }) {
-  const { loading, isPlatformAdmin } = useAuth();
-  if (loading) return <PageLoader />;
+  const { loading: authLoading } = useAuth();
+  const { loading: organizationLoading, isPlatformAdmin } = useOrganization();
+  if (authLoading || organizationLoading) return <PageLoader />;
   if (!isPlatformAdmin) return <Navigate to="/organization/admin" replace />;
   return <>{children}</>;
+}
+
+function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
+  const { session, loading, profile, refreshProfile } = useAuth();
+  useAppResilience();
+
+  if (loading) return <PageLoader />;
+  if (!session) return <Navigate to="/auth" replace />;
+  if (profile?.must_change_password) {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <ForcePasswordChange onDone={refreshProfile} />
+      </Suspense>
+    );
+  }
+
+  return (
+    <>
+      {children}
+      <SessionTimeoutAlert />
+    </>
+  );
 }
 
 function LegacyOperationalRoute({
@@ -357,6 +405,22 @@ function OrganizationConsoleRoute({ children }: { children: React.ReactNode }) {
   );
 }
 
+function BackofficeRoute({
+  children,
+  requiredRoles,
+}: {
+  children: React.ReactNode;
+  requiredRoles?: BackofficeRole[];
+}) {
+  return (
+    <AuthenticatedRoute>
+      <BackofficeGuard requiredRoles={requiredRoles}>
+        <BackofficeLayout>{children}</BackofficeLayout>
+      </BackofficeGuard>
+    </AuthenticatedRoute>
+  );
+}
+
 function AppRoutes() {
   return (
     <SprintProvider>
@@ -373,6 +437,15 @@ function AppRoutes() {
           <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
           <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />
 
+          <Route path="/backoffice" element={<BackofficeRoute><BODashboard /></BackofficeRoute>} />
+          <Route path="/backoffice/clientes" element={<BackofficeRoute requiredRoles={["admin", "comercial", "financeiro"]}><BOClientes /></BackofficeRoute>} />
+          <Route path="/backoffice/assinaturas" element={<BackofficeRoute requiredRoles={["admin", "financeiro", "comercial"]}><PlatformSubscriptionsPage embedded /></BackofficeRoute>} />
+          <Route path="/backoffice/financeiro" element={<BackofficeRoute requiredRoles={["admin", "financeiro"]}><BOFinanceiro /></BackofficeRoute>} />
+          <Route path="/backoffice/equipe" element={<BackofficeRoute requiredRoles={["admin"]}><BOEquipe /></BackofficeRoute>} />
+          <Route path="/backoffice/suporte" element={<BackofficeRoute requiredRoles={["admin", "suporte", "comercial"]}><BOSuporte /></BackofficeRoute>} />
+          <Route path="/backoffice/analitico" element={<BackofficeRoute requiredRoles={["admin", "financeiro", "comercial"]}><BOAnalitico /></BackofficeRoute>} />
+          <Route path="/backoffice/configuracoes" element={<BackofficeRoute requiredRoles={["admin"]}><BOConfiguracoes /></BackofficeRoute>} />
+
           <Route path="/organization/admin" element={<OrganizationConsoleRoute><OrganizationAdminOverviewPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/companies" element={<OrganizationConsoleRoute><OrganizationCompaniesPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/contracts" element={<OrganizationConsoleRoute><AdminContratosPage /></OrganizationConsoleRoute>} />
@@ -384,7 +457,15 @@ function AppRoutes() {
 
           <Route
             path="/platform"
-            element={<ProtectedRoute><PlatformAdminGuard><Navigate to="/platform/ai-providers" replace /></PlatformAdminGuard></ProtectedRoute>}
+            element={<ProtectedRoute><PlatformAdminGuard><Navigate to="/platform/plans" replace /></PlatformAdminGuard></ProtectedRoute>}
+          />
+          <Route
+            path="/platform/plans"
+            element={<ProtectedRoute><PlatformAdminGuard><PlatformPlansPage /></PlatformAdminGuard></ProtectedRoute>}
+          />
+          <Route
+            path="/platform/subscriptions"
+            element={<ProtectedRoute><PlatformAdminGuard><PlatformSubscriptionsPage /></PlatformAdminGuard></ProtectedRoute>}
           />
           <Route
             path="/platform/ai-providers"

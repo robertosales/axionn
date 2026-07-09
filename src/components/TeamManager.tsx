@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useTeamManagementPermissions } from "@/features/admin/hooks/useTeamManagementPermissions";
+import { resolveOrganizationOperationalError } from "@/features/organization/utils/operationalErrors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,8 +28,13 @@ interface TeamManagerProps {
 }
 
 export function TeamManager({ moduleFilter }: TeamManagerProps) {
-  const { teams, refreshTeams, currentTeamId, setCurrentTeamId, isAdmin, hasPermission } = useAuth();
-  const canManage = hasPermission("manage_teams");
+  const { teams, refreshTeams, currentTeamId, setCurrentTeamId } = useAuth();
+  const { currentOrganizationId, enabled: orgEnabled } = useOrganization();
+  const permissions = useTeamManagementPermissions();
+  const canCreate = permissions.canCreateTeam;
+  const canUpdate = permissions.canUpdateTeam;
+  const canDelete = permissions.canDeleteTeam;
+  const canManage = canCreate || canUpdate || canDelete;
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [module, setModule] = useState<string>(moduleFilter || "sala_agil");
@@ -52,13 +60,38 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
   };
 
   const loadTeams = async () => {
-    let query = supabase.from("teams").select("*");
-    if (moduleFilter) {
-      query = query.eq("module", moduleFilter);
+    const accessibleTeams = teams
+      .filter((team) => !moduleFilter || team.module === moduleFilter)
+      .slice()
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+      );
+
+    if (accessibleTeams.length > 0) {
+      setAllTeams(accessibleTeams);
+      loadTeamMembers(accessibleTeams.map((team) => team.id));
+      return;
     }
-    const { data } = await query;
+
+    let query = supabase
+      .from("teams")
+      .select("*")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+
+    if (moduleFilter) query = query.eq("module", moduleFilter);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("[TeamManager] loadTeams:", error);
+      setAllTeams([]);
+      setTeamMembers({});
+      return;
+    }
+
     setAllTeams(data || []);
     if (data && data.length > 0) loadTeamMembers(data.map((t: any) => t.id));
+    else setTeamMembers({});
   };
 
   const loadTeamMembers = async (teamIds: string[]) => {
@@ -66,8 +99,74 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
       setTeamMembers({});
       return;
     }
-    const { data: tmData } = await supabase.from("team_members").select("*").in("team_id", teamIds);
-    if (!tmData || tmData.length === 0) {
+
+    if (currentOrganizationId) {
+      const { data: rpcMembers, error: rpcError } = await (supabase as any).rpc(
+        "get_team_members_for_teams_v2",
+        {
+          p_org_id: currentOrganizationId,
+          p_team_ids: teamIds,
+        },
+      );
+
+      if (!rpcError && rpcMembers) {
+        const result: Record<string, TeamMemberInfo[]> = {};
+        for (const member of rpcMembers as any[]) {
+          if (!member.team_id || !member.user_id) continue;
+          if (!result[member.team_id]) result[member.team_id] = [];
+          result[member.team_id].push({
+            user_id: member.user_id,
+            role: member.role || "member",
+            display_name: member.display_name || member.email || "Usuario",
+            email: member.email || "",
+          });
+        }
+        setTeamMembers(result);
+        return;
+      }
+
+      console.error("[TeamManager] get_team_members_for_teams_v2:", rpcError);
+    }
+
+    const { data: tmData, error: tmError } = await supabase
+      .from("team_members")
+      .select("team_id, user_id, role")
+      .in("team_id", teamIds);
+
+    if (tmError) {
+      console.error("[TeamManager] loadTeamMembers:", tmError);
+    }
+
+    if (tmError || !tmData || tmData.length === 0) {
+      const { data: profileMembers, error: profileError } = await supabase
+        .from("profiles")
+        .select("team_id, user_id, display_name, email")
+        .in("team_id", teamIds)
+        .eq("is_active", true);
+
+      if (profileError || !profileMembers || profileMembers.length === 0) {
+        if (profileError) console.error("[TeamManager] loadProfileMembers:", profileError);
+        setTeamMembers({});
+        return;
+      }
+
+      const result: Record<string, TeamMemberInfo[]> = {};
+      for (const profile of profileMembers as any[]) {
+        if (!profile.team_id || !profile.user_id) continue;
+        if (!result[profile.team_id]) result[profile.team_id] = [];
+        result[profile.team_id].push({
+          user_id: profile.user_id,
+          role: "member",
+          display_name: profile.display_name || "Usuario",
+          email: profile.email || "",
+        });
+      }
+
+      setTeamMembers(result);
+      return;
+    }
+
+    if (tmData.length === 0) {
       setTeamMembers({});
       return;
     }
@@ -96,17 +195,52 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
 
   useEffect(() => {
     loadTeams();
-  }, [moduleFilter]);
+  }, [moduleFilter, teams, currentOrganizationId]);
 
   const handleCreate = async () => {
     if (!name.trim()) {
       toast.error("Nome do time é obrigatório *");
       return;
     }
+    if (!canCreate) {
+      toast.error(
+        permissions.writeBlockedReason ??
+          "Você não tem permissão para gerenciar times nesta organização.",
+      );
+      return;
+    }
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+
+    if (orgEnabled && currentOrganizationId) {
+      const { error: rpcError } = await (supabase as any).rpc(
+        "create_organization_team_v2",
+        {
+          p_org_id: currentOrganizationId,
+          p_name: name.trim(),
+          p_module: module,
+          p_company_id: null,
+          p_contract_id: null,
+        },
+      );
+      if (rpcError) {
+        console.error("[TeamManager] create_organization_team_v2:", rpcError);
+        toast.error(
+          resolveOrganizationOperationalError(rpcError, "Erro ao criar time"),
+        );
+        return;
+      }
+      toast.success("Time criado com sucesso!");
+      setName("");
+      setDescription("");
+      setModule(moduleFilter || "sala_agil");
+      setOpen(false);
+      await refreshTeams(undefined, currentOrganizationId);
+      await loadTeams();
+      return;
+    }
 
     const { data, error } = await supabase
       .from("teams")
@@ -154,6 +288,38 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
 
   const handleUpdate = async () => {
     if (!editingTeam) return;
+    if (!canUpdate) {
+      toast.error(
+        permissions.writeBlockedReason ??
+          "Você não tem permissão para gerenciar times nesta organização.",
+      );
+      return;
+    }
+    if (orgEnabled && currentOrganizationId) {
+      const { error: rpcError } = await (supabase as any).rpc(
+        "update_organization_team_v2",
+        {
+          p_org_id: currentOrganizationId,
+          p_team_id: editingTeam.id,
+          p_name: editingTeam.name,
+          p_module: editingTeam.module,
+          p_company_id: null,
+          p_contract_id: null,
+        },
+      );
+      if (rpcError) {
+        console.error("[TeamManager] update_organization_team_v2:", rpcError);
+        toast.error(
+          resolveOrganizationOperationalError(rpcError, "Erro ao atualizar time"),
+        );
+        return;
+      }
+      toast.success("Time atualizado!");
+      setEditingTeam(null);
+      await refreshTeams(undefined, currentOrganizationId);
+      await loadTeams();
+      return;
+    }
     const { error } = await supabase
       .from("teams")
       .update({
@@ -176,6 +342,36 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
+    if (!canDelete) {
+      toast.error(
+        permissions.writeBlockedReason ??
+          "Você não tem permissão para gerenciar times nesta organização.",
+      );
+      setDeleteTarget(null);
+      return;
+    }
+    if (orgEnabled && currentOrganizationId) {
+      const { error: rpcError } = await (supabase as any).rpc(
+        "deactivate_organization_team_v2",
+        { p_org_id: currentOrganizationId, p_team_id: deleteTarget },
+      );
+      if (rpcError) {
+        console.error("[TeamManager] deactivate_organization_team_v2:", rpcError);
+        toast.error(
+          resolveOrganizationOperationalError(rpcError, "Erro ao inativar time"),
+        );
+        setDeleteTarget(null);
+        return;
+      }
+      toast.success("Time inativado com sucesso");
+      await refreshTeams(undefined, currentOrganizationId);
+      await loadTeams();
+      if (currentTeamId === deleteTarget) {
+        setCurrentTeamId(allTeams.find((t) => t.id !== deleteTarget)?.id || null);
+      }
+      setDeleteTarget(null);
+      return;
+    }
     try {
       await supabase.from("teams").delete().eq("id", deleteTarget);
       toast.success("Registro excluído com sucesso");

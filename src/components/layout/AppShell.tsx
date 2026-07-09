@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { getInitials } from "@/lib/personName";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { useSprint } from "@/contexts/SprintContext";
 import { APP_VERSION, APP_BUILD_DATE } from "@/lib/constants";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -13,24 +14,23 @@ import {
   LayoutDashboard, ListTodo, Layers, Kanban, Calendar, BarChart3,
   History, Users, Settings, Zap, Wrench, LogOut, User, GitBranch,
   AlertTriangle, FileText, Upload, Repeat, Activity, ShieldCheck,
-  ChevronRight, Building2, ChevronsUpDown, Check, PanelLeftClose,
-  PanelLeftOpen, Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight,
-  Target,
+  ChevronRight, ChevronLeft, Building2, ChevronsUpDown, Check,
+  Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight, Target,
+  Menu, Search, Shield,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
-import { AxionLogo } from "@/components/AxionLogo";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
 const SB = {
-  bg:       "#0f1a18",
-  fg:       "#c0d4d0",
-  muted:    "#3d5a56",
-  acc:      "#182e2a",
-  active:   "#0c3d38",
-  teal:     "#0bbcaf",
-  border:   "rgba(192,212,208,0.08)",
-  tealA:    (a: number) => `rgba(11,188,175,${a})`,
+  bg:       "#0F172A",
+  fg:       "#CBD5E1",
+  muted:    "#94A3B8",
+  acc:      "rgba(255,255,255,0.06)",
+  active:   "#4F46E5",
+  teal:     "#6366F1",
+  border:   "rgba(255,255,255,0.06)",
+  tealA:    (a: number) => `rgba(99,102,241,${a})`,
 } as const;
 
 type ActiveModule = "sala_agil" | "sustentacao" | "rdm";
@@ -118,9 +118,9 @@ const NAV_RDM: NavItem[] = [
 ];
 
 const ACCENT = {
-  sala_agil:   { hex: "#0bbcaf", hexAlpha: (a: number) => `rgba(11,188,175,${a})`,  avatarBg: "#0a8f85",  label: "Sala Ágil",    icon: Zap,          textCls: "text-[#0bbcaf]", bgCls: "bg-[rgba(11,188,175,0.12)]" },
-  sustentacao: { hex: "#d97706", hexAlpha: (a: number) => `rgba(217,119,6,${a})`,   avatarBg: "#b45309",  label: "Sustentação",  icon: Wrench,       textCls: "text-amber-500", bgCls: "bg-amber-500/10" },
-  rdm:         { hex: "#7c3aed", hexAlpha: (a: number) => `rgba(124,58,237,${a})`,  avatarBg: "#6d28d9",  label: "RDM",          icon: ClipboardList, textCls: "text-violet-500", bgCls: "bg-violet-500/10" },
+  sala_agil:   { hex: "#6366F1", hexAlpha: (a: number) => `rgba(99,102,241,${a})`, avatarBg: "#4f46e5", label: "Sala Ágil", icon: Zap, textCls: "text-indigo-500", bgCls: "bg-indigo-500/12", boxCls: "bg-indigo-500/15 text-indigo-300", path: "/sala-agil" },
+  sustentacao: { hex: "#F59E0B", hexAlpha: (a: number) => `rgba(245,158,11,${a})`, avatarBg: "#d97706", label: "Sustentação", icon: Wrench, textCls: "text-amber-500", bgCls: "bg-amber-500/12", boxCls: "bg-amber-500/15 text-amber-300", path: "/sustentacao" },
+  rdm:         { hex: "#8B5CF6", hexAlpha: (a: number) => `rgba(139,92,246,${a})`, avatarBg: "#7c3aed", label: "RDM", icon: ClipboardList, textCls: "text-violet-500", bgCls: "bg-violet-500/12", boxCls: "bg-violet-500/15 text-violet-300", path: "/rdm" },
 } as const;
 
 function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
@@ -209,8 +209,9 @@ function NavItemButton({ item, isActive, collapsed, onNavigate }: {
     <button
       onClick={handleClick}
       className={cn(
-        "w-full flex items-center rounded-md transition-all duration-150 relative",
-        collapsed ? "justify-center h-9 w-9 mx-auto" : "gap-2.5 px-3 py-[7px]",
+        "w-full flex items-center rounded-lg transition-all duration-200 relative group focus-visible:ring-2 focus-visible:ring-indigo-400",
+        collapsed ? "justify-center h-10 w-10 mx-auto" : "gap-2.5 px-3 h-9",
+        isActive && "shadow-md shadow-indigo-900/40",
       )}
       style={{
         color:      isActive ? "#ffffff" : SB.fg,
@@ -220,16 +221,15 @@ function NavItemButton({ item, isActive, collapsed, onNavigate }: {
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
     >
       {isActive && !collapsed && (
-        <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
-          style={{ background: SB.teal }} />
+        <span className="absolute right-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-white" />
       )}
       <Icon className={cn("shrink-0", collapsed ? "h-4 w-4" : "h-[14px] w-[14px]")}
-        style={{ color: isActive ? SB.teal : SB.muted }} />
+        style={{ color: isActive ? "#ffffff" : SB.muted }} />
       {!collapsed && (
         <span className="text-[13px] font-medium truncate flex-1 text-left leading-none">{item.label}</span>
       )}
       {isActive && collapsed && (
-        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full" style={{ background: SB.teal }} />
+        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-white" />
       )}
     </button>
   );
@@ -284,48 +284,121 @@ function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
   );
 }
 
-function ModuleSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: boolean }) {
+function ModuleSwitcher({
+  module,
+  collapsed,
+  allowedModules,
+  administrationPath,
+}: {
+  module: ActiveModule;
+  collapsed: boolean;
+  allowedModules: ActiveModule[];
+  administrationPath: string | null;
+}) {
   const navigate = useNavigate();
-  const modules = [
-    { key: "sala_agil"   as ActiveModule, path: "/sala-agil",  label: "Ágil",  Icon: Zap },
-    { key: "sustentacao" as ActiveModule, path: "/sustentacao", label: "Sust.", Icon: Wrench },
-    { key: "rdm"         as ActiveModule, path: "/rdm",         label: "RDM",   Icon: ClipboardList },
-  ];
+  const operationalModules = [
+    { key: "sala_agil" as ActiveModule, path: "/sala-agil", label: "Sala Ágil", Icon: Zap },
+    { key: "sustentacao" as ActiveModule, path: "/sustentacao", label: "Sustentação", Icon: Wrench },
+    { key: "rdm" as ActiveModule, path: "/rdm", label: "RDM", Icon: ClipboardList },
+  ].filter(({ key }) => allowedModules.includes(key));
+  const modules = administrationPath
+    ? [
+        ...operationalModules,
+        {
+          key: "administracao",
+          path: administrationPath,
+          label: "Administrador",
+          Icon: Shield,
+        },
+      ]
+    : operationalModules;
+  const activeModule =
+    operationalModules.find(({ key }) => key === module) ?? operationalModules[0];
+
+  if (!activeModule) return null;
 
   if (collapsed) return (
-    <div className="flex flex-col items-center gap-1 w-full px-2 py-1">
-      {modules.map(({ key, path, label, Icon }) => (
-        <Tooltip key={key}>
-          <TooltipTrigger asChild>
-            <button onClick={() => navigate(path)} className="flex w-full items-center justify-center rounded-md p-2 transition-all"
-              style={{ color: module === key ? SB.teal : SB.muted, background: module === key ? SB.active : "transparent" }}
-              onMouseEnter={e => { if (module !== key) e.currentTarget.style.background = SB.acc; }}
-              onMouseLeave={e => { if (module !== key) e.currentTarget.style.background = "transparent"; }}>
-              <Icon className="h-3.5 w-3.5" />
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="mx-auto my-1 flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
+              style={{ color: SB.teal, background: SB.active }}
+              aria-label={`Trocar módulo. Atual: ${activeModule.label}`}
+            >
+              <activeModule.Icon className="h-4 w-4" />
             </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-xs">{label}</TooltipContent>
-        </Tooltip>
-      ))}
-    </div>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          {activeModule.label}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent side="right" align="start" className="w-52">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Trocar módulo</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {modules.map(({ key, path, label, Icon }) => (
+          <DropdownMenuItem
+            key={key}
+            onClick={() => navigate(path)}
+            className="cursor-pointer justify-between gap-2 text-xs"
+          >
+            <span className="flex items-center gap-2">
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </span>
+            {key === module && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   return (
-    <div className="flex items-stretch" style={{ borderBottom: `1px solid ${SB.border}` }}>
-      {modules.map(({ key, path, label, Icon }) => {
-        const isActive = module === key;
-        return (
-          <button key={key} onClick={() => navigate(path)} className="flex flex-1 items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-all relative"
-            style={{ color: isActive ? SB.teal : SB.muted, background: isActive ? SB.active : "transparent" }}
-            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = SB.acc; }}
-            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
-            <Icon className="h-3 w-3 shrink-0" />
-            {label}
-            {isActive && <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full" style={{ background: SB.teal }} />}
-          </button>
-        );
-      })}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex w-full items-center gap-2.5 px-3 py-2 transition-colors"
+          style={{ color: SB.fg, borderBottom: `1px solid ${SB.border}` }}
+          onMouseEnter={(event) => (event.currentTarget.style.background = SB.acc)}
+          onMouseLeave={(event) => (event.currentTarget.style.background = "transparent")}
+        >
+          <div
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: SB.active, color: SB.teal }}
+          >
+            <activeModule.Icon className="h-3.5 w-3.5" />
+          </div>
+          <div className="min-w-0 flex-1 text-left">
+            <p className="mb-0.5 text-[10px] uppercase leading-none tracking-wider" style={{ color: SB.muted }}>
+              Módulo ativo
+            </p>
+            <p className="truncate text-[12px] font-semibold leading-none" style={{ color: SB.fg }}>
+              {activeModule.label}
+            </p>
+          </div>
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0" style={{ color: SB.muted }} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="start" className="w-52">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Trocar módulo</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {modules.map(({ key, path, label, Icon }) => (
+          <DropdownMenuItem
+            key={key}
+            onClick={() => navigate(path)}
+            className="cursor-pointer justify-between gap-2 text-xs"
+          >
+            <span className="flex items-center gap-2">
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </span>
+            {key === module && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -362,7 +435,7 @@ function DarkModeToggle() {
   );
 }
 
-function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: string }) {
+function Topbar({ module, activeKey, onOpenMobile }: { module: ActiveModule; activeKey?: string; onOpenMobile: () => void }) {
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
@@ -381,15 +454,26 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   const Icon = activeItem?.icon;
 
   return (
-    <header className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-border overflow-hidden" style={{ background: "hsl(var(--background))" }}>
+    <header className="sticky top-0 z-20 h-14 shrink-0 flex items-center justify-between gap-3 px-3 sm:px-4 border-b border-border overflow-hidden bg-card/80 backdrop-blur-md">
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-[11px] text-muted-foreground font-medium hidden sm:block shrink-0">{accent.label}</span>
+        <button
+          onClick={onOpenMobile}
+          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted lg:hidden"
+          aria-label="Abrir navegação"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+        <span className="font-display text-[13px] text-muted-foreground font-bold hidden sm:block shrink-0">{accent.label}</span>
         <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
         <div className="flex items-center gap-2 min-w-0">
           {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}
-          <span className="text-[13px] font-semibold text-foreground truncate">{pageLabel}</span>
+          <span className="font-display text-[13px] font-bold text-foreground truncate">{pageLabel}</span>
         </div>
       </div>
+      <button className="hidden h-9 min-w-[180px] items-center justify-between rounded-lg bg-muted/60 px-3 text-left text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:flex lg:min-w-[260px]">
+        <span className="flex items-center gap-2"><Search className="h-3.5 w-3.5" />Search...</span>
+        <span className="font-mono text-[10px]">⌘K</span>
+      </button>
       <div className="flex items-center gap-1 shrink-0">
         {module === "sala_agil" && activeSprint && (
           <div className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border shrink-0"
@@ -405,64 +489,162 @@ function Topbar({ module, activeKey }: { module: ActiveModule; activeKey?: strin
   );
 }
 
+function SprintBanner() {
+  const sprint = useSprint() as any;
+  const { activeSprint, userStories = [], impediments = [] } = sprint;
+  if (!activeSprint) return null;
+
+  const sprintHUs = userStories.filter((hu: any) => (hu.sprintId || hu.sprint_id) === activeSprint.id);
+  const doneHUs = sprintHUs.filter((hu: any) =>
+    ["done", "concluido", "finalizado", "pronto_para_publicacao"].includes(String(hu.status ?? "").toLowerCase()),
+  );
+  const progress = sprintHUs.length > 0 ? Math.round((doneHUs.length / sprintHUs.length) * 100) : 0;
+  const activeImpediments = impediments.filter((imp: any) => !imp.resolvedAt && !imp.resolved_at);
+
+  return (
+    <div className="sticky top-14 z-10 border-b border-indigo-500/10 bg-indigo-600/[0.06] px-4 py-2 backdrop-blur-sm">
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+          </span>
+          <span className="font-display font-bold text-indigo-700 dark:text-indigo-300">Sprint ativa</span>
+          <span className="truncate font-semibold text-foreground">{activeSprint.name}</span>
+        </div>
+        <div className="h-4 w-px bg-border" />
+        <span className="font-mono font-semibold text-indigo-600">{progress}%</span>
+        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-indigo-500/12">
+          <div className="h-full rounded-full bg-indigo-600 transition-all duration-500" style={{ width: `${progress}%` }} />
+        </div>
+        <span className="text-muted-foreground">{sprintHUs.length} HUs</span>
+        {activeImpediments.length > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/12 px-2 py-0.5 font-semibold text-amber-600">
+            <AlertTriangle className="h-3 w-3" />
+            {activeImpediments.length} imped.
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
   const { profile, isAdmin, signOut, isSigningOut } = useAuth();
+  const {
+    isPlatformAdmin,
+    isOrganizationAdmin,
+    hasModuleAccess,
+    getModuleRole,
+  } = useOrganization();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const moduleAccess = profile?.module_access ?? "sala_agil";
-  const canSwitch = isAdmin || moduleAccess === "admin";
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
+  const allowedModules = (["sala_agil", "sustentacao", "rdm"] as ActiveModule[]).filter(
+    (moduleKey) => isAdmin || isPlatformAdmin || hasModuleAccess(moduleKey),
+  );
+  const administrationPath = isOrganizationAdmin
+    ? "/organization/admin"
+    : isAdmin
+      ? "/dashboard-admin"
+      : null;
+  const canSwitch =
+    allowedModules.length > 1 ||
+    Boolean(administrationPath) ||
+    isPlatformAdmin;
   const accent = ACCENT[module];
+  const moduleRole = getModuleRole(module);
+  const roleLabel =
+    moduleRole === "admin"
+      ? "Administrador"
+      : moduleRole === "member"
+        ? "Membro"
+        : moduleRole === "viewer"
+          ? "Leitura"
+          : null;
+  const profileContextLabel = roleLabel
+    ? `${accent.label} · ${roleLabel}`
+    : accent.label;
+  const ModuleIcon = accent.icon;
   const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
-  const sidebarWidth = collapsed ? "w-[56px]" : "w-[220px]";
+  const sidebarWidth = collapsed ? "w-16" : "w-60";
 
   const handleSignOut = async (e: React.MouseEvent) => {
     e.preventDefault();
     await signOut();
   };
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
   return (
     <TooltipProvider delayDuration={80}>
-      <div className="flex h-screen w-screen overflow-hidden bg-background" data-module={module}>
-        <aside className={cn("flex flex-col h-full shrink-0 transition-[width] duration-200 ease-in-out overflow-hidden", sidebarWidth)}
-          style={{ background: SB.bg, boxShadow: "2px 0 16px rgba(0,0,0,0.4)" }}>
+      <div className="flex h-screen w-screen overflow-hidden bg-background font-sans" data-module={module}>
+        {mobileOpen && (
+          <button
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+            aria-label="Fechar navegação"
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+        <aside className={cn(
+          "fixed inset-y-0 left-0 z-50 flex flex-col h-full shrink-0 overflow-hidden border-r transition-all duration-300 ease-in-out lg:static lg:z-auto",
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+          collapsed ? "lg:w-16 w-60" : sidebarWidth,
+        )}
+          style={{ background: SB.bg, borderColor: SB.border, boxShadow: "2px 0 24px rgba(15,23,42,0.28)" }}>
           <div className={cn("flex items-center h-14 shrink-0 px-3", collapsed ? "justify-center" : "justify-between")}
             style={{ borderBottom: `1px solid ${SB.border}` }}>
             {collapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button onClick={() => setCollapsed(false)} aria-label="Expandir sidebar"
-                    className="flex items-center justify-center rounded-md transition-colors"
-                    style={{ color: SB.muted }}
-                    onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    <PanelLeftOpen className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="text-xs">Expandir</TooltipContent>
-              </Tooltip>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 font-display text-sm font-black text-white shadow-md shadow-indigo-950/30">
+                Ax
+              </div>
             ) : (
               <>
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <AxionLogo size={24} />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 font-display text-sm font-black text-white shadow-md shadow-indigo-950/30">
+                    Ax
+                  </div>
                   <div className="min-w-0">
-                    <p className="text-[15px] font-bold leading-none tracking-tight" style={{ color: "#ffffff" }}>Axion</p>
-                    <p className="text-[9px] uppercase tracking-widest leading-none mt-0.5" style={{ color: SB.teal }}>{accent.label}</p>
+                    <p className="font-display text-base font-extrabold leading-none text-white">Axionn</p>
+                    <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">{accent.label}</p>
                   </div>
                 </div>
                 <button onClick={() => setCollapsed(true)} aria-label="Recolher sidebar"
-                  className="flex h-6 w-6 items-center justify-center rounded-md shrink-0 transition-colors"
+                  className="hidden h-8 w-8 items-center justify-center rounded-lg shrink-0 transition-colors lg:flex"
                   style={{ color: SB.muted }}
                   onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                  <PanelLeftClose className="h-3.5 w-3.5" />
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
               </>
             )}
+            {collapsed && (
+              <button onClick={() => setCollapsed(false)} aria-label="Expandir sidebar"
+                className="absolute left-11 hidden h-8 w-8 items-center justify-center rounded-lg transition-colors lg:flex"
+                style={{ color: SB.muted }}
+                onMouseEnter={e => (e.currentTarget.style.background = SB.acc)}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
-          {canSwitch && <div className="shrink-0"><ModuleSwitcher module={module} collapsed={collapsed} /></div>}
+          {canSwitch && (
+            <div className="shrink-0">
+              <ModuleSwitcher
+                module={module}
+                collapsed={collapsed}
+                allowedModules={allowedModules}
+                administrationPath={administrationPath}
+              />
+            </div>
+          )}
           {!canSwitch && !collapsed && (
             <div className="mx-2 mt-2 flex items-center rounded-lg px-3 py-2 text-[12px] font-semibold gap-2" style={{ background: SB.active, color: SB.teal }}>
-              <accent.icon className="h-3.5 w-3.5 shrink-0" />
+              <ModuleIcon className="h-3.5 w-3.5 shrink-0" />
               {accent.label}
             </div>
           )}
@@ -486,7 +668,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                         {profile?.full_name ?? profile?.display_name ?? profile?.email?.split("@")[0] ?? "Usuário"}
                       </p>
                       <p className="text-[10px] truncate leading-none mt-0.5" style={{ color: SB.teal }}>
-                        {profile?.role ?? profile?.module_access ?? "Membro"}
+                        {profileContextLabel}
                       </p>
                     </div>
                   )}
@@ -497,6 +679,14 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
                   <p className="font-semibold text-sm">{profile?.full_name ?? profile?.display_name ?? "Usuário"}</p>
                   <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => navigate("/modulos")}
+                  className="cursor-pointer gap-2"
+                >
+                  <Layers className="h-4 w-4" />
+                  Trocar ambiente
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} disabled={isSigningOut}
                   className="text-red-500 focus:text-red-500 gap-2 cursor-pointer disabled:opacity-50">
@@ -513,7 +703,8 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
         </aside>
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Topbar module={module} activeKey={activeKey} />
+          <Topbar module={module} activeKey={activeKey} onOpenMobile={() => setMobileOpen(true)} />
+          {module === "sala_agil" && <SprintBanner />}
           <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
         </div>
       </div>

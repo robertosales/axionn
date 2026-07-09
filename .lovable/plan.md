@@ -1,126 +1,88 @@
-# Correção definitiva de permissões e gestão de times/membros no modelo multi-tenant
-
 ## Objetivo
-Eliminar a inconsistência entre o modelo legado (`user_roles` / `role_permissions` / `hasPermission("manage_teams")`) e o modelo organizacional (`organization_members`, `organization_member_modules`, RPCs `*_v2`), fazendo com que admins de organização e membros de times como GESP3/Nexo consigam operar corretamente sem depender do modelo legado.
 
-## Escopo e abordagem
-Trabalho dividido em 4 camadas: banco (RPCs + backfill), hook central de permissões, refactor dos componentes, e validação. Nada de refatoração cosmética, nada de remover o modelo legado — ele fica como fallback controlado quando `VITE_ORG_TENANCY_ENABLED=false`.
+Criar a Edge Function `process-ai-briefing` que gera sugestões de tarefas/decisões/riscos a partir de um Briefing armazenado em `ai_briefings`, reutilizando:
 
----
+- provedor ativo/recomendado cadastrado em `public.ai_providers` (mesma tabela usada pelo APF);
+- credencial obtida exclusivamente via RPC `get_ai_provider_key_by_id`;
+- RPCs de ciclo de vida do briefing já existentes: `start_ai_briefing_run`, `complete_ai_briefing_run`, `fail_ai_briefing_run` e inserção em `ai_briefing_suggestions`.
 
-## 1. Banco de dados (migrations idempotentes)
+Nada da rotina de APF (`apf-generate`, `count-function-points`, `apf-*`) é alterado.
 
-### 1.1 Corrigir `get_organization_teams_admin_v2`
-Trocar a filtragem restritiva por resolução via `resolve_team_org_id`:
+## Arquivos
 
-```sql
-where coalesce(t.org_id, public.resolve_team_org_id(t.id)) = p_org_id
+- `supabase/functions/process-ai-briefing/index.ts` (novo)
+- `supabase/config.toml` (adicionar bloco `[functions.process-ai-briefing]` com `verify_jwt = true`)
+
+Nenhuma nova tabela, secret, página, hook ou cadastro. Nenhum arquivo do APF é tocado.
+
+## Contrato da função
+
+- Método: `POST`, `verify_jwt = true`.
+- CORS igual às demais functions da plataforma.
+- Body: `{ briefingId: string (uuid), providerId?: string }`.
+- Autenticação: `Authorization: Bearer <jwt>` do usuário logado (client anon + header). RLS já protege `ai_briefings`, então o carregamento inicial usa o client autenticado do usuário.
+- Retorno: `{ success, runId, providerUsed, model, latencyMs, suggestionsCount }` ou `{ success: false, reason, userMessage }` (mesmo padrão do `platform-ai-provider-test`).
+
+## Fluxo
+
+1. Validar JWT via `userClient.auth.getUser()`; recusar 401 se inválido.
+2. Ler o briefing com o client do usuário: `select id, org_id, briefing_type, language, source_content, participants, meeting_date, title from ai_briefings where id = :briefingId`. Se não encontrado → 404 (RLS já garante escopo).
+3. Selecionar o provedor de IA usando o service role, na ordem:
+   - `providerId` recebido (se enviado, e `is_active`);
+   - senão, `is_recommended = true and is_active = true` (mais recente);
+   - senão, primeiro `is_active = true` ordenado por `created_at desc`.
+   Se nenhum → `{ success:false, reason:"AI_PROVIDER_NOT_CONFIGURED" }`.
+4. Buscar a credencial exclusivamente via `admin.rpc("get_ai_provider_key_by_id", { p_id: provider.id })`. Se ausente/curta → `AI_PROVIDER_KEY_MISSING`.
+5. Chamar `start_ai_briefing_run({ p_briefing_id, p_prompt_version:"briefing.v1", p_request_id: crypto.randomUUID(), p_schema_version:"briefing.suggestions.v1" })` para obter `run_id` e dados oficiais do briefing.
+6. Montar o prompt do Briefing (próprio, separado do APF) e o schema de saída (ver seções abaixo). Ambos ficam apenas nesta function.
+7. Chamar o provedor usando a mesma lógica de `platform-ai-provider-test`: um helper `callProvider(provider, apiKey, systemPrompt, userPrompt)` que suporta `request_format` `openai_compatible`, `gemini` e `anthropic` (endpoints, headers e parsing idênticos aos já usados na plataforma; sem novas dependências).
+8. Extrair o JSON da resposta (bloco ```json ou parse direto). Validar contra o schema (Zod inline). Se falhar → `fail_ai_briefing_run(run_id, "AI_OUTPUT_INVALID", ...)` e retornar erro amigável.
+9. Persistir com service role:
+   - `insert into ai_briefing_suggestions` — um registro por item, com `ordinal` sequencial, `suggestion_type` (`task` | `decision` | `risk` | `follow_up`), `title`, `description`, `priority_hint`, `suggested_assignee_name`, `suggested_due_date`, `date_source`, `original_payload = item`, `review_status = 'pending'`.
+   - `complete_ai_briefing_run({ p_run_id, p_provider_id, p_model_name, p_output_payload, p_duration_ms, p_input_tokens?, p_output_tokens?, p_estimated_cost? })`.
+10. Erros do provedor (401/402/404/429/5xx/timeout) reutilizam o mapeamento `sanitizeProviderFailure` do `platform-ai-provider-test`, e chamam `fail_ai_briefing_run` antes de retornar. Logs técnicos vão em `console.error` (nunca no `userMessage`).
+
+## Prompt do Briefing (isolado nesta function)
+
+- System prompt em PT-BR (fallback para o `language` do briefing) explicando que a IA lê uma ata / transcrição de reunião do módulo Sala Ágil e deve extrair itens acionáveis para o time.
+- User prompt injeta: `title`, `briefing_type`, `meeting_date`, `participants`, `source_content`.
+- Instrução explícita para responder **somente** com JSON válido conforme o schema, sem texto adicional, sem markdown.
+- Regras de negócio herdadas do produto: HU/ação com estimativa máxima de 24h, atividades ≤ 8h, datas nunca retroativas à `meeting_date`, idioma PT-BR.
+
+## Schema de saída (próprio do Briefing)
+
+```
+{
+  "summary": string,                          // resumo executivo curto
+  "suggestions": [
+    {
+      "type": "task" | "decision" | "risk" | "follow_up",
+      "title": string,                        // <=120 chars
+      "description": string,                  // <=1200 chars
+      "priority": "low" | "medium" | "high" | null,
+      "assignee_name": string | null,         // texto livre (mapeado depois)
+      "due_date": string | null,              // ISO yyyy-mm-dd, >= meeting_date
+      "date_source": "explicit" | "inferred" | "none"
+    }
+  ]
+}
 ```
 
-Aplicar o mesmo padrão em `create_organization_team_v2`, `update_organization_team_v2`, `deactivate_organization_team_v2` para não quebrar em times legados (GESP3, Nexo) cujo `org_id` ainda é nulo.
+Validação com Zod (versão via `npm:zod`). Se o modelo devolver campos extras, são ignorados; se faltar campo obrigatório, cai em `AI_OUTPUT_INVALID`.
 
-### 1.2 Backfill de `teams.org_id`
-Migration idempotente e não destrutiva:
+## Config e publicação
 
-```sql
-update public.teams
-set org_id = public.resolve_team_org_id(id)
-where org_id is null
-  and public.resolve_team_org_id(id) is not null;
-```
+- `supabase/config.toml` recebe:
+  ```
+  [functions.process-ai-briefing]
+  verify_jwt = true
+  ```
+- Publicar imediatamente via deploy da nova function.
 
-### 1.3 Novas RPCs para membros de time (tenant-scoped, SECURITY DEFINER)
-Todas validam: usuário autenticado, organização ativa/trial, executor é platform admin OU org owner/admin, time pertence à org, usuário-alvo é membro ativo da organização, sem cross-tenant. Registram auditoria em `organization_operational_audit_log` quando aplicável.
+## Validação pós-deploy
 
-- `get_organization_team_members_v2(p_org_id uuid, p_team_id uuid)` — lista membros com nome, email, role no time, ativo.
-- `add_organization_team_member_v2(p_org_id, p_team_id, p_user_id, p_role)`
-- `update_organization_team_member_role_v2(p_org_id, p_team_member_id, p_role)`
-- `remove_organization_team_member_v2(p_org_id, p_team_member_id)`
-
-GRANT EXECUTE apenas para `authenticated` e `service_role`. REVOKE em `public` e `anon`.
-
-### 1.4 View/query de diagnóstico
-Query SQL parametrizável (guardada em `supabase/audits/`) para validar qualquer usuário: presença em `profiles`, `is_active`, `organization_members` (role, is_active), `organization_member_modules`, `team_members` para times-alvo, `teams.org_id` vs. organização esperada. Sem hardcode de nomes.
-
----
-
-## 2. Hook central de permissões — `useTeamManagementPermissions`
-
-Novo arquivo `src/features/admin/hooks/useTeamManagementPermissions.ts`. Retorna:
-
-```
-canViewTeams, canCreateTeam, canUpdateTeam, canDeleteTeam,
-canViewTeamMembers, canAddTeamMember, canRemoveTeamMember, canUpdateTeamMember
-```
-
-Regras:
-- `VITE_ORG_TENANCY_ENABLED=true` → deriva de `OrganizationContext`:
-  - `isPlatformAdmin` → tudo `true`.
-  - `isOrganizationAdmin` (owner/admin em `organization_members` da org atual, org com status operacional) → tudo `true`.
-  - membro comum → apenas leitura do que já é acessível.
-- `VITE_ORG_TENANCY_ENABLED=false` → fallback legado: `isAdmin || hasPermission("manage_teams")`.
-
-Também expor flags nomeadas separadas em `OrganizationContext`/`AuthContext`: `isPlatformAdmin`, `isOrganizationAdmin`, `isLegacyAdmin`, `isModuleAdmin`, `isTeamMember` (sem sobrecarga do termo `isAdmin`).
-
----
-
-## 3. Refactor de componentes
-
-### 3.1 `TeamManager` / `useTeamsAdmin`
-Já usa RPCs `*_v2` quando `enabled`. Ajustes:
-- Substituir gates locais por `useTeamManagementPermissions`.
-- Remover queries diretas em `user_stories`/`demandas` para bloqueio de exclusão em modo tenancy (validação passa a ser feita na RPC `deactivate_organization_team_v2`).
-- Mensagens de erro específicas via `resolveOrganizationOperationalError` estendido.
-
-### 3.2 `TeamMembersManager`
-Hoje faz mutação direta em `team_members`. Refatorar para:
-- Em modo tenancy: usar as 4 RPCs novas de membros de time.
-- Em modo legado: manter comportamento atual.
-- Gates via `useTeamManagementPermissions`.
-
-### 3.3 `useUsersAdmin`
-- Em modo tenancy: só usa RPCs (`get_organization_members_v2`, `update_organization_member_v2`, `deactivate_organization_member_v2`, `transfer_organization_ownership_v2`).
-- Remover updates diretos em `profiles`, `team_members`, `user_module_roles` para ações administrativas.
-- Se algum campo de `profiles` precisar mudar por admin org, adicionar RPC dedicada (a decidir no momento, só se houver caller real).
-
-### 3.4 `AdminUsuariosPage`
-Remover a checagem `supabase.from("user_roles").select(...).eq("role","admin")` — substituir por `isPlatformAdmin` do contexto.
-
----
-
-## 4. Mensagens de erro
-Estender `resolveOrganizationOperationalError` (ou wrapper novo) para mapear os códigos das novas RPCs para:
-- "Você não tem permissão para gerenciar times nesta organização."
-- "Este time não pertence à organização selecionada."
-- "Usuário não é membro ativo da organização."
-- "Organização suspensa ou cancelada: operações bloqueadas."
-- "Não foi possível carregar os times da organização."
-
-Detalhes técnicos ficam em `console.error`, nunca em toast.
-
----
-
-## 5. Testes / validação
-Novo arquivo `supabase/tests/database/10_team_membership_management.test.sql` cobrindo os 5 cenários (A platform admin, B org admin, C membro comum, D time legado sem `org_id`, E membership/role variados). Segue o padrão dos testes existentes em `supabase/tests/database/`.
-
-Query de diagnóstico em `supabase/audits/20260708_team_membership_diagnostics.sql` para rodar contra staging/prod validando qualquer usuário e conjunto de times.
-
----
-
-## Detalhes técnicos
-
-- Migrations: uma para RPCs de teams corrigidas + backfill, outra para RPCs novas de membros. Ambas idempotentes (`create or replace function`, `update ... where org_id is null`).
-- Sem `service_role` no frontend. Sem policies abertas. RLS permanece habilitado.
-- RPCs `SECURITY DEFINER` com `set search_path = public` e validações explícitas via `auth.uid()`, `is_platform_admin()`, `is_organization_admin()`, `resolve_team_org_id()`, status da organização, membership ativo.
-- Nenhum nome de usuário hardcoded.
-- Fallback legado preservado atrás de `ORGANIZATION_TENANCY_ENABLED`.
-
-## Fora de escopo
-- Remoção do modelo legado.
-- Mudanças no `AuthContext` que alterem semântica atual de `hasPermission` para consumidores não-times.
-- Novas UIs — apenas ajustes em componentes existentes de gestão de times/membros.
-
-## Como validar após deploy
-1. Rodar `supabase/audits/20260708_team_membership_diagnostics.sql` para Leidy e Jo com IDs de GESP3/Nexo.
-2. Executar `supabase/tests/database/10_team_membership_management.test.sql`.
-3. Smoke manual: login como org admin → listar/criar/editar/inativar time; adicionar/remover membro; verificar toasts com mensagens novas.
+- `curl` autenticado com um `briefingId` real:
+  - retorna `success: true` e cria linhas em `ai_briefing_suggestions` + `ai_briefing_runs.status = 'completed'`.
+- Cenário sem chave configurada → `AI_PROVIDER_KEY_MISSING`, sem stacktrace no toast.
+- Cenário com JSON inválido → `AI_OUTPUT_INVALID`, `ai_briefing_runs.status = 'failed'` com `error_code` correspondente.
+- Nenhuma alteração observável em `apf-generate` / rotinas de APF.

@@ -8,7 +8,9 @@ alter table public.ai_providers
   add constraint ai_providers_provider_type_check
   check (provider_type in (
     'lovable', 'openai', 'gemini', 'anthropic',
-    'perplexity', 'sakana', 'openrouter'
+    'perplexity', 'sakana', 'groq', 'manus',
+    'deepseek', 'mistral', 'ollama', 'xai',
+    'azure_openai', 'cohere', 'custom', 'openrouter'
   ));
 
 insert into public.ai_providers (name, provider_type, model, api_base_url, request_format, is_active, is_recommended)
@@ -25,4 +27,4 @@ where not exists (
 );
 
 comment on column public.ai_providers.provider_type is
-  'Tipo do provedor: lovable, openai, gemini, anthropic, perplexity, sakana, openrouter';
+  'Tipo do provedor: lovable, openai, gemini, anthropic, perplexity, sakana, groq, manus, deepseek, mistral, ollama, xai, azure_openai, cohere, custom, openrouter';

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import {
+  applyBriefingSuggestion,
   createBriefing,
   getBriefing,
   processBriefing,
@@ -12,6 +13,7 @@ export function useBriefing() {
   const [briefing, setBriefing] = useState<BriefingRecord | null>(null);
   const [creating, setCreating] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async (briefingId: string) => {
@@ -73,13 +75,38 @@ export function useBriefing() {
     setError(null);
   }, []);
 
+  const apply = useCallback(
+    async (suggestionId: string) => {
+      if (!briefing) return null;
+      setApplyingId(suggestionId);
+      setError(null);
+      try {
+        const result = await applyBriefingSuggestion(suggestionId);
+        await refresh(briefing.id);
+        return result;
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível aplicar a sugestão.",
+        );
+        throw cause;
+      } finally {
+        setApplyingId(null);
+      }
+    },
+    [briefing, refresh],
+  );
+
   return {
     briefing,
     creating,
     reviewingId,
+    applyingId,
     error,
     createAndProcess,
     review,
+    apply,
     reset,
   };
 }

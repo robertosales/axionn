@@ -77,9 +77,11 @@ export default function BriefingPage() {
     briefing,
     creating,
     reviewingId,
+    applyingId,
     error,
     createAndProcess,
     review,
+    apply,
     reset,
   } = useBriefing();
 
@@ -102,6 +104,11 @@ export default function BriefingPage() {
   const enabled = entitlements.some(
     (entitlement) =>
       entitlement.featureKey === "ai.briefing.enabled" && entitlement.enabled,
+  );
+  const canApply = entitlements.some(
+    (entitlement) =>
+      entitlement.featureKey === "ai.briefing.apply_actions" &&
+      entitlement.enabled,
   );
   const maxChars =
     entitlements.find(
@@ -204,6 +211,40 @@ export default function BriefingPage() {
     }
   };
 
+  const applicableSuggestions =
+    briefing?.suggestions.filter(
+      (suggestion) =>
+        ["action", "backlog_candidate", "impediment"].includes(
+          suggestion.type,
+        ) &&
+        ["approved", "edited"].includes(suggestion.reviewStatus),
+    ) ?? [];
+
+  const handleApply = async (suggestionId: string) => {
+    try {
+      const result = await apply(suggestionId);
+      toast.success(
+        result?.target_type === "impediment"
+          ? "Impedimento criado na sprint."
+          : "Item criado no backlog da sprint.",
+      );
+    } catch {
+      toast.error("Não foi possível aplicar a sugestão.");
+    }
+  };
+
+  const applyAll = async () => {
+    for (const suggestion of applicableSuggestions) {
+      try {
+        await apply(suggestion.id);
+      } catch {
+        toast.error(`Falha ao aplicar “${suggestion.title}”.`);
+        return;
+      }
+    }
+    toast.success("Todas as sugestões aprovadas foram aplicadas.");
+  };
+
   if (!entitlementLoading && !enabled) {
     return (
       <Card className="mx-auto max-w-2xl">
@@ -237,6 +278,12 @@ export default function BriefingPage() {
           <Button variant="outline" onClick={reset}>
             <RotateCcw className="mr-2 h-4 w-4" /> Novo briefing
           </Button>
+          {canApply && applicableSuggestions.length > 0 && (
+            <Button onClick={() => void applyAll()}>
+              <Check className="mr-2 h-4 w-4" />
+              Aplicar aprovadas ({applicableSuggestions.length})
+            </Button>
+          )}
         </div>
 
         {error && (
@@ -284,7 +331,13 @@ export default function BriefingPage() {
 
             {briefing.suggestions.map((suggestion) => {
               const busy = reviewingId === suggestion.id;
+              const applying = applyingId === suggestion.id;
               const reviewed = suggestion.reviewStatus !== "pending";
+              const applicable = [
+                "action",
+                "backlog_candidate",
+                "impediment",
+              ].includes(suggestion.type);
               return (
                 <Card
                   key={suggestion.id}
@@ -309,6 +362,8 @@ export default function BriefingPage() {
                         variant={
                           suggestion.reviewStatus === "approved"
                             ? "default"
+                            : suggestion.reviewStatus === "applied"
+                              ? "default"
                             : suggestion.reviewStatus === "rejected"
                               ? "destructive"
                               : "secondary"
@@ -318,6 +373,8 @@ export default function BriefingPage() {
                           ? "Pendente"
                           : suggestion.reviewStatus === "approved"
                             ? "Aprovada"
+                            : suggestion.reviewStatus === "applied"
+                              ? "Aplicada"
                             : suggestion.reviewStatus === "edited"
                               ? "Editada"
                             : suggestion.reviewStatus === "rejected"
@@ -394,6 +451,25 @@ export default function BriefingPage() {
                         </Button>
                       </div>
                     )}
+                    {canApply &&
+                      applicable &&
+                      ["approved", "edited"].includes(
+                        suggestion.reviewStatus,
+                      ) && (
+                        <Button
+                          size="sm"
+                          disabled={applying}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleApply(suggestion.id);
+                          }}
+                        >
+                          {applying && (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          )}
+                          Aplicar no projeto
+                        </Button>
+                      )}
                   </CardContent>
                 </Card>
               );

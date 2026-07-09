@@ -224,3 +224,18 @@ export async function reviewBriefingSuggestion(
   });
   assertNoError(error);
 }
+
+export async function applyBriefingSuggestion(suggestionId: string) {
+  const { data, error } = await supabase.rpc(
+    "apply_ai_briefing_suggestion" as never,
+    { p_suggestion_id: suggestionId } as never,
+  );
+  assertNoError(error);
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result) throw new Error("A aplicação não retornou o registro criado.");
+  return result as {
+    application_id: string;
+    target_type: "user_story" | "impediment";
+    target_id: string;
+  };
+}

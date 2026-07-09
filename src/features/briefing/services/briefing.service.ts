@@ -469,3 +469,43 @@ export async function applyBriefingSuggestion(suggestionId: string) {
     target_id: string;
   };
 }
+
+export interface AgendaItem {
+  section: string;
+  ordinal: number;
+  title: string;
+  description: string | null;
+  sourceBriefingId: string;
+  sourceBriefingTitle: string;
+  suggestionType: string;
+  dueDate: string | null;
+  priorityHint: string | null;
+}
+
+export async function generateBriefingAgenda(
+  teamId: string,
+  briefingType = "daily",
+): Promise<AgendaItem[]> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<Record<string, unknown>> | null;
+    error: { message: string } | null;
+  }>)("generate_briefing_agenda", {
+    p_team_id: teamId,
+    p_briefing_type: briefingType,
+  });
+  assertNoError(error);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    section: String(row.section),
+    ordinal: Number(row.ordinal),
+    title: String(row.title),
+    description: row.description == null ? null : String(row.description),
+    sourceBriefingId: String(row.source_briefing_id),
+    sourceBriefingTitle: String(row.source_briefing_title),
+    suggestionType: String(row.suggestion_type),
+    dueDate: row.due_date == null ? null : String(row.due_date),
+    priorityHint: row.priority_hint == null ? null : String(row.priority_hint),
+  }));
+}

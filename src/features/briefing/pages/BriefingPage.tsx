@@ -61,6 +61,7 @@ import {
   type BriefingOutcomes,
 } from "../services/briefing.service";
 import type { BriefingSuggestionType, BriefingType } from "../types/briefing";
+import { NextMeetingAgenda } from "../components/NextMeetingAgenda";
 
 const TYPE_LABELS: Record<BriefingType, string> = {
   daily: "Daily",
@@ -849,13 +850,17 @@ export default function BriefingPage() {
               value={sourceContent}
               maxLength={maxChars}
               rows={16}
-              placeholder="Cole aqui a transcrição da reunião..."
+              placeholder="Cole aqui a transcricao da reuniao... Ex: Nome: texto / Decisao: ... / Acao: ..."
               onChange={(event) => {
                 setSourceContent(event.target.value);
                 setSourceType("pasted_text");
                 setFileName(null);
               }}
             />
+            <p className="text-xs text-muted-foreground">
+              Formato ideal: transcreva com identificacao de quem falou (ex: &quot;Ana: vamos revisar o prazo&quot;).
+              A IA extrai automaticamente decisoes, acoes, impedimentos, riscos, perguntas e candidatos ao backlog.
+            </p>
           </div>
 
           {error && (
@@ -865,10 +870,24 @@ export default function BriefingPage() {
           )}
 
           <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <FileText className="h-4 w-4" />
-              A IA apenas criará rascunhos para sua revisão.
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <FileText className="h-4 w-4" />
+                A IA apenas criará rascunhos para sua revisão.
+              </p>
+              {(!currentOrganizationId || !currentTeamId) && (
+                <p className="flex items-center gap-1 text-xs text-amber-600">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Selecione uma organizacao e equipe antes de analisar.
+                </p>
+              )}
+              {!activeSprint && (
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Sem sprint ativa: sugestoes do tipo acao/backlog serao registradas sem sprint vinculada.
+                </p>
+              )}
+            </div>
             <Button
               size="lg"
               disabled={
@@ -982,6 +1001,11 @@ export default function BriefingPage() {
         </Card>
       )}
 
+      <NextMeetingAgenda
+        teamId={currentTeamId}
+        onOpenBriefing={openBriefing}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -1025,7 +1049,44 @@ export default function BriefingPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Badge variant="secondary">{item.status}</Badge>
+                    <Badge
+                      variant={
+                        item.status === "failed"
+                          ? "destructive"
+                          : item.status === "ready_for_review"
+                            ? "default"
+                          : item.status === "applied" || item.status === "partially_applied"
+                            ? "default"
+                          : item.status === "processing"
+                            ? "secondary"
+                          : "outline"
+                      }
+                    >
+                      {item.status === "failed"
+                        ? "Falha"
+                        : item.status === "draft"
+                          ? "Rascunho"
+                          : item.status === "processing"
+                            ? "Processando"
+                          : item.status === "ready_for_review"
+                            ? "Pronto"
+                          : item.status === "partially_applied"
+                            ? "Parcial"
+                          : item.status === "applied"
+                            ? "Aplicado"
+                          : item.status === "archived"
+                            ? "Arquivado"
+                          : item.status}
+                    </Badge>
+                    {item.status === "failed" && (
+                      <RotateCcw
+                        className="h-4 w-4 cursor-pointer text-muted-foreground hover:text-foreground"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void openBriefing(item.id);
+                        }}
+                      />
+                    )}
                     {openingId === item.id && (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     )}

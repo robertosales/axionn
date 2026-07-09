@@ -7784,6 +7784,14 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_ai_briefing_suggestion: {
+        Args: { p_suggestion_id: string }
+        Returns: {
+          application_id: string
+          target_id: string
+          target_type: string
+        }[]
+      }
       archive_organization_company_v2: {
         Args: { p_company_id: string; p_org_id: string }
         Returns: undefined

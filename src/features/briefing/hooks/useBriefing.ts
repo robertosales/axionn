@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import {
   applyBriefingSuggestion,
   createBriefing,
+  generateBriefingAgenda,
   getBriefing,
   processBriefing,
   reviewBriefingSuggestion,
@@ -9,10 +10,12 @@ import {
   type BriefingRecord,
   type CreateBriefingInput,
 } from "../services/briefing.service";
+import type { AgendaItem } from "../services/briefing.service";
 
 export function useBriefing() {
   const [briefing, setBriefing] = useState<BriefingRecord | null>(null);
   const [creating, setCreating] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +43,27 @@ export function useBriefing() {
         throw cause;
       } finally {
         setCreating(false);
+      }
+    },
+    [refresh],
+  );
+
+  const processAgain = useCallback(
+    async (briefingId: string) => {
+      setProcessingId(briefingId);
+      setError(null);
+      try {
+        await processBriefing(briefingId);
+        return await refresh(briefingId);
+      } catch (cause) {
+        const message =
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível reprocessar o briefing.";
+        setError(message);
+        throw cause;
+      } finally {
+        setProcessingId(null);
       }
     },
     [refresh],
@@ -121,17 +145,37 @@ export function useBriefing() {
     [briefing, refresh],
   );
 
+  const generateAgenda = useCallback(
+    async (teamId: string, briefingType = "daily"): Promise<AgendaItem[]> => {
+      setError(null);
+      try {
+        return await generateBriefingAgenda(teamId, briefingType);
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível gerar a pauta da próxima reunião.",
+        );
+        throw cause;
+      }
+    },
+    [],
+  );
+
   return {
     briefing,
     creating,
+    processingId,
     reviewingId,
     applyingId,
     error,
     createAndProcess,
+    processAgain,
     review,
     apply,
     confirmAssignee,
     reset,
     open: refresh,
+    generateAgenda,
   };
 }

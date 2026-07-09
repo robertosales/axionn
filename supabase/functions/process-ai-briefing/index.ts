@@ -144,8 +144,10 @@ function normalizeDate(value: unknown): string | undefined {
   let year: number;
   let month: number;
   let day: number;
+
   const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const brazilian = raw.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  const brazilian = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  const brazilianShort = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$/);
 
   if (iso) {
     year = Number(iso[1]);
@@ -155,8 +157,24 @@ function normalizeDate(value: unknown): string | undefined {
     day = Number(brazilian[1]);
     month = Number(brazilian[2]);
     year = Number(brazilian[3]);
+  } else if (brazilianShort) {
+    day = Number(brazilianShort[1]);
+    month = Number(brazilianShort[2]);
+    year = 2000 + Number(brazilianShort[3]);
   } else {
-    throw new HttpError(422, "AI_OUTPUT_INVALID", "Data sugerida invalida");
+    throw new HttpError(
+      422,
+      "AI_OUTPUT_INVALID_DATE_FORMAT",
+      "Formato de data invalido. Use YYYY-MM-DD (ex: 2026-07-09) ou DD/MM/YYYY (ex: 09/07/2026)",
+    );
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    throw new HttpError(
+      422,
+      "AI_OUTPUT_INVALID_DATE",
+      "Data sugerida invalida: dia ou mes fora do intervalo",
+    );
   }
 
   const parsed = new Date(Date.UTC(year, month - 1, day));
@@ -165,7 +183,11 @@ function normalizeDate(value: unknown): string | undefined {
     parsed.getUTCMonth() !== month - 1 ||
     parsed.getUTCDate() !== day
   ) {
-    throw new HttpError(422, "AI_OUTPUT_INVALID", "Data sugerida invalida");
+    throw new HttpError(
+      422,
+      "AI_OUTPUT_INVALID_DATE",
+      "Data sugerida invalida (ex: 31/02/2026 nao existe)",
+    );
   }
 
   return [
@@ -177,7 +199,7 @@ function normalizeDate(value: unknown): string | undefined {
 
 function parseEvidence(value: unknown): Evidence {
   const item = asRecord(value);
-  if (!item) throw new HttpError(422, "AI_OUTPUT_INVALID", "Evidencia invalida");
+  if (!item) throw new HttpError(422, "AI_OUTPUT_INVALID_EVIDENCE", "Evidencia invalida: objeto esperado");
 
   const sourceStart =
     item.sourceStart === undefined ? undefined : Number(item.sourceStart);
@@ -194,8 +216,8 @@ function parseEvidence(value: unknown): Evidence {
   ) {
     throw new HttpError(
       422,
-      "AI_OUTPUT_INVALID",
-      "Intervalo de evidencia invalido",
+      "AI_OUTPUT_INVALID_EVIDENCE_RANGE",
+      "Intervalo de evidencia invalido: sourceStart e sourceEnd devem ser inteiros positivos, com sourceEnd > sourceStart",
     );
   }
 
@@ -219,7 +241,7 @@ function parseEvidence(value: unknown): Evidence {
 
 function parseSuggestion(value: unknown): Suggestion {
   const item = asRecord(value);
-  if (!item) throw new HttpError(422, "AI_OUTPUT_INVALID", "Sugestao invalida");
+  if (!item) throw new HttpError(422, "AI_OUTPUT_INVALID", "Sugestao invalida: objeto esperado");
 
   const allowedTypes = [
     "decision",
@@ -230,12 +252,20 @@ function parseSuggestion(value: unknown): Suggestion {
     "backlog_candidate",
   ];
   if (typeof item.type !== "string" || !allowedTypes.includes(item.type)) {
-    throw new HttpError(422, "AI_OUTPUT_INVALID", "Tipo de sugestao invalido");
+    throw new HttpError(
+      422,
+      "AI_OUTPUT_INVALID_TYPE",
+      `Tipo de sugestao invalido: "${item.type}". Tipos permitidos: ${allowedTypes.join(", ")}`,
+    );
   }
 
   const dateSource = item.dateSource;
   if (!["explicit", "inferred", "absent"].includes(String(dateSource))) {
-    throw new HttpError(422, "AI_OUTPUT_INVALID", "Origem da data invalida");
+    throw new HttpError(
+      422,
+      "AI_OUTPUT_INVALID_DATE_SOURCE",
+      'Origem da data invalida. Use "explicit", "inferred" ou "absent"',
+    );
   }
   const dueDate = normalizeDate(item.dueDate);
   if (
@@ -244,20 +274,24 @@ function parseSuggestion(value: unknown): Suggestion {
   ) {
     throw new HttpError(
       422,
-      "AI_OUTPUT_INVALID",
-      "Data e origem da data inconsistentes",
+      "AI_OUTPUT_DATE_MISMATCH",
+      "Data e origem da data inconsistentes: se dateSource='absent', nao informe dueDate; caso contrario, dueDate e obrigatorio",
     );
   }
 
   const priority = optionalString(item.priority, "suggestion.priority", 20);
   if (priority && !["low", "medium", "high", "urgent"].includes(priority)) {
-    throw new HttpError(422, "AI_OUTPUT_INVALID", "Prioridade invalida");
+    throw new HttpError(
+      422,
+      "AI_OUTPUT_INVALID_PRIORITY",
+      `Prioridade invalida: "${priority}". Use: low, medium, high ou urgent`,
+    );
   }
   if (!Array.isArray(item.evidence) || item.evidence.length === 0) {
     throw new HttpError(
       422,
-      "AI_OUTPUT_INVALID",
-      "Toda sugestao deve possuir evidencia",
+      "AI_OUTPUT_MISSING_EVIDENCE",
+      "Toda sugestao deve possuir pelo menos uma evidencia (trecho literal da transcricao)",
     );
   }
 
@@ -302,7 +336,11 @@ function extractJson(text: string): unknown {
       }
     }
   }
-  throw new HttpError(422, "AI_OUTPUT_INVALID_JSON", "A IA retornou JSON invalido");
+  throw new HttpError(
+    422,
+    "AI_OUTPUT_INVALID_JSON",
+    "A IA retornou JSON invalido. A resposta deve conter apenas o objeto JSON (sem markdown, sem texto extra).",
+  );
 }
 
 function parseAnalysis(text: string): BriefingAnalysis {
@@ -336,8 +374,8 @@ function validateEvidenceAgainstSource(
       if (!sourceContent.includes(evidence.quote)) {
         throw new HttpError(
           422,
-          "AI_EVIDENCE_NOT_FOUND",
-          "A IA retornou uma evidencia que nao existe literalmente na transcricao",
+          "AI_EVIDENCE_NOT_IN_SOURCE",
+          `Evidencia nao encontrada na transcricao: "${evidence.quote.substring(0, 80)}...". A IA deve citar trechos literais exatos do texto original.`,
         );
       }
 
@@ -349,8 +387,8 @@ function validateEvidenceAgainstSource(
       ) {
         throw new HttpError(
           422,
-          "AI_EVIDENCE_RANGE_INVALID",
-          "A IA retornou indices que nao correspondem ao trecho informado",
+          "AI_EVIDENCE_RANGE_MISMATCH",
+          `Indices de evidencia nao correspondem ao trecho citado. Verifique sourceStart/sourceEnd.`,
         );
       }
     }

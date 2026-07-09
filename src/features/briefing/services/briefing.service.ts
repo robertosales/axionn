@@ -509,3 +509,250 @@ export async function generateBriefingAgenda(
     priorityHint: row.priority_hint == null ? null : String(row.priority_hint),
   }));
 }
+
+export interface BriefingBackofficeSummary {
+  totalOrganizations: number;
+  totalTeams: number;
+  totalBriefings: number;
+  totalAiRuns: number;
+  totalSuggestions: number;
+  totalApplied: number;
+  totalFailed: number;
+  totalUsageEvents: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalEstimatedCost: number;
+  avgDurationMs: number;
+  suggestionApprovalRate: number;
+  currentMonthRuns: number;
+  currentMonthCost: number;
+}
+
+export interface BriefingBackofficeOrg {
+  orgId: string;
+  orgName: string;
+  planCode: string;
+  totalBriefings: number;
+  totalRuns: number;
+  totalSuggestions: number;
+  totalApplied: number;
+  totalTokens: number;
+  totalCost: number;
+  currentMonthRuns: number;
+  monthlyLimit: number | null;
+  runsRemaining: number | null;
+  suggestionRate: number;
+}
+
+export interface BriefingBackofficeProvider {
+  providerId: string;
+  providerName: string;
+  providerType: string;
+  totalRuns: number;
+  successRuns: number;
+  failedRuns: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCost: number;
+  avgDurationMs: number;
+  avgCostPerRun: number;
+}
+
+export interface BriefingBackofficeTeamSummary {
+  teamId: string;
+  teamName: string;
+  orgName: string;
+  totalBriefings: number;
+  totalSuggestions: number;
+  totalApplied: number;
+  pendingReview: number;
+  overdueItems: number;
+  totalCost: number;
+}
+
+export async function getBriefingBackofficeSummary(): Promise<BriefingBackofficeSummary> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<Record<string, unknown>> | null;
+    error: { message: string } | null;
+  }>)("get_briefing_backoffice_summary", {});
+  assertNoError(error);
+  const row = data?.[0];
+  return {
+    totalOrganizations: Number(row?.total_organizations ?? 0),
+    totalTeams: Number(row?.total_teams ?? 0),
+    totalBriefings: Number(row?.total_briefings ?? 0),
+    totalAiRuns: Number(row?.total_ai_runs ?? 0),
+    totalSuggestions: Number(row?.total_suggestions ?? 0),
+    totalApplied: Number(row?.total_applied ?? 0),
+    totalFailed: Number(row?.total_failed ?? 0),
+    totalUsageEvents: Number(row?.total_usage_events ?? 0),
+    totalInputTokens: Number(row?.total_input_tokens ?? 0),
+    totalOutputTokens: Number(row?.total_output_tokens ?? 0),
+    totalEstimatedCost: Number(row?.total_estimated_cost ?? 0),
+    avgDurationMs: Number(row?.avg_duration_ms ?? 0),
+    suggestionApprovalRate: Number(row?.suggestion_approval_rate ?? 0),
+    currentMonthRuns: Number(row?.current_month_runs ?? 0),
+    currentMonthCost: Number(row?.current_month_cost ?? 0),
+  };
+}
+
+export async function getBriefingBackofficeByOrganization(): Promise<BriefingBackofficeOrg[]> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<Record<string, unknown>> | null;
+    error: { message: string } | null;
+  }>)("get_briefing_backoffice_by_organization", {});
+  assertNoError(error);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    orgId: String(row.org_id),
+    orgName: String(row.org_name),
+    planCode: String(row.plan_code),
+    totalBriefings: Number(row.total_briefings ?? 0),
+    totalRuns: Number(row.total_runs ?? 0),
+    totalSuggestions: Number(row.total_suggestions ?? 0),
+    totalApplied: Number(row.total_applied ?? 0),
+    totalTokens: Number(row.total_tokens ?? 0),
+    totalCost: Number(row.total_cost ?? 0),
+    currentMonthRuns: Number(row.current_month_runs ?? 0),
+    monthlyLimit: row.monthly_limit == null ? null : Number(row.monthly_limit),
+    runsRemaining: row.runs_remaining == null ? null : Number(row.runs_remaining),
+    suggestionRate: Number(row.suggestion_rate ?? 0),
+  }));
+}
+
+export async function getBriefingBackofficeByProvider(): Promise<BriefingBackofficeProvider[]> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<Record<string, unknown>> | null;
+    error: { message: string } | null;
+  }>)("get_briefing_backoffice_by_provider", {});
+  assertNoError(error);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    providerId: String(row.provider_id),
+    providerName: String(row.provider_name),
+    providerType: String(row.provider_type),
+    totalRuns: Number(row.total_runs ?? 0),
+    successRuns: Number(row.success_runs ?? 0),
+    failedRuns: Number(row.failed_runs ?? 0),
+    totalInputTokens: Number(row.total_input_tokens ?? 0),
+    totalOutputTokens: Number(row.total_output_tokens ?? 0),
+    totalCost: Number(row.total_cost ?? 0),
+    avgDurationMs: Number(row.avg_duration_ms ?? 0),
+    avgCostPerRun: Number(row.avg_cost_per_run ?? 0),
+  }));
+}
+
+export async function getBriefingBackofficeTeamSummary(
+  orgId?: string,
+): Promise<BriefingBackofficeTeamSummary[]> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<Record<string, unknown>> | null;
+    error: { message: string } | null;
+  }>)("get_briefing_backoffice_team_summary", { p_org_id: orgId ?? null });
+  assertNoError(error);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    teamId: String(row.team_id),
+    teamName: String(row.team_name),
+    orgName: String(row.org_name),
+    totalBriefings: Number(row.total_briefings ?? 0),
+    totalSuggestions: Number(row.total_suggestions ?? 0),
+    totalApplied: Number(row.total_applied ?? 0),
+    pendingReview: Number(row.pending_review ?? 0),
+    overdueItems: Number(row.overdue_items ?? 0),
+    totalCost: Number(row.total_cost ?? 0),
+  }));
+}
+
+export interface BriefingRetentionConfig {
+  orgId: string;
+  defaultRetentionDays: number;
+  autoArchive: boolean;
+  autoAnonymize: boolean;
+  allowPermanentDelete: boolean;
+}
+
+export async function getOrgBriefingRetentionConfig(
+  orgId: string,
+): Promise<BriefingRetentionConfig | null> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{
+    data: Array<Record<string, unknown>> | null;
+    error: { message: string } | null;
+  }>)("get_org_briefing_retention_config", { p_org_id: orgId });
+  assertNoError(error);
+  if (!data || data.length === 0) return null;
+  const row = data[0];
+  return {
+    orgId: String(row.org_id),
+    defaultRetentionDays: Number(row.default_retention_days ?? 180),
+    autoArchive: Boolean(row.auto_archive ?? true),
+    autoAnonymize: Boolean(row.auto_anonymize ?? false),
+    allowPermanentDelete: Boolean(row.allow_permanent_delete ?? false),
+  };
+}
+
+export async function setOrgBriefingRetentionConfig(
+  orgId: string,
+  config: {
+    defaultRetentionDays: number;
+    autoArchive: boolean;
+    autoAnonymize: boolean;
+    allowPermanentDelete: boolean;
+  },
+): Promise<void> {
+  const { error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message: string } | null }>)("set_org_briefing_retention", {
+    p_org_id: orgId,
+    p_default_retention_days: config.defaultRetentionDays,
+    p_auto_archive: config.autoArchive,
+    p_auto_anonymize: config.autoAnonymize,
+    p_allow_permanent_delete: config.allowPermanentDelete,
+  });
+  assertNoError(error);
+}
+
+export async function archiveExpiredBriefings(): Promise<number> {
+  const { data, error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: number | null; error: { message: string } | null }>)(
+    "archive_expired_briefings",
+    {},
+  );
+  assertNoError(error);
+  return Number(data ?? 0);
+}
+
+export async function anonymizeAiBriefing(briefingId: string): Promise<void> {
+  const { error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message: string } | null }>)("anonymize_ai_briefing", {
+    p_briefing_id: briefingId,
+  });
+  assertNoError(error);
+}
+
+export async function deleteAiBriefing(briefingId: string): Promise<void> {
+  const { error } = await (supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message: string } | null }>)("delete_ai_briefing", {
+    p_briefing_id: briefingId,
+  });
+  assertNoError(error);
+}

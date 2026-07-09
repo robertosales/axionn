@@ -76,6 +76,7 @@ const BOSuporte = lazy(() => import("./backoffice/pages/BOSuporte"));
 const BOAnalitico = lazy(() => import("./backoffice/pages/BOAnalitico"));
 const BOConfiguracoes = lazy(() => import("./backoffice/pages/BOConfiguracoes"));
 const BOBriefingIA = lazy(() => import("./backoffice/pages/BOBriefingIA"));
+const BORetentionConfig = lazy(() => import("./backoffice/pages/BORetentionConfig"));
 const AdminContratosPage = lazy(() =>
   import("./features/admin/pages/AdminContratosPage").then((module) => ({
     default: module.AdminContratosPage,
@@ -446,6 +447,7 @@ function AppRoutes() {
           <Route path="/backoffice/suporte" element={<BackofficeRoute requiredRoles={["admin", "suporte", "comercial"]}><BOSuporte /></BackofficeRoute>} />
           <Route path="/backoffice/analitico" element={<BackofficeRoute requiredRoles={["admin", "financeiro", "comercial"]}><BOAnalitico /></BackofficeRoute>} />
           <Route path="/backoffice/briefing-ia" element={<BackofficeRoute requiredRoles={["admin", "dev"]}><BOBriefingIA /></BackofficeRoute>} />
+          <Route path="/backoffice/retencao-briefing" element={<BackofficeRoute requiredRoles={["admin"]}><BORetentionConfig /></BackofficeRoute>} />
           <Route path="/backoffice/configuracoes" element={<BackofficeRoute requiredRoles={["admin"]}><BOConfiguracoes /></BackofficeRoute>} />
 
           <Route path="/organization/admin" element={<OrganizationConsoleRoute><OrganizationAdminOverviewPage /></OrganizationConsoleRoute>} />

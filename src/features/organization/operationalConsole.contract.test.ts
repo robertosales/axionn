@@ -97,9 +97,21 @@ describe("platform plan management contract", () => {
     "supabase/migrations/20260708133000_platform_plan_management.sql",
   );
   const planService = source("src/features/platform/services/plans.service.ts");
+  const platformShell = source("src/features/platform/components/PlatformShell.tsx");
+  const aiProvidersPage = source(
+    "src/features/platform/pages/PlatformAIProvidersPage.tsx",
+  );
 
   it("routes the platform home to plan management", () => {
     expect(app).toContain('Navigate to="/platform/plans"');
+  });
+
+  it("keeps platform administration on the standard sidebar shell", () => {
+    expect(platformShell).toContain("<aside");
+    expect(platformShell).toContain('to: "/platform/plans"');
+    expect(platformShell).toContain('to: "/platform/subscriptions"');
+    expect(platformShell).toContain('to: "/platform/ai-providers"');
+    expect(aiProvidersPage).toContain("<PlatformShell>");
   });
 
   it("exposes only platform-admin RPCs for plan and subscription mutations", () => {

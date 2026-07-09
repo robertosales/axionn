@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   Bot,
   CalendarDays,
   Check,
   FileText,
+  ExternalLink,
   History,
   Loader2,
   Pencil,
@@ -74,6 +76,7 @@ const SUGGESTION_LABELS: Record<BriefingSuggestionType, string> = {
 const MIN_SOURCE_LENGTH = 20;
 
 export default function BriefingPage() {
+  const navigate = useNavigate();
   const { currentTeamId, currentTeam } = useAuth();
   const { currentOrganizationId } = useOrganization();
   const { activeSprint } = useSprint();
@@ -338,6 +341,22 @@ export default function BriefingPage() {
           </div>
         )}
 
+        {briefing.summary && (
+          <Card className="border-indigo-500/20 bg-indigo-500/[0.03]">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Bot className="h-4 w-4 text-indigo-500" />
+                Resumo executivo
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {briefing.summary}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <Card>
             <CardHeader>
@@ -516,6 +535,38 @@ export default function BriefingPage() {
                           Aplicar no projeto
                         </Button>
                       )}
+                    {suggestion.application && (
+                      <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+                        <div className="text-xs">
+                          <span className="font-medium text-foreground">
+                            {suggestion.application.targetType === "impediment"
+                              ? "Impedimento criado"
+                              : "HU criada"}
+                          </span>
+                          <span className="ml-2 text-muted-foreground">
+                            {new Date(
+                              suggestion.application.appliedAt,
+                            ).toLocaleString("pt-BR")}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(
+                              suggestion.application?.targetType ===
+                                "impediment"
+                                ? "/sala-agil/impedimentos"
+                                : "/sala-agil/backlog",
+                            );
+                          }}
+                        >
+                          <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                          Abrir
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );

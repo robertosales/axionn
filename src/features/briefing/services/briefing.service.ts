@@ -32,6 +32,11 @@ export interface BriefingSuggestionRecord {
   priority: "low" | "medium" | "high" | "urgent" | null;
   reviewStatus: BriefingReviewStatus;
   evidence: BriefingEvidenceRecord[];
+  application: {
+    targetType: "user_story" | "impediment";
+    targetId: string;
+    appliedAt: string;
+  } | null;
 }
 
 export interface BriefingRecord {
@@ -42,6 +47,7 @@ export interface BriefingRecord {
   sourceContent: string;
   meetingDate: string | null;
   language: string | null;
+  summary: string | null;
   suggestions: BriefingSuggestionRecord[];
 }
 
@@ -148,6 +154,12 @@ function normalizeSuggestion(
   const evidence = Array.isArray(row.ai_suggestion_evidence)
     ? row.ai_suggestion_evidence
     : [];
+  const applications = Array.isArray(row.ai_suggestion_applications)
+    ? row.ai_suggestion_applications
+    : [];
+  const application = applications[0] as
+    | Record<string, unknown>
+    | undefined;
   const reviewed =
     row.review_status === "edited" &&
     row.reviewed_payload &&
@@ -188,6 +200,15 @@ function normalizeSuggestion(
     evidence: (evidence as Array<Record<string, unknown>>).map(
       normalizeEvidence,
     ),
+    application: application
+      ? {
+          targetType: String(application.target_type) as
+            | "user_story"
+            | "impediment",
+          targetId: String(application.target_id),
+          appliedAt: String(application.applied_at),
+        }
+      : null,
   };
 }
 
@@ -203,10 +224,26 @@ export async function getBriefing(briefingId: string): Promise<BriefingRecord> {
 
   const { data: suggestions, error: suggestionsError } = await supabase
     .from("ai_briefing_suggestions")
-    .select("*,ai_suggestion_evidence(*)")
+    .select("*,ai_suggestion_evidence(*),ai_suggestion_applications(*)")
     .eq("briefing_id", briefingId)
     .order("ordinal");
   assertNoError(suggestionsError);
+
+  const { data: latestRun, error: runError } = await supabase
+    .from("ai_briefing_runs")
+    .select("output_payload")
+    .eq("briefing_id", briefingId)
+    .eq("status", "success")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  assertNoError(runError);
+  const outputPayload =
+    latestRun?.output_payload &&
+    typeof latestRun.output_payload === "object" &&
+    !Array.isArray(latestRun.output_payload)
+      ? (latestRun.output_payload as Record<string, unknown>)
+      : null;
 
   return {
     id: briefing.id,
@@ -216,6 +253,10 @@ export async function getBriefing(briefingId: string): Promise<BriefingRecord> {
     sourceContent: briefing.source_content,
     meetingDate: briefing.meeting_date,
     language: briefing.language,
+    summary:
+      typeof outputPayload?.summary === "string"
+        ? outputPayload.summary
+        : null,
     suggestions: ((suggestions ?? []) as Array<Record<string, unknown>>).map(
       normalizeSuggestion,
     ),

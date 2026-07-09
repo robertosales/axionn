@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Bot,
   CalendarDays,
   Check,
   FileText,
+  History,
   Loader2,
   Pencil,
   RotateCcw,
@@ -46,6 +47,10 @@ import { useSprint } from "@/contexts/SprintContext";
 import { useOrganizationUsage } from "@/features/organization/hooks/useOrganizationUsage";
 import { useBriefing } from "../hooks/useBriefing";
 import type { BriefingSuggestionRecord } from "../services/briefing.service";
+import {
+  listTeamBriefings,
+  type BriefingHistoryItem,
+} from "../services/briefing.service";
 import type { BriefingSuggestionType, BriefingType } from "../types/briefing";
 
 const TYPE_LABELS: Record<BriefingType, string> = {
@@ -83,6 +88,7 @@ export default function BriefingPage() {
     review,
     apply,
     reset,
+    open,
   } = useBriefing();
 
   const [type, setType] = useState<BriefingType>("daily");
@@ -100,6 +106,9 @@ export default function BriefingPage() {
   const [editDescription, setEditDescription] = useState("");
   const [editAssignee, setEditAssignee] = useState("");
   const [editDueDate, setEditDueDate] = useState("");
+  const [history, setHistory] = useState<BriefingHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   const enabled = entitlements.some(
     (entitlement) =>
@@ -122,6 +131,43 @@ export default function BriefingPage() {
       ) ?? briefing?.suggestions[0] ?? null,
     [briefing, selectedSuggestionId],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentTeamId) {
+      setHistory([]);
+      return;
+    }
+
+    setHistoryLoading(true);
+    listTeamBriefings(currentTeamId)
+      .then((items) => {
+        if (!cancelled) setHistory(items);
+      })
+      .catch((cause) => {
+        console.error("[BriefingPage] history load failed", cause);
+        if (!cancelled) setHistory([]);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTeamId, briefing?.status]);
+
+  const openBriefing = async (briefingId: string) => {
+    setOpeningId(briefingId);
+    try {
+      const loaded = await open(briefingId);
+      setSelectedSuggestionId(loaded.suggestions[0]?.id ?? null);
+    } catch {
+      toast.error("Não foi possível abrir o briefing.");
+    } finally {
+      setOpeningId(null);
+    }
+  };
 
   const submit = async () => {
     if (!currentOrganizationId || !currentTeamId) {
@@ -656,6 +702,61 @@ export default function BriefingPage() {
               {creating ? "Analisando..." : "Analisar briefing"}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <History className="h-5 w-5" /> Histórico da equipe
+          </CardTitle>
+          <CardDescription>
+            Reabra análises anteriores para concluir revisões e aplicações.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {historyLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : history.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Nenhum briefing processado para esta equipe.
+            </p>
+          ) : (
+            <div className="divide-y rounded-lg border">
+              {history.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-muted/40"
+                  disabled={openingId === item.id}
+                  onClick={() => void openBriefing(item.id)}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">
+                        {item.title}
+                      </span>
+                      <Badge variant="outline">
+                        {TYPE_LABELS[item.type]}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(item.createdAt).toLocaleDateString("pt-BR")} ·{" "}
+                      {item.suggestionCount} sugestão(ões)
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge variant="secondary">{item.status}</Badge>
+                    {openingId === item.id && (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

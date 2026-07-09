@@ -108,5 +108,6 @@ export function useBriefing() {
     review,
     apply,
     reset,
+    open: refresh,
   };
 }

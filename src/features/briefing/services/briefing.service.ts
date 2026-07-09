@@ -45,6 +45,16 @@ export interface BriefingRecord {
   suggestions: BriefingSuggestionRecord[];
 }
 
+export interface BriefingHistoryItem {
+  id: string;
+  title: string;
+  type: BriefingType;
+  status: string;
+  meetingDate: string | null;
+  createdAt: string;
+  suggestionCount: number;
+}
+
 export interface CreateBriefingInput {
   organizationId: string;
   teamId: string;
@@ -212,6 +222,37 @@ export async function getBriefing(briefingId: string): Promise<BriefingRecord> {
   };
 }
 
+export async function listTeamBriefings(
+  teamId: string,
+): Promise<BriefingHistoryItem[]> {
+  const { data, error } = await supabase
+    .from("ai_briefings")
+    .select(
+      "id,title,briefing_type,status,meeting_date,created_at,ai_briefing_suggestions(count)",
+    )
+    .eq("team_id", teamId)
+    .neq("status", "archived")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  assertNoError(error);
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+    const counts = Array.isArray(row.ai_briefing_suggestions)
+      ? row.ai_briefing_suggestions
+      : [];
+    const firstCount = counts[0] as Record<string, unknown> | undefined;
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      type: String(row.briefing_type) as BriefingType,
+      status: String(row.status),
+      meetingDate: row.meeting_date == null ? null : String(row.meeting_date),
+      createdAt: String(row.created_at),
+      suggestionCount: Number(firstCount?.count ?? 0),
+    };
+  });
+}
+
 export async function reviewBriefingSuggestion(
   suggestionId: string,
   status: "approved" | "edited" | "rejected",
@@ -226,10 +267,9 @@ export async function reviewBriefingSuggestion(
 }
 
 export async function applyBriefingSuggestion(suggestionId: string) {
-  const { data, error } = await supabase.rpc(
-    "apply_ai_briefing_suggestion" as never,
-    { p_suggestion_id: suggestionId } as never,
-  );
+  const { data, error } = await supabase.rpc("apply_ai_briefing_suggestion", {
+    p_suggestion_id: suggestionId,
+  });
   assertNoError(error);
   const result = Array.isArray(data) ? data[0] : data;
   if (!result) throw new Error("A aplicação não retornou o registro criado.");

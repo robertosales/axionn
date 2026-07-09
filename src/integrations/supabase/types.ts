@@ -162,6 +162,261 @@ export type Database = {
           },
         ]
       }
+      ai_briefing_runs: {
+        Row: {
+          briefing_id: string
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          error_detail: string | null
+          estimated_cost: number | null
+          id: string
+          input_tokens: number | null
+          model_name: string | null
+          output_payload: Json | null
+          output_tokens: number | null
+          prompt_version: string
+          provider_id: string | null
+          request_id: string
+          schema_version: string
+          status: string
+        }
+        Insert: {
+          briefing_id: string
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          error_detail?: string | null
+          estimated_cost?: number | null
+          id?: string
+          input_tokens?: number | null
+          model_name?: string | null
+          output_payload?: Json | null
+          output_tokens?: number | null
+          prompt_version: string
+          provider_id?: string | null
+          request_id: string
+          schema_version: string
+          status?: string
+        }
+        Update: {
+          briefing_id?: string
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          error_detail?: string | null
+          estimated_cost?: number | null
+          id?: string
+          input_tokens?: number | null
+          model_name?: string | null
+          output_payload?: Json | null
+          output_tokens?: number | null
+          prompt_version?: string
+          provider_id?: string | null
+          request_id?: string
+          schema_version?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_briefing_runs_briefing_id_fkey"
+            columns: ["briefing_id"]
+            isOneToOne: false
+            referencedRelation: "ai_briefings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_briefing_runs_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_briefing_suggestions: {
+        Row: {
+          briefing_id: string
+          created_at: string
+          date_source: string
+          description: string
+          id: string
+          ordinal: number
+          original_payload: Json
+          priority_hint: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_payload: Json | null
+          run_id: string
+          suggested_assignee_id: string | null
+          suggested_assignee_name: string | null
+          suggested_due_date: string | null
+          suggestion_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          briefing_id: string
+          created_at?: string
+          date_source?: string
+          description?: string
+          id?: string
+          ordinal: number
+          original_payload?: Json
+          priority_hint?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_payload?: Json | null
+          run_id: string
+          suggested_assignee_id?: string | null
+          suggested_assignee_name?: string | null
+          suggested_due_date?: string | null
+          suggestion_type: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          briefing_id?: string
+          created_at?: string
+          date_source?: string
+          description?: string
+          id?: string
+          ordinal?: number
+          original_payload?: Json
+          priority_hint?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_payload?: Json | null
+          run_id?: string
+          suggested_assignee_id?: string | null
+          suggested_assignee_name?: string | null
+          suggested_due_date?: string | null
+          suggestion_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_briefing_suggestions_briefing_id_fkey"
+            columns: ["briefing_id"]
+            isOneToOne: false
+            referencedRelation: "ai_briefings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_briefing_suggestions_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_briefing_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_briefings: {
+        Row: {
+          briefing_type: string
+          created_at: string
+          created_by: string
+          id: string
+          language: string | null
+          meeting_date: string | null
+          org_id: string
+          participants: Json
+          project_id: string | null
+          retention_until: string | null
+          source_content: string
+          source_hash: string
+          source_type: string
+          sprint_id: string | null
+          status: string
+          team_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          briefing_type: string
+          created_at?: string
+          created_by: string
+          id?: string
+          language?: string | null
+          meeting_date?: string | null
+          org_id: string
+          participants?: Json
+          project_id?: string | null
+          retention_until?: string | null
+          source_content: string
+          source_hash: string
+          source_type?: string
+          sprint_id?: string | null
+          status?: string
+          team_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          briefing_type?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          language?: string | null
+          meeting_date?: string | null
+          org_id?: string
+          participants?: Json
+          project_id?: string | null
+          retention_until?: string | null
+          source_content?: string
+          source_hash?: string
+          source_type?: string
+          sprint_id?: string | null
+          status?: string
+          team_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_briefings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_briefings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_briefings_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_briefings_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
+            foreignKeyName: "ai_briefings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_providers: {
         Row: {
           api_base_url: string | null
@@ -209,6 +464,88 @@ export type Database = {
           vault_secret_id?: string | null
         }
         Relationships: []
+      }
+      ai_suggestion_applications: {
+        Row: {
+          application_snapshot: Json
+          applied_at: string
+          applied_by: string
+          id: string
+          suggestion_id: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          application_snapshot?: Json
+          applied_at?: string
+          applied_by: string
+          id?: string
+          suggestion_id: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          application_snapshot?: Json
+          applied_at?: string
+          applied_by?: string
+          id?: string
+          suggestion_id?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_suggestion_applications_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: true
+            referencedRelation: "ai_briefing_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_suggestion_evidence: {
+        Row: {
+          created_at: string
+          id: string
+          quote_text: string
+          source_end: number | null
+          source_start: number | null
+          speaker_name: string | null
+          suggestion_id: string
+          timestamp_end: string | null
+          timestamp_start: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          quote_text: string
+          source_end?: number | null
+          source_start?: number | null
+          speaker_name?: string | null
+          suggestion_id: string
+          timestamp_end?: string | null
+          timestamp_start?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          quote_text?: string
+          source_end?: number | null
+          source_start?: number | null
+          speaker_name?: string | null
+          suggestion_id?: string
+          timestamp_end?: string | null
+          timestamp_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_suggestion_evidence_suggestion_id_fkey"
+            columns: ["suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "ai_briefing_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       apf_baseline_items: {
         Row: {
@@ -2557,6 +2894,128 @@ export type Database = {
           },
         ]
       }
+      backoffice_audit_log: {
+        Row: {
+          action: string
+          actor_staff_id: string | null
+          actor_user_id: string | null
+          after_values: Json
+          before_values: Json
+          created_at: string
+          id: string
+          metadata: Json
+          resource_id: string | null
+          resource_type: string
+        }
+        Insert: {
+          action: string
+          actor_staff_id?: string | null
+          actor_user_id?: string | null
+          after_values?: Json
+          before_values?: Json
+          created_at?: string
+          id?: string
+          metadata?: Json
+          resource_id?: string | null
+          resource_type: string
+        }
+        Update: {
+          action?: string
+          actor_staff_id?: string | null
+          actor_user_id?: string | null
+          after_values?: Json
+          before_values?: Json
+          created_at?: string
+          id?: string
+          metadata?: Json
+          resource_id?: string | null
+          resource_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backoffice_audit_log_actor_staff_id_fkey"
+            columns: ["actor_staff_id"]
+            isOneToOne: false
+            referencedRelation: "owner_staff_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_records: {
+        Row: {
+          amount: number
+          billing_period: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          due_date: string
+          id: string
+          invoice_url: string | null
+          notes: string | null
+          paid_at: string | null
+          period_end: string | null
+          period_start: string | null
+          plan_type: string
+          status: string
+          tenant_id: string | null
+          tenant_name: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          billing_period?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          due_date: string
+          id?: string
+          invoice_url?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          plan_type?: string
+          status?: string
+          tenant_id?: string | null
+          tenant_name: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          billing_period?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          due_date?: string
+          id?: string
+          invoice_url?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          plan_type?: string
+          status?: string
+          tenant_id?: string | null
+          tenant_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_records_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "owner_staff_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_records_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_events: {
         Row: {
           created_at: string
@@ -4590,6 +5049,48 @@ export type Database = {
         }
         Relationships: []
       }
+      owner_staff_members: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          department: string | null
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean
+          last_login_at: string | null
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          department?: string | null
+          email: string
+          full_name: string
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          role: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          department?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          last_login_at?: string | null
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planning_participants: {
         Row: {
           id: string
@@ -6130,6 +6631,57 @@ export type Database = {
           },
         ]
       }
+      saas_metrics_snapshots: {
+        Row: {
+          active_tenants: number
+          active_users_30d: number
+          arr: number
+          churned_mrr: number
+          churned_tenants: number
+          created_at: string
+          id: string
+          mrr: number
+          new_mrr: number
+          open_tickets: number
+          snapshot_date: string
+          total_tenants: number
+          total_users: number
+          trial_tenants: number
+        }
+        Insert: {
+          active_tenants?: number
+          active_users_30d?: number
+          arr?: number
+          churned_mrr?: number
+          churned_tenants?: number
+          created_at?: string
+          id?: string
+          mrr?: number
+          new_mrr?: number
+          open_tickets?: number
+          snapshot_date?: string
+          total_tenants?: number
+          total_users?: number
+          trial_tenants?: number
+        }
+        Update: {
+          active_tenants?: number
+          active_users_30d?: number
+          arr?: number
+          churned_mrr?: number
+          churned_tenants?: number
+          created_at?: string
+          id?: string
+          mrr?: number
+          new_mrr?: number
+          open_tickets?: number
+          snapshot_date?: string
+          total_tenants?: number
+          total_users?: number
+          trial_tenants?: number
+        }
+        Relationships: []
+      }
       saas_plan_entitlements: {
         Row: {
           created_at: string
@@ -6173,31 +6725,40 @@ export type Database = {
       }
       saas_plans: {
         Row: {
+          annual_price: number
           code: string
           created_at: string
+          currency: string
           description: string | null
           id: string
           metadata: Json
+          monthly_price: number
           name: string
           status: string
           updated_at: string
         }
         Insert: {
+          annual_price?: number
           code: string
           created_at?: string
+          currency?: string
           description?: string | null
           id?: string
           metadata?: Json
+          monthly_price?: number
           name: string
           status?: string
           updated_at?: string
         }
         Update: {
+          annual_price?: number
           code?: string
           created_at?: string
+          currency?: string
           description?: string | null
           id?: string
           metadata?: Json
+          monthly_price?: number
           name?: string
           status?: string
           updated_at?: string
@@ -6298,6 +6859,78 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          assigned_to: string | null
+          category: string
+          created_at: string
+          description: string
+          id: string
+          priority: string
+          reporter_email: string
+          reporter_name: string
+          resolved_at: string | null
+          sla_deadline: string | null
+          status: string
+          subject: string
+          tenant_id: string | null
+          tenant_name: string
+          ticket_number: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          description: string
+          id?: string
+          priority?: string
+          reporter_email: string
+          reporter_name: string
+          resolved_at?: string | null
+          sla_deadline?: string | null
+          status?: string
+          subject: string
+          tenant_id?: string | null
+          tenant_name: string
+          ticket_number?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          priority?: string
+          reporter_email?: string
+          reporter_name?: string
+          resolved_at?: string | null
+          sla_deadline?: string | null
+          status?: string
+          subject?: string
+          tenant_id?: string | null
+          tenant_name?: string
+          ticket_number?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "owner_staff_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_tickets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -7167,6 +7800,32 @@ export type Database = {
         Args: { p_provider_id: string }
         Returns: undefined
       }
+      archive_platform_saas_plan_v1: {
+        Args: { p_plan_id: string }
+        Returns: undefined
+      }
+      assert_backoffice_staff: {
+        Args: { p_allowed_roles?: string[] }
+        Returns: {
+          avatar_url: string | null
+          created_at: string
+          department: string | null
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean
+          last_login_at: string | null
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "owner_staff_members"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       assert_organization_entitlement: {
         Args: { p_feature_key: string; p_org_id: string }
         Returns: undefined
@@ -7270,6 +7929,19 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      complete_ai_briefing_run: {
+        Args: {
+          p_duration_ms?: number
+          p_estimated_cost?: number
+          p_input_tokens?: number
+          p_model_name: string
+          p_output_payload: Json
+          p_output_tokens?: number
+          p_provider_id: string
+          p_run_id: string
+        }
+        Returns: number
+      }
       compute_learning_metrics: {
         Args: { p_week_start?: string }
         Returns: Json
@@ -7281,6 +7953,33 @@ export type Database = {
           p_team_id?: string
         }
         Returns: Json
+      }
+      create_ai_briefing: {
+        Args: {
+          p_briefing_type: string
+          p_language?: string
+          p_meeting_date?: string
+          p_org_id: string
+          p_participants?: Json
+          p_project_id?: string
+          p_source_content: string
+          p_source_hash: string
+          p_source_type?: string
+          p_sprint_id?: string
+          p_team_id?: string
+          p_title: string
+        }
+        Returns: string
+      }
+      create_backoffice_billing_record: {
+        Args: {
+          p_amount?: number
+          p_billing_period: string
+          p_due_date: string
+          p_notes?: string
+          p_tenant_id: string
+        }
+        Returns: string
       }
       create_organization_company_v2: {
         Args: {
@@ -7360,6 +8059,20 @@ export type Database = {
         }
         Returns: string
       }
+      create_platform_saas_plan_v1: {
+        Args: {
+          p_code: string
+          p_description: string
+          p_metadata: Json
+          p_name: string
+          p_status: string
+        }
+        Returns: string
+      }
+      deactivate_backoffice_staff_member: {
+        Args: { p_staff_id: string }
+        Returns: undefined
+      }
       deactivate_organization_member_v2: {
         Args: { p_org_id: string; p_user_id: string }
         Returns: boolean
@@ -7373,9 +8086,28 @@ export type Database = {
         Args: { p_baseline_id: string }
         Returns: Json
       }
+      delete_platform_organization_entitlement_override_v1: {
+        Args: { p_feature_key: string; p_org_id: string }
+        Returns: undefined
+      }
+      delete_platform_plan_entitlement_v1: {
+        Args: { p_feature_key: string; p_plan_id: string }
+        Returns: undefined
+      }
       extract_user_story_external_reference: {
         Args: { p_title: string }
         Returns: string
+      }
+      fail_ai_briefing_run: {
+        Args: {
+          p_duration_ms?: number
+          p_error_code: string
+          p_error_detail?: string
+          p_model_name?: string
+          p_provider_id?: string
+          p_run_id: string
+        }
+        Returns: undefined
       }
       fn_audit_log_insert: {
         Args: {
@@ -7478,6 +8210,10 @@ export type Database = {
       fn_sla_status_summary: {
         Args: { p_contract_id?: string; p_project_id?: string }
         Returns: Json
+      }
+      generate_backoffice_monthly_billing: {
+        Args: { p_due_day?: number; p_reference_date?: string }
+        Returns: number
       }
       get_accessible_companies_v2: {
         Args: { p_org_id: string }
@@ -7645,6 +8381,33 @@ export type Database = {
         }[]
       }
       get_apf_session_summary: { Args: { p_session_id: string }; Returns: Json }
+      get_backoffice_dashboard_summary: {
+        Args: never
+        Returns: {
+          active_staff_members: number
+          active_subscriptions: number
+          active_tenants: number
+          past_due_subscriptions: number
+          staff_members: number
+          suspended_tenants: number
+          total_tenants: number
+          trial_tenants: number
+        }[]
+      }
+      get_backoffice_saas_metrics: {
+        Args: never
+        Returns: {
+          active_tenants: number
+          arr: number
+          churn_rate: number
+          churned_tenants: number
+          mrr: number
+          open_tickets: number
+          overdue_invoices: number
+          paid_revenue: number
+          trial_tenants: number
+        }[]
+      }
       get_capacity_planner: {
         Args: {
           p_default_cap?: number
@@ -7679,6 +8442,22 @@ export type Database = {
           plan_code: string
           source: string
           subscription_status: string
+        }[]
+      }
+      get_my_backoffice_staff_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          created_at: string
+          department: string
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean
+          last_login_at: string
+          role: string
+          updated_at: string
+          user_id: string
         }[]
       }
       get_my_contract_id: { Args: { _user_id?: string }; Returns: string }
@@ -7880,6 +8659,8 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_apf_auxiliary_action: { Args: { p_text: string }; Returns: boolean }
+      is_backoffice_admin: { Args: { p_user_id?: string }; Returns: boolean }
+      is_backoffice_staff: { Args: { p_user_id?: string }; Returns: boolean }
       is_contract_admin: {
         Args: { _contract_id: string; _user_id: string }
         Returns: boolean
@@ -7921,6 +8702,10 @@ export type Database = {
         Returns: boolean
       }
       is_organization_resource_limit_enforced: { Args: never; Returns: boolean }
+      is_organization_team_admin: {
+        Args: { p_team_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       is_platform_admin: { Args: { p_user_id?: string }; Returns: boolean }
       is_team_admin: {
         Args: { _team_id: string; _user_id: string }
@@ -7939,6 +8724,98 @@ export type Database = {
         Returns: boolean
       }
       is_tenancy_enforced: { Args: never; Returns: boolean }
+      list_backoffice_billing_customers: {
+        Args: never
+        Returns: {
+          org_id: string
+          org_name: string
+          plan_code: string
+          plan_name: string
+        }[]
+      }
+      list_backoffice_billing_records: {
+        Args: never
+        Returns: {
+          amount: number
+          billing_period: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          due_date: string
+          id: string
+          invoice_url: string | null
+          notes: string | null
+          paid_at: string | null
+          period_end: string | null
+          period_start: string | null
+          plan_type: string
+          status: string
+          tenant_id: string | null
+          tenant_name: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "billing_records"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      list_backoffice_plan_prices: {
+        Args: never
+        Returns: {
+          annual_price: number
+          code: string
+          currency: string
+          id: string
+          monthly_price: number
+          name: string
+          status: string
+        }[]
+      }
+      list_backoffice_staff_members: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          created_at: string
+          department: string
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean
+          last_login_at: string
+          role: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      list_backoffice_support_tickets: {
+        Args: never
+        Returns: {
+          assigned_to: string | null
+          category: string
+          created_at: string
+          description: string
+          id: string
+          priority: string
+          reporter_email: string
+          reporter_name: string
+          resolved_at: string | null
+          sla_deadline: string | null
+          status: string
+          subject: string
+          tenant_id: string | null
+          tenant_name: string
+          ticket_number: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "support_tickets"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       list_platform_ai_providers_v2: {
         Args: { p_only_active?: boolean }
         Returns: {
@@ -7952,6 +8829,45 @@ export type Database = {
           name: string
           provider_type: string
           request_format: string
+          updated_at: string
+        }[]
+      }
+      list_platform_organization_subscriptions_v1: {
+        Args: never
+        Returns: {
+          canceled_at: string
+          contracts_used: number
+          current_period_end: string
+          current_period_start: string
+          org_id: string
+          org_name: string
+          org_plan: string
+          org_slug: string
+          org_status: string
+          overrides: Json
+          plan_code: string
+          plan_id: string
+          plan_name: string
+          projects_used: number
+          source: string
+          starts_at: string
+          subscription_id: string
+          subscription_status: string
+          trial_ends_at: string
+          users_used: number
+        }[]
+      }
+      list_platform_saas_plans_v1: {
+        Args: { p_include_archived: boolean }
+        Returns: {
+          code: string
+          created_at: string
+          description: string
+          entitlements: Json
+          id: string
+          metadata: Json
+          name: string
+          status: string
           updated_at: string
         }[]
       }
@@ -8064,6 +8980,14 @@ export type Database = {
         }
         Returns: string
       }
+      platform_plan_org_plan_code: {
+        Args: { p_plan_code: string }
+        Returns: Database["public"]["Enums"]["org_plan"]
+      }
+      platform_plan_org_status_code: {
+        Args: { p_subscription_status: string }
+        Returns: Database["public"]["Enums"]["org_status"]
+      }
       provision_apf_model_pfs_dpf: {
         Args: { p_contract_id: string; p_model_name?: string }
         Returns: string
@@ -8151,6 +9075,14 @@ export type Database = {
         Returns: string
       }
       resolve_team_org_id: { Args: { p_team_id: string }; Returns: string }
+      review_ai_briefing_suggestion: {
+        Args: {
+          p_review_status: string
+          p_reviewed_payload?: Json
+          p_suggestion_id: string
+        }
+        Returns: undefined
+      }
       revoke_organization_invitation_v2: {
         Args: { p_invitation_id: string }
         Returns: boolean
@@ -8214,16 +9146,66 @@ export type Database = {
         Args: { p_key: string; p_provider_id: string }
         Returns: undefined
       }
+      set_platform_organization_subscription_v1: {
+        Args: {
+          p_current_period_end: string
+          p_current_period_start: string
+          p_org_id: string
+          p_plan_id: string
+          p_source: string
+          p_status: string
+          p_trial_ends_at: string
+        }
+        Returns: string
+      }
       set_tenancy_enforcement: {
         Args: { p_enabled: boolean }
         Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      start_ai_briefing_run: {
+        Args: {
+          p_briefing_id: string
+          p_prompt_version: string
+          p_request_id: string
+          p_schema_version: string
+        }
+        Returns: {
+          briefing_type: string
+          language: string
+          meeting_date: string
+          org_id: string
+          participants: Json
+          project_id: string
+          run_id: string
+          source_content: string
+          sprint_id: string
+          team_id: string
+          title: string
+        }[]
+      }
       status_concluidos: { Args: never; Returns: string[] }
       transfer_organization_ownership_v2: {
         Args: { p_new_owner_id: string; p_org_id: string }
         Returns: boolean
+      }
+      update_backoffice_billing_status: {
+        Args: { p_billing_id: string; p_status: string }
+        Returns: undefined
+      }
+      update_backoffice_plan_price: {
+        Args: {
+          p_annual_price: number
+          p_currency?: string
+          p_monthly_price: number
+          p_plan_id: string
+        }
+        Returns: undefined
+      }
+      update_backoffice_support_ticket_status: {
+        Args: { p_status: string; p_ticket_id: string }
+        Returns: undefined
       }
       update_organization_company_v2: {
         Args: {
@@ -8311,9 +9293,51 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_platform_saas_plan_v1: {
+        Args: {
+          p_description: string
+          p_metadata: Json
+          p_name: string
+          p_plan_id: string
+          p_status: string
+        }
+        Returns: undefined
+      }
+      upsert_backoffice_staff_member: {
+        Args: {
+          p_avatar_url: string
+          p_department: string
+          p_email: string
+          p_full_name: string
+          p_is_active: boolean
+          p_role: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       upsert_demandas_batch: {
         Args: { p_rows: Json; p_team_id: string }
         Returns: Json
+      }
+      upsert_platform_organization_entitlement_override_v1: {
+        Args: {
+          p_enabled: boolean
+          p_feature_key: string
+          p_limit_value: number
+          p_org_id: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      upsert_platform_plan_entitlement_v1: {
+        Args: {
+          p_enabled: boolean
+          p_feature_key: string
+          p_limit_value: number
+          p_metadata: Json
+          p_plan_id: string
+        }
+        Returns: string
       }
       users_share_contract: {
         Args: { _a: string; _b: string }

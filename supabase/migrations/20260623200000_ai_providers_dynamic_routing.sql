@@ -5,7 +5,7 @@
 ALTER TABLE public.ai_providers
   ADD COLUMN IF NOT EXISTS api_base_url  TEXT DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS request_format TEXT DEFAULT 'openai_compatible'
-    CHECK (request_format IN ('openai_compatible', 'gemini', 'anthropic'));
+    CHECK (request_format IN ('openai_compatible', 'gemini', 'anthropic', 'nemotron'));
 
 COMMENT ON COLUMN public.ai_providers.api_base_url IS
   'URL base da API do provider. Ex: https://api.groq.com/openai/v1/chat/completions';
@@ -42,6 +42,11 @@ UPDATE public.ai_providers SET
   api_base_url   = 'https://api.sakana.ai/v1/chat/completions',
   request_format = 'openai_compatible'
 WHERE provider_type = 'sakana' AND api_base_url IS NULL;
+
+UPDATE public.ai_providers SET
+  api_base_url   = 'https://api.nemotron.ai/v1/chat/completions',
+  request_format = 'openai_compatible'
+WHERE provider_type = 'nemotron' AND api_base_url IS NULL;
 
 UPDATE public.ai_providers SET
   api_base_url   = 'https://api.groq.com/openai/v1/chat/completions',

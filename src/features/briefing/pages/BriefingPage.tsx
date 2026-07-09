@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
+  AlertTriangle,
   Bot,
   CalendarDays,
   Check,
@@ -50,7 +51,9 @@ import { useOrganizationUsage } from "@/features/organization/hooks/useOrganizat
 import { useBriefing } from "../hooks/useBriefing";
 import type { BriefingSuggestionRecord } from "../services/briefing.service";
 import {
+  getTeamBriefingFollowup,
   listTeamBriefings,
+  type BriefingFollowup,
   type BriefingHistoryItem,
 } from "../services/briefing.service";
 import type { BriefingSuggestionType, BriefingType } from "../types/briefing";
@@ -112,6 +115,7 @@ export default function BriefingPage() {
   const [history, setHistory] = useState<BriefingHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [followup, setFollowup] = useState<BriefingFollowup | null>(null);
 
   const enabled = entitlements.some(
     (entitlement) =>
@@ -143,13 +147,22 @@ export default function BriefingPage() {
     }
 
     setHistoryLoading(true);
-    listTeamBriefings(currentTeamId)
-      .then((items) => {
-        if (!cancelled) setHistory(items);
+    Promise.all([
+      listTeamBriefings(currentTeamId),
+      getTeamBriefingFollowup(currentTeamId),
+    ])
+      .then(([items, followupData]) => {
+        if (!cancelled) {
+          setHistory(items);
+          setFollowup(followupData);
+        }
       })
       .catch((cause) => {
         console.error("[BriefingPage] history load failed", cause);
-        if (!cancelled) setHistory([]);
+        if (!cancelled) {
+          setHistory([]);
+          setFollowup(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setHistoryLoading(false);
@@ -755,6 +768,65 @@ export default function BriefingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {followup && (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["Briefings", followup.totalBriefings],
+              ["Aguardando revisão", followup.pendingReview],
+              ["Prontos para aplicar", followup.readyToApply],
+              ["Itens aplicados", followup.appliedItems],
+            ].map(([label, value]) => (
+              <Card key={String(label)}>
+                <CardContent className="pt-5">
+                  <div className="text-2xl font-semibold">{value}</div>
+                  <div className="text-xs text-muted-foreground">{label}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {followup.overdueItems > 0 && (
+            <Card className="border-amber-500/30 bg-amber-500/[0.03]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  {followup.overdueItems} compromisso(s) vencido(s)
+                </CardTitle>
+                <CardDescription>
+                  Datas extraídas das reuniões que ainda exigem revisão ou
+                  aplicação.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {followup.attentionItems.map((item) => (
+                  <button
+                    key={item.suggestionId}
+                    type="button"
+                    className="flex w-full items-center justify-between gap-4 rounded-md border bg-background p-3 text-left hover:bg-muted/40"
+                    onClick={() => void openBriefing(item.briefingId)}
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {item.title}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {item.briefingTitle}
+                      </div>
+                    </div>
+                    <Badge variant="destructive">
+                      {new Date(
+                        `${item.dueDate}T12:00:00`,
+                      ).toLocaleDateString("pt-BR")}
+                    </Badge>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       <Card>
         <CardHeader>

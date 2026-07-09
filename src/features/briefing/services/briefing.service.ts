@@ -61,6 +61,25 @@ export interface BriefingHistoryItem {
   suggestionCount: number;
 }
 
+export interface BriefingAttentionItem {
+  suggestionId: string;
+  briefingId: string;
+  briefingTitle: string;
+  suggestionType: BriefingSuggestionType;
+  title: string;
+  reviewStatus: BriefingReviewStatus;
+  dueDate: string;
+}
+
+export interface BriefingFollowup {
+  totalBriefings: number;
+  pendingReview: number;
+  readyToApply: number;
+  appliedItems: number;
+  overdueItems: number;
+  attentionItems: BriefingAttentionItem[];
+}
+
 export interface CreateBriefingInput {
   organizationId: string;
   teamId: string;
@@ -292,6 +311,47 @@ export async function listTeamBriefings(
       suggestionCount: Number(firstCount?.count ?? 0),
     };
   });
+}
+
+export async function getTeamBriefingFollowup(
+  teamId: string,
+): Promise<BriefingFollowup> {
+  const { data, error } = await (
+    supabase.rpc as unknown as (
+      name: string,
+      args: Record<string, unknown>,
+    ) => Promise<{
+      data: Array<Record<string, unknown>> | null;
+      error: { message: string } | null;
+    }>
+  )("get_ai_briefing_team_followup", { p_team_id: teamId });
+  assertNoError(error);
+
+  const row = data?.[0];
+  const attention = Array.isArray(row?.attention_items)
+    ? row.attention_items
+    : [];
+
+  return {
+    totalBriefings: Number(row?.total_briefings ?? 0),
+    pendingReview: Number(row?.pending_review ?? 0),
+    readyToApply: Number(row?.ready_to_apply ?? 0),
+    appliedItems: Number(row?.applied_items ?? 0),
+    overdueItems: Number(row?.overdue_items ?? 0),
+    attentionItems: (attention as Array<Record<string, unknown>>).map(
+      (item) => ({
+        suggestionId: String(item.suggestion_id),
+        briefingId: String(item.briefing_id),
+        briefingTitle: String(item.briefing_title),
+        suggestionType: String(
+          item.suggestion_type,
+        ) as BriefingSuggestionType,
+        title: String(item.title),
+        reviewStatus: String(item.review_status) as BriefingReviewStatus,
+        dueDate: String(item.due_date),
+      }),
+    ),
+  };
 }
 
 export async function reviewBriefingSuggestion(

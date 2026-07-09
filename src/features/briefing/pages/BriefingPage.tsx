@@ -13,6 +13,7 @@ import {
   Pencil,
   RotateCcw,
   Sparkles,
+  Upload,
   UserRound,
   X,
 } from "lucide-react";
@@ -103,6 +104,11 @@ export default function BriefingPage() {
     new Date().toISOString().slice(0, 10),
   );
   const [sourceContent, setSourceContent] = useState("");
+  const [participantsInput, setParticipantsInput] = useState("");
+  const [sourceType, setSourceType] = useState<
+    "pasted_text" | "text_file" | "markdown_file"
+  >("pasted_text");
+  const [fileName, setFileName] = useState<string | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<
     string | null
   >(null);
@@ -203,6 +209,15 @@ export default function BriefingPage() {
       return;
     }
 
+    const participants = Array.from(
+      new Set(
+        participantsInput
+          .split(/[,\n;]/)
+          .map((name) => name.trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, 50);
+
     try {
       const result = await createAndProcess({
         organizationId: currentOrganizationId,
@@ -211,6 +226,8 @@ export default function BriefingPage() {
         type,
         title,
         sourceContent,
+        sourceType,
+        participants,
         meetingDate: meetingDate
           ? new Date(`${meetingDate}T12:00:00`).toISOString()
           : null,
@@ -221,6 +238,40 @@ export default function BriefingPage() {
       );
     } catch {
       toast.error("Não foi possível processar o briefing.");
+    }
+  };
+
+  const importTextFile = async (file: File | undefined) => {
+    if (!file) return;
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!extension || !["txt", "md", "markdown"].includes(extension)) {
+      toast.error("Envie um arquivo .txt ou .md.");
+      return;
+    }
+    if (file.size > Math.max(maxChars * 4, 120_000)) {
+      toast.error("O arquivo excede o tamanho permitido para este plano.");
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      if (content.trim().length < MIN_SOURCE_LENGTH) {
+        toast.error("O arquivo não possui conteúdo suficiente.");
+        return;
+      }
+      if (content.trim().length > maxChars) {
+        toast.error(`O plano permite até ${maxChars} caracteres.`);
+        return;
+      }
+      setSourceContent(content);
+      setFileName(file.name);
+      setSourceType(extension === "txt" ? "text_file" : "markdown_file");
+      if (!title.trim()) {
+        setTitle(file.name.replace(/\.(txt|md|markdown)$/i, ""));
+      }
+      toast.success("Arquivo carregado.");
+    } catch {
+      toast.error("Não foi possível ler o arquivo.");
     }
   };
 
@@ -720,6 +771,20 @@ export default function BriefingPage() {
           </div>
 
           <div className="space-y-2">
+            <Label>Participantes</Label>
+            <Input
+              value={participantsInput}
+              maxLength={2_000}
+              placeholder="Ana, Bruno, Carlos"
+              onChange={(event) => setParticipantsInput(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Separe os nomes por vírgula. Eles ajudam a validar responsáveis
+              mencionados na transcrição.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
               <Label>Transcrição ou ata</Label>
               <span className="text-xs text-muted-foreground">
@@ -727,12 +792,31 @@ export default function BriefingPage() {
                 {maxChars.toLocaleString("pt-BR")}
               </span>
             </div>
+            <div className="flex flex-col gap-2 rounded-lg border border-dashed p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Upload className="h-4 w-4" />
+                {fileName ?? "Importe um arquivo .txt ou .md"}
+              </div>
+              <Input
+                type="file"
+                accept=".txt,.md,.markdown,text/plain,text/markdown"
+                className="h-9 max-w-xs cursor-pointer"
+                onChange={(event) => {
+                  void importTextFile(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+            </div>
             <Textarea
               value={sourceContent}
               maxLength={maxChars}
               rows={16}
               placeholder="Cole aqui a transcrição da reunião..."
-              onChange={(event) => setSourceContent(event.target.value)}
+              onChange={(event) => {
+                setSourceContent(event.target.value);
+                setSourceType("pasted_text");
+                setFileName(null);
+              }}
             />
           </div>
 

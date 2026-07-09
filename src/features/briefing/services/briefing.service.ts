@@ -87,6 +87,8 @@ export interface CreateBriefingInput {
   type: BriefingType;
   title: string;
   sourceContent: string;
+  sourceType?: "pasted_text" | "manual_notes" | "text_file" | "markdown_file";
+  participants?: string[];
   meetingDate?: string | null;
 }
 
@@ -123,9 +125,9 @@ export async function createBriefing(input: CreateBriefingInput) {
     p_team_id: input.teamId,
     p_sprint_id: input.sprintId ?? null,
     p_meeting_date: input.meetingDate || null,
-    p_source_type: "pasted_text",
+    p_source_type: input.sourceType ?? "pasted_text",
     p_language: null,
-    p_participants: [],
+    p_participants: input.participants ?? [],
   });
   assertNoError(error);
   return String(data);

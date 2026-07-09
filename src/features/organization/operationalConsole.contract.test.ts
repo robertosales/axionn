@@ -146,9 +146,10 @@ describe("platform AI security contract", () => {
     expect(edgeTest).not.toContain("rawError");
   });
 
-  it("keeps JWT verification enabled for both functions", () => {
+  it("keeps JWT verification enabled for all AI functions", () => {
     expect(config).toContain("[functions.apf-generate]");
     expect(config).toContain("[functions.platform-ai-provider-test]");
-    expect(config.match(/verify_jwt = true/g)).toHaveLength(2);
+    expect(config).toContain("[functions.process-ai-briefing]");
+    expect(config.match(/verify_jwt = true/g)).toHaveLength(3);
   });
 });

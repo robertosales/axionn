@@ -1,3 +1,5 @@
+// Redeploy bump: 2026-07-09 — versao final do modulo Briefing IA com governanca SaaS
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SITE_URL = Deno.env.get("SITE_URL") ?? "*";

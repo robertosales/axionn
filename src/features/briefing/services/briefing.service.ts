@@ -97,6 +97,40 @@ function assertNoError(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
+async function getFunctionErrorMessage(error: unknown): Promise<string> {
+  const fallback =
+    error instanceof Error
+      ? error.message
+      : "Falha ao processar briefing";
+  const context =
+    error && typeof error === "object" && "context" in error
+      ? (error as { context?: unknown }).context
+      : null;
+
+  if (!(context instanceof Response)) return fallback;
+
+  try {
+    const payload = (await context.clone().json()) as {
+      error?: unknown;
+      message?: unknown;
+    };
+    const code =
+      typeof payload.error === "string" ? payload.error.trim() : "";
+    const message =
+      typeof payload.message === "string" ? payload.message.trim() : "";
+
+    if (code && message) return `${code}: ${message}`;
+    return message || code || fallback;
+  } catch {
+    try {
+      const body = (await context.clone().text()).trim();
+      return body || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+}
+
 async function sha256(value: string) {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -139,7 +173,7 @@ export async function processBriefing(briefingId: string) {
     "process-ai-briefing",
     { body: { briefingId } },
   );
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(await getFunctionErrorMessage(error));
   if (!data?.success) {
     throw new Error(
       String(data?.message ?? data?.error ?? "Falha ao processar briefing"),

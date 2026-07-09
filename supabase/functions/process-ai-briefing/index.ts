@@ -653,12 +653,12 @@ Deno.serve(async (request: Request) => {
     }
 
     requestId = crypto.randomUUID();
-    const { data: usage, error: usageError } = await admin.rpc(
-      "reserve_ai_usage",
+    const { error: usageError } = await admin.rpc(
+      "reserve_ai_briefing_usage",
       {
+        p_org_id: visibleBriefing.org_id,
         p_team_id: visibleBriefing.team_id,
         p_user_id: user.id,
-        p_feature: "ai.briefing",
         p_request_id: requestId,
       },
     );
@@ -714,7 +714,7 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    await admin.rpc("finalize_ai_usage", {
+    await admin.rpc("finalize_ai_briefing_usage", {
       p_request_id: requestId,
       p_status: "success",
       p_provider_id: provider.id,
@@ -765,7 +765,7 @@ Deno.serve(async (request: Request) => {
       });
     }
     if (usageReserved && requestId) {
-      await admin.rpc("finalize_ai_usage", {
+      await admin.rpc("finalize_ai_briefing_usage", {
         p_request_id: requestId,
         p_status: "failed",
         p_provider_id: provider?.id ?? null,

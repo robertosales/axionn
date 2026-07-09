@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -21,18 +21,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { listBillingCustomers } from "@/backoffice/services/backoffice.service";
+import type { BillingCustomer } from "@/backoffice/types/backoffice.types";
 import {
   useOrgBriefingRetentionConfig,
   useSetOrgBriefingRetentionConfig,
   useArchiveExpiredBriefings,
 } from "@/features/briefing/hooks/useBriefingBackoffice";
 
-interface BORetentionConfigProps {
-  orgId: string;
-}
-
-export default function BORetentionConfig({ orgId }: BORetentionConfigProps) {
+export default function BORetentionConfig() {
   const queryClient = useQueryClient();
+  const [customers, setCustomers] = useState<BillingCustomer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(true);
+  const [selectedOrgId, setSelectedOrgId] = useState("");
+  const orgId = selectedOrgId;
   const { data: config, isLoading } = useOrgBriefingRetentionConfig(orgId);
   const setConfigMutation = useSetOrgBriefingRetentionConfig();
   const archiveMutation = useArchiveExpiredBriefings();
@@ -44,12 +46,51 @@ export default function BORetentionConfig({ orgId }: BORetentionConfigProps) {
     allowPermanentDelete: config?.allowPermanentDelete ?? false,
   });
 
+  useEffect(() => {
+    let cancelled = false;
+
+    setCustomersLoading(true);
+    listBillingCustomers()
+      .then((items) => {
+        if (cancelled) return;
+        setCustomers(items);
+        setSelectedOrgId((current) => current || items[0]?.orgId || "");
+      })
+      .catch(() => toast.error("Erro ao carregar organizações"))
+      .finally(() => {
+        if (!cancelled) setCustomersLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setForm({
+      defaultRetentionDays: config?.defaultRetentionDays ?? 180,
+      autoArchive: config?.autoArchive ?? true,
+      autoAnonymize: config?.autoAnonymize ?? false,
+      allowPermanentDelete: config?.allowPermanentDelete ?? false,
+    });
+  }, [config, orgId]);
+
+  const selectedCustomer = useMemo(
+    () => customers.find((customer) => customer.orgId === orgId) ?? null,
+    [customers, orgId],
+  );
+
   const handleChange = (key: string, value: unknown) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!orgId) {
+      toast.error("Selecione uma organização.");
+      return;
+    }
+
     try {
       await setConfigMutation.mutateAsync({ orgId, config: form });
       toast.success("Configuração salva");
@@ -69,7 +110,7 @@ export default function BORetentionConfig({ orgId }: BORetentionConfigProps) {
     }
   };
 
-  if (isLoading) {
+  if (customersLoading || (orgId && isLoading)) {
     return (
       <div className="flex justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -85,6 +126,38 @@ export default function BORetentionConfig({ orgId }: BORetentionConfigProps) {
           Configure por quanto tempo os briefings são mantidos e como dados sensíveis são tratados.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Organização</CardTitle>
+          <CardDescription>
+            Escolha o cliente que receberá esta política de retenção.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Select value={orgId} onValueChange={setSelectedOrgId}>
+            <SelectTrigger className="max-w-xl">
+              <SelectValue placeholder="Selecione uma organização" />
+            </SelectTrigger>
+            <SelectContent>
+              {customers.map((customer) => (
+                <SelectItem key={customer.orgId} value={customer.orgId}>
+                  {customer.orgName}
+                  {customer.planCode ? ` - ${customer.planCode}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedCustomer && (
+            <p className="text-xs text-muted-foreground">
+              Plano atual:{" "}
+              {selectedCustomer.planName ??
+                selectedCustomer.planCode ??
+                "não informado"}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="border-cyan-500/20">
         <CardHeader>
@@ -216,7 +289,7 @@ export default function BORetentionConfig({ orgId }: BORetentionConfigProps) {
       </Card>
 
       <div className="flex gap-3 pt-4 border-t">
-        <Button type="submit" disabled={setConfigMutation.isPending}>
+        <Button type="submit" disabled={setConfigMutation.isPending || !orgId}>
           {setConfigMutation.isPending ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : null}

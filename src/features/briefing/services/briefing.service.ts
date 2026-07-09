@@ -688,12 +688,13 @@ export async function getOrgBriefingRetentionConfig(
     name: string,
     args: Record<string, unknown>,
   ) => Promise<{
-    data: Array<Record<string, unknown>> | null;
+    data: Array<Record<string, unknown>> | Record<string, unknown> | null;
     error: { message: string } | null;
   }>)("get_org_briefing_retention_config", { p_org_id: orgId });
   assertNoError(error);
-  if (!data || data.length === 0) return null;
-  const row = data[0];
+  if (!data) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
   return {
     orgId: String(row.org_id),
     defaultRetentionDays: Number(row.default_retention_days ?? 180),

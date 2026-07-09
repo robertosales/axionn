@@ -58,9 +58,18 @@ describe("backoffice routing contract", () => {
     "/backoffice/equipe",
     "/backoffice/suporte",
     "/backoffice/analitico",
+    "/backoffice/briefing-ia",
+    "/backoffice/retencao-briefing",
     "/backoffice/configuracoes",
   ])("keeps the backoffice route %s registered", (route) => {
     expect(app).toContain(`path=\"${route}\"`);
+  });
+
+  it("keeps briefing backoffice entries visible in the sidebar", () => {
+    const layout = source("src/backoffice/components/BackofficeLayout.tsx");
+
+    expect(layout).toContain('to: "/backoffice/briefing-ia"');
+    expect(layout).toContain('to: "/backoffice/retencao-briefing"');
   });
 
   it("keeps backoffice outside the organization operational guard", () => {

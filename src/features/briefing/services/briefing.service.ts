@@ -81,6 +81,14 @@ export interface BriefingFollowup {
   attentionItems: BriefingAttentionItem[];
 }
 
+export interface BriefingOutcomes {
+  totalApplied: number;
+  openItems: number;
+  completedItems: number;
+  overdueItems: number;
+  missingItems: number;
+}
+
 export interface CreateBriefingInput {
   organizationId: string;
   teamId: string;
@@ -392,6 +400,30 @@ export async function getTeamBriefingFollowup(
         dueDate: String(item.due_date),
       }),
     ),
+  };
+}
+
+export async function getTeamBriefingOutcomes(
+  teamId: string,
+): Promise<BriefingOutcomes> {
+  const { data, error } = await (
+    supabase.rpc as unknown as (
+      name: string,
+      args: Record<string, unknown>,
+    ) => Promise<{
+      data: Array<Record<string, unknown>> | null;
+      error: { message: string } | null;
+    }>
+  )("get_ai_briefing_team_outcomes", { p_team_id: teamId });
+  assertNoError(error);
+
+  const row = data?.[0];
+  return {
+    totalApplied: Number(row?.total_applied ?? 0),
+    openItems: Number(row?.open_items ?? 0),
+    completedItems: Number(row?.completed_items ?? 0),
+    overdueItems: Number(row?.overdue_items ?? 0),
+    missingItems: Number(row?.missing_items ?? 0),
   };
 }
 

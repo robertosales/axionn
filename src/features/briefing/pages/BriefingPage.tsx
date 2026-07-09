@@ -54,9 +54,11 @@ import { useBriefing } from "../hooks/useBriefing";
 import type { BriefingSuggestionRecord } from "../services/briefing.service";
 import {
   getTeamBriefingFollowup,
+  getTeamBriefingOutcomes,
   listTeamBriefings,
   type BriefingFollowup,
   type BriefingHistoryItem,
+  type BriefingOutcomes,
 } from "../services/briefing.service";
 import type { BriefingSuggestionType, BriefingType } from "../types/briefing";
 
@@ -125,6 +127,7 @@ export default function BriefingPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [followup, setFollowup] = useState<BriefingFollowup | null>(null);
+  const [outcomes, setOutcomes] = useState<BriefingOutcomes | null>(null);
 
   const enabled = entitlements.some(
     (entitlement) =>
@@ -164,11 +167,13 @@ export default function BriefingPage() {
     Promise.all([
       listTeamBriefings(currentTeamId),
       getTeamBriefingFollowup(currentTeamId),
+      getTeamBriefingOutcomes(currentTeamId),
     ])
-      .then(([items, followupData]) => {
+      .then(([items, followupData, outcomeData]) => {
         if (!cancelled) {
           setHistory(items);
           setFollowup(followupData);
+          setOutcomes(outcomeData);
         }
       })
       .catch((cause) => {
@@ -176,6 +181,7 @@ export default function BriefingPage() {
         if (!cancelled) {
           setHistory([]);
           setFollowup(null);
+          setOutcomes(null);
         }
       })
       .finally(() => {
@@ -942,6 +948,38 @@ export default function BriefingPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {outcomes && outcomes.totalApplied > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Resultados gerados</CardTitle>
+            <CardDescription>
+              Situação atual das HUs e impedimentos originados pelos briefings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["Aplicados", outcomes.totalApplied],
+                ["Em andamento", outcomes.openItems],
+                ["Concluídos", outcomes.completedItems],
+                ["Vencidos", outcomes.overdueItems],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-lg border p-4">
+                  <div className="text-2xl font-semibold">{value}</div>
+                  <div className="text-xs text-muted-foreground">{label}</div>
+                </div>
+              ))}
+            </div>
+            {outcomes.missingItems > 0 && (
+              <p className="mt-3 text-xs text-amber-600">
+                {outcomes.missingItems} item(ns) aplicado(s) não existe(m) mais
+                no projeto.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <Card>

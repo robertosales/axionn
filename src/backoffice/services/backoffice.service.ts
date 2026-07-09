@@ -3,6 +3,11 @@ import {
   type BackofficeDashboardSummary,
   type BackofficeRole,
   type BackofficeStaffMember,
+  type BillingRecord,
+  type BillingStatus,
+  type SaaSMetrics,
+  type SupportStatus,
+  type SupportTicket,
 } from "@/backoffice/types/backoffice.types";
 
 function toNumber(value: unknown) {
@@ -97,4 +102,79 @@ export async function getBackofficeDashboardSummary() {
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   return normalizeSummary((row ?? {}) as Record<string, unknown>);
+}
+
+function normalizeBilling(row: Record<string, unknown>): BillingRecord {
+  return {
+    id: String(row.id),
+    tenantId: row.tenant_id == null ? null : String(row.tenant_id),
+    tenantName: String(row.tenant_name ?? ""),
+    amount: toNumber(row.amount),
+    status: String(row.status) as BillingStatus,
+    planType: String(row.plan_type ?? ""),
+    billingPeriod: String(row.billing_period ?? ""),
+    dueDate: String(row.due_date ?? ""),
+    paidAt: row.paid_at == null ? null : String(row.paid_at),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export async function listBillingRecords() {
+  const { data, error } = await (supabase as any).rpc("list_backoffice_billing_records");
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map(normalizeBilling);
+}
+
+export async function updateBillingStatus(id: string, status: BillingStatus) {
+  const { error } = await (supabase as any).rpc("update_backoffice_billing_status", {
+    p_billing_id: id,
+    p_status: status,
+  });
+  if (error) throw error;
+}
+
+function normalizeTicket(row: Record<string, unknown>): SupportTicket {
+  return {
+    id: String(row.id),
+    ticketNumber: String(row.ticket_number ?? ""),
+    tenantName: String(row.tenant_name ?? ""),
+    reporterName: String(row.reporter_name ?? ""),
+    subject: String(row.subject ?? ""),
+    category: String(row.category ?? "other"),
+    priority: String(row.priority ?? "medium"),
+    status: String(row.status) as SupportStatus,
+    slaDeadline: row.sla_deadline == null ? null : String(row.sla_deadline),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
+export async function listSupportTickets() {
+  const { data, error } = await (supabase as any).rpc("list_backoffice_support_tickets");
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map(normalizeTicket);
+}
+
+export async function updateSupportTicketStatus(id: string, status: SupportStatus) {
+  const { error } = await (supabase as any).rpc("update_backoffice_support_ticket_status", {
+    p_ticket_id: id,
+    p_status: status,
+  });
+  if (error) throw error;
+}
+
+export async function getSaaSMetrics(): Promise<SaaSMetrics> {
+  const { data, error } = await (supabase as any).rpc("get_backoffice_saas_metrics");
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) ?? {};
+  return {
+    mrr: toNumber(row.mrr),
+    arr: toNumber(row.arr),
+    activeTenants: toNumber(row.active_tenants),
+    trialTenants: toNumber(row.trial_tenants),
+    churnedTenants: toNumber(row.churned_tenants),
+    churnRate: toNumber(row.churn_rate),
+    openTickets: toNumber(row.open_tickets),
+    overdueInvoices: toNumber(row.overdue_invoices),
+    paidRevenue: toNumber(row.paid_revenue),
+  };
 }

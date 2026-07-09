@@ -32,3 +32,44 @@ export interface BackofficeDashboardSummary {
   activeSubscriptions: number;
   pastDueSubscriptions: number;
 }
+
+export type BillingStatus = "pending" | "paid" | "overdue" | "cancelled" | "refunded";
+export type SupportStatus = "open" | "in_progress" | "waiting_client" | "resolved" | "closed";
+
+export interface BillingRecord {
+  id: string;
+  tenantId: string | null;
+  tenantName: string;
+  amount: number;
+  status: BillingStatus;
+  planType: string;
+  billingPeriod: string;
+  dueDate: string;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  ticketNumber: string;
+  tenantName: string;
+  reporterName: string;
+  subject: string;
+  category: string;
+  priority: string;
+  status: SupportStatus;
+  slaDeadline: string | null;
+  createdAt: string;
+}
+
+export interface SaaSMetrics {
+  mrr: number;
+  arr: number;
+  activeTenants: number;
+  trialTenants: number;
+  churnedTenants: number;
+  churnRate: number;
+  openTickets: number;
+  overdueInvoices: number;
+  paidRevenue: number;
+}

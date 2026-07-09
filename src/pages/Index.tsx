@@ -55,6 +55,7 @@ const ApfGeneratorPage = lazy(() =>
 const SalaAgilReportsPage = lazy(() =>
   import("@/features/reports/pages/SalaAgilReportsPage").then((m) => ({ default: m.SalaAgilReportsPage })),
 );
+const BriefingPage = lazy(() => import("@/features/briefing/pages/BriefingPage"));
 
 // ─── Skeleton de seção ────────────────────────────────────────────────────────
 function SectionSkeleton() {
@@ -125,6 +126,7 @@ const VALID_SECTIONS = [
   "board",
   "planning-poker",
   "retrospectiva",
+  "briefing",
   "releases",
   "relatorios",
   "notificacoes",
@@ -327,6 +329,14 @@ const Index = () => {
               <LazySection name="Retrospectiva">
                 <RetroManager />
               </LazySection>
+            )}
+
+            {active === "briefing" && (
+              <SectionGuard permission="view_dashboard">
+                <LazySection name="Axionn Briefing">
+                  <BriefingPage />
+                </LazySection>
+              </SectionGuard>
             )}
 
             {active === "gerador-apf" && (

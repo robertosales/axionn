@@ -17,6 +17,7 @@ import {
   ChevronRight, ChevronLeft, Building2, ChevronsUpDown, Check,
   Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight, Target,
   Menu, Search, Shield,
+  Sparkles,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
@@ -75,6 +76,7 @@ const NAV_SALA_AGIL: NavItem[] = [
   { key: "epicos",         label: "Épicos",        icon: Layers,          path: "/sala-agil/epicos",         group: "sprints" },
   { key: "planning-poker", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning-poker", group: "cerimonias" },
   { key: "retrospectiva",  label: "Retrospectiva", icon: Repeat,          path: "/sala-agil/retrospectiva",  group: "cerimonias" },
+  { key: "briefing",       label: "Briefing IA",   icon: Sparkles,        path: "/sala-agil/briefing",       group: "cerimonias" },
   { key: "impedimentos",   label: "Impedimentos",  icon: AlertTriangle,   path: "/sala-agil/impedimentos",   group: "cerimonias" },
   { key: "calendario",     label: "Calendário",    icon: Calendar,        path: "/sala-agil/calendario",     group: "operacoes" },
   { key: "equipe",         label: "Equipe",        icon: Users,           path: "/sala-agil/equipe",         group: "operacoes" },

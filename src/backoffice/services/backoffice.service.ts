@@ -8,6 +8,8 @@ import {
   type SaaSMetrics,
   type SupportStatus,
   type SupportTicket,
+  type BackofficePlanPrice,
+  type BillingCustomer,
 } from "@/backoffice/types/backoffice.types";
 
 function toNumber(value: unknown) {
@@ -131,6 +133,66 @@ export async function updateBillingStatus(id: string, status: BillingStatus) {
     p_status: status,
   });
   if (error) throw error;
+}
+
+export async function listBackofficePlanPrices(): Promise<BackofficePlanPrice[]> {
+  const { data, error } = await (supabase as any).rpc("list_backoffice_plan_prices");
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    monthlyPrice: toNumber(row.monthly_price),
+    annualPrice: toNumber(row.annual_price),
+    currency: String(row.currency ?? "BRL"),
+    status: String(row.status),
+  }));
+}
+
+export async function updateBackofficePlanPrice(plan: BackofficePlanPrice) {
+  const { error } = await (supabase as any).rpc("update_backoffice_plan_price", {
+    p_plan_id: plan.id,
+    p_monthly_price: plan.monthlyPrice,
+    p_annual_price: plan.annualPrice,
+    p_currency: plan.currency,
+  });
+  if (error) throw error;
+}
+
+export async function listBillingCustomers(): Promise<BillingCustomer[]> {
+  const { data, error } = await (supabase as any).rpc("list_backoffice_billing_customers");
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[])
+    .map((row) => ({
+      orgId: String(row.org_id),
+      orgName: String(row.org_name),
+      planName: row.plan_name == null ? null : String(row.plan_name),
+      planCode: row.plan_code == null ? null : String(row.plan_code),
+    }));
+}
+
+export async function createBillingRecord(payload: {
+  tenantId: string; billingPeriod: string; dueDate: string;
+  amount: number | null; notes: string | null;
+}) {
+  const { data, error } = await (supabase as any).rpc("create_backoffice_billing_record", {
+    p_tenant_id: payload.tenantId,
+    p_billing_period: payload.billingPeriod,
+    p_due_date: payload.dueDate,
+    p_amount: payload.amount,
+    p_notes: payload.notes,
+  });
+  if (error) throw error;
+  return String(data);
+}
+
+export async function generateMonthlyBilling(referenceDate: string, dueDay: number) {
+  const { data, error } = await (supabase as any).rpc("generate_backoffice_monthly_billing", {
+    p_reference_date: referenceDate,
+    p_due_day: dueDay,
+  });
+  if (error) throw error;
+  return toNumber(data);
 }
 
 function normalizeTicket(row: Record<string, unknown>): SupportTicket {

@@ -1,26 +1,69 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Loader2, Search } from "lucide-react";
+import { Download, Loader2, Plus, RefreshCw, Save, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import { listBillingRecords, updateBillingStatus } from "@/backoffice/services/backoffice.service";
-import type { BillingRecord, BillingStatus } from "@/backoffice/types/backoffice.types";
+import {
+  createBillingRecord, generateMonthlyBilling, listBackofficePlanPrices,
+  listBillingCustomers, listBillingRecords, updateBackofficePlanPrice, updateBillingStatus,
+} from "@/backoffice/services/backoffice.service";
+import type { BackofficePlanPrice, BillingCustomer, BillingRecord, BillingStatus } from "@/backoffice/types/backoffice.types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const statuses: BillingStatus[] = ["pending", "paid", "overdue", "cancelled", "refunded"];
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function BOFinanceiro() {
   const [records, setRecords] = useState<BillingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [plans, setPlans] = useState<BackofficePlanPrice[]>([]);
+  const [customers, setCustomers] = useState<BillingCustomer[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [pricesOpen, setPricesOpen] = useState(false);
+  const [invoice, setInvoice] = useState({ tenantId: "", billingPeriod: "monthly", dueDate: today(), amount: "", notes: "" });
 
   useEffect(() => {
-    void listBillingRecords().then(setRecords).catch(() => toast.error("Erro ao carregar faturas.")).finally(() => setLoading(false));
+    void Promise.all([listBillingRecords(), listBackofficePlanPrices(), listBillingCustomers()])
+      .then(([billing, prices, organizations]) => { setRecords(billing); setPlans(prices); setCustomers(organizations); })
+      .catch(() => toast.error("Erro ao carregar o financeiro.")).finally(() => setLoading(false));
   }, []);
+
+  const reloadBilling = async () => setRecords(await listBillingRecords());
+
+  const saveInvoice = async () => {
+    if (!invoice.tenantId || !invoice.dueDate) return toast.error("Cliente e vencimento são obrigatórios.");
+    setSaving(true);
+    try {
+      await createBillingRecord({ tenantId: invoice.tenantId, billingPeriod: invoice.billingPeriod,
+        dueDate: invoice.dueDate, amount: invoice.amount ? Number(invoice.amount.replace(",", ".")) : null,
+        notes: invoice.notes || null });
+      toast.success("Fatura criada."); setInvoiceOpen(false); await reloadBilling();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao criar fatura."); }
+    finally { setSaving(false); }
+  };
+
+  const savePrices = async () => {
+    setSaving(true);
+    try { await Promise.all(plans.map(updateBackofficePlanPrice)); toast.success("Preços atualizados."); setPricesOpen(false); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao salvar preços."); }
+    finally { setSaving(false); }
+  };
+
+  const generate = async () => {
+    setSaving(true);
+    try { const count = await generateMonthlyBilling(today(), 10); toast.success(`${count} fatura(s) gerada(s).`); await reloadBilling(); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Erro na geração mensal."); }
+    finally { setSaving(false); }
+  };
 
   const visible = useMemo(() => records.filter((record) =>
     (filter === "all" || record.status === filter) &&
@@ -48,13 +91,18 @@ export default function BOFinanceiro() {
   return <div className="space-y-5">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="text-xl font-semibold">Financeiro</h1><p className="text-sm text-muted-foreground">Faturas, receitas e inadimplência.</p></div>
-      <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />Exportar CSV</Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" onClick={() => setPricesOpen(true)}><Settings2 className="mr-2 h-4 w-4" />Preços</Button>
+        <Button variant="outline" onClick={() => void generate()} disabled={saving}><RefreshCw className="mr-2 h-4 w-4" />Gerar mensalidade</Button>
+        <Button onClick={() => setInvoiceOpen(true)}><Plus className="mr-2 h-4 w-4" />Nova fatura</Button>
+        <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />CSV</Button>
+      </div>
     </div>
     <div className="grid gap-4 sm:grid-cols-3">
       {[
         ["Receita paga", money.format(records.filter((r) => r.status === "paid").reduce((sum, r) => sum + r.amount, 0))],
-        ["Pendente", money.format(records.filter((r) => r.status === "pending").reduce((sum, r) => sum + r.amount, 0))],
-        ["Vencida", money.format(records.filter((r) => r.status === "overdue").reduce((sum, r) => sum + r.amount, 0))],
+        ["Pendente", money.format(records.filter((r) => r.status === "pending" && r.dueDate >= today()).reduce((sum, r) => sum + r.amount, 0))],
+        ["Vencida", money.format(records.filter((r) => r.status === "overdue" || (r.status === "pending" && r.dueDate < today())).reduce((sum, r) => sum + r.amount, 0))],
       ].map(([label, value]) => <div key={label} className="rounded-lg border bg-white p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div>)}
     </div>
     <div className="rounded-lg border bg-white">
@@ -68,5 +116,17 @@ export default function BOFinanceiro() {
         </Table>}
       {!loading && visible.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">Nenhuma fatura encontrada.</p>}
     </div>
+    <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}><DialogContent><DialogHeader><DialogTitle>Nova fatura</DialogTitle></DialogHeader>
+      <div className="grid gap-4">
+        <div className="space-y-2"><Label>Cliente</Label><Select value={invoice.tenantId} onValueChange={(tenantId) => setInvoice((v) => ({ ...v, tenantId }))}><SelectTrigger><SelectValue placeholder="Selecione uma assinatura" /></SelectTrigger><SelectContent>{customers.map((c) => <SelectItem key={c.orgId} value={c.orgId}>{c.orgName} · {c.planName}</SelectItem>)}</SelectContent></Select></div>
+        <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Período</Label><Select value={invoice.billingPeriod} onValueChange={(billingPeriod) => setInvoice((v) => ({ ...v, billingPeriod }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="monthly">Mensal</SelectItem><SelectItem value="quarterly">Trimestral</SelectItem><SelectItem value="annual">Anual</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Vencimento</Label><Input type="date" value={invoice.dueDate} onChange={(e) => setInvoice((v) => ({ ...v, dueDate: e.target.value }))} /></div></div>
+        <div className="space-y-2"><Label>Valor personalizado (opcional)</Label><Input inputMode="decimal" placeholder="Vazio usa o preço do plano" value={invoice.amount} onChange={(e) => setInvoice((v) => ({ ...v, amount: e.target.value }))} /></div>
+        <div className="space-y-2"><Label>Observações</Label><Textarea value={invoice.notes} onChange={(e) => setInvoice((v) => ({ ...v, notes: e.target.value }))} /></div>
+      </div><DialogFooter><Button variant="outline" onClick={() => setInvoiceOpen(false)}>Cancelar</Button><Button onClick={() => void saveInvoice()} disabled={saving}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Criar</Button></DialogFooter>
+    </DialogContent></Dialog>
+    <Dialog open={pricesOpen} onOpenChange={setPricesOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle>Preços dos planos</DialogTitle></DialogHeader>
+      <div className="space-y-3">{plans.map((plan, index) => <div key={plan.id} className="grid items-end gap-3 rounded-md border p-3 sm:grid-cols-3"><div><p className="font-medium">{plan.name}</p><p className="text-xs text-muted-foreground">{plan.code}</p></div><div className="space-y-1"><Label>Mensal (R$)</Label><Input type="number" min="0" step="0.01" value={plan.monthlyPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, monthlyPrice: Number(e.target.value) } : item))} /></div><div className="space-y-1"><Label>Anual (R$)</Label><Input type="number" min="0" step="0.01" value={plan.annualPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, annualPrice: Number(e.target.value) } : item))} /></div></div>)}</div>
+      <DialogFooter><Button variant="outline" onClick={() => setPricesOpen(false)}>Cancelar</Button><Button onClick={() => void savePrices()} disabled={saving}><Save className="mr-2 h-4 w-4" />Salvar</Button></DialogFooter>
+    </DialogContent></Dialog>
   </div>;
 }

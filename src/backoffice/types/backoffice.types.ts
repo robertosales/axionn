@@ -73,3 +73,20 @@ export interface SaaSMetrics {
   overdueInvoices: number;
   paidRevenue: number;
 }
+
+export interface BackofficePlanPrice {
+  id: string;
+  code: string;
+  name: string;
+  monthlyPrice: number;
+  annualPrice: number;
+  currency: string;
+  status: string;
+}
+
+export interface BillingCustomer {
+  orgId: string;
+  orgName: string;
+  planName: string | null;
+  planCode: string | null;
+}

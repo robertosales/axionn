@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.platform-ai-provider-test]
 verify_jwt = true
+
+[functions.process-ai-briefing]
+verify_jwt = true

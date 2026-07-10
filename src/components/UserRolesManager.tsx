@@ -50,6 +50,7 @@ import {
   UserX, UserCheck, ArrowRightLeft, AlertTriangle,
   Copy, CheckCircle2, Save, History, Loader2,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
 import { getInitials, formatPersonName } from "@/lib/personName";
@@ -241,6 +242,11 @@ export function UserRolesManager() {
   const [emailState,      setEmailState]      = useState<EmailState>(EMAIL0);
   const [resetState,      setResetState]      = useState<ResetState>(RESET0);
   const [toggleState,     setToggleState]     = useState<ToggleState>(TOG0);
+
+  // Multi-seleção para desativação em massa
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
@@ -498,10 +504,11 @@ export function UserRolesManager() {
     setToggleState(p => ({ ...p, saving: true }));
     const newActive = !user.is_active;
     try {
-      const { error } = await supabase.from("profiles").update({ is_active: newActive }).eq("user_id", user.user_id);
+      const { data, error } = await supabase.functions.invoke("admin-user-management", {
+        body: { action: "toggle_active", user_id: user.user_id, is_active: newActive },
+      });
       if (error) throw error;
-      const { data: { user: actor } } = await supabase.auth.getUser();
-      if (actor) await writeAudit(actor.id, user.user_id, "toggle_active", { status: newActive ? "ativado" : "desativado" });
+      if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(newActive ? `${user.display_name} ativado.` : `${user.display_name} desativado.`);
       setToggleState(TOG0);
       if (sheetUser?.user_id === user.user_id) closeSheet();
@@ -510,6 +517,49 @@ export function UserRolesManager() {
       toast.error(err?.message || "Erro ao alterar status");
       setToggleState(p => ({ ...p, saving: false }));
     }
+  }
+
+  // ── Desativação em massa ──────────────────────────────────────────────────
+  function togglePageSelection(checked: boolean) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      paginatedItems.forEach(u => {
+        if (checked) next.add(u.user_id);
+        else next.delete(u.user_id);
+      });
+      return next;
+    });
+  }
+  function toggleRowSelection(userId: string, checked: boolean) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(userId); else next.delete(userId);
+      return next;
+    });
+  }
+  async function runBulkDeactivate() {
+    const targets = users.filter(u => selectedIds.has(u.user_id) && u.is_active);
+    if (targets.length === 0) { setBulkOpen(false); return; }
+    setBulkRunning(true);
+    const results = await Promise.allSettled(
+      targets.map(u =>
+        supabase.functions.invoke("admin-user-management", {
+          body: { action: "toggle_active", user_id: u.user_id, is_active: false },
+        }).then(res => {
+          if (res.error) throw res.error;
+          if ((res.data as any)?.error) throw new Error((res.data as any).error);
+          return res;
+        })
+      )
+    );
+    const ok = results.filter(r => r.status === "fulfilled").length;
+    const fail = results.length - ok;
+    if (ok > 0) toast.success(`${ok} usuário(s) desativado(s).`);
+    if (fail > 0) toast.error(`${fail} falha(s) ao desativar.`);
+    setBulkRunning(false);
+    setBulkOpen(false);
+    setSelectedIds(new Set());
+    await fetchUsers();
   }
 
   // ── Inativar + migrar ─────────────────────────────────────────────────────
@@ -638,6 +688,27 @@ export function UserRolesManager() {
           {totalItems} usuário{totalItems !== 1 ? "s" : ""} encontrado{totalItems !== 1 ? "s" : ""}
           {totalItems !== users.length && ` (de ${users.length})`}
         </span>
+        {selectedIds.size > 0 && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs font-medium">{selectedIds.size} selecionado(s)</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Limpar
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-8 text-xs gap-1"
+              onClick={() => setBulkOpen(true)}
+            >
+              <UserX className="h-3.5 w-3.5" /> Desativar selecionados
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Tabela */}
@@ -650,6 +721,16 @@ export function UserRolesManager() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b border-border/70">
+                <TableHead className="w-9 py-2.5">
+                  <Checkbox
+                    checked={
+                      paginatedItems.length > 0 &&
+                      paginatedItems.every(u => selectedIds.has(u.user_id))
+                    }
+                    onCheckedChange={(c) => togglePageSelection(!!c)}
+                    aria-label="Selecionar página"
+                  />
+                </TableHead>
                 <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Usuário</TableHead>
                 <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Módulo &amp; Perfil</TableHead>
                 <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Times</TableHead>
@@ -660,7 +741,7 @@ export function UserRolesManager() {
             <TableBody>
               {paginatedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-10 bg-muted/20">
+                  <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-10 bg-muted/20">
                     Nenhum usuário encontrado.
                   </TableCell>
                 </TableRow>
@@ -673,6 +754,13 @@ export function UserRolesManager() {
                     idx % 2 === 0 ? "bg-background" : "bg-muted/20",
                   )}
                 >
+                  <TableCell className="py-2.5">
+                    <Checkbox
+                      checked={selectedIds.has(user.user_id)}
+                      onCheckedChange={(c) => toggleRowSelection(user.user_id, !!c)}
+                      aria-label={`Selecionar ${user.display_name}`}
+                    />
+                  </TableCell>
                   {/* Usuário */}
                   <TableCell className="py-2.5">
                     <div className="flex items-center gap-2">
@@ -981,6 +1069,31 @@ export function UserRolesManager() {
                 Confirmar reset
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog — Desativação em massa */}
+      <Dialog open={bulkOpen} onOpenChange={v => { if (!v && !bulkRunning) setBulkOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <UserX className="h-4 w-4" /> Desativar usuários selecionados
+            </DialogTitle>
+            <DialogDescription>
+              Você está prestes a desativar{" "}
+              {users.filter(u => selectedIds.has(u.user_id) && u.is_active).length}{" "}
+              usuário(s). Eles perderão acesso ao sistema imediatamente. Esta ação pode ser revertida ativando novamente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => setBulkOpen(false)} disabled={bulkRunning}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={runBulkDeactivate} disabled={bulkRunning}>
+              {bulkRunning && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              Desativar {users.filter(u => selectedIds.has(u.user_id) && u.is_active).length}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

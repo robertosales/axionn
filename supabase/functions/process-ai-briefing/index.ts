@@ -396,14 +396,39 @@ function validateEvidenceAgainstSource(
         sourceContent.slice(evidence.sourceStart, evidence.sourceEnd) !==
           evidence.quote
       ) {
-        throw new HttpError(
-          422,
-          "AI_EVIDENCE_RANGE_MISMATCH",
-          `Indices de evidencia nao correspondem ao trecho citado. Verifique sourceStart/sourceEnd.`,
-        );
+        // Auto-heal: a IA frequentemente erra os indices mesmo citando trecho
+        // literal correto. Como o quote foi validado como presente no source,
+        // recomputamos os indices via indexOf em vez de derrubar todo o briefing.
+        const foundAt = sourceContent.indexOf(evidence.quote);
+        if (foundAt >= 0) {
+          evidence.sourceStart = foundAt;
+          evidence.sourceEnd = foundAt + evidence.quote.length;
+        } else {
+          // Nao deveria ocorrer (includes ja passou), mas por seguranca descartamos os indices.
+          evidence.sourceStart = undefined;
+          evidence.sourceEnd = undefined;
+        }
       }
     }
   }
+}
+
+function inferParticipantsFromEvidence(
+  analysis: BriefingAnalysis,
+  max = 50,
+): string[] {
+  const set = new Set<string>();
+  for (const suggestion of analysis.suggestions) {
+    for (const evidence of suggestion.evidence) {
+      const speaker = evidence.speaker?.trim();
+      if (speaker && speaker.length >= 2 && speaker.length <= 120) {
+        set.add(speaker);
+        if (set.size >= max) break;
+      }
+    }
+    if (set.size >= max) break;
+  }
+  return [...set];
 }
 
 function buildPrompt(briefing: BriefingContext): string {
@@ -822,6 +847,17 @@ Deno.serve(async (request: Request) => {
     const analysis = parseAnalysis(result.text);
     validateEvidenceAgainstSource(analysis, briefing.source_content);
     const durationMs = Date.now() - startedAt;
+
+    // Se o briefing nao veio com participantes, inferir a partir dos falantes citados na transcricao.
+    if (!Array.isArray(briefing.participants) || briefing.participants.length === 0) {
+      const inferred = inferParticipantsFromEvidence(analysis);
+      if (inferred.length > 0) {
+        await admin
+          .from("ai_briefings")
+          .update({ participants: inferred })
+          .eq("id", briefingId);
+      }
+    }
 
     const { data: suggestionCount, error: completeError } = await admin.rpc(
       "complete_ai_briefing_run",

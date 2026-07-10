@@ -12,6 +12,7 @@ import {
   Loader2,
   Pencil,
   RotateCcw,
+  Search,
   Sparkles,
   Upload,
   UserRound,
@@ -62,6 +63,9 @@ import {
 } from "../services/briefing.service";
 import type { BriefingSuggestionType, BriefingType } from "../types/briefing";
 import { NextMeetingAgenda } from "../components/NextMeetingAgenda";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { usePagination } from "@/shared/hooks/usePagination";
+import { PaginationControls } from "@/shared/components/common/Pagination";
 
 const TYPE_LABELS: Record<BriefingType, string> = {
   daily: "Daily",
@@ -129,6 +133,26 @@ export default function BriefingPage() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [followup, setFollowup] = useState<BriefingFollowup | null>(null);
   const [outcomes, setOutcomes] = useState<BriefingOutcomes | null>(null);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<string>("all");
+  const debouncedHistorySearch = useDebounce(historySearch, 300);
+
+  const filteredHistory = useMemo(() => {
+    const q = debouncedHistorySearch.trim().toLowerCase();
+    return history.filter((item) => {
+      if (historyTypeFilter !== "all" && item.type !== historyTypeFilter) return false;
+      if (q && !item.title.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [history, debouncedHistorySearch, historyTypeFilter]);
+
+  const {
+    paginatedItems: paginatedHistory,
+    currentPage: historyPage,
+    setCurrentPage: setHistoryPage,
+    totalItems: historyTotal,
+    pageSize: historyPageSize,
+  } = usePagination(filteredHistory, { pageSize: 10 });
 
   const enabled = entitlements.some(
     (entitlement) =>
@@ -1016,17 +1040,44 @@ export default function BriefingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por título..."
+                value={historySearch}
+                onChange={(event) => setHistorySearch(event.target.value)}
+                className="h-9 pl-9 text-xs"
+              />
+            </div>
+            <Select value={historyTypeFilter} onValueChange={setHistoryTypeFilter}>
+              <SelectTrigger className="h-9 w-full text-xs sm:w-56">
+                <SelectValue placeholder="Tipo de reunião" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {historyLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : history.length === 0 ? (
+          ) : filteredHistory.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhum briefing processado para esta equipe.
+              {history.length === 0
+                ? "Nenhum briefing processado para esta equipe."
+                : "Nenhum briefing corresponde aos filtros."}
             </p>
           ) : (
+            <>
             <div className="divide-y rounded-lg border">
-              {history.map((item) => (
+              {paginatedHistory.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -1094,6 +1145,13 @@ export default function BriefingPage() {
                 </button>
               ))}
             </div>
+            <PaginationControls
+              currentPage={historyPage}
+              totalItems={historyTotal}
+              pageSize={historyPageSize}
+              onPageChange={setHistoryPage}
+            />
+            </>
           )}
         </CardContent>
       </Card>

@@ -205,19 +205,19 @@ GRANT EXECUTE ON FUNCTION public.get_default_identity_provider(UUID) TO authenti
 
 -- 7. RPC para registrar evento de auditoria de auth
 CREATE OR REPLACE FUNCTION public.log_auth_audit_event(
+    p_event_type TEXT,
+    p_result TEXT,
     p_organization_id UUID DEFAULT NULL,
     p_user_id UUID DEFAULT NULL,
     p_identity_provider_id UUID DEFAULT NULL,
-    p_event_type TEXT,
     p_client_id TEXT DEFAULT NULL,
     p_ip_address INET DEFAULT NULL,
     p_user_agent TEXT DEFAULT NULL,
     p_correlation_id UUID DEFAULT NULL,
-    p_result TEXT,
     p_failure_reason TEXT DEFAULT NULL,
     p_metadata JSONB DEFAULT '{}'::jsonb
 )
-RETURNS UUID
+RETRETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -240,7 +240,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_auth_audit_event(
-    UUID, UUID, UUID, TEXT, TEXT, INET, TEXT, UUID, TEXT, TEXT, JSONB
+    TEXT, TEXT, UUID, UUID, UUID, TEXT, INET, TEXT, UUID, TEXT, JSONB
 ) TO authenticated;
 
 -- 8. Função para sincronizar usuário do Keycloak

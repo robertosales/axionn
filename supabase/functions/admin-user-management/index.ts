@@ -213,6 +213,35 @@ Deno.serve(async (req: Request) => {
       }
     };
 
+    if (action === "toggle_active") {
+      if (typeof is_active !== "boolean") {
+        return new Response(JSON.stringify({ error: "is_active (boolean) obrigatório" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { error: updErr } = await adminClient
+        .from("profiles")
+        .update({ is_active })
+        .eq("user_id", user_id);
+      if (updErr) throw updErr;
+
+      // Sincroniza banimento no auth (não obrigatório, best-effort)
+      try {
+        await adminClient.auth.admin.updateUserById(user_id, {
+          ban_duration: is_active ? "none" : "876000h",
+        } as any);
+      } catch (banErr) {
+        console.warn("[admin-user-management] toggle_active ban sync falhou:", banErr);
+      }
+
+      await auditLog("toggle_active", { status: is_active ? "ativado" : "desativado" });
+      return new Response(
+        JSON.stringify({ success: true, is_active }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     if (action === "change_email") {
       if (!new_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(new_email)) {
         return new Response(JSON.stringify({ error: "E-mail inválido" }), {

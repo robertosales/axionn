@@ -74,5 +74,5 @@ export const briefingAnalysisSchema = z.object({
 });
 
 export function parseBriefingAnalysis(input: unknown): BriefingAnalysis {
-  return briefingAnalysisSchema.parse(input);
+  return briefingAnalysisSchema.parse(input) as BriefingAnalysis;
 }

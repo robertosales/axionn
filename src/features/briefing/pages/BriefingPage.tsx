@@ -1040,17 +1040,44 @@ export default function BriefingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por título..."
+                value={historySearch}
+                onChange={(event) => setHistorySearch(event.target.value)}
+                className="h-9 pl-9 text-xs"
+              />
+            </div>
+            <Select value={historyTypeFilter} onValueChange={setHistoryTypeFilter}>
+              <SelectTrigger className="h-9 w-full text-xs sm:w-56">
+                <SelectValue placeholder="Tipo de reunião" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {historyLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : history.length === 0 ? (
+          ) : filteredHistory.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhum briefing processado para esta equipe.
+              {history.length === 0
+                ? "Nenhum briefing processado para esta equipe."
+                : "Nenhum briefing corresponde aos filtros."}
             </p>
           ) : (
+            <>
             <div className="divide-y rounded-lg border">
-              {history.map((item) => (
+              {paginatedHistory.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -1118,6 +1145,13 @@ export default function BriefingPage() {
                 </button>
               ))}
             </div>
+            <PaginationControls
+              currentPage={historyPage}
+              totalItems={historyTotal}
+              pageSize={historyPageSize}
+              onPageChange={setHistoryPage}
+            />
+            </>
           )}
         </CardContent>
       </Card>

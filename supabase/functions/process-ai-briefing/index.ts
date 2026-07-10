@@ -380,37 +380,102 @@ function validateEvidenceAgainstSource(
   analysis: BriefingAnalysis,
   sourceContent: string,
 ): void {
-  for (const suggestion of analysis.suggestions) {
-    for (const evidence of suggestion.evidence) {
-      if (!sourceContent.includes(evidence.quote)) {
-        throw new HttpError(
-          422,
-          "AI_EVIDENCE_NOT_IN_SOURCE",
-          `Evidencia nao encontrada na transcricao: "${evidence.quote.substring(0, 80)}...". A IA deve citar trechos literais exatos do texto original.`,
-        );
-      }
+  // Auto-heal robusto: a IA muitas vezes cita trechos "quase literais"
+  // (whitespace/pontuacao/ellipsis divergentes). Em vez de derrubar todo o
+  // briefing com 422, tentamos localizar o trecho por variacoes toleraveis e
+  // reescrevemos o quote/indices com o trecho literal real do source.
+  // Evidencias que nao casam de forma alguma sao descartadas; sugestoes que
+  // ficam sem evidencia sao removidas ao final.
+  const normalized = normalizeForMatch(sourceContent);
 
-      if (
-        evidence.sourceStart !== undefined &&
-        evidence.sourceEnd !== undefined &&
-        sourceContent.slice(evidence.sourceStart, evidence.sourceEnd) !==
-          evidence.quote
-      ) {
-        // Auto-heal: a IA frequentemente erra os indices mesmo citando trecho
-        // literal correto. Como o quote foi validado como presente no source,
-        // recomputamos os indices via indexOf em vez de derrubar todo o briefing.
-        const foundAt = sourceContent.indexOf(evidence.quote);
-        if (foundAt >= 0) {
-          evidence.sourceStart = foundAt;
-          evidence.sourceEnd = foundAt + evidence.quote.length;
-        } else {
-          // Nao deveria ocorrer (includes ja passou), mas por seguranca descartamos os indices.
-          evidence.sourceStart = undefined;
-          evidence.sourceEnd = undefined;
-        }
+  for (const suggestion of analysis.suggestions) {
+    const kept: typeof suggestion.evidence = [];
+    for (const evidence of suggestion.evidence) {
+      const healed = healEvidenceQuote(evidence.quote, sourceContent, normalized);
+      if (!healed) {
+        console.warn(
+          "[process-ai-briefing] evidence descartada (nao encontrada no source):",
+          evidence.quote.substring(0, 120),
+        );
+        continue;
+      }
+      evidence.quote = healed.quote;
+      evidence.sourceStart = healed.start;
+      evidence.sourceEnd = healed.end;
+      kept.push(evidence);
+    }
+    suggestion.evidence = kept;
+  }
+
+  // Remove sugestoes que ficaram sem nenhuma evidencia valida.
+  analysis.suggestions = analysis.suggestions.filter(
+    (s) => s.evidence.length > 0,
+  );
+}
+
+function normalizeForMatch(input: string): { text: string; map: number[] } {
+  // Colapsa qualquer whitespace em um unico espaco e lowercase, mantendo um
+  // mapa de indice normalizado -> indice original para reconstruir a fatia.
+  const chars: string[] = [];
+  const map: number[] = [];
+  let prevSpace = false;
+  for (let i = 0; i < input.length; i++) {
+    const c = input[i];
+    if (/\s/.test(c)) {
+      if (!prevSpace && chars.length > 0) {
+        chars.push(" ");
+        map.push(i);
+        prevSpace = true;
+      }
+    } else {
+      chars.push(c.toLowerCase());
+      map.push(i);
+      prevSpace = false;
+    }
+  }
+  return { text: chars.join(""), map };
+}
+
+function stripEdges(q: string): string {
+  // Remove ellipsis, aspas, pontuacao e whitespace nas bordas.
+  return q
+    .replace(/^[\s\.\u2026"'`\-–—]+/, "")
+    .replace(/[\s\.\u2026"'`\-–—]+$/, "")
+    .trim();
+}
+
+function healEvidenceQuote(
+  rawQuote: string,
+  source: string,
+  normalized: { text: string; map: number[] },
+): { quote: string; start: number; end: number } | null {
+  // 1. Match exato
+  let idx = source.indexOf(rawQuote);
+  if (idx >= 0) return { quote: rawQuote, start: idx, end: idx + rawQuote.length };
+
+  // 2. Match apos aparar bordas (ellipsis/pontuacao/aspas)
+  const trimmed = stripEdges(rawQuote);
+  if (trimmed.length >= 8 && trimmed !== rawQuote) {
+    idx = source.indexOf(trimmed);
+    if (idx >= 0) return { quote: trimmed, start: idx, end: idx + trimmed.length };
+  }
+
+  // 3. Match tolerante a whitespace/case usando o texto normalizado
+  const candidate = trimmed.length >= 8 ? trimmed : rawQuote;
+  const normQuote = normalizeForMatch(candidate).text;
+  if (normQuote.length >= 8) {
+    const nIdx = normalized.text.indexOf(normQuote);
+    if (nIdx >= 0) {
+      const start = normalized.map[nIdx];
+      const endNorm = nIdx + normQuote.length - 1;
+      const end = normalized.map[endNorm] + 1;
+      if (typeof start === "number" && typeof end === "number" && end > start) {
+        return { quote: source.slice(start, end), start, end };
       }
     }
   }
+
+  return null;
 }
 
 function inferParticipantsFromEvidence(

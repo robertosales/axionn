@@ -243,6 +243,11 @@ export function UserRolesManager() {
   const [resetState,      setResetState]      = useState<ResetState>(RESET0);
   const [toggleState,     setToggleState]     = useState<ToggleState>(TOG0);
 
+  // Multi-seleção para desativação em massa
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -499,10 +504,11 @@ export function UserRolesManager() {
     setToggleState(p => ({ ...p, saving: true }));
     const newActive = !user.is_active;
     try {
-      const { error } = await supabase.from("profiles").update({ is_active: newActive }).eq("user_id", user.user_id);
+      const { data, error } = await supabase.functions.invoke("admin-user-management", {
+        body: { action: "toggle_active", user_id: user.user_id, is_active: newActive },
+      });
       if (error) throw error;
-      const { data: { user: actor } } = await supabase.auth.getUser();
-      if (actor) await writeAudit(actor.id, user.user_id, "toggle_active", { status: newActive ? "ativado" : "desativado" });
+      if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(newActive ? `${user.display_name} ativado.` : `${user.display_name} desativado.`);
       setToggleState(TOG0);
       if (sheetUser?.user_id === user.user_id) closeSheet();
@@ -511,6 +517,49 @@ export function UserRolesManager() {
       toast.error(err?.message || "Erro ao alterar status");
       setToggleState(p => ({ ...p, saving: false }));
     }
+  }
+
+  // ── Desativação em massa ──────────────────────────────────────────────────
+  function togglePageSelection(checked: boolean) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      paginatedItems.forEach(u => {
+        if (checked) next.add(u.user_id);
+        else next.delete(u.user_id);
+      });
+      return next;
+    });
+  }
+  function toggleRowSelection(userId: string, checked: boolean) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(userId); else next.delete(userId);
+      return next;
+    });
+  }
+  async function runBulkDeactivate() {
+    const targets = users.filter(u => selectedIds.has(u.user_id) && u.is_active);
+    if (targets.length === 0) { setBulkOpen(false); return; }
+    setBulkRunning(true);
+    const results = await Promise.allSettled(
+      targets.map(u =>
+        supabase.functions.invoke("admin-user-management", {
+          body: { action: "toggle_active", user_id: u.user_id, is_active: false },
+        }).then(res => {
+          if (res.error) throw res.error;
+          if ((res.data as any)?.error) throw new Error((res.data as any).error);
+          return res;
+        })
+      )
+    );
+    const ok = results.filter(r => r.status === "fulfilled").length;
+    const fail = results.length - ok;
+    if (ok > 0) toast.success(`${ok} usuário(s) desativado(s).`);
+    if (fail > 0) toast.error(`${fail} falha(s) ao desativar.`);
+    setBulkRunning(false);
+    setBulkOpen(false);
+    setSelectedIds(new Set());
+    await fetchUsers();
   }
 
   // ── Inativar + migrar ─────────────────────────────────────────────────────

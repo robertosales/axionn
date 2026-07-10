@@ -66,7 +66,7 @@ const suggestionSchema = z
     }
   });
 
-export const briefingAnalysisSchema: z.ZodType<BriefingAnalysis> = z.object({
+export const briefingAnalysisSchema = z.object({
   schemaVersion: z.literal("1.0"),
   language: z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/),
   summary: z.string().trim().min(10).max(10_000),

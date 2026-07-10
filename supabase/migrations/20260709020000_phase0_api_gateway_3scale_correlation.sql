@@ -121,8 +121,8 @@ CREATE INDEX IF NOT EXISTS idx_correlation_contexts_user_time ON public.correlat
 
 -- 5. RPC para criar novo contexto de correlação
 CREATE OR REPLACE FUNCTION public.create_correlation_context(
-    p_organization_id UUID DEFAULT NULL,
     p_source_system TEXT,
+    p_organization_id UUID DEFAULT NULL,
     p_source_component TEXT DEFAULT NULL,
     p_initiated_by_user_id UUID DEFAULT NULL,
     p_initiated_by_application_id UUID DEFAULT NULL,
@@ -164,7 +164,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.create_correlation_context(UUID, TEXT, TEXT, UUID, UUID, UUID, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_correlation_context(TEXT, UUID, TEXT, UUID, UUID, UUID, JSONB) TO authenticated;
 
 -- 6. RPC para finalizar contexto de correlação
 CREATE OR REPLACE FUNCTION public.complete_correlation_context(
@@ -192,11 +192,11 @@ GRANT EXECUTE ON FUNCTION public.complete_correlation_context(UUID, TEXT, TEXT) 
 CREATE OR REPLACE FUNCTION public.log_api_gateway_usage(
     p_organization_id UUID,
     p_application_id UUID,
-    p_contract_version_id UUID DEFAULT NULL,
     p_endpoint_path TEXT,
     p_http_method TEXT,
-    p_api_version TEXT DEFAULT NULL,
     p_response_status INTEGER,
+    p_contract_version_id UUID DEFAULT NULL,
+    p_api_version TEXT DEFAULT NULL,
     p_response_time_ms INTEGER DEFAULT NULL,
     p_request_size_bytes BIGINT DEFAULT NULL,
     p_response_size_bytes BIGINT DEFAULT NULL,
@@ -234,7 +234,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_api_gateway_usage(
-    UUID, UUID, UUID, TEXT, TEXT, TEXT, INTEGER, INTEGER, BIGINT, BIGINT,
+    UUID, UUID, TEXT, TEXT, INTEGER, UUID, TEXT, INTEGER, BIGINT, BIGINT,
     INET, TEXT, UUID, UUID, TEXT, JSONB
 ) TO authenticated;
 
@@ -245,75 +245,84 @@ ALTER TABLE public.api_gateway_usage_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.correlation_contexts ENABLE ROW LEVEL SECURITY;
 
 -- API Gateway Applications: org admins manage, members can read
+DROP POLICY IF EXISTS "api_gateway_apps_select_org_member" ON public.api_gateway_applications;
 CREATE POLICY "api_gateway_apps_select_org_member" ON public.api_gateway_applications
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
+DROP POLICY IF EXISTS "api_gateway_apps_manage_org_admin" ON public.api_gateway_applications;
 CREATE POLICY "api_gateway_apps_manage_org_admin" ON public.api_gateway_applications
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
 
 -- API Contract Versions: similar
+DROP POLICY IF EXISTS "api_contract_versions_select_org_member" ON public.api_contract_versions;
 CREATE POLICY "api_contract_versions_select_org_member" ON public.api_contract_versions
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
+DROP POLICY IF EXISTS "api_contract_versions_manage_org_admin" ON public.api_contract_versions;
 CREATE POLICY "api_contract_versions_manage_org_admin" ON public.api_contract_versions
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
 
 -- API Gateway Usage Events: only org admins and platform admins can read
+DROP POLICY IF EXISTS "api_gateway_usage_select_org_admin" ON public.api_gateway_usage_events;
 CREATE POLICY "api_gateway_usage_select_org_admin" ON public.api_gateway_usage_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
 
 -- Insert allowed for services
+DROP POLICY IF EXISTS "api_gateway_usage_insert_service" ON public.api_gateway_usage_events;
 CREATE POLICY "api_gateway_usage_insert_service" ON public.api_gateway_usage_events
     FOR INSERT WITH CHECK (true);
 
 -- Correlation Contexts: users can see their own, org admins see all
+DROP POLICY IF EXISTS "correlation_contexts_select_own" ON public.correlation_contexts;
 CREATE POLICY "correlation_contexts_select_own" ON public.correlation_contexts
     FOR SELECT USING (
         initiated_by_user_id = auth.uid() OR
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
 
+DROP POLICY IF EXISTS "correlation_contexts_insert_service" ON public.correlation_contexts;
 CREATE POLICY "correlation_contexts_insert_service" ON public.correlation_contexts
     FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "correlation_contexts_update_service" ON public.correlation_contexts;
 CREATE POLICY "correlation_contexts_update_service" ON public.correlation_contexts
     FOR UPDATE USING (true);
 

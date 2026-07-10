@@ -216,7 +216,7 @@ ALTER TABLE public.dora_metrics_config ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deployment_events_select_org_member" ON public.deployment_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -227,7 +227,7 @@ CREATE POLICY "deployment_events_manage_service" ON public.deployment_events
 CREATE POLICY "incident_events_select_org_member" ON public.incident_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -238,7 +238,7 @@ CREATE POLICY "incident_events_manage_service" ON public.incident_events
 CREATE POLICY "dora_snapshots_select_org_member" ON public.dora_metrics_snapshots
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -249,20 +249,20 @@ CREATE POLICY "dora_snapshots_manage_service" ON public.dora_metrics_snapshots
 CREATE POLICY "dora_config_select_org_member" ON public.dora_metrics_config
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
 CREATE POLICY "dora_config_manage_org_admin" ON public.dora_metrics_config
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -270,21 +270,21 @@ CREATE POLICY "dora_config_manage_org_admin" ON public.dora_metrics_config
 -- 7. RPC para registrar evento de deploy
 CREATE OR REPLACE FUNCTION public.log_deployment_event(
     p_organization_id UUID,
-    p_project_id UUID DEFAULT NULL,
-    p_team_id UUID DEFAULT NULL,
     p_deployment_id TEXT,
     p_source TEXT,
-    p_environment TEXT DEFAULT 'production',
     p_commit_sha TEXT,
+    p_deployed_at TIMESTAMPTZ,
+    p_status TEXT,
+    p_project_id UUID DEFAULT NULL,
+    p_team_id UUID DEFAULT NULL,
+    p_environment TEXT DEFAULT 'production',
     p_commit_message TEXT DEFAULT NULL,
     p_commit_author_email TEXT DEFAULT NULL,
     p_commit_author_name TEXT DEFAULT NULL,
     p_committed_at TIMESTAMPTZ DEFAULT NULL,
     p_branch_name TEXT DEFAULT NULL,
     p_tag_name TEXT DEFAULT NULL,
-    p_deployed_at TIMESTAMPTZ,
     p_finished_at TIMESTAMPTZ DEFAULT NULL,
-    p_status TEXT,
     p_duration_seconds INTEGER DEFAULT NULL,
     p_first_commit_sha TEXT DEFAULT NULL,
     p_first_commit_at TIMESTAMPTZ DEFAULT NULL,
@@ -341,24 +341,22 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_deployment_event(
-    UUID, UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ,
-    TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, INTEGER, TEXT, TIMESTAMPTZ,
-    TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, UUID
+    UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ, TEXT, UUID, UUID, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TEXT, TEXT, TIMESTAMPTZ, INTEGER, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, UUID
 ) TO authenticated;
 
 -- 8. RPC para registrar evento de incidente
 CREATE OR REPLACE FUNCTION public.log_incident_event(
     p_organization_id UUID,
-    p_project_id UUID DEFAULT NULL,
-    p_team_id UUID DEFAULT NULL,
     p_incident_id TEXT,
     p_source TEXT,
     p_severity TEXT,
     p_title TEXT,
+    p_started_at TIMESTAMPTZ,
+    p_project_id UUID DEFAULT NULL,
+    p_team_id UUID DEFAULT NULL,
     p_description TEXT DEFAULT NULL,
     p_related_deployment_id UUID DEFAULT NULL,
     p_related_commit_sha TEXT DEFAULT NULL,
-    p_started_at TIMESTAMPTZ,
     p_detected_at TIMESTAMPTZ DEFAULT NULL,
     p_acknowledged_at TIMESTAMPTZ DEFAULT NULL,
     p_resolved_at TIMESTAMPTZ DEFAULT NULL,
@@ -417,9 +415,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_incident_event(
-    UUID, UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, TEXT, TIMESTAMPTZ,
-    TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT[],
-    TEXT[], TEXT[], JSONB, UUID
+    UUID, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, UUID, UUID, TEXT, UUID, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT[], TEXT[], TEXT[], JSONB, UUID
 ) TO authenticated;
 
 -- 9. Engine de cálculo das Métricas DORA
@@ -427,8 +423,8 @@ CREATE OR REPLACE FUNCTION public.calculate_dora_metrics(
     p_organization_id UUID,
     p_project_id UUID DEFAULT NULL,
     p_team_id UUID DEFAULT NULL,
-    p_period_start TIMESTAMPTZ,
-    p_period_end TIMESTAMPTZ,
+    p_period_start TIMESTAMPTZ DEFAULT NULL,
+    p_period_end TIMESTAMPTZ DEFAULT NULL,
     p_granularity TEXT DEFAULT 'daily'
 )
 RETURNS public.dora_metrics_snapshots
@@ -754,7 +750,7 @@ JOIN public.organizations o ON o.id = dms.organization_id
 LEFT JOIN public.projects p ON p.id = dms.project_id
 LEFT JOIN public.teams t ON t.id = dms.team_id
 WHERE dms.organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
 )
 ORDER BY dms.period_start DESC;
 

@@ -112,62 +112,68 @@ ALTER TABLE public.keycloak_user_mappings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.auth_audit_events ENABLE ROW LEVEL SECURITY;
 
 -- Identity Providers: org members can read, admins can manage
+DROP POLICY IF EXISTS "identity_providers_select_org_member" ON public.identity_providers;
 CREATE POLICY "identity_providers_select_org_member" ON public.identity_providers
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
+DROP POLICY IF EXISTS "identity_providers_manage_org_admin" ON public.identity_providers;
 CREATE POLICY "identity_providers_manage_org_admin" ON public.identity_providers
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
 
 -- Keycloak User Mappings: users can see their own, admins can manage all
+DROP POLICY IF EXISTS "keycloak_user_mappings_select_own" ON public.keycloak_user_mappings;
 CREATE POLICY "keycloak_user_mappings_select_own" ON public.keycloak_user_mappings
     FOR SELECT USING (
         axionn_user_id = auth.uid() OR
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
 
+DROP POLICY IF EXISTS "keycloak_user_mappings_manage_org_admin" ON public.keycloak_user_mappings;
 CREATE POLICY "keycloak_user_mappings_manage_org_admin" ON public.keycloak_user_mappings
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
 
 -- Auth Audit Events: only org admins and platform admins can read
+DROP POLICY IF EXISTS "auth_audit_events_select_org_admin" ON public.auth_audit_events;
 CREATE POLICY "auth_audit_events_select_org_admin" ON public.auth_audit_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR
         public.is_platform_admin(auth.uid())
     );
 
 -- Insert policy for system/services to write audit events
+DROP POLICY IF EXISTS "auth_audit_events_insert_service" ON public.auth_audit_events;
 CREATE POLICY "auth_audit_events_insert_service" ON public.auth_audit_events
     FOR INSERT WITH CHECK (true);
 
@@ -217,7 +223,7 @@ CREATE OR REPLACE FUNCTION public.log_auth_audit_event(
     p_failure_reason TEXT DEFAULT NULL,
     p_metadata JSONB DEFAULT '{}'::jsonb
 )
-RETRETURNS UUID
+RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public

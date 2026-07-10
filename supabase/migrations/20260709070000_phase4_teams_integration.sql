@@ -207,20 +207,20 @@ ALTER TABLE public.teams_custom_commands ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "teams_integrations_select_org_member" ON public.teams_integrations
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
 CREATE POLICY "teams_integrations_manage_org_admin" ON public.teams_integrations
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -229,20 +229,20 @@ CREATE POLICY "teams_integrations_manage_org_admin" ON public.teams_integrations
 CREATE POLICY "teams_channels_select_org_member" ON public.teams_channel_mappings
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
 CREATE POLICY "teams_channels_manage_org_admin" ON public.teams_channel_mappings
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -251,7 +251,7 @@ CREATE POLICY "teams_channels_manage_org_admin" ON public.teams_channel_mappings
 CREATE POLICY "teams_interactions_select_org_admin" ON public.teams_interaction_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -263,7 +263,7 @@ CREATE POLICY "teams_interactions_insert_service" ON public.teams_interaction_ev
 CREATE POLICY "teams_notifications_select_org_admin" ON public.teams_notifications_sent
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -278,20 +278,20 @@ CREATE POLICY "teams_notifications_update_service" ON public.teams_notifications
 CREATE POLICY "teams_commands_select_org_member" ON public.teams_custom_commands
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
 CREATE POLICY "teams_commands_manage_org_admin" ON public.teams_custom_commands
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -301,6 +301,7 @@ CREATE OR REPLACE FUNCTION public.log_teams_interaction(
     p_integration_id UUID,
     p_organization_id UUID,
     p_teams_user_id TEXT,
+    p_interaction_type TEXT,
     p_teams_user_name TEXT DEFAULT NULL,
     p_teams_user_email TEXT DEFAULT NULL,
     p_teams_user_aad_object_id TEXT DEFAULT NULL,
@@ -309,7 +310,6 @@ CREATE OR REPLACE FUNCTION public.log_teams_interaction(
     p_channel_id TEXT DEFAULT NULL,
     p_channel_name TEXT DEFAULT NULL,
     p_conversation_id TEXT DEFAULT NULL,
-    p_interaction_type TEXT,
     p_command_name TEXT DEFAULT NULL,
     p_command_args JSONB DEFAULT '{}'::jsonb,
     p_response_type TEXT DEFAULT NULL,
@@ -359,17 +359,17 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.log_teams_interaction(
     UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT,
-    TEXT, TEXT, JSONB, TEXT, TEXT, JSONB, INTEGER, UUID
+    TEXT, JSONB, TEXT, TEXT, JSONB, INTEGER, UUID
 ) TO authenticated;
 
 -- 9. RPC para registrar notificação enviada
 CREATE OR REPLACE FUNCTION public.log_teams_notification(
     p_integration_id UUID,
     p_organization_id UUID,
-    p_channel_mapping_id UUID DEFAULT NULL,
     p_team_id TEXT,
     p_channel_id TEXT,
     p_event_type TEXT,
+    p_channel_mapping_id UUID DEFAULT NULL,
     p_event_source TEXT DEFAULT NULL,
     p_event_payload JSONB DEFAULT '{}'::jsonb,
     p_card_type TEXT DEFAULT NULL,
@@ -415,7 +415,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_teams_notification(
-    UUID, UUID, UUID, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TIMESTAMPTZ, TEXT, TEXT, UUID
+    UUID, UUID, TEXT, TEXT, TEXT, UUID, TEXT, JSONB, TEXT, JSONB, TEXT, TEXT, TIMESTAMPTZ, TEXT, TEXT, UUID
 ) TO authenticated;
 
 -- 10. View para relatório de adoção Teams
@@ -442,7 +442,7 @@ FROM public.teams_integrations ti
 JOIN public.organizations o ON o.id = ti.organization_id
 LEFT JOIN public.teams_interaction_events tie ON tie.integration_id = ti.id
 WHERE ti.organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
 )
 GROUP BY ti.organization_id, o.name, ti.id, ti.name, ti.is_active, ti.installed_at
 ORDER BY total_interactions DESC;
@@ -466,7 +466,7 @@ FROM public.teams_notifications_sent tns
 JOIN public.teams_integrations ti ON ti.id = tns.integration_id
 JOIN public.organizations o ON o.id = ti.organization_id
 WHERE ti.organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
 )
   AND tns.created_at >= now() - INTERVAL '30 days'
 GROUP BY ti.organization_id, o.name, ti.id, DATE(tns.created_at), tns.event_type

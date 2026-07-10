@@ -90,6 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_report_snapshots_project_time ON public.report_us
 -- 4. Log de auditoria para ações sensíveis e administrativas
 CREATE TABLE IF NOT EXISTS public.audit_log_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL,
     actor_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     action TEXT NOT NULL, -- Ex: 'user_invited', 'role_changed', 'integration_configured', 'api_key_rotated', 'retention_policy_changed', 'data_exported', 'permission_granted', 'permission_revoked'
     target_type TEXT NOT NULL, -- 'user', 'organization', 'project', 'integration', 'api_key', 'retention_policy', 'report', 'team'
@@ -104,13 +105,17 @@ CREATE TABLE IF NOT EXISTS public.audit_log_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Garantir coluna caso tabela já exista de execução anterior sem a coluna (antes dos índices)
+ALTER TABLE public.audit_log_events
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL;
+
 COMMENT ON TABLE public.audit_log_events IS 'Log de auditoria imutável para ações sensíveis, administrativas e de segurança';
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_actor_time ON public.audit_log_events (actor_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_target ON public.audit_log_events (target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action_time ON public.audit_log_events (action, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_correlation ON public.audit_log_events (correlation_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_time ON public.audit_log_events (created_at DESC); -- Para queries globais de plataforma
+CREATE INDEX IF NOT EXISTS idx_audit_log_org_time ON public.audit_log_events (organization_id, created_at DESC);
 
 -- 5. Tabela para configuração de retenção de logs por tipo
 CREATE TABLE IF NOT EXISTS public.log_retention_policies (
@@ -156,7 +161,7 @@ CREATE POLICY "user_usage_events_select_own" ON public.user_usage_events
     FOR SELECT USING (
         user_id = auth.uid() OR
         tenant_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -168,7 +173,7 @@ CREATE POLICY "user_usage_events_insert_service" ON public.user_usage_events
 CREATE POLICY "integration_usage_events_select_org_admin" ON public.integration_usage_events
     FOR SELECT USING (
         tenant_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -180,7 +185,7 @@ CREATE POLICY "integration_usage_events_insert_service" ON public.integration_us
 CREATE POLICY "report_snapshots_select_org_admin" ON public.report_usage_snapshots
     FOR SELECT USING (
         tenant_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -198,10 +203,12 @@ CREATE POLICY "audit_log_events_select_org_admin" ON public.audit_log_events
         public.is_platform_admin(auth.uid()) OR
         EXISTS (
             SELECT 1 FROM public.organization_members om
-            JOIN public.organizations o ON o.id = om.organization_id
             WHERE om.user_id = auth.uid()
               AND om.role IN ('admin', 'owner')
-              AND (o.id = (SELECT tenant_id FROM public.audit_log_events WHERE id = audit_log_events.id) -- Simplificado
+              AND om.org_id IN (
+                  SELECT om2.org_id FROM public.organization_members om2
+                  WHERE om2.user_id = audit_log_events.actor_user_id
+              )
         )
     );
 
@@ -213,8 +220,9 @@ CREATE POLICY "audit_log_events_select_org_admin_v2" ON public.audit_log_events
             SELECT 1 FROM public.organization_members om
             WHERE om.user_id = auth.uid()
               AND om.role IN ('admin', 'owner')
-              AND om.organization_id = (
-                  SELECT organization_id FROM public.profiles WHERE id = audit_log_events.actor_user_id
+              AND om.org_id IN (
+                  SELECT om2.org_id FROM public.organization_members om2
+                  WHERE om2.user_id = audit_log_events.actor_user_id
               )
         )
     );
@@ -226,7 +234,7 @@ CREATE POLICY "audit_log_events_insert_service" ON public.audit_log_events
 CREATE POLICY "log_retention_policies_select_org_admin" ON public.log_retention_policies
     FOR SELECT USING (
         tenant_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -234,13 +242,13 @@ CREATE POLICY "log_retention_policies_select_org_admin" ON public.log_retention_
 CREATE POLICY "log_retention_policies_manage_org_admin" ON public.log_retention_policies
     FOR ALL USING (
         tenant_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         tenant_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -248,9 +256,9 @@ CREATE POLICY "log_retention_policies_manage_org_admin" ON public.log_retention_
 -- 8. RPC para registrar evento de uso do usuário (chamado pelo frontend)
 CREATE OR REPLACE FUNCTION public.log_user_usage_event(
     p_tenant_id UUID,
+    p_event_type TEXT,
     p_project_id UUID DEFAULT NULL,
     p_user_id UUID DEFAULT NULL,
-    p_event_type TEXT,
     p_entity_type TEXT DEFAULT NULL,
     p_entity_id UUID DEFAULT NULL,
     p_source TEXT DEFAULT 'web',
@@ -282,7 +290,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_user_usage_event(
-    UUID, UUID, UUID, TEXT, TEXT, UUID, TEXT, JSONB, TEXT, TEXT, UUID, UUID
+    UUID, TEXT, UUID, UUID, TEXT, UUID, TEXT, JSONB, TEXT, TEXT, UUID, UUID
 ) TO authenticated;
 
 -- 9. RPC para registrar evento de integração
@@ -325,9 +333,10 @@ GRANT EXECUTE ON FUNCTION public.log_integration_usage_event(
 
 -- 10. RPC para registrar evento de auditoria
 CREATE OR REPLACE FUNCTION public.log_audit_event(
-    p_actor_user_id UUID DEFAULT NULL,
     p_action TEXT,
     p_target_type TEXT,
+    p_organization_id UUID DEFAULT NULL,
+    p_actor_user_id UUID DEFAULT NULL,
     p_target_id UUID DEFAULT NULL,
     p_before_json JSONB DEFAULT NULL,
     p_after_json JSONB DEFAULT NULL,
@@ -347,11 +356,11 @@ DECLARE
     v_actor UUID := COALESCE(p_actor_user_id, auth.uid());
 BEGIN
     INSERT INTO public.audit_log_events (
-        actor_user_id, action, target_type, target_id,
+        organization_id, actor_user_id, action, target_type, target_id,
         before_json, after_json, source, ip_hash, user_agent,
         correlation_id, metadata_json
     ) VALUES (
-        v_actor, p_action, p_target_type, p_target_id,
+        p_organization_id, v_actor, p_action, p_target_type, p_target_id,
         p_before_json, p_after_json, p_source, p_ip_hash, p_user_agent,
         p_correlation_id, p_metadata_json
     ) RETURNING id INTO v_event_id;
@@ -361,7 +370,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_audit_event(
-    UUID, TEXT, TEXT, UUID, JSONB, JSONB, TEXT, TEXT, TEXT, UUID, JSONB
+    TEXT, TEXT, UUID, UUID, UUID, JSONB, JSONB, TEXT, TEXT, TEXT, UUID, JSONB
 ) TO authenticated;
 
 -- 11. Função para hashear IP (LGPD - não armazenar IP direto)

@@ -342,20 +342,20 @@ ALTER TABLE public.git_branches ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "git_integrations_select_org_member" ON public.git_integrations
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
 CREATE POLICY "git_integrations_manage_org_admin" ON public.git_integrations
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -364,7 +364,7 @@ CREATE POLICY "git_integrations_manage_org_admin" ON public.git_integrations
 CREATE POLICY "git_events_select_org_admin" ON public.git_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -376,7 +376,7 @@ CREATE POLICY "git_events_insert_service" ON public.git_events
 CREATE POLICY "git_mrs_select_org_member" ON public.git_merge_requests
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -387,7 +387,7 @@ CREATE POLICY "git_mrs_manage_service" ON public.git_merge_requests
 CREATE POLICY "git_commits_select_org_member" ON public.git_commits
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -398,7 +398,7 @@ CREATE POLICY "git_commits_manage_service" ON public.git_commits
 CREATE POLICY "gitlab_pipelines_select_org_admin" ON public.gitlab_pipeline_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -409,7 +409,7 @@ CREATE POLICY "gitlab_pipelines_manage_service" ON public.gitlab_pipeline_events
 CREATE POLICY "gitlab_jobs_select_org_admin" ON public.gitlab_job_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -420,7 +420,7 @@ CREATE POLICY "gitlab_jobs_manage_service" ON public.gitlab_job_events
 CREATE POLICY "gitlab_deployments_select_org_admin" ON public.gitlab_deployment_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -433,7 +433,7 @@ CREATE POLICY "gitlab_user_mappings_select_own" ON public.gitlab_user_mappings
     FOR SELECT USING (
         axionn_user_id = auth.uid() OR
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -441,13 +441,13 @@ CREATE POLICY "gitlab_user_mappings_select_own" ON public.gitlab_user_mappings
 CREATE POLICY "gitlab_user_mappings_manage_org_admin" ON public.gitlab_user_mappings
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -456,7 +456,7 @@ CREATE POLICY "gitlab_user_mappings_manage_org_admin" ON public.gitlab_user_mapp
 CREATE POLICY "hu_git_links_select_org_member" ON public.hu_git_links
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -467,7 +467,7 @@ CREATE POLICY "hu_git_links_manage_service" ON public.hu_git_links
 CREATE POLICY "git_branches_select_org_member" ON public.git_branches
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -489,7 +489,7 @@ BEGIN
         AND hgl.git_entity_id = gmr.mr_iid::text
         AND hgl.hu_id = p_hu_id
     WHERE gmr.organization_id IN (
-        SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+        SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
     )
     ORDER BY gmr.updated_at DESC;
 END;
@@ -512,7 +512,7 @@ BEGIN
         AND hgl.git_entity_id = gc.commit_sha
         AND hgl.hu_id = p_hu_id
     WHERE gc.organization_id IN (
-        SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+        SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
     )
     ORDER BY gc.committed_at DESC
     LIMIT p_limit;
@@ -536,7 +536,7 @@ BEGIN
         AND hgl.git_entity_id = gde.deployment_id::text
         AND hgl.hu_id = p_hu_id
     WHERE gde.organization_id IN (
-        SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+        SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
     )
     ORDER BY gde.deployed_at DESC;
 END;
@@ -551,7 +551,7 @@ SELECT
     hu.code AS hu_code,
     hu.title AS hu_title,
     hu.status AS hu_status,
-    hu.project_id,
+    t.project_id,
     p.name AS project_name,
     COUNT(DISTINCT hgl.id) FILTER (WHERE hgl.git_entity_type = 'merge_request') AS mr_count,
     COUNT(DISTINCT hgl.id) FILTER (WHERE hgl.git_entity_type = 'commit') AS commit_count,
@@ -570,7 +570,7 @@ SELECT
         JOIN public.hu_git_links hgl2 ON hgl2.git_entity_type = 'merge_request'
             AND hgl2.git_entity_id = gmr.mr_iid::text
             AND hgl2.hu_id = hu.id
-        WHERE gmr.organization_id = hu.organization_id
+        WHERE gmr.organization_id = c.org_id
         ORDER BY gmr.updated_at DESC
         LIMIT 1
     ) AS latest_mr,
@@ -587,17 +587,19 @@ SELECT
         JOIN public.hu_git_links hgl3 ON hgl3.git_entity_type = 'deployment'
             AND hgl3.git_entity_id = gde.deployment_id::text
             AND hgl3.hu_id = hu.id
-        WHERE gde.organization_id = hu.organization_id
+        WHERE gde.organization_id = c.org_id
           AND gde.environment = 'production'
         ORDER BY gde.deployed_at DESC
         LIMIT 1
     ) AS latest_production_deployment
 FROM public.user_stories hu
-JOIN public.projects p ON p.id = hu.project_id
+JOIN public.teams t ON t.id = hu.team_id
+LEFT JOIN public.projects p ON p.id = t.project_id
+LEFT JOIN public.contracts c ON c.id = p.contract_id
 LEFT JOIN public.hu_git_links hgl ON hgl.hu_id = hu.id
-WHERE hu.organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+WHERE c.org_id IN (
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
 )
-GROUP BY hu.id, hu.code, hu.title, hu.status, hu.project_id, p.name;
+GROUP BY hu.id, hu.code, hu.title, hu.status, t.project_id, p.name, c.org_id;
 
 COMMENT ON VIEW public.v_hu_git_summary IS 'Resumo de atividade Git por HU para dashboards';

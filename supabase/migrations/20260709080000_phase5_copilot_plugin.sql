@@ -180,7 +180,7 @@ ALTER TABLE public.copilot_plugin_interactions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "copilot_plugins_select_org_admin" ON public.copilot_plugins
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -188,13 +188,13 @@ CREATE POLICY "copilot_plugins_select_org_admin" ON public.copilot_plugins
 CREATE POLICY "copilot_plugins_manage_org_admin" ON public.copilot_plugins
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -203,7 +203,7 @@ CREATE POLICY "copilot_plugins_manage_org_admin" ON public.copilot_plugins
 CREATE POLICY "graph_connectors_select_org_admin" ON public.graph_connectors_config
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -211,13 +211,13 @@ CREATE POLICY "graph_connectors_select_org_admin" ON public.graph_connectors_con
 CREATE POLICY "graph_connectors_manage_org_admin" ON public.graph_connectors_config
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -228,7 +228,7 @@ CREATE POLICY "graph_entity_mappings_select_org_admin" ON public.graph_connector
         connector_config_id IN (
             SELECT id FROM public.graph_connectors_config
             WHERE organization_id IN (
-                SELECT organization_id FROM public.organization_members
+                SELECT org_id FROM public.organization_members
                 WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
             )
         ) OR public.is_platform_admin(auth.uid())
@@ -239,7 +239,7 @@ CREATE POLICY "graph_entity_mappings_manage_org_admin" ON public.graph_connector
         connector_config_id IN (
             SELECT id FROM public.graph_connectors_config
             WHERE organization_id IN (
-                SELECT organization_id FROM public.organization_members
+                SELECT org_id FROM public.organization_members
                 WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
             )
         )
@@ -248,7 +248,7 @@ CREATE POLICY "graph_entity_mappings_manage_org_admin" ON public.graph_connector
         connector_config_id IN (
             SELECT id FROM public.graph_connectors_config
             WHERE organization_id IN (
-                SELECT organization_id FROM public.organization_members
+                SELECT org_id FROM public.organization_members
                 WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
             )
         )
@@ -260,7 +260,7 @@ CREATE POLICY "graph_sync_logs_select_org_admin" ON public.graph_connector_sync_
         connector_config_id IN (
             SELECT id FROM public.graph_connectors_config
             WHERE organization_id IN (
-                SELECT organization_id FROM public.organization_members
+                SELECT org_id FROM public.organization_members
                 WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
             )
         ) OR public.is_platform_admin(auth.uid())
@@ -273,7 +273,7 @@ CREATE POLICY "graph_sync_logs_insert_service" ON public.graph_connector_sync_lo
 CREATE POLICY "copilot_interactions_select_org_admin" ON public.copilot_plugin_interactions
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -286,11 +286,11 @@ CREATE OR REPLACE FUNCTION public.log_copilot_interaction(
     p_plugin_id UUID,
     p_organization_id UUID,
     p_ms_user_id TEXT,
+    p_query_text TEXT,
     p_ms_user_email TEXT DEFAULT NULL,
     p_ms_user_name TEXT DEFAULT NULL,
     p_conversation_id TEXT DEFAULT NULL,
     p_message_id TEXT DEFAULT NULL,
-    p_query_text TEXT,
     p_intent TEXT DEFAULT NULL,
     p_parameters JSONB DEFAULT '{}'::jsonb,
     p_response_type TEXT DEFAULT NULL,
@@ -332,8 +332,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_copilot_interaction(
-    UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB,
-    TEXT, TEXT, JSONB, INTEGER, INTEGER, NUMERIC, UUID
+    UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, TEXT, JSONB, INTEGER, INTEGER, NUMERIC, UUID
 ) TO authenticated;
 
 -- 9. View para relatório de uso do Copilot
@@ -360,7 +359,7 @@ FROM public.copilot_plugin_interactions cpi
 JOIN public.copilot_plugins cp ON cp.id = cpi.plugin_id
 JOIN public.organizations o ON o.id = cpi.organization_id
 WHERE cpi.organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
 )
 GROUP BY cpi.organization_id, o.name, cp.id, cp.name, DATE(cpi.created_at)
 ORDER BY interaction_date DESC;
@@ -379,7 +378,7 @@ SELECT
 FROM public.copilot_plugin_interactions
 WHERE intent IS NOT NULL
   AND organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
   )
   AND created_at >= now() - INTERVAL '30 days'
 GROUP BY organization_id, intent

@@ -194,7 +194,7 @@ ALTER TABLE public.risk_model_versions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "sprint_risk_events_select_org_member" ON public.sprint_risk_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -205,20 +205,20 @@ CREATE POLICY "sprint_risk_events_manage_service" ON public.sprint_risk_events
 CREATE POLICY "risk_config_select_org_member" ON public.risk_prediction_config
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
 CREATE POLICY "risk_config_manage_org_admin" ON public.risk_prediction_config
     FOR ALL USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -227,7 +227,7 @@ CREATE POLICY "risk_config_manage_org_admin" ON public.risk_prediction_config
 CREATE POLICY "risk_training_select_org_admin" ON public.risk_training_data
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -239,7 +239,7 @@ CREATE POLICY "risk_training_manage_service" ON public.risk_training_data
 CREATE POLICY "risk_model_select_org_admin" ON public.risk_model_versions
     FOR SELECT USING (
         organization_id IN (
-            SELECT organization_id FROM public.organization_members
+            SELECT org_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -250,18 +250,18 @@ CREATE POLICY "risk_model_manage_service" ON public.risk_model_versions
 -- 7. RPC para registrar predição de risco
 CREATE OR REPLACE FUNCTION public.log_sprint_risk_prediction(
     p_organization_id UUID,
+    p_risk_level TEXT,
+    p_risk_score NUMERIC,
+    p_justification TEXT,
+    p_model_version TEXT,
+    p_model_type TEXT,
     p_project_id UUID DEFAULT NULL,
     p_sprint_id UUID DEFAULT NULL,
     p_hu_id UUID DEFAULT NULL,
-    p_risk_level TEXT,
-    p_risk_score NUMERIC,
     p_delay_probability NUMERIC DEFAULT NULL,
     p_incomplete_probability NUMERIC DEFAULT NULL,
-    p_justification TEXT,
     p_key_factors JSONB DEFAULT '[]'::jsonb,
     p_features JSONB DEFAULT '{}'::jsonb,
-    p_model_version TEXT,
-    p_model_type TEXT,
     p_sprint_start_date DATE DEFAULT NULL,
     p_sprint_end_date DATE DEFAULT NULL,
     p_days_remaining INTEGER DEFAULT NULL
@@ -293,8 +293,7 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_sprint_risk_prediction(
-    UUID, UUID, UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC,
-    TEXT, JSONB, JSONB, TEXT, TEXT, DATE, DATE, INTEGER
+    UUID, TEXT, NUMERIC, TEXT, TEXT, TEXT, UUID, UUID, UUID, NUMERIC, NUMERIC, JSONB, JSONB, DATE, DATE, INTEGER
 ) TO authenticated;
 
 -- 8. RPC para registrar feedback (feedback loop)
@@ -430,7 +429,7 @@ JOIN public.organizations o ON o.id = sre.organization_id
 LEFT JOIN public.projects p ON p.id = sre.project_id
 LEFT JOIN public.sprints s ON s.id = sre.sprint_id
 WHERE sre.organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
 )
 GROUP BY sre.organization_id, o.name, sre.project_id, p.name, sre.sprint_id, s.name, s.start_date, s.end_date
 ORDER BY sre.organization_id, s.end_date DESC;

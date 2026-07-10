@@ -230,7 +230,7 @@ FROM public.audit_log_events ale
 JOIN public.organizations o ON o.id = ale.organization_id
 WHERE ale.created_at >= now() - INTERVAL '30 days'
   AND ale.organization_id IN (
-    SELECT organization_id FROM public.organization_members
+    SELECT org_id FROM public.organization_members
     WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
   )
 GROUP BY ale.organization_id, o.name, DATE(ale.created_at), ale.action, ale.target_type
@@ -263,7 +263,7 @@ FROM public.user_usage_events uue
 JOIN public.organizations o ON o.id = uue.tenant_id
 WHERE uue.created_at >= now() - INTERVAL '12 weeks'
   AND uue.tenant_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
   )
 GROUP BY uue.tenant_id, o.name, uue.event_type, DATE_TRUNC('week', uue.created_at)::DATE
 ORDER BY week_start DESC, total_events DESC;
@@ -301,7 +301,7 @@ LEFT JOIN public.projects p ON p.id = uue.project_id
 WHERE uue.event_type LIKE 'ai_%'
   AND uue.created_at >= now() - INTERVAL '8 weeks'
   AND uue.tenant_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
   )
 GROUP BY uue.tenant_id, o.name, uue.project_id, p.name, uue.metadata_json->>'feature', uue.metadata_json->>'model', DATE_TRUNC('week', uue.created_at)::DATE
 ORDER BY week_start DESC, total_calls DESC;
@@ -395,8 +395,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM public.organization_members
         WHERE user_id = auth.uid()
-          AND organization_id = p_organization_id
-          AND role IN ('admin', 'owner')
+          AND org_id = p_organization_id
     ) THEN
         RAISE EXCEPTION 'Insufficient permissions to export report';
     END IF;
@@ -483,7 +482,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM public.organization_members
         WHERE user_id = auth.uid()
-          AND organization_id = p_organization_id
+          AND org_id = p_organization_id
     ) THEN
         RAISE EXCEPTION 'Access denied';
     END IF;

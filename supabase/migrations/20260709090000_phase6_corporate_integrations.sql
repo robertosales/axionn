@@ -1,5 +1,19 @@
 -- Phase 6: Integrações Corporativas - Redmine, Oracle Database, Oracle APEX
 -- Cria tabelas para integração com sistemas corporativos legados
+-- Correções:
+--   1. RPCs com parâmetros obrigatórios antes dos parâmetros com DEFAULT.
+--   2. Assinatura de public.log_oracle_sync_event alinhada ao GRANT/call com 18 parâmetros.
+--   3. Policies e funções tornadas mais seguras para rerun parcial da migration.
+
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$;
 
 -- ============================================================
 -- REDMINE INTEGRATION
@@ -11,37 +25,28 @@ CREATE TABLE IF NOT EXISTS public.redmine_integrations (
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
-    base_url TEXT NOT NULL, -- Ex: https://redmine.empresa.com
+    base_url TEXT NOT NULL,
     api_key_encrypted TEXT NOT NULL,
-    -- Mapeamento de projetos Redmine -> Axionn
-    project_mappings JSONB DEFAULT '[]'::jsonb, -- Array de {redmine_project_id, axionn_project_id}
-    -- Mapeamento de trackers -> tipos de entidade Axionn
+    project_mappings JSONB DEFAULT '[]'::jsonb,
     tracker_mappings JSONB DEFAULT '{
         "Bug": "impediment",
         "Feature": "user_story",
         "Support": "task",
         "Task": "task"
     }'::jsonb,
-    -- Mapeamento de status
     status_mappings JSONB DEFAULT '{}'::jsonb,
-    -- Mapeamento de prioridades
     priority_mappings JSONB DEFAULT '{}'::jsonb,
-    -- Mapeamento de usuários
     user_mapping_strategy TEXT DEFAULT 'email' CHECK (user_mapping_strategy IN ('email', 'login', 'custom_field', 'manual')),
-    -- Sincronização
     sync_direction TEXT DEFAULT 'bidirectional' CHECK (sync_direction IN ('redmine_to_axionn', 'axionn_to_redmine', 'bidirectional')),
-    sync_schedule TEXT DEFAULT '0 */30 * * * *', -- A cada 30 minutos
+    sync_schedule TEXT DEFAULT '0 */30 * * * *',
     last_sync_at TIMESTAMPTZ,
     last_sync_status TEXT CHECK (last_sync_status IN ('success', 'partial', 'failed')),
     last_sync_items INTEGER DEFAULT 0,
     last_sync_error TEXT,
-    -- Filtros
-    sync_filter_json JSONB DEFAULT '{}'::jsonb, -- Ex: {project_ids: [1,2], tracker_ids: [1,3]}
-    -- Webhook
+    sync_filter_json JSONB DEFAULT '{}'::jsonb,
     webhook_url TEXT,
     webhook_secret_encrypted TEXT,
     webhook_events TEXT[] DEFAULT ARRAY['issues', 'journals', 'projects', 'users'],
-    -- Status
     is_active BOOLEAN DEFAULT true,
     config_json JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -57,16 +62,13 @@ CREATE TABLE IF NOT EXISTS public.redmine_issue_links (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     integration_id UUID NOT NULL REFERENCES public.redmine_integrations(id) ON DELETE CASCADE,
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    -- Redmine side
     redmine_issue_id INTEGER NOT NULL,
     redmine_project_id INTEGER NOT NULL,
     redmine_tracker_id INTEGER,
     redmine_status_id INTEGER,
     redmine_priority_id INTEGER,
-    -- Axionn side
     axionn_entity_type TEXT NOT NULL CHECK (axionn_entity_type IN ('user_story', 'impediment', 'task', 'bug', 'epic')),
     axionn_entity_id UUID NOT NULL,
-    -- Metadata
     sync_direction TEXT NOT NULL CHECK (sync_direction IN ('redmine_to_axionn', 'axionn_to_redmine', 'bidirectional')),
     last_synced_at TIMESTAMPTZ,
     last_redmine_updated_on TIMESTAMPTZ,
@@ -117,7 +119,6 @@ CREATE TABLE IF NOT EXISTS public.oracle_integrations (
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
-    -- Conexão
     connection_type TEXT NOT NULL DEFAULT 'direct' CHECK (connection_type IN ('direct', 'wallet', 'tns', 'proxy', 'api')),
     host TEXT,
     port INTEGER DEFAULT 1521,
@@ -126,19 +127,14 @@ CREATE TABLE IF NOT EXISTS public.oracle_integrations (
     wallet_path TEXT,
     tns_alias TEXT,
     proxy_url TEXT,
-    -- Credenciais (criptografadas)
     username TEXT NOT NULL,
     password_encrypted TEXT NOT NULL,
-    -- TLS/SSL
     use_tls BOOLEAN DEFAULT true,
     tls_config JSONB DEFAULT '{}'::jsonb,
-    -- Pool de conexões
     pool_min INTEGER DEFAULT 1,
     pool_max INTEGER DEFAULT 10,
     pool_increment INTEGER DEFAULT 1,
-    -- Jobs de sincronização
-    jobs JSONB DEFAULT '[]'::jsonb, -- Array de jobs de ETL
-    -- Status
+    jobs JSONB DEFAULT '[]'::jsonb,
     is_active BOOLEAN DEFAULT true,
     last_connection_test TIMESTAMPTZ,
     connection_test_status TEXT CHECK (connection_test_status IN ('success', 'failed')),
@@ -159,32 +155,25 @@ CREATE TABLE IF NOT EXISTS public.oracle_sync_jobs (
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
-    -- Tipo de job
     job_type TEXT NOT NULL CHECK (job_type IN ('extract', 'load', 'transform', 'full_etl')),
-    -- Estratégia de extração
     extraction_strategy TEXT NOT NULL CHECK (extraction_strategy IN (
         'incremental_timestamp', 'incremental_id', 'full', 'cdc', 'view', 'staging_table'
     )),
-    -- Query SQL ou configuração
-    source_query TEXT, -- Query para extrair dados
-    source_table TEXT, -- Tabela origem
+    source_query TEXT,
+    source_table TEXT,
     source_schema TEXT,
-    incremental_column TEXT, -- Coluna para incremental (timestamp ou ID)
-    incremental_watermark TEXT, -- Último valor processado
-    -- Destino no Axionn
-    target_table TEXT, -- Tabela destino (ou staging)
+    incremental_column TEXT,
+    incremental_watermark TEXT,
+    target_table TEXT,
     target_schema TEXT DEFAULT 'public',
-    column_mapping JSONB DEFAULT '{}'::jsonb, -- {source_col: target_col}
-    transform_sql TEXT, -- SQL de transformação opcional
-    -- Agendamento
-    schedule TEXT, -- Cron expression
+    column_mapping JSONB DEFAULT '{}'::jsonb,
+    transform_sql TEXT,
+    schedule TEXT,
     timezone TEXT DEFAULT 'UTC',
-    -- Configuração de execução
     batch_size INTEGER DEFAULT 10000,
     max_retries INTEGER DEFAULT 3,
     retry_delay_seconds INTEGER DEFAULT 60,
     timeout_seconds INTEGER DEFAULT 3600,
-    -- Status
     is_active BOOLEAN DEFAULT true,
     last_run_at TIMESTAMPTZ,
     last_run_status TEXT CHECK (last_run_status IN ('success', 'partial', 'failed')),
@@ -207,27 +196,22 @@ CREATE TABLE IF NOT EXISTS public.oracle_sync_events (
     job_id UUID NOT NULL REFERENCES public.oracle_sync_jobs(id) ON DELETE CASCADE,
     integration_id UUID NOT NULL REFERENCES public.oracle_integrations(id) ON DELETE CASCADE,
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    -- Execução
     run_id UUID NOT NULL DEFAULT gen_random_uuid(),
     trigger_type TEXT CHECK (trigger_type IN ('schedule', 'manual', 'webhook', 'dependency')),
     status TEXT NOT NULL CHECK (status IN ('started', 'extracting', 'transforming', 'loading', 'completed', 'failed', 'partial')),
-    -- Métricas
     rows_extracted INTEGER DEFAULT 0,
     rows_transformed INTEGER DEFAULT 0,
     rows_loaded INTEGER DEFAULT 0,
     rows_failed INTEGER DEFAULT 0,
     bytes_processed BIGINT DEFAULT 0,
-    -- Timing
     extract_duration_ms INTEGER,
     transform_duration_ms INTEGER,
     load_duration_ms INTEGER,
     total_duration_ms INTEGER,
-    -- Checkpoints para resume
     extract_checkpoint JSONB,
     transform_checkpoint JSONB,
-    -- Erros
     error_details JSONB,
-    error_sample JSONB, -- Amostra de erros
+    error_sample JSONB,
     started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     completed_at TIMESTAMPTZ,
     correlation_id UUID
@@ -249,28 +233,20 @@ CREATE TABLE IF NOT EXISTS public.apex_integrations (
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     project_id UUID REFERENCES public.projects(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
-    -- APEX Workspace
     workspace_name TEXT NOT NULL,
     workspace_id INTEGER,
-    -- URL base do APEX (ORDS)
-    base_url TEXT NOT NULL, -- Ex: https://apex.empresa.com/ords
-    -- Autenticação
+    base_url TEXT NOT NULL,
     auth_type TEXT NOT NULL DEFAULT 'oauth2' CHECK (auth_type IN ('oauth2', 'basic_token', 'custom')),
     client_id TEXT,
     client_secret_encrypted TEXT,
     oauth2_token_url TEXT,
     oauth2_scope TEXT,
-    -- Aplicações APEX integradas
-    applications JSONB DEFAULT '[]'::jsonb, -- Array de {app_id, app_name, features[]}
-    -- Configuração de REST Data Sources
-    rest_data_sources JSONB DEFAULT '[]'::jsonb, -- Configuração de REST Data Sources no APEX
-    -- Webhooks APEX -> Axionn
+    applications JSONB DEFAULT '[]'::jsonb,
+    rest_data_sources JSONB DEFAULT '[]'::jsonb,
     webhook_url TEXT,
     webhook_secret_encrypted TEXT,
     webhook_events TEXT[] DEFAULT ARRAY['page_submit', 'process', 'report_query'],
-    -- Mapeamento de usuários
     user_mapping JSONB DEFAULT '{}'::jsonb,
-    -- Status
     is_active BOOLEAN DEFAULT true,
     last_connection_test TIMESTAMPTZ,
     connection_test_status TEXT CHECK (connection_test_status IN ('success', 'failed')),
@@ -290,13 +266,9 @@ CREATE TABLE IF NOT EXISTS public.apex_applications (
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     apex_app_id INTEGER NOT NULL,
     apex_app_name TEXT,
-    -- Funcionalidades expostas
-    features JSONB DEFAULT '[]'::jsonb, -- Ex: [{name: "dashboard_hu", type: "report", params: {}}]
-    -- Páginas/Regiões mapeadas
+    features JSONB DEFAULT '[]'::jsonb,
     page_mappings JSONB DEFAULT '[]'::jsonb,
-    -- REST Data Sources desta app
     rest_data_sources JSONB DEFAULT '[]'::jsonb,
-    -- Status
     is_active BOOLEAN DEFAULT true,
     last_sync_at TIMESTAMPTZ,
     config_json JSONB DEFAULT '{}'::jsonb,
@@ -313,22 +285,17 @@ CREATE TABLE IF NOT EXISTS public.apex_usage_events (
     integration_id UUID NOT NULL REFERENCES public.apex_integrations(id) ON DELETE CASCADE,
     application_id UUID REFERENCES public.apex_applications(id) ON DELETE SET NULL,
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    -- Origem
     apex_session_id TEXT,
-    apex_user TEXT, -- Usuário APEX (APP_USER)
+    apex_user TEXT,
     apex_app_id INTEGER,
     apex_page_id INTEGER,
-    -- Requisição
     request_type TEXT CHECK (request_type IN ('report_query', 'page_submit', 'process', 'ajax', 'webhook')),
     endpoint_path TEXT,
     parameters JSONB,
-    -- Resposta
     response_status INTEGER,
     response_time_ms INTEGER,
     rows_returned INTEGER,
-    -- Usuário Axionn (se mapeado)
     axionn_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-    -- Correlation
     correlation_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -344,7 +311,7 @@ CREATE TABLE IF NOT EXISTS public.external_app_user_mappings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     integration_type TEXT NOT NULL CHECK (integration_type IN ('redmine', 'oracle_apex', 'jira', 'azure_devops', 'service_now', 'custom')),
-    integration_id UUID, -- ID da integração específica (pode ser NULL para mapeamento global)
+    integration_id UUID,
     external_user_id TEXT NOT NULL,
     external_username TEXT,
     external_email TEXT,
@@ -368,7 +335,6 @@ CREATE INDEX IF NOT EXISTS idx_external_user_mappings_email ON public.external_a
 -- TRIGGERS E RLS
 -- ============================================================
 
--- Triggers para updated_at
 DROP TRIGGER IF EXISTS update_redmine_integrations_updated_at ON public.redmine_integrations;
 CREATE TRIGGER update_redmine_integrations_updated_at
     BEFORE UPDATE ON public.redmine_integrations
@@ -404,7 +370,6 @@ CREATE TRIGGER update_external_app_user_mappings_updated_at
     BEFORE UPDATE ON public.external_app_user_mappings
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- RLS Policies
 ALTER TABLE public.redmine_integrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.redmine_issue_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.redmine_sync_events ENABLE ROW LEVEL SECURITY;
@@ -415,6 +380,27 @@ ALTER TABLE public.apex_integrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.apex_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.apex_usage_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.external_app_user_mappings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "redmine_integrations_select_org_admin" ON public.redmine_integrations;
+DROP POLICY IF EXISTS "redmine_integrations_manage_org_admin" ON public.redmine_integrations;
+DROP POLICY IF EXISTS "redmine_issue_links_select_org_member" ON public.redmine_issue_links;
+DROP POLICY IF EXISTS "redmine_issue_links_manage_service" ON public.redmine_issue_links;
+DROP POLICY IF EXISTS "redmine_sync_events_select_org_admin" ON public.redmine_sync_events;
+DROP POLICY IF EXISTS "redmine_sync_events_insert_service" ON public.redmine_sync_events;
+DROP POLICY IF EXISTS "oracle_integrations_select_org_admin" ON public.oracle_integrations;
+DROP POLICY IF EXISTS "oracle_integrations_manage_org_admin" ON public.oracle_integrations;
+DROP POLICY IF EXISTS "oracle_sync_jobs_select_org_admin" ON public.oracle_sync_jobs;
+DROP POLICY IF EXISTS "oracle_sync_jobs_manage_org_admin" ON public.oracle_sync_jobs;
+DROP POLICY IF EXISTS "oracle_sync_events_select_org_admin" ON public.oracle_sync_events;
+DROP POLICY IF EXISTS "oracle_sync_events_insert_service" ON public.oracle_sync_events;
+DROP POLICY IF EXISTS "apex_integrations_select_org_admin" ON public.apex_integrations;
+DROP POLICY IF EXISTS "apex_integrations_manage_org_admin" ON public.apex_integrations;
+DROP POLICY IF EXISTS "apex_applications_select_org_admin" ON public.apex_applications;
+DROP POLICY IF EXISTS "apex_applications_manage_org_admin" ON public.apex_applications;
+DROP POLICY IF EXISTS "apex_usage_events_select_org_admin" ON public.apex_usage_events;
+DROP POLICY IF EXISTS "apex_usage_events_insert_service" ON public.apex_usage_events;
+DROP POLICY IF EXISTS "external_user_mappings_select_org_admin" ON public.external_app_user_mappings;
+DROP POLICY IF EXISTS "external_user_mappings_manage_org_admin" ON public.external_app_user_mappings;
 
 -- Redmine Integrations: org admins
 CREATE POLICY "redmine_integrations_select_org_admin" ON public.redmine_integrations
@@ -448,7 +434,8 @@ CREATE POLICY "redmine_issue_links_select_org_member" ON public.redmine_issue_li
     );
 
 CREATE POLICY "redmine_issue_links_manage_service" ON public.redmine_issue_links
-    FOR ALL USING (true);
+    FOR ALL USING (true)
+    WITH CHECK (true);
 
 -- Redmine Sync Events: org admins
 CREATE POLICY "redmine_sync_events_select_org_admin" ON public.redmine_sync_events
@@ -605,13 +592,32 @@ CREATE POLICY "external_user_mappings_manage_org_admin" ON public.external_app_u
 -- RPCs
 -- ============================================================
 
+DROP FUNCTION IF EXISTS public.log_redmine_sync_event(
+    UUID, UUID, TEXT, TEXT, TEXT, INTEGER, INTEGER, INTEGER, INTEGER, INTEGER, JSONB, UUID
+);
+
+DROP FUNCTION IF EXISTS public.log_oracle_sync_event(
+    UUID, UUID, UUID, TEXT, TEXT, INTEGER, INTEGER, INTEGER, INTEGER, BIGINT,
+    INTEGER, INTEGER, INTEGER, INTEGER, JSONB, JSONB, JSONB, UUID
+);
+
+DROP FUNCTION IF EXISTS public.log_oracle_sync_event(
+    UUID, UUID, UUID, TEXT, TEXT, INTEGER, INTEGER, INTEGER, INTEGER, BIGINT,
+    INTEGER, INTEGER, INTEGER, INTEGER, JSONB, JSONB, JSONB, JSONB, UUID
+);
+
+DROP FUNCTION IF EXISTS public.log_apex_usage_event(
+    UUID, UUID, UUID, TEXT, TEXT, INTEGER, INTEGER, TEXT, TEXT, JSONB,
+    INTEGER, INTEGER, INTEGER, UUID, UUID
+);
+
 -- RPC para registrar evento de sincronização Redmine
-CREATE OR REPLACE FUNCTION public.log_redmine_sync_event(
+CREATE FUNCTION public.log_redmine_sync_event(
     p_integration_id UUID,
     p_organization_id UUID,
     p_sync_type TEXT,
-    p_trigger_source TEXT DEFAULT NULL,
     p_status TEXT,
+    p_trigger_source TEXT DEFAULT NULL,
     p_issues_processed INTEGER DEFAULT 0,
     p_issues_created INTEGER DEFAULT 0,
     p_issues_updated INTEGER DEFAULT 0,
@@ -649,12 +655,12 @@ GRANT EXECUTE ON FUNCTION public.log_redmine_sync_event(
 ) TO authenticated;
 
 -- RPC para registrar evento de job Oracle
-CREATE OR REPLACE FUNCTION public.log_oracle_sync_event(
+CREATE FUNCTION public.log_oracle_sync_event(
     p_job_id UUID,
     p_integration_id UUID,
     p_organization_id UUID,
-    p_trigger_type TEXT DEFAULT NULL,
     p_status TEXT,
+    p_trigger_type TEXT DEFAULT NULL,
     p_rows_extracted INTEGER DEFAULT 0,
     p_rows_transformed INTEGER DEFAULT 0,
     p_rows_loaded INTEGER DEFAULT 0,
@@ -667,7 +673,6 @@ CREATE OR REPLACE FUNCTION public.log_oracle_sync_event(
     p_extract_checkpoint JSONB DEFAULT NULL,
     p_transform_checkpoint JSONB DEFAULT NULL,
     p_error_details JSONB DEFAULT '{}'::jsonb,
-    p_error_sample JSONB DEFAULT NULL,
     p_correlation_id UUID DEFAULT NULL
 )
 RETURNS UUID
@@ -692,7 +697,7 @@ BEGIN
         p_rows_extracted, p_rows_transformed, p_rows_loaded, p_rows_failed, p_bytes_processed,
         p_extract_duration_ms, p_transform_duration_ms, p_load_duration_ms, p_total_duration_ms,
         p_extract_checkpoint, p_transform_checkpoint,
-        p_error_details, p_error_sample, p_correlation_id
+        p_error_details, NULL, p_correlation_id
     ) RETURNING id INTO v_event_id;
 
     RETURN v_event_id;
@@ -701,14 +706,14 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.log_oracle_sync_event(
     UUID, UUID, UUID, TEXT, TEXT, INTEGER, INTEGER, INTEGER, INTEGER, BIGINT,
-    INTEGER, INTEGER, INTEGER, INTEGER, JSONB, JSONB, JSONB, JSONB, UUID
+    INTEGER, INTEGER, INTEGER, INTEGER, JSONB, JSONB, JSONB, UUID
 ) TO authenticated;
 
 -- RPC para registrar evento de uso APEX
-CREATE OR REPLACE FUNCTION public.log_apex_usage_event(
+CREATE FUNCTION public.log_apex_usage_event(
     p_integration_id UUID,
-    p_application_id UUID DEFAULT NULL,
     p_organization_id UUID,
+    p_application_id UUID DEFAULT NULL,
     p_apex_session_id TEXT DEFAULT NULL,
     p_apex_user TEXT DEFAULT NULL,
     p_apex_app_id INTEGER DEFAULT NULL,

@@ -50,6 +50,7 @@ import {
   UserX, UserCheck, ArrowRightLeft, AlertTriangle,
   Copy, CheckCircle2, Save, History, Loader2,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { ORGANIZATION_TENANCY_ENABLED } from "@/lib/featureFlags";
 import { getInitials, formatPersonName } from "@/lib/personName";

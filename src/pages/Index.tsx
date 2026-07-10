@@ -14,6 +14,7 @@ import { DeveloperManager } from "@/components/DeveloperManager";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DashboardHome } from "@/components/DashboardHome";
 import { DemandasPorTimeSection } from "@/features/contracts/DemandasPorTimeSection";
+import { ImpedimentList } from "@/components/ImpedimentManager";
 
 // ─── Componentes pesados — lazy loaded  ───────────────────────────────────────
 const AgileHistory = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
@@ -29,9 +30,6 @@ const ActivityManager = lazy(() =>
 );
 const MetricsDashboard = lazy(() =>
   import("@/components/MetricsDashboard").then((m) => ({ default: m.MetricsDashboard })),
-);
-const ImpedimentList = lazy(() =>
-  import("@/components/ImpedimentManager").then((m) => ({ default: m.ImpedimentList })),
 );
 const EpicManager = lazy(() => import("@/components/EpicManager").then((m) => ({ default: m.EpicManager })));
 const WorkflowManager = lazy(() =>

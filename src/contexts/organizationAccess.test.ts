@@ -162,4 +162,41 @@ describe("resolveOrganizationPermissionAuthority", () => {
       }),
     ).toMatchObject({ source: "closed", hasAccess: false });
   });
+
+  it("nao usa legado quando a RPC organizacional responde sem o modulo", () => {
+    expect(
+      resolveOrganizationPermissionAuthority({
+        tenancyEnabled: true,
+        legacyFallbackEnabled: true,
+        rpcStatus: "success",
+        isPlatformAdmin: false,
+        module: "rdm",
+        moduleRoles: orgRoles,
+        legacyHasAccess: true,
+        legacyRoleName: "admin",
+      }),
+    ).toMatchObject({
+      source: "organization",
+      hasAccess: false,
+      roleName: null,
+      shouldWarnLegacyFallback: false,
+    });
+  });
+
+  it("nao promove papel member para admin", () => {
+    expect(
+      resolveOrganizationPermissionAuthority({
+        tenancyEnabled: true,
+        legacyFallbackEnabled: false,
+        rpcStatus: "success",
+        isPlatformAdmin: false,
+        module: "sala_agil",
+        moduleRoles: orgRoles,
+      }),
+    ).toMatchObject({
+      source: "organization",
+      hasAccess: true,
+      roleName: "member",
+    });
+  });
 });

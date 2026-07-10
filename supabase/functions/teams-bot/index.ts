@@ -295,7 +295,7 @@ async function handleHUCommand(supabase: any, integration: any, args: string): P
       if (!huCode) return { type: 'message', text: 'Uso: `/axionn hu detalhes HU-CODE`' };
       return handleStatusCommand(supabase, integration, huCode);
     case 'list':
-    default:
+    default: {
       const { data: hus } = await supabase
         .from('user_stories')
         .select('code, title, status, story_points, assignee:profiles(display_name)')
@@ -304,6 +304,7 @@ async function handleHUCommand(supabase: any, integration: any, args: string): P
         .order('updated_at', { ascending: false })
         .limit(10);
       return createHUListCard(hus || []);
+    }
   }
 }
 
@@ -316,7 +317,7 @@ async function handleImpedimentCommand(supabase: any, integration: any, args: st
     case 'create':
       return createImpedimentCreateCard(integration.organization_id);
     case 'list':
-    default:
+    default: {
       const { data: impediments } = await supabase
         .from('impediments')
         .select('id, title, severity, status, hu:user_stories(code, title), assignee:profiles(display_name)')
@@ -325,6 +326,7 @@ async function handleImpedimentCommand(supabase: any, integration: any, args: st
         .order('created_at', { ascending: false })
         .limit(10);
       return createImpedimentListCard(impediments || []);
+    }
   }
 }
 

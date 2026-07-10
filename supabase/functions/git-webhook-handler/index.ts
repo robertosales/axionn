@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-gitlab-token, x-github-event, x-gitlab-event',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-integration-id, x-git-provider, x-gitlab-token, x-hub-signature-256, x-github-event, x-gitlab-event',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -29,6 +29,12 @@ serve(async (req: Request) => {
 
   const correlationId = crypto.randomUUID();
   const startTime = Date.now();
+  let healthContext: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  } | null = null;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -60,7 +66,7 @@ serve(async (req: Request) => {
 
     const { data: integration, error: integrationError } = await supabase
       .from('git_integrations')
-      .select('*, projects!inner(organization_id)')
+      .select('*')
       .eq('id', integrationId)
       .single();
 
@@ -72,7 +78,27 @@ serve(async (req: Request) => {
       });
     }
 
-    const organizationId = integration.projects.organization_id;
+    const organizationId = integration.organization_id;
+    healthContext = {
+      supabase,
+      organizationId,
+      projectId: integration.project_id ?? null,
+      integrationId,
+    };
+
+    if (!integration.is_active) {
+      await recordIntegrationHealth(healthContext, {
+        status: 'degraded',
+        errorCode: 'INTEGRATION_INACTIVE',
+        errorMessage: 'Git integration is inactive',
+        correlationId,
+        latencyMs: Date.now() - startTime,
+      });
+      return new Response(JSON.stringify({ error: 'Integration is inactive' }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Verify webhook signature if configured
     if (integration.webhook_secret && signature) {
@@ -83,6 +109,13 @@ serve(async (req: Request) => {
           error_code: 'INVALID_SIGNATURE',
           event_type: eventType,
         }, correlationId);
+        await recordIntegrationHealth(healthContext, {
+          status: 'unhealthy',
+          errorCode: 'INVALID_SIGNATURE',
+          errorMessage: 'Webhook signature validation failed',
+          correlationId,
+          latencyMs: Date.now() - startTime,
+        });
         return new Response(JSON.stringify({ error: 'Invalid signature' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -107,6 +140,13 @@ serve(async (req: Request) => {
 
     if (eventError) {
       console.error('[Git Webhook] Failed to store event:', eventError);
+      await recordIntegrationHealth(healthContext, {
+        status: 'unhealthy',
+        errorCode: 'EVENT_PERSISTENCE_FAILED',
+        errorMessage: eventError.message,
+        correlationId,
+        latencyMs: Date.now() - startTime,
+      });
       return new Response(JSON.stringify({ error: 'Failed to store event' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -123,6 +163,13 @@ serve(async (req: Request) => {
       processing_time_ms: Date.now() - startTime,
     }, correlationId);
 
+    await recordIntegrationHealth(healthContext, {
+      status: 'healthy',
+      correlationId,
+      latencyMs: Date.now() - startTime,
+      details: { event_type: eventType, provider },
+    });
+
     return new Response(JSON.stringify({
       success: true,
       event_id: gitEvent.id,
@@ -133,6 +180,15 @@ serve(async (req: Request) => {
     });
   } catch (error) {
     console.error('[Git Webhook] Unexpected error:', error);
+    if (healthContext) {
+      await recordIntegrationHealth(healthContext, {
+        status: 'unhealthy',
+        errorCode: 'UNEXPECTED_ERROR',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        correlationId,
+        latencyMs: Date.now() - startTime,
+      });
+    }
     return new Response(JSON.stringify({
       error: 'Internal server error',
       correlation_id: correlationId,
@@ -142,6 +198,44 @@ serve(async (req: Request) => {
     });
   }
 });
+
+async function recordIntegrationHealth(
+  context: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  },
+  event: {
+    status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    correlationId: string;
+    latencyMs: number;
+    errorCode?: string;
+    errorMessage?: string;
+    details?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await context.supabase
+    .from('integration_health_events')
+    .insert({
+      organization_id: context.organizationId,
+      project_id: context.projectId,
+      provider: 'git',
+      integration_id: context.integrationId,
+      check_type: 'webhook',
+      status: event.status,
+      latency_ms: event.latencyMs,
+      error_code: event.errorCode ?? null,
+      error_message: event.errorMessage ?? null,
+      details: event.details ?? {},
+      correlation_id: event.correlationId,
+    });
+
+  if (error) {
+    // Health telemetry must never interrupt webhook processing.
+    console.error('[Git Webhook] Failed to record integration health:', error);
+  }
+}
 
 async function verifyWebhookSignature(
   provider: string,

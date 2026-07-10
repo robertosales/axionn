@@ -1,73 +1,118 @@
-# Welcome to your Lovable project
+# Axionn
 
-## Project info
+Plataforma de Engineering Intelligence para gestão de engenharia, agilidade, sustentação, mudanças, contratos, métricas e automações com IA.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Visão geral
 
-## How can I edit this code?
+O Axionn é uma aplicação SaaS multi-tenant. A organização é a fronteira de isolamento dos dados; contratos definem módulos e limites; projetos, times e membros determinam o escopo operacional.
 
-There are several ways of editing your application.
+Módulos principais:
 
-**Use Lovable**
+- Sala Ágil: backlog, HUs, sprints, kanban, planning poker, retrospectivas e relatórios;
+- Sustentação: demandas, SLAs, IMR e indicadores operacionais;
+- RDM: mudanças, checklists, go/no-go e auditoria;
+- APF e IA: contagem, baseline, análise, aprendizagem e briefing;
+- Administração: organizações, empresas, contratos, projetos, times e membros;
+- Plataforma e backoffice: planos, assinaturas, provedores de IA, faturamento e suporte;
+- Integrações: fundações para Git/GitLab, Teams, Redmine, Oracle, APEX, Keycloak e 3Scale.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Stack
 
-Changes made via Lovable will be committed automatically to this repo.
+- React 18, TypeScript e Vite;
+- React Router e TanStack Query;
+- Tailwind CSS, shadcn/ui e Radix UI;
+- Supabase Auth, PostgreSQL, RLS, RPCs e Edge Functions;
+- Vitest para testes de frontend/domínio;
+- pgTAP para contratos e isolamento do banco.
 
-**Use your preferred IDE**
+## Estrutura
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```text
+src/
+├── backoffice/          # operação interna da plataforma
+├── components/          # componentes compartilhados e legado em consolidação
+├── contexts/            # autenticação, organização e sprint
+├── features/            # domínios funcionais
+├── integrations/        # clientes e tipos de integrações
+├── lib/                 # infraestrutura do frontend
+├── pages/               # entradas de rota
+└── shared/              # componentes, hooks e constantes comuns
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+supabase/
+├── functions/           # Edge Functions
+├── migrations/          # histórico SQL publicado
+├── operations/          # rollouts manuais e validações operacionais
+├── audits/              # consultas somente leitura
+└── tests/               # pgTAP e gates de staging
+```
 
-Follow these steps:
+## Desenvolvimento local
+
+Pré-requisitos:
+
+- Node.js compatível com o `package-lock.json`;
+- npm;
+- variáveis Supabase de um ambiente de desenvolvimento autorizado.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Variáveis esperadas pelo frontend:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+```
 
-**Use GitHub Codespaces**
+Não adicione secrets ao repositório. Credenciais privilegiadas e chaves de integrações devem permanecer no ambiente seguro/Vault e ser acessadas somente pelo backend.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Validação
 
-## What technologies are used for this project?
+```sh
+npm test
+npm run lint
+npm run build
+```
 
-This project is built with:
+O lint possui dívida histórica registrada. Novas mudanças não devem introduzir erros; avisos devem ser reduzidos gradualmente por domínio, sem correções mecânicas em massa.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Os testes pgTAP exigem banco local ou staging isolado. Nunca execute testes que escrevem dados diretamente no Lovable Cloud de produção.
 
-## How can I deploy this project?
+## Banco e migrations
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+As migrations existentes representam histórico já publicado e não devem ser renomeadas, reordenadas ou reescritas retroativamente.
 
-## Can I connect a custom domain to my Lovable project?
+Para mudanças futuras:
 
-Yes, you can!
+1. crie uma migration nova, com versão única e posterior às existentes;
+2. preserve dados e objetos em funcionamento;
+3. inclua preflight e validação pós-execução;
+4. prefira alterações incrementais e idempotentes;
+5. documente ordem, resultado esperado e rollback;
+6. aplique manualmente pelo fluxo autorizado do Lovable.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Arquivos em `supabase/operations` são procedimentos operacionais e não devem ser repetidos quando já houver evidência de execução.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Autorização
+
+- O frontend usa guards para navegação e experiência do usuário.
+- RLS, RPCs e Edge Functions são a autoridade final para operações sensíveis.
+- `platform_admin` é o papel de suporte entre organizações.
+- Owners/admins de organização administram somente seu tenant.
+- Papéis de contrato, projeto, time e módulo devem manter escopo mínimo.
+
+Não contorne RLS com consultas no cliente nem use permissões visuais como mecanismo único de segurança.
+
+## Documentação operacional
+
+- `docs/revisao_tecnica_funcional_axionn_2026-07-10.md`: diagnóstico e arquitetura recomendada;
+- `docs/consolidacao-fase-0-baseline-2026-07-10.md`: baseline e gates de segurança;
+- `docs/saas-remote-rollout-status.md`: estado operacional do rollout SaaS;
+- `docs/saas-remote-rollout-runbook.md`: sequência, validações e rollback;
+- `docs/security.md`: controles e práticas de segurança.
+
+## Regra de preservação
+
+Antes de alterar tabelas, papéis, rotas ou integrações, mapeie consumidores e impacto. Funcionalidades existentes devem evoluir por compatibilidade, canário, observabilidade e rollback — nunca por substituição abrupta.

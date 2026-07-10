@@ -1072,6 +1072,31 @@ export function UserRolesManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog — Desativação em massa */}
+      <Dialog open={bulkOpen} onOpenChange={v => { if (!v && !bulkRunning) setBulkOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <UserX className="h-4 w-4" /> Desativar usuários selecionados
+            </DialogTitle>
+            <DialogDescription>
+              Você está prestes a desativar{" "}
+              {users.filter(u => selectedIds.has(u.user_id) && u.is_active).length}{" "}
+              usuário(s). Eles perderão acesso ao sistema imediatamente. Esta ação pode ser revertida ativando novamente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => setBulkOpen(false)} disabled={bulkRunning}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={runBulkDeactivate} disabled={bulkRunning}>
+              {bulkRunning && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              Desativar {users.filter(u => selectedIds.has(u.user_id) && u.is_active).length}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

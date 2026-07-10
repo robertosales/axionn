@@ -1,61 +1,104 @@
-## Diagnóstico
+## Objetivo
 
-O erro que o usuário recebe é:
+Corrigir o erro `AI_EVIDENCE_RANGE_MISMATCH` do Axionn Briefing, dar sobrevida à listagem do Histórico (paginação + busca por texto e por tipo), inferir participantes a partir da transcrição quando não informados, apagar todos os briefings cadastrados, e melhorar a gestão de Perfis (RBAC): corrigir a ação "Desativar", permitir desativação em massa, e remover do banco todos os usuários vinculados a times de Sustentação (preservando `tiago.vieira2@globalweb.com.br`).
 
+---
+
+## 1. Axionn Briefing — correções no backend e no fluxo
+
+### 1.1 Corrigir `AI_EVIDENCE_RANGE_MISMATCH`
+Em `supabase/functions/process-ai-briefing/index.ts` (função `validateEvidence`, linha ~393):
+
+- Substituir o `throw` por **auto-correção**: quando `sourceContent.slice(start, end) !== quote`, tentar recalcular via `sourceContent.indexOf(quote)`. Se encontrado, sobrescrever `sourceStart`/`sourceEnd` com os índices corretos e continuar.
+- Se `indexOf` retornar `-1` (não deveria, pois `AI_EVIDENCE_NOT_IN_SOURCE` já cobriu), aí sim descartar os índices (`undefined`) em vez de estourar 422 — mantém o briefing rodando, já que o `quote` literal ainda é válido.
+- Manter `AI_EVIDENCE_NOT_IN_SOURCE` como erro (evidência inventada continua bloqueando).
+
+### 1.2 Participantes inferidos da transcrição
+Quando `participants` chegar vazio no `buildPrompt`:
+- Adicionar uma instrução extra ao prompt pedindo à IA para extrair a lista de participantes a partir de nomes citados/falantes da própria transcrição, no campo `evidence[].speaker` e num novo campo top-level opcional `inferredParticipants: string[]` (armazenado em `ai_briefings.participants` via update pós-processamento).
+- Após parse do JSON, se `analysis.inferredParticipants` existir e `briefing.participants` estava vazio, chamar `admin.from("ai_briefings").update({ participants }).eq("id", briefingId)`.
+- Ajustar `briefingAnalysisSchema` (`src/features/briefing/schemas/briefingAnalysis.schema.ts`) para aceitar `inferredParticipants: z.array(z.string()).max(50).optional()`.
+
+### 1.3 Apagar todos os briefings cadastrados
+Migração de dados (via `supabase--insert`):
+```sql
+DELETE FROM public.ai_briefing_runs;
+DELETE FROM public.ai_suggestion_evidence;
+DELETE FROM public.ai_suggestion_applications;
+DELETE FROM public.ai_briefing_suggestions;
+DELETE FROM public.ai_briefings;
 ```
-POST /process-ai-briefing → 502 Bad Gateway
-{ "error": "AI_PROVIDER_429", "message": "Nao foi possivel processar o briefing." }
+
+---
+
+## 2. Histórico da equipe (BriefingPage)
+
+Em `src/features/briefing/pages/BriefingPage.tsx` e `src/features/briefing/services/briefing.service.ts`:
+
+- **Remover `.limit(20)`** de `listTeamBriefings` para trazer todo o histórico do time.
+- Adicionar acima da lista de histórico:
+  - `Input` de **busca por texto** (procura em `title` — debounce 300ms via `useDebounce`).
+  - `Select` de **tipo de reunião** com opções: Todos, Daily, Planning, Review, Retrospectiva, Discovery, Reunião livre.
+- Filtrar `history` em `useMemo` por texto + tipo.
+- Aplicar `usePagination` (pageSize 10) na lista filtrada + `PaginationControls` no rodapé.
+
+---
+
+## 3. RBAC — Perfis
+
+### 3.1 Corrigir "Desativar"
+Investigação: `confirmToggleActive` faz `UPDATE profiles SET is_active` diretamente. Falha silenciosa provavelmente vem de RLS que exige rota de admin. Trocar para a Edge Function existente `admin-user-management` com nova `action: "toggle_active"` (ou reutilizar padrão já usado em `change_email`), que roda com service role. Se a action ainda não existir na edge function, adicionar `case "toggle_active"` que faz `admin.auth.admin.updateUserById` + `update profiles.is_active`. Fallback: manter o `UPDATE` client-side apenas se a invoke falhar, com toast do erro real (hoje o erro é engolido por `err?.message`).
+
+### 3.2 Desativação em massa (multi-seleção)
+Em `src/components/UserRolesManager.tsx`:
+- Adicionar coluna de `Checkbox` no início do `Table` (header com "select all" da página atual).
+- Estado `selectedUserIds: Set<string>`.
+- Barra flutuante quando `selectedUserIds.size > 0`: mostra "N selecionados" + botão **Desativar selecionados** + **Limpar seleção**.
+- Botão abre `ConfirmDialog` (`Dialog` local) → itera em `Promise.allSettled` chamando o mesmo caminho de `confirmToggleActive` (via edge function) para cada `user_id`. Toast agregado ("X desativados, Y falharam").
+- Após conclusão: limpar seleção e `fetchUsers()`.
+
+### 3.3 Limpeza de usuários dos times de Sustentação
+Migração de dados (via `supabase--insert`) — remover todos os usuários pertencentes a times cujo `module = 'sustentacao'`, exceto `tiago.vieira2@globalweb.com.br`:
+
+```sql
+-- Passo 1: identificar user_ids alvo
+WITH sust_teams AS (
+  SELECT id FROM public.teams WHERE module = 'sustentacao'
+),
+target_users AS (
+  SELECT DISTINCT tm.user_id
+  FROM public.team_members tm
+  JOIN sust_teams st ON st.id = tm.team_id
+  JOIN public.profiles p ON p.user_id = tm.user_id
+  WHERE lower(p.email) <> 'tiago.vieira2@globalweb.com.br'
+)
+-- Passo 2: remover vínculos e desativar (não deletar auth.users)
+DELETE FROM public.team_members
+ WHERE user_id IN (SELECT user_id FROM target_users)
+   AND team_id IN (SELECT id FROM sust_teams);
+
+UPDATE public.profiles
+   SET is_active = false
+ WHERE user_id IN (SELECT user_id FROM target_users);
 ```
 
-Confirmado pelos logs da edge function:
+**Nota:** por diretriz do projeto (`NEVER delete tables/columns`), e para preservar histórico/auditoria, os usuários serão **removidos dos times de Sustentação e marcados como `is_active = false`**, em vez de `DELETE FROM auth.users` (o que quebraria FKs de demandas, HUs, briefings, auditoria). Se você quiser exclusão física (via `auth.admin.deleteUser`), me confirme antes de rodar.
 
-```
-[process-ai-briefing] AI_PROVIDER_429 Provedor respondeu HTTP 429
-```
+---
 
-O provedor de IA (Gemini/OpenAI/Anthropic, dependendo do `ai_providers` configurado) devolveu **HTTP 429 — rate limit**. Hoje o `callProvider` em `supabase/functions/process-ai-briefing/index.ts` (linhas 511-640) faz **uma única tentativa**: qualquer 429 ou 5xx do provedor cai direto em `throw new HttpError(502, "AI_PROVIDER_${status}", ...)`. Sem retry, sem backoff, sem respeitar `Retry-After`.
+## Detalhes técnicos
 
-Além disso, o front recebe `502` mesmo quando o provedor devolve `429` — o que confunde monitoramento e não sinaliza corretamente "tente de novo em alguns segundos".
+- **Arquivos editados:**
+  - `supabase/functions/process-ai-briefing/index.ts` (validateEvidence + prompt + persistência inferredParticipants)
+  - `src/features/briefing/schemas/briefingAnalysis.schema.ts` (novo campo opcional)
+  - `src/features/briefing/services/briefing.service.ts` (remover limit)
+  - `src/features/briefing/pages/BriefingPage.tsx` (filtros + paginação)
+  - `src/components/UserRolesManager.tsx` (checkboxes, bulk deactivate, fix toggle)
+  - `supabase/functions/admin-user-management/index.ts` (nova action `toggle_active` se ausente)
+- **Migrações de dados (não schema):** via `supabase--insert` — DELETE dos briefings + cleanup dos usuários de Sustentação.
+- Redeploy da edge function `process-ai-briefing` e `admin-user-management` após as alterações.
 
-## Solução
-
-Alterações **somente** em `supabase/functions/process-ai-briefing/index.ts`. Sem UI, sem migrations, sem mudar prompt ou schema.
-
-### 1. Retry com backoff exponencial em `callProvider`
-
-Envolver as 3 chamadas `fetch` (gemini, anthropic, openai-compatible) num helper único `fetchWithRetry`:
-
-- Tentativas: **3** no total (1 original + 2 retries).
-- Retriável quando: `response.status === 429` **ou** `response.status >= 500 && response.status <= 599` **ou** erro de rede/timeout transitório.
-- Backoff base: `500ms → 1500ms` com jitter aleatório (±20%).
-- Se o provedor mandar header `Retry-After` (segundos ou HTTP-date), respeitar esse valor no lugar do backoff calculado, com teto de 5s para não estourar o timeout total da função.
-- Nunca retriar em 4xx que não seja 429 (400/401/403/404 seguem falhando imediatamente).
-
-### 2. Propagar corretamente 429 do provedor
-
-Quando todas as tentativas esgotam com 429, retornar ao cliente:
-
-- HTTP `429` (não 502).
-- Body: `{ success: false, error: "AI_PROVIDER_429", message: "O provedor de IA está sobrecarregado. Tente novamente em alguns segundos." }`.
-
-Para 5xx persistente do provedor, manter `502 AI_PROVIDER_5xx` como hoje.
-
-Isso é feito ajustando a construção do `HttpError` no ponto onde a última tentativa falha (mapear 429 → status 429, resto → 502) e deixando o handler `catch` no fim da função repassar `error.status` intacto (já é o comportamento atual — só precisa garantir que `HttpError.status = 429` seja usado tal qual).
-
-### 3. Finalização de uso em falha
-
-Manter a chamada `finalize_ai_briefing_usage` com `status="failed"` e `error_code="AI_PROVIDER_429"` no bloco `catch` para não deixar reserva pendurada (comportamento já existente — apenas confirmar que continua acionando após retries).
-
-### Fora de escopo
-
-- Não trocar provedor nem modelo.
-- Não mexer em `normalizeDate`, prompt, schema ou validação de evidências.
-- Não adicionar fila/worker para reprocessamento assíncrono (fora do MVP; o retry em processo já resolve rate limits transitórios).
-- Não alterar UI — o front já mostra o `message` retornado pela function.
-
-## Critério de aceite
-
-- Um 429 transitório do provedor não chega mais ao usuário: as 2 retries recuperam a chamada.
-- Se o provedor insistir em 429, o front recebe **HTTP 429** com `error: "AI_PROVIDER_429"` e mensagem clara pedindo para tentar novamente.
-- 5xx persistente continua chegando como `502 AI_PROVIDER_5xx`.
-- Reservas em `ai_usage_events` são finalizadas como `failed` em vez de ficarem em `reserved`.
+## Fora de escopo
+- Não alterar RLS/policies das tabelas de briefing (o problema é lógico, não de acesso).
+- Não excluir fisicamente contas em `auth.users` (a menos que confirmado).
+- Não mexer no fluxo de retry/backoff já implementado.

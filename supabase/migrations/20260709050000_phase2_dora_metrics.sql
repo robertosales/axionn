@@ -272,7 +272,7 @@ DROP POLICY IF EXISTS "dora_config_manage_org_admin" ON public.dora_metrics_conf
 CREATE POLICY "deployment_events_select_org_member" ON public.deployment_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -284,7 +284,7 @@ CREATE POLICY "deployment_events_manage_service" ON public.deployment_events
 CREATE POLICY "incident_events_select_org_member" ON public.incident_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -296,7 +296,7 @@ CREATE POLICY "incident_events_manage_service" ON public.incident_events
 CREATE POLICY "dora_snapshots_select_org_member" ON public.dora_metrics_snapshots
     FOR SELECT USING (
         organization_id IN (
-            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
@@ -308,20 +308,20 @@ CREATE POLICY "dora_snapshots_manage_service" ON public.dora_metrics_snapshots
 CREATE POLICY "dora_config_select_org_member" ON public.dora_metrics_config
     FOR SELECT USING (
         organization_id IN (
-            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
+            SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
         )
     );
 
 CREATE POLICY "dora_config_manage_org_admin" ON public.dora_metrics_config
     FOR ALL USING (
         organization_id IN (
-            SELECT org_id FROM public.organization_members
+            SELECT organization_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT org_id FROM public.organization_members
+            SELECT organization_id FROM public.organization_members
             WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
         )
     );
@@ -432,13 +432,9 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_deployment_event(
-<<<<<<< HEAD
-    UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ, TEXT, UUID, UUID, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TEXT, TEXT, TIMESTAMPTZ, INTEGER, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, UUID
-=======
     UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ, TEXT, UUID, UUID, TEXT, TEXT, TEXT, TEXT,
     TIMESTAMPTZ, TEXT, TEXT, TIMESTAMPTZ, INTEGER, TEXT, TIMESTAMPTZ,
     TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT, TEXT, JSONB, UUID
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
 ) TO authenticated;
 
 -- 8. RPC para registrar evento de incidente
@@ -518,29 +514,18 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.log_incident_event(
-<<<<<<< HEAD
-    UUID, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, UUID, UUID, TEXT, UUID, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT, TEXT[], TEXT[], TEXT[], JSONB, UUID
-=======
     UUID, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, UUID, UUID, TEXT, UUID, TEXT,
     TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMPTZ, TEXT, TEXT, TEXT,
     TEXT[], TEXT[], TEXT[], JSONB, UUID
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
 ) TO authenticated;
 
 -- 9. Engine de cálculo das Métricas DORA
 CREATE OR REPLACE FUNCTION public.calculate_dora_metrics(
     p_organization_id UUID,
-<<<<<<< HEAD
-    p_project_id UUID DEFAULT NULL,
-    p_team_id UUID DEFAULT NULL,
-    p_period_start TIMESTAMPTZ DEFAULT NULL,
-    p_period_end TIMESTAMPTZ DEFAULT NULL,
-=======
     p_period_start TIMESTAMPTZ,
     p_period_end TIMESTAMPTZ,
     p_project_id UUID DEFAULT NULL,
     p_team_id UUID DEFAULT NULL,
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
     p_granularity TEXT DEFAULT 'daily'
 )
 RETURNS public.dora_metrics_snapshots
@@ -874,7 +859,7 @@ JOIN public.organizations o ON o.id = dms.organization_id
 LEFT JOIN public.projects p ON p.id = dms.project_id
 LEFT JOIN public.teams t ON t.id = dms.team_id
 WHERE dms.organization_id IN (
-    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
 )
 ORDER BY dms.period_start DESC;
 

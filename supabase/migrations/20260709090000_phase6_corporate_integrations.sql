@@ -5,7 +5,8 @@
 --   2. Assinatura de public.log_oracle_sync_event alinhada ao GRANT/call com 18 parâmetros.
 --   3. Policies e funções tornadas mais seguras para rerun parcial da migration.
 --   4. Removido error_sample do INSERT da função log_oracle_sync_event.
---   5. Corrigido erro 42702: organization_id ambíguo nas views - qualificado com alias de tabela.
+--   5. Corrigido erro 42702: organization_id ambíguo -> qualificado com alias om.
+--   6. Corrigido erro 42703: organization_members usa org_id (nao organization_id).
 
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER
@@ -181,8 +182,8 @@ CREATE TABLE IF NOT EXISTS public.oracle_sync_jobs (
     last_run_status TEXT CHECK (last_run_status IN ('success', 'partial', 'failed')),
     last_run_rows INTEGER DEFAULT 0,
     last_run_duration_ms INTEGER,
-    last_run_error TEXT,
     next_run_at TIMESTAMPTZ,
+    last_run_error TEXT,
     config_json JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -404,11 +405,13 @@ DROP POLICY IF EXISTS "apex_usage_events_insert_service" ON public.apex_usage_ev
 DROP POLICY IF EXISTS "external_user_mappings_select_org_admin" ON public.external_app_user_mappings;
 DROP POLICY IF EXISTS "external_user_mappings_manage_org_admin" ON public.external_app_user_mappings;
 
+-- NOTA: organization_members usa 'org_id' (nao 'organization_id')
+
 -- Redmine Integrations: org admins
 CREATE POLICY "redmine_integrations_select_org_admin" ON public.redmine_integrations
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -416,13 +419,13 @@ CREATE POLICY "redmine_integrations_select_org_admin" ON public.redmine_integrat
 CREATE POLICY "redmine_integrations_manage_org_admin" ON public.redmine_integrations
     FOR ALL USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -431,7 +434,7 @@ CREATE POLICY "redmine_integrations_manage_org_admin" ON public.redmine_integrat
 CREATE POLICY "redmine_issue_links_select_org_member" ON public.redmine_issue_links
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()
+            SELECT om.org_id FROM public.organization_members om WHERE om.user_id = auth.uid()
         )
     );
 
@@ -443,7 +446,7 @@ CREATE POLICY "redmine_issue_links_manage_service" ON public.redmine_issue_links
 CREATE POLICY "redmine_sync_events_select_org_admin" ON public.redmine_sync_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -455,7 +458,7 @@ CREATE POLICY "redmine_sync_events_insert_service" ON public.redmine_sync_events
 CREATE POLICY "oracle_integrations_select_org_admin" ON public.oracle_integrations
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -463,13 +466,13 @@ CREATE POLICY "oracle_integrations_select_org_admin" ON public.oracle_integratio
 CREATE POLICY "oracle_integrations_manage_org_admin" ON public.oracle_integrations
     FOR ALL USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -478,7 +481,7 @@ CREATE POLICY "oracle_integrations_manage_org_admin" ON public.oracle_integratio
 CREATE POLICY "oracle_sync_jobs_select_org_admin" ON public.oracle_sync_jobs
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -486,13 +489,13 @@ CREATE POLICY "oracle_sync_jobs_select_org_admin" ON public.oracle_sync_jobs
 CREATE POLICY "oracle_sync_jobs_manage_org_admin" ON public.oracle_sync_jobs
     FOR ALL USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -501,7 +504,7 @@ CREATE POLICY "oracle_sync_jobs_manage_org_admin" ON public.oracle_sync_jobs
 CREATE POLICY "oracle_sync_events_select_org_admin" ON public.oracle_sync_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -513,7 +516,7 @@ CREATE POLICY "oracle_sync_events_insert_service" ON public.oracle_sync_events
 CREATE POLICY "apex_integrations_select_org_admin" ON public.apex_integrations
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -521,13 +524,13 @@ CREATE POLICY "apex_integrations_select_org_admin" ON public.apex_integrations
 CREATE POLICY "apex_integrations_manage_org_admin" ON public.apex_integrations
     FOR ALL USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -536,7 +539,7 @@ CREATE POLICY "apex_integrations_manage_org_admin" ON public.apex_integrations
 CREATE POLICY "apex_applications_select_org_admin" ON public.apex_applications
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -544,13 +547,13 @@ CREATE POLICY "apex_applications_select_org_admin" ON public.apex_applications
 CREATE POLICY "apex_applications_manage_org_admin" ON public.apex_applications
     FOR ALL USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -559,7 +562,7 @@ CREATE POLICY "apex_applications_manage_org_admin" ON public.apex_applications
 CREATE POLICY "apex_usage_events_select_org_admin" ON public.apex_usage_events
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         ) OR public.is_platform_admin(auth.uid())
     );
@@ -571,7 +574,7 @@ CREATE POLICY "apex_usage_events_insert_service" ON public.apex_usage_events
 CREATE POLICY "external_user_mappings_select_org_admin" ON public.external_app_user_mappings
     FOR SELECT USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -579,13 +582,13 @@ CREATE POLICY "external_user_mappings_select_org_admin" ON public.external_app_u
 CREATE POLICY "external_user_mappings_manage_org_admin" ON public.external_app_user_mappings
     FOR ALL USING (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     )
     WITH CHECK (
         organization_id IN (
-            SELECT om.organization_id FROM public.organization_members om
+            SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
         )
     );
@@ -613,7 +616,6 @@ DROP FUNCTION IF EXISTS public.log_apex_usage_event(
     INTEGER, INTEGER, INTEGER, UUID, UUID
 );
 
--- RPC para registrar evento de sincronização Redmine
 CREATE FUNCTION public.log_redmine_sync_event(
     p_integration_id UUID,
     p_organization_id UUID,
@@ -656,9 +658,6 @@ GRANT EXECUTE ON FUNCTION public.log_redmine_sync_event(
     UUID, UUID, TEXT, TEXT, TEXT, INTEGER, INTEGER, INTEGER, INTEGER, INTEGER, JSONB, UUID
 ) TO authenticated;
 
--- RPC para registrar evento de job Oracle
--- CORREÇÃO: removido 'error_sample' da lista de colunas do INSERT.
--- A coluna existe na tabela e será NULL por default; não é parâmetro da função.
 CREATE FUNCTION public.log_oracle_sync_event(
     p_job_id UUID,
     p_integration_id UUID,
@@ -713,7 +712,6 @@ GRANT EXECUTE ON FUNCTION public.log_oracle_sync_event(
     INTEGER, INTEGER, INTEGER, INTEGER, JSONB, JSONB, JSONB, UUID
 ) TO authenticated;
 
--- RPC para registrar evento de uso APEX
 CREATE FUNCTION public.log_apex_usage_event(
     p_integration_id UUID,
     p_organization_id UUID,
@@ -767,7 +765,7 @@ GRANT EXECUTE ON FUNCTION public.log_apex_usage_event(
 -- ============================================================
 
 -- View: Saúde da integração Redmine
--- CORREÇÃO 42702: qualificado 'organization_id' da subquery com alias 'om'
+-- organization_members usa org_id (nao organization_id)
 CREATE OR REPLACE VIEW public.v_redmine_integration_health AS
 SELECT
     ri.organization_id,
@@ -788,14 +786,14 @@ JOIN public.organizations o ON o.id = ri.organization_id
 LEFT JOIN public.redmine_issue_links ril ON ril.integration_id = ri.id
 LEFT JOIN public.redmine_sync_events rse ON rse.integration_id = ri.id
 WHERE ri.organization_id IN (
-    SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()
+    SELECT om.org_id FROM public.organization_members om WHERE om.user_id = auth.uid()
 )
-GROUP BY ri.organization_id, o.name, ri.id, ri.name, ri.is_active, ri.last_sync_at, ri.last_sync_status, ri.last_sync_items, ri.last_sync_error;
+GROUP BY ri.organization_id, o.name, ri.id, ri.name, ri.is_active,
+    ri.last_sync_at, ri.last_sync_status, ri.last_sync_items, ri.last_sync_error;
 
 COMMENT ON VIEW public.v_redmine_integration_health IS 'Saúde das integrações Redmine por organização';
 
 -- View: Saúde dos jobs Oracle
--- CORREÇÃO 42702: qualificado 'organization_id' da subquery com alias 'om'
 CREATE OR REPLACE VIEW public.v_oracle_job_health AS
 SELECT
     oi.organization_id,
@@ -821,16 +819,16 @@ JOIN public.organizations o ON o.id = oi.organization_id
 JOIN public.oracle_sync_jobs osj ON osj.integration_id = oi.id
 LEFT JOIN public.oracle_sync_events ose ON ose.job_id = osj.id
 WHERE oi.organization_id IN (
-    SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()
+    SELECT om.org_id FROM public.organization_members om WHERE om.user_id = auth.uid()
 )
-GROUP BY oi.organization_id, o.name, oi.id, oi.name, osj.id, osj.name, osj.job_type, osj.extraction_strategy,
-    osj.is_active, osj.last_run_at, osj.last_run_status, osj.last_run_rows, osj.last_run_duration_ms,
-    osj.last_run_error, osj.next_run_at;
+GROUP BY oi.organization_id, o.name, oi.id, oi.name,
+    osj.id, osj.name, osj.job_type, osj.extraction_strategy,
+    osj.is_active, osj.last_run_at, osj.last_run_status, osj.last_run_rows,
+    osj.last_run_duration_ms, osj.last_run_error, osj.next_run_at;
 
 COMMENT ON VIEW public.v_oracle_job_health IS 'Saúde dos jobs de sincronização Oracle por organização';
 
 -- View: Uso de aplicações APEX
--- CORREÇÃO 42702: qualificado 'organization_id' da subquery com alias 'om'
 CREATE OR REPLACE VIEW public.v_apex_usage_report AS
 SELECT
     ai.organization_id,
@@ -851,10 +849,11 @@ JOIN public.organizations o ON o.id = ai.organization_id
 JOIN public.apex_applications aap ON aap.integration_id = ai.id
 JOIN public.apex_usage_events aue ON aue.integration_id = ai.id AND aue.application_id = aap.id
 WHERE ai.organization_id IN (
-    SELECT om.organization_id FROM public.organization_members om WHERE om.user_id = auth.uid()
+    SELECT om.org_id FROM public.organization_members om WHERE om.user_id = auth.uid()
 )
   AND aue.created_at >= now() - INTERVAL '30 days'
-GROUP BY ai.organization_id, o.name, ai.id, ai.name, aap.id, aap.apex_app_name, DATE(aue.created_at)
+GROUP BY ai.organization_id, o.name, ai.id, ai.name,
+    aap.id, aap.apex_app_name, DATE(aue.created_at)
 ORDER BY usage_date DESC;
 
 COMMENT ON VIEW public.v_apex_usage_report IS 'Relatório de uso de aplicações APEX consumindo Axionn';

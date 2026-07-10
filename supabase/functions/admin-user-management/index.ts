@@ -169,12 +169,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { action, user_id, new_email, mode, email_mode } = body as {
-      action: "change_email" | "reset_password";
+    const { action, user_id, new_email, mode, email_mode, is_active } = body as {
+      action: "change_email" | "reset_password" | "toggle_active";
       user_id: string;
       new_email?: string;
       mode?: "temp_password" | "send_link";
       email_mode?: "confirm" | "direct";
+      is_active?: boolean;
     };
 
     if (!action || !user_id) {

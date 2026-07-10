@@ -81,7 +81,7 @@ export default function BOFinanceiro() {
   const exportCsv = () => {
     const rows = [["Cliente", "Valor", "Status", "Plano", "Vencimento"], ...visible.map((r) =>
       [r.tenantName, String(r.amount), r.status, r.planType, r.dueDate])];
-    const blob = new Blob([rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\n")],
+    const blob = new Blob([rows.map((row) => row.map((cell) => `"${cell.split('"').join('""')}"`).join(",")).join("\n")],
       { type: "text/csv;charset=utf-8" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob); link.download = "faturas-backoffice.csv"; link.click();

@@ -1,88 +1,59 @@
-## Objetivo
+## Diagnóstico
 
-Criar a Edge Function `process-ai-briefing` que gera sugestões de tarefas/decisões/riscos a partir de um Briefing armazenado em `ai_briefings`, reutilizando:
+A edge function `process-ai-briefing` está retornando 422 `AI_OUTPUT_INVALID_DATE_FORMAT` porque a IA devolve `dueDate` em formatos que o parser não aceita. O `normalizeDate` atual (linhas 140-198 de `supabase/functions/process-ai-briefing/index.ts`) só reconhece três padrões estritos:
 
-- provedor ativo/recomendado cadastrado em `public.ai_providers` (mesma tabela usada pelo APF);
-- credencial obtida exclusivamente via RPC `get_ai_provider_key_by_id`;
-- RPCs de ciclo de vida do briefing já existentes: `start_ai_briefing_run`, `complete_ai_briefing_run`, `fail_ai_briefing_run` e inserção em `ai_briefing_suggestions`.
+- `YYYY-MM-DD` (mês e dia obrigatoriamente com 2 dígitos)
+- `DD/MM/YYYY` ou `DD-MM-YYYY`
+- `DD/MM/YY` ou `DD-MM-YY`
 
-Nada da rotina de APF (`apf-generate`, `count-function-points`, `apf-*`) é alterado.
+Formatos comuns que a IA gera e que quebram tudo hoje:
+- `2026-07-09T00:00:00` / `2026-07-09T00:00:00Z` (ISO com hora)
+- `2026-7-9`, `9/7/2026` (sem zero-padding)
+- `09 de julho de 2026`, `julho de 2026` (linguagem natural em PT-BR)
+- `2026/07/09` (barra no formato ISO)
 
-## Arquivos
+Como o parser lança `HttpError` na primeira falha, um único `dueDate` mal formado invalida o briefing inteiro — mesmo quando as demais sugestões estão perfeitas. Esse é o comportamento que o usuário viu.
 
-- `supabase/functions/process-ai-briefing/index.ts` (novo)
-- `supabase/config.toml` (adicionar bloco `[functions.process-ai-briefing]` com `verify_jwt = true`)
+## Solução
 
-Nenhuma nova tabela, secret, página, hook ou cadastro. Nenhum arquivo do APF é tocado.
+Alterações **apenas** em `supabase/functions/process-ai-briefing/index.ts`. Sem mudança de UI, migrations ou schemas do cliente.
 
-## Contrato da função
+### 1. Tornar `normalizeDate` mais tolerante
 
-- Método: `POST`, `verify_jwt = true`.
-- CORS igual às demais functions da plataforma.
-- Body: `{ briefingId: string (uuid), providerId?: string }`.
-- Autenticação: `Authorization: Bearer <jwt>` do usuário logado (client anon + header). RLS já protege `ai_briefings`, então o carregamento inicial usa o client autenticado do usuário.
-- Retorno: `{ success, runId, providerUsed, model, latencyMs, suggestionsCount }` ou `{ success: false, reason, userMessage }` (mesmo padrão do `platform-ai-provider-test`).
+Aceitar, sempre normalizando para `YYYY-MM-DD`:
+- ISO com hora: pegar apenas os 10 primeiros caracteres antes de aplicar o regex ISO.
+- Mês/dia sem zero à esquerda em ISO: `^(\d{4})-(\d{1,2})-(\d{1,2})$`.
+- `YYYY/MM/DD` como sinônimo do ISO.
+- `DD de <mês> de YYYY` em PT-BR (janeiro…dezembro, com/sem acento, case-insensitive).
 
-## Fluxo
+Manter a validação de dia/mês reais (rejeita 31/02) e retornar sempre `YYYY-MM-DD`.
 
-1. Validar JWT via `userClient.auth.getUser()`; recusar 401 se inválido.
-2. Ler o briefing com o client do usuário: `select id, org_id, briefing_type, language, source_content, participants, meeting_date, title from ai_briefings where id = :briefingId`. Se não encontrado → 404 (RLS já garante escopo).
-3. Selecionar o provedor de IA usando o service role, na ordem:
-   - `providerId` recebido (se enviado, e `is_active`);
-   - senão, `is_recommended = true and is_active = true` (mais recente);
-   - senão, primeiro `is_active = true` ordenado por `created_at desc`.
-   Se nenhum → `{ success:false, reason:"AI_PROVIDER_NOT_CONFIGURED" }`.
-4. Buscar a credencial exclusivamente via `admin.rpc("get_ai_provider_key_by_id", { p_id: provider.id })`. Se ausente/curta → `AI_PROVIDER_KEY_MISSING`.
-5. Chamar `start_ai_briefing_run({ p_briefing_id, p_prompt_version:"briefing.v1", p_request_id: crypto.randomUUID(), p_schema_version:"briefing.suggestions.v1" })` para obter `run_id` e dados oficiais do briefing.
-6. Montar o prompt do Briefing (próprio, separado do APF) e o schema de saída (ver seções abaixo). Ambos ficam apenas nesta function.
-7. Chamar o provedor usando a mesma lógica de `platform-ai-provider-test`: um helper `callProvider(provider, apiKey, systemPrompt, userPrompt)` que suporta `request_format` `openai_compatible`, `gemini` e `anthropic` (endpoints, headers e parsing idênticos aos já usados na plataforma; sem novas dependências).
-8. Extrair o JSON da resposta (bloco ```json ou parse direto). Validar contra o schema (Zod inline). Se falhar → `fail_ai_briefing_run(run_id, "AI_OUTPUT_INVALID", ...)` e retornar erro amigável.
-9. Persistir com service role:
-   - `insert into ai_briefing_suggestions` — um registro por item, com `ordinal` sequencial, `suggestion_type` (`task` | `decision` | `risk` | `follow_up`), `title`, `description`, `priority_hint`, `suggested_assignee_name`, `suggested_due_date`, `date_source`, `original_payload = item`, `review_status = 'pending'`.
-   - `complete_ai_briefing_run({ p_run_id, p_provider_id, p_model_name, p_output_payload, p_duration_ms, p_input_tokens?, p_output_tokens?, p_estimated_cost? })`.
-10. Erros do provedor (401/402/404/429/5xx/timeout) reutilizam o mapeamento `sanitizeProviderFailure` do `platform-ai-provider-test`, e chamam `fail_ai_briefing_run` antes de retornar. Logs técnicos vão em `console.error` (nunca no `userMessage`).
+### 2. Falha suave em vez de 422 global
 
-## Prompt do Briefing (isolado nesta function)
+Se, após todas as tentativas, o valor ainda for irreconhecível, **não** derrubar o briefing:
+- descartar `dueDate`
+- forçar `dateSource = "absent"`
+- registrar via `console.warn` para observabilidade
 
-- System prompt em PT-BR (fallback para o `language` do briefing) explicando que a IA lê uma ata / transcrição de reunião do módulo Sala Ágil e deve extrair itens acionáveis para o time.
-- User prompt injeta: `title`, `briefing_type`, `meeting_date`, `participants`, `source_content`.
-- Instrução explícita para responder **somente** com JSON válido conforme o schema, sem texto adicional, sem markdown.
-- Regras de negócio herdadas do produto: HU/ação com estimativa máxima de 24h, atividades ≤ 8h, datas nunca retroativas à `meeting_date`, idioma PT-BR.
+Rationale: o briefing tem valor mesmo sem data em uma sugestão isolada; hoje 1 data ruim = 0 sugestões entregues. Datas mal preenchidas continuam bloqueadas apenas quando o `dateSource` foi `explicit`/`inferred` e nem o modo tolerante conseguiu extrair — e mesmo assim caímos para `absent` em vez de 422.
 
-## Schema de saída (próprio do Briefing)
+### 3. Reforçar o prompt
 
-```
-{
-  "summary": string,                          // resumo executivo curto
-  "suggestions": [
-    {
-      "type": "task" | "decision" | "risk" | "follow_up",
-      "title": string,                        // <=120 chars
-      "description": string,                  // <=1200 chars
-      "priority": "low" | "medium" | "high" | null,
-      "assignee_name": string | null,         // texto livre (mapeado depois)
-      "due_date": string | null,              // ISO yyyy-mm-dd, >= meeting_date
-      "date_source": "explicit" | "inferred" | "none"
-    }
-  ]
-}
-```
+Em `buildPrompt` (linhas 398-448), adicionar instrução explícita no bloco de regras:
+- `dueDate` DEVE estar em `YYYY-MM-DD` estrito (ex: `2026-07-09`).
+- NUNCA usar linguagem natural, timestamps, hora, timezone ou nomes de mês.
+- Se não houver data no texto, omitir `dueDate` e usar `dateSource: "absent"`.
 
-Validação com Zod (versão via `npm:zod`). Se o modelo devolver campos extras, são ignorados; se faltar campo obrigatório, cai em `AI_OUTPUT_INVALID`.
+Isso reduz a chance de a IA devolver formatos exóticos em primeiro lugar.
 
-## Config e publicação
+### Fora de escopo
 
-- `supabase/config.toml` recebe:
-  ```
-  [functions.process-ai-briefing]
-  verify_jwt = true
-  ```
-- Publicar imediatamente via deploy da nova function.
+- Não alterar `briefingAnalysisSchema.ts` do cliente (validação server-side é a fonte da verdade aqui).
+- Não mexer em migrations, RLS, nem em outras funções.
+- Não trocar o modelo/provider.
 
-## Validação pós-deploy
+## Critério de aceite
 
-- `curl` autenticado com um `briefingId` real:
-  - retorna `success: true` e cria linhas em `ai_briefing_suggestions` + `ai_briefing_runs.status = 'completed'`.
-- Cenário sem chave configurada → `AI_PROVIDER_KEY_MISSING`, sem stacktrace no toast.
-- Cenário com JSON inválido → `AI_OUTPUT_INVALID`, `ai_briefing_runs.status = 'failed'` com `error_code` correspondente.
-- Nenhuma alteração observável em `apf-generate` / rotinas de APF.
+- Chamadas ao `process-ai-briefing` deixam de retornar 422 quando o único problema é formato de `dueDate`.
+- Datas em ISO com hora, ISO sem zero-padding, `YYYY/MM/DD` e `DD de mês de YYYY` são normalizadas para `YYYY-MM-DD`.
+- Datas realmente inválidas (ex: `31/02/2026`) continuam sendo capturadas — mas em vez de 422 a sugestão vira `dateSource=absent` e o briefing conclui.

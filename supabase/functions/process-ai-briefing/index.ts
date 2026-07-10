@@ -138,16 +138,27 @@ function requiredString(
 }
 
 function normalizeDate(value: unknown): string | undefined {
-  const raw = optionalString(value, "suggestion.dueDate", 20);
+  const raw = optionalString(value, "suggestion.dueDate", 60);
   if (!raw) return undefined;
 
   let year: number;
   let month: number;
   let day: number;
 
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const brazilian = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  const brazilianShort = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$/);
+  // Tolerar ISO com hora/timezone: pegar apenas a parte da data.
+  const cleaned = raw.replace(/[Tt].*$/, "").trim();
+  // Aceitar YYYY-MM-DD e YYYY/MM/DD, com ou sem zero-padding.
+  const iso = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  const brazilian = cleaned.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  const brazilianShort = cleaned.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$/);
+  const PT_MONTHS: Record<string, number> = {
+    janeiro: 1, fevereiro: 2, marco: 3, "março": 3, abril: 4,
+    maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9,
+    outubro: 10, novembro: 11, dezembro: 12,
+  };
+  const ptNatural = cleaned
+    .toLowerCase()
+    .match(/^(\d{1,2})\s+de\s+([a-zç]+)\s+de\s+(\d{4})$/i);
 
   if (iso) {
     year = Number(iso[1]);
@@ -161,20 +172,22 @@ function normalizeDate(value: unknown): string | undefined {
     day = Number(brazilianShort[1]);
     month = Number(brazilianShort[2]);
     year = 2000 + Number(brazilianShort[3]);
+  } else if (ptNatural && PT_MONTHS[ptNatural[2]] !== undefined) {
+    day = Number(ptNatural[1]);
+    month = PT_MONTHS[ptNatural[2]];
+    year = Number(ptNatural[3]);
   } else {
-    throw new HttpError(
-      422,
-      "AI_OUTPUT_INVALID_DATE_FORMAT",
-      "Formato de data invalido. Use YYYY-MM-DD (ex: 2026-07-09) ou DD/MM/YYYY (ex: 09/07/2026)",
+    console.warn(
+      `[process-ai-briefing] dueDate irreconhecivel, descartando: "${raw}"`,
     );
+    return undefined;
   }
 
   if (month < 1 || month > 12 || day < 1 || day > 31) {
-    throw new HttpError(
-      422,
-      "AI_OUTPUT_INVALID_DATE",
-      "Data sugerida invalida: dia ou mes fora do intervalo",
+    console.warn(
+      `[process-ai-briefing] dueDate fora do intervalo, descartando: "${raw}"`,
     );
+    return undefined;
   }
 
   const parsed = new Date(Date.UTC(year, month - 1, day));
@@ -183,11 +196,10 @@ function normalizeDate(value: unknown): string | undefined {
     parsed.getUTCMonth() !== month - 1 ||
     parsed.getUTCDate() !== day
   ) {
-    throw new HttpError(
-      422,
-      "AI_OUTPUT_INVALID_DATE",
-      "Data sugerida invalida (ex: 31/02/2026 nao existe)",
+    console.warn(
+      `[process-ai-briefing] dueDate inexistente no calendario, descartando: "${raw}"`,
     );
+    return undefined;
   }
 
   return [
@@ -268,15 +280,14 @@ function parseSuggestion(value: unknown): Suggestion {
     );
   }
   const dueDate = normalizeDate(item.dueDate);
-  if (
-    (dateSource === "absent" && dueDate) ||
-    (dateSource !== "absent" && !dueDate)
-  ) {
-    throw new HttpError(
-      422,
-      "AI_OUTPUT_DATE_MISMATCH",
-      "Data e origem da data inconsistentes: se dateSource='absent', nao informe dueDate; caso contrario, dueDate e obrigatorio",
-    );
+  // Coerencia suave: se o normalizador descartou uma data, rebaixa para "absent"
+  // em vez de derrubar o briefing inteiro. Se veio dueDate com dateSource=absent,
+  // preferimos manter a data e promover para "inferred".
+  let effectiveDateSource = dateSource as DateSource;
+  if (dateSource === "absent" && dueDate) {
+    effectiveDateSource = "inferred";
+  } else if (dateSource !== "absent" && !dueDate) {
+    effectiveDateSource = "absent";
   }
 
   const priority = optionalString(item.priority, "suggestion.priority", 20);
@@ -306,7 +317,7 @@ function parseSuggestion(value: unknown): Suggestion {
       200,
     ),
     dueDate,
-    dateSource: dateSource as DateSource,
+    dateSource: effectiveDateSource,
     priority: priority as Suggestion["priority"],
     evidence: item.evidence.slice(0, 10).map(parseEvidence),
   };
@@ -411,6 +422,7 @@ REGRAS INVIOLAVEIS
 5. Use sourceStart/sourceEnd somente se conseguir indicar indices de caracteres validos; caso contrario, omita ambos.
 6. Data mencionada diretamente: dateSource="explicit". Data deduzida: "inferred". Sem data: "absent" e omita dueDate.
 7. Retorne somente JSON valido, sem markdown ou texto adicional.
+8. FORMATO DE DATA: dueDate DEVE ser SEMPRE uma string no formato ISO estrito YYYY-MM-DD (ex: "2026-07-09"). NUNCA use linguagem natural ("9 de julho"), timestamps ("2026-07-09T00:00:00"), timezone ("Z", "+00:00") ou nomes de mes. Se nao houver data concreta, omita dueDate e use dateSource="absent".
 
 CONTEXTO
 Tipo: ${briefing.briefing_type}

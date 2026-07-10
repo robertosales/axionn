@@ -519,7 +519,7 @@ async function callProvider(
 
   if (format === "gemini") {
     const resolvedModel = (model || "gemini-2.0-flash").replace(/^google\//, "");
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${resolvedModel}:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: "POST",
@@ -533,14 +533,8 @@ async function callProvider(
         }),
         signal,
       },
+      "Gemini",
     );
-    if (!response.ok) {
-      throw new HttpError(
-        502,
-        `AI_PROVIDER_${response.status}`,
-        `Gemini respondeu HTTP ${response.status}`,
-      );
-    }
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new HttpError(502, "AI_PROVIDER_EMPTY", "Resposta vazia");
@@ -552,7 +546,7 @@ async function callProvider(
   }
 
   if (format === "anthropic") {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
@@ -566,14 +560,7 @@ async function callProvider(
         messages: [{ role: "user", content: prompt }],
       }),
       signal,
-    });
-    if (!response.ok) {
-      throw new HttpError(
-        502,
-        `AI_PROVIDER_${response.status}`,
-        `Anthropic respondeu HTTP ${response.status}`,
-      );
-    }
+    }, "Anthropic");
     const data = await response.json();
     const text = data?.content?.[0]?.text;
     if (!text) throw new HttpError(502, "AI_PROVIDER_EMPTY", "Resposta vazia");
@@ -599,7 +586,7 @@ async function callProvider(
     );
   }
 
-  const response = await fetch(provider.api_base_url, {
+  const response = await fetchWithRetry(provider.api_base_url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -622,14 +609,7 @@ async function callProvider(
       ],
     }),
     signal,
-  });
-  if (!response.ok) {
-    throw new HttpError(
-      502,
-      `AI_PROVIDER_${response.status}`,
-      `Provedor respondeu HTTP ${response.status}`,
-    );
-  }
+  }, provider.name || "Provedor");
   const data = await response.json();
   const text = data?.choices?.[0]?.message?.content;
   if (!text) throw new HttpError(502, "AI_PROVIDER_EMPTY", "Resposta vazia");

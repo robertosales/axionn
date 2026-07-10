@@ -688,6 +688,27 @@ export function UserRolesManager() {
           {totalItems} usuário{totalItems !== 1 ? "s" : ""} encontrado{totalItems !== 1 ? "s" : ""}
           {totalItems !== users.length && ` (de ${users.length})`}
         </span>
+        {selectedIds.size > 0 && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-xs font-medium">{selectedIds.size} selecionado(s)</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Limpar
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-8 text-xs gap-1"
+              onClick={() => setBulkOpen(true)}
+            >
+              <UserX className="h-3.5 w-3.5" /> Desativar selecionados
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Tabela */}

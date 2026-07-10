@@ -341,8 +341,7 @@ export async function listTeamBriefings(
     )
     .eq("team_id", teamId)
     .neq("status", "archived")
-    .order("created_at", { ascending: false })
-    .limit(20);
+    .order("created_at", { ascending: false });
   assertNoError(error);
 
   return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {

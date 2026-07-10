@@ -721,6 +721,16 @@ export function UserRolesManager() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b border-border/70">
+                <TableHead className="w-9 py-2.5">
+                  <Checkbox
+                    checked={
+                      paginatedItems.length > 0 &&
+                      paginatedItems.every(u => selectedIds.has(u.user_id))
+                    }
+                    onCheckedChange={(c) => togglePageSelection(!!c)}
+                    aria-label="Selecionar página"
+                  />
+                </TableHead>
                 <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Usuário</TableHead>
                 <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Módulo &amp; Perfil</TableHead>
                 <TableHead className="text-[10px] font-semibold uppercase tracking-wider py-2.5 text-muted-foreground">Times</TableHead>
@@ -731,7 +741,7 @@ export function UserRolesManager() {
             <TableBody>
               {paginatedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-10 bg-muted/20">
+                  <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-10 bg-muted/20">
                     Nenhum usuário encontrado.
                   </TableCell>
                 </TableRow>
@@ -744,6 +754,13 @@ export function UserRolesManager() {
                     idx % 2 === 0 ? "bg-background" : "bg-muted/20",
                   )}
                 >
+                  <TableCell className="py-2.5">
+                    <Checkbox
+                      checked={selectedIds.has(user.user_id)}
+                      onCheckedChange={(c) => toggleRowSelection(user.user_id, !!c)}
+                      aria-label={`Selecionar ${user.display_name}`}
+                    />
+                  </TableCell>
                   {/* Usuário */}
                   <TableCell className="py-2.5">
                     <div className="flex items-center gap-2">

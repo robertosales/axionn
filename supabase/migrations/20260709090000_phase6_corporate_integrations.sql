@@ -411,37 +411,22 @@ DROP POLICY IF EXISTS "external_user_mappings_manage_org_admin" ON public.extern
 CREATE POLICY "redmine_integrations_select_org_admin" ON public.redmine_integrations
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
 CREATE POLICY "redmine_integrations_manage_org_admin" ON public.redmine_integrations
     FOR ALL USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     )
     WITH CHECK (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
@@ -449,11 +434,7 @@ CREATE POLICY "redmine_integrations_manage_org_admin" ON public.redmine_integrat
 CREATE POLICY "redmine_issue_links_select_org_member" ON public.redmine_issue_links
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
-=======
             SELECT om.org_id FROM public.organization_members om WHERE om.user_id = auth.uid()
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
@@ -465,13 +446,8 @@ CREATE POLICY "redmine_issue_links_manage_service" ON public.redmine_issue_links
 CREATE POLICY "redmine_sync_events_select_org_admin" ON public.redmine_sync_events
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         ) OR public.is_platform_admin(auth.uid())
     );
 
@@ -482,37 +458,22 @@ CREATE POLICY "redmine_sync_events_insert_service" ON public.redmine_sync_events
 CREATE POLICY "oracle_integrations_select_org_admin" ON public.oracle_integrations
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
 CREATE POLICY "oracle_integrations_manage_org_admin" ON public.oracle_integrations
     FOR ALL USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     )
     WITH CHECK (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
@@ -520,37 +481,22 @@ CREATE POLICY "oracle_integrations_manage_org_admin" ON public.oracle_integratio
 CREATE POLICY "oracle_sync_jobs_select_org_admin" ON public.oracle_sync_jobs
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
 CREATE POLICY "oracle_sync_jobs_manage_org_admin" ON public.oracle_sync_jobs
     FOR ALL USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     )
     WITH CHECK (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
@@ -558,13 +504,8 @@ CREATE POLICY "oracle_sync_jobs_manage_org_admin" ON public.oracle_sync_jobs
 CREATE POLICY "oracle_sync_events_select_org_admin" ON public.oracle_sync_events
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         ) OR public.is_platform_admin(auth.uid())
     );
 
@@ -575,37 +516,22 @@ CREATE POLICY "oracle_sync_events_insert_service" ON public.oracle_sync_events
 CREATE POLICY "apex_integrations_select_org_admin" ON public.apex_integrations
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
 CREATE POLICY "apex_integrations_manage_org_admin" ON public.apex_integrations
     FOR ALL USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     )
     WITH CHECK (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
@@ -613,37 +539,22 @@ CREATE POLICY "apex_integrations_manage_org_admin" ON public.apex_integrations
 CREATE POLICY "apex_applications_select_org_admin" ON public.apex_applications
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
 CREATE POLICY "apex_applications_manage_org_admin" ON public.apex_applications
     FOR ALL USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     )
     WITH CHECK (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
@@ -651,13 +562,8 @@ CREATE POLICY "apex_applications_manage_org_admin" ON public.apex_applications
 CREATE POLICY "apex_usage_events_select_org_admin" ON public.apex_usage_events
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         ) OR public.is_platform_admin(auth.uid())
     );
 
@@ -668,37 +574,22 @@ CREATE POLICY "apex_usage_events_insert_service" ON public.apex_usage_events
 CREATE POLICY "external_user_mappings_select_org_admin" ON public.external_app_user_mappings
     FOR SELECT USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
 CREATE POLICY "external_user_mappings_manage_org_admin" ON public.external_app_user_mappings
     FOR ALL USING (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     )
     WITH CHECK (
         organization_id IN (
-<<<<<<< HEAD
-            SELECT org_id FROM public.organization_members
-            WHERE user_id = auth.uid() AND role IN ('admin', 'owner')
-=======
             SELECT om.org_id FROM public.organization_members om
             WHERE om.user_id = auth.uid() AND om.role IN ('admin', 'owner')
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
         )
     );
 
@@ -729,13 +620,8 @@ CREATE FUNCTION public.log_redmine_sync_event(
     p_integration_id UUID,
     p_organization_id UUID,
     p_sync_type TEXT,
-<<<<<<< HEAD
-    p_trigger_source TEXT DEFAULT NULL,
-    p_status TEXT DEFAULT NULL,
-=======
     p_status TEXT,
     p_trigger_source TEXT DEFAULT NULL,
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
     p_issues_processed INTEGER DEFAULT 0,
     p_issues_created INTEGER DEFAULT 0,
     p_issues_updated INTEGER DEFAULT 0,
@@ -900,11 +786,7 @@ JOIN public.organizations o ON o.id = ri.organization_id
 LEFT JOIN public.redmine_issue_links ril ON ril.integration_id = ri.id
 LEFT JOIN public.redmine_sync_events rse ON rse.integration_id = ri.id
 WHERE ri.organization_id IN (
-<<<<<<< HEAD
-    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
-=======
     SELECT om.org_id FROM public.organization_members om WHERE om.user_id = auth.uid()
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
 )
 GROUP BY ri.organization_id, o.name, ri.id, ri.name, ri.is_active,
     ri.last_sync_at, ri.last_sync_status, ri.last_sync_items, ri.last_sync_error;
@@ -937,11 +819,7 @@ JOIN public.organizations o ON o.id = oi.organization_id
 JOIN public.oracle_sync_jobs osj ON osj.integration_id = oi.id
 LEFT JOIN public.oracle_sync_events ose ON ose.job_id = osj.id
 WHERE oi.organization_id IN (
-<<<<<<< HEAD
-    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
-=======
     SELECT om.org_id FROM public.organization_members om WHERE om.user_id = auth.uid()
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
 )
 GROUP BY oi.organization_id, o.name, oi.id, oi.name,
     osj.id, osj.name, osj.job_type, osj.extraction_strategy,
@@ -971,11 +849,7 @@ JOIN public.organizations o ON o.id = ai.organization_id
 JOIN public.apex_applications aap ON aap.integration_id = ai.id
 JOIN public.apex_usage_events aue ON aue.integration_id = ai.id AND aue.application_id = aap.id
 WHERE ai.organization_id IN (
-<<<<<<< HEAD
-    SELECT org_id FROM public.organization_members WHERE user_id = auth.uid()
-=======
     SELECT om.org_id FROM public.organization_members om WHERE om.user_id = auth.uid()
->>>>>>> 009ea7e6a4d26868315c013e4632a42929db98c9
 )
   AND aue.created_at >= now() - INTERVAL '30 days'
 GROUP BY ai.organization_id, o.name, ai.id, ai.name,

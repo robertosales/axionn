@@ -508,6 +508,69 @@ async function getProviderKey(
   return data.trim();
 }
 
+function computeBackoffMs(attempt: number, retryAfterHeader: string | null): number {
+  if (retryAfterHeader) {
+    const asSeconds = Number(retryAfterHeader);
+    if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+      return Math.min(asSeconds * 1000, 5_000);
+    }
+    const asDate = Date.parse(retryAfterHeader);
+    if (!Number.isNaN(asDate)) {
+      return Math.max(0, Math.min(asDate - Date.now(), 5_000));
+    }
+  }
+  const base = 500 * Math.pow(3, attempt); // 500, 1500
+  const jitter = base * (0.8 + Math.random() * 0.4);
+  return Math.min(Math.round(jitter), 5_000);
+}
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  providerLabel: string,
+  maxAttempts = 3,
+): Promise<Response> {
+  let lastStatus = 0;
+  let lastRetryAfter: string | null = null;
+  let lastNetworkError: unknown = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, init);
+      if (response.ok) return response;
+      const retriable = response.status === 429 || (response.status >= 500 && response.status <= 599);
+      lastStatus = response.status;
+      lastRetryAfter = response.headers.get("retry-after");
+      // Consume body to free connection before retry.
+      try { await response.text(); } catch { /* ignore */ }
+      if (!retriable || attempt === maxAttempts - 1) {
+        const isRateLimit = response.status === 429;
+        const status = isRateLimit ? 429 : 502;
+        const code = `AI_PROVIDER_${response.status}`;
+        const message = isRateLimit
+          ? `${providerLabel} sobrecarregado (HTTP 429). Tente novamente em alguns segundos.`
+          : `${providerLabel} respondeu HTTP ${response.status}`;
+        throw new HttpError(status, code, message);
+      }
+      await new Promise((r) => setTimeout(r, computeBackoffMs(attempt, lastRetryAfter)));
+      continue;
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      lastNetworkError = error;
+      // Do not retry timeouts / aborts.
+      if (error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) {
+        throw error;
+      }
+      if (attempt === maxAttempts - 1) {
+        const detail = error instanceof Error ? error.message : "erro de rede";
+        throw new HttpError(502, "AI_PROVIDER_NETWORK", `${providerLabel} indisponivel: ${detail}`);
+      }
+      await new Promise((r) => setTimeout(r, computeBackoffMs(attempt, null)));
+    }
+  }
+  // Unreachable, but keeps TypeScript happy.
+  throw new HttpError(502, `AI_PROVIDER_${lastStatus || 0}`, `${providerLabel} falhou apos ${maxAttempts} tentativas`);
+}
+
 async function callProvider(
   provider: ProviderRow,
   apiKey: string,

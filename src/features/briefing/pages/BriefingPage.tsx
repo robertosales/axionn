@@ -12,6 +12,7 @@ import {
   Loader2,
   Pencil,
   RotateCcw,
+  Search,
   Sparkles,
   Upload,
   UserRound,
@@ -62,6 +63,9 @@ import {
 } from "../services/briefing.service";
 import type { BriefingSuggestionType, BriefingType } from "../types/briefing";
 import { NextMeetingAgenda } from "../components/NextMeetingAgenda";
+import { useDebounce } from "@/shared/hooks/useDebounce";
+import { usePagination } from "@/shared/hooks/usePagination";
+import { PaginationControls } from "@/shared/components/common/Pagination";
 
 const TYPE_LABELS: Record<BriefingType, string> = {
   daily: "Daily",
@@ -129,6 +133,26 @@ export default function BriefingPage() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [followup, setFollowup] = useState<BriefingFollowup | null>(null);
   const [outcomes, setOutcomes] = useState<BriefingOutcomes | null>(null);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<string>("all");
+  const debouncedHistorySearch = useDebounce(historySearch, 300);
+
+  const filteredHistory = useMemo(() => {
+    const q = debouncedHistorySearch.trim().toLowerCase();
+    return history.filter((item) => {
+      if (historyTypeFilter !== "all" && item.type !== historyTypeFilter) return false;
+      if (q && !item.title.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [history, debouncedHistorySearch, historyTypeFilter]);
+
+  const {
+    paginatedItems: paginatedHistory,
+    currentPage: historyPage,
+    setCurrentPage: setHistoryPage,
+    totalItems: historyTotal,
+    pageSize: historyPageSize,
+  } = usePagination(filteredHistory, { pageSize: 10 });
 
   const enabled = entitlements.some(
     (entitlement) =>

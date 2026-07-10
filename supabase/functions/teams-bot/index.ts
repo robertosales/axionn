@@ -793,7 +793,7 @@ function createErrorCard(message: string): any {
 }
 
 function extractCommand(text: string): string {
-  const match = text.match(^\/(\w+)/);
+  const match = text.match(/^\/(\w+)/);
   return match ? match[1] : 'message';
 }
 

@@ -4,6 +4,8 @@
 --   1. RPCs com parâmetros obrigatórios antes dos parâmetros com DEFAULT.
 --   2. Assinatura de public.log_oracle_sync_event alinhada ao GRANT/call com 18 parâmetros.
 --   3. Policies e funções tornadas mais seguras para rerun parcial da migration.
+--   4. Removido error_sample do INSERT da função log_oracle_sync_event (coluna existe na tabela
+--      mas não é parâmetro da função — era inserida como NULL causando erro 42883).
 
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER
@@ -655,6 +657,8 @@ GRANT EXECUTE ON FUNCTION public.log_redmine_sync_event(
 ) TO authenticated;
 
 -- RPC para registrar evento de job Oracle
+-- CORREÇÃO: removido 'error_sample' da lista de colunas do INSERT.
+-- A coluna existe na tabela e será NULL por default; não é parâmetro da função.
 CREATE FUNCTION public.log_oracle_sync_event(
     p_job_id UUID,
     p_integration_id UUID,
@@ -690,14 +694,14 @@ BEGIN
         rows_extracted, rows_transformed, rows_loaded, rows_failed, bytes_processed,
         extract_duration_ms, transform_duration_ms, load_duration_ms, total_duration_ms,
         extract_checkpoint, transform_checkpoint,
-        error_details, error_sample, correlation_id
+        error_details, correlation_id
     ) VALUES (
         p_job_id, p_integration_id, p_organization_id, v_run_id,
         p_trigger_type, p_status,
         p_rows_extracted, p_rows_transformed, p_rows_loaded, p_rows_failed, p_bytes_processed,
         p_extract_duration_ms, p_transform_duration_ms, p_load_duration_ms, p_total_duration_ms,
         p_extract_checkpoint, p_transform_checkpoint,
-        p_error_details, NULL, p_correlation_id
+        p_error_details, p_correlation_id
     ) RETURNING id INTO v_event_id;
 
     RETURN v_event_id;

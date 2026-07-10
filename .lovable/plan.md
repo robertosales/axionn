@@ -1,59 +1,61 @@
 ## Diagnóstico
 
-A edge function `process-ai-briefing` está retornando 422 `AI_OUTPUT_INVALID_DATE_FORMAT` porque a IA devolve `dueDate` em formatos que o parser não aceita. O `normalizeDate` atual (linhas 140-198 de `supabase/functions/process-ai-briefing/index.ts`) só reconhece três padrões estritos:
+O erro que o usuário recebe é:
 
-- `YYYY-MM-DD` (mês e dia obrigatoriamente com 2 dígitos)
-- `DD/MM/YYYY` ou `DD-MM-YYYY`
-- `DD/MM/YY` ou `DD-MM-YY`
+```
+POST /process-ai-briefing → 502 Bad Gateway
+{ "error": "AI_PROVIDER_429", "message": "Nao foi possivel processar o briefing." }
+```
 
-Formatos comuns que a IA gera e que quebram tudo hoje:
-- `2026-07-09T00:00:00` / `2026-07-09T00:00:00Z` (ISO com hora)
-- `2026-7-9`, `9/7/2026` (sem zero-padding)
-- `09 de julho de 2026`, `julho de 2026` (linguagem natural em PT-BR)
-- `2026/07/09` (barra no formato ISO)
+Confirmado pelos logs da edge function:
 
-Como o parser lança `HttpError` na primeira falha, um único `dueDate` mal formado invalida o briefing inteiro — mesmo quando as demais sugestões estão perfeitas. Esse é o comportamento que o usuário viu.
+```
+[process-ai-briefing] AI_PROVIDER_429 Provedor respondeu HTTP 429
+```
+
+O provedor de IA (Gemini/OpenAI/Anthropic, dependendo do `ai_providers` configurado) devolveu **HTTP 429 — rate limit**. Hoje o `callProvider` em `supabase/functions/process-ai-briefing/index.ts` (linhas 511-640) faz **uma única tentativa**: qualquer 429 ou 5xx do provedor cai direto em `throw new HttpError(502, "AI_PROVIDER_${status}", ...)`. Sem retry, sem backoff, sem respeitar `Retry-After`.
+
+Além disso, o front recebe `502` mesmo quando o provedor devolve `429` — o que confunde monitoramento e não sinaliza corretamente "tente de novo em alguns segundos".
 
 ## Solução
 
-Alterações **apenas** em `supabase/functions/process-ai-briefing/index.ts`. Sem mudança de UI, migrations ou schemas do cliente.
+Alterações **somente** em `supabase/functions/process-ai-briefing/index.ts`. Sem UI, sem migrations, sem mudar prompt ou schema.
 
-### 1. Tornar `normalizeDate` mais tolerante
+### 1. Retry com backoff exponencial em `callProvider`
 
-Aceitar, sempre normalizando para `YYYY-MM-DD`:
-- ISO com hora: pegar apenas os 10 primeiros caracteres antes de aplicar o regex ISO.
-- Mês/dia sem zero à esquerda em ISO: `^(\d{4})-(\d{1,2})-(\d{1,2})$`.
-- `YYYY/MM/DD` como sinônimo do ISO.
-- `DD de <mês> de YYYY` em PT-BR (janeiro…dezembro, com/sem acento, case-insensitive).
+Envolver as 3 chamadas `fetch` (gemini, anthropic, openai-compatible) num helper único `fetchWithRetry`:
 
-Manter a validação de dia/mês reais (rejeita 31/02) e retornar sempre `YYYY-MM-DD`.
+- Tentativas: **3** no total (1 original + 2 retries).
+- Retriável quando: `response.status === 429` **ou** `response.status >= 500 && response.status <= 599` **ou** erro de rede/timeout transitório.
+- Backoff base: `500ms → 1500ms` com jitter aleatório (±20%).
+- Se o provedor mandar header `Retry-After` (segundos ou HTTP-date), respeitar esse valor no lugar do backoff calculado, com teto de 5s para não estourar o timeout total da função.
+- Nunca retriar em 4xx que não seja 429 (400/401/403/404 seguem falhando imediatamente).
 
-### 2. Falha suave em vez de 422 global
+### 2. Propagar corretamente 429 do provedor
 
-Se, após todas as tentativas, o valor ainda for irreconhecível, **não** derrubar o briefing:
-- descartar `dueDate`
-- forçar `dateSource = "absent"`
-- registrar via `console.warn` para observabilidade
+Quando todas as tentativas esgotam com 429, retornar ao cliente:
 
-Rationale: o briefing tem valor mesmo sem data em uma sugestão isolada; hoje 1 data ruim = 0 sugestões entregues. Datas mal preenchidas continuam bloqueadas apenas quando o `dateSource` foi `explicit`/`inferred` e nem o modo tolerante conseguiu extrair — e mesmo assim caímos para `absent` em vez de 422.
+- HTTP `429` (não 502).
+- Body: `{ success: false, error: "AI_PROVIDER_429", message: "O provedor de IA está sobrecarregado. Tente novamente em alguns segundos." }`.
 
-### 3. Reforçar o prompt
+Para 5xx persistente do provedor, manter `502 AI_PROVIDER_5xx` como hoje.
 
-Em `buildPrompt` (linhas 398-448), adicionar instrução explícita no bloco de regras:
-- `dueDate` DEVE estar em `YYYY-MM-DD` estrito (ex: `2026-07-09`).
-- NUNCA usar linguagem natural, timestamps, hora, timezone ou nomes de mês.
-- Se não houver data no texto, omitir `dueDate` e usar `dateSource: "absent"`.
+Isso é feito ajustando a construção do `HttpError` no ponto onde a última tentativa falha (mapear 429 → status 429, resto → 502) e deixando o handler `catch` no fim da função repassar `error.status` intacto (já é o comportamento atual — só precisa garantir que `HttpError.status = 429` seja usado tal qual).
 
-Isso reduz a chance de a IA devolver formatos exóticos em primeiro lugar.
+### 3. Finalização de uso em falha
+
+Manter a chamada `finalize_ai_briefing_usage` com `status="failed"` e `error_code="AI_PROVIDER_429"` no bloco `catch` para não deixar reserva pendurada (comportamento já existente — apenas confirmar que continua acionando após retries).
 
 ### Fora de escopo
 
-- Não alterar `briefingAnalysisSchema.ts` do cliente (validação server-side é a fonte da verdade aqui).
-- Não mexer em migrations, RLS, nem em outras funções.
-- Não trocar o modelo/provider.
+- Não trocar provedor nem modelo.
+- Não mexer em `normalizeDate`, prompt, schema ou validação de evidências.
+- Não adicionar fila/worker para reprocessamento assíncrono (fora do MVP; o retry em processo já resolve rate limits transitórios).
+- Não alterar UI — o front já mostra o `message` retornado pela function.
 
 ## Critério de aceite
 
-- Chamadas ao `process-ai-briefing` deixam de retornar 422 quando o único problema é formato de `dueDate`.
-- Datas em ISO com hora, ISO sem zero-padding, `YYYY/MM/DD` e `DD de mês de YYYY` são normalizadas para `YYYY-MM-DD`.
-- Datas realmente inválidas (ex: `31/02/2026`) continuam sendo capturadas — mas em vez de 422 a sugestão vira `dateSource=absent` e o briefing conclui.
+- Um 429 transitório do provedor não chega mais ao usuário: as 2 retries recuperam a chamada.
+- Se o provedor insistir em 429, o front recebe **HTTP 429** com `error: "AI_PROVIDER_429"` e mensagem clara pedindo para tentar novamente.
+- 5xx persistente continua chegando como `502 AI_PROVIDER_5xx`.
+- Reservas em `ai_usage_events` são finalizadas como `failed` em vez de ficarem em `reserved`.

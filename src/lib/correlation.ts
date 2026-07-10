@@ -114,3 +114,16 @@ export function createCorrelationContext(
     },
   };
 }
+
+export interface CorrelationContext {
+  correlationId: string;
+  rootCorrelationId: string;
+}
+
+export function getCurrentCorrelationContext(): CorrelationContext | null {
+  if (!currentCorrelationId) return null;
+  return {
+    correlationId: currentCorrelationId,
+    rootCorrelationId: currentRootCorrelationId ?? currentCorrelationId,
+  };
+}

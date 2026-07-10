@@ -205,9 +205,9 @@ GRANT EXECUTE ON FUNCTION public.get_default_identity_provider(UUID) TO authenti
 
 -- 7. RPC para registrar evento de auditoria de auth
 CREATE OR REPLACE FUNCTION public.log_auth_audit_event(
-    p_organization_id UUID,
-    p_user_id UUID,
-    p_identity_provider_id UUID,
+    p_organization_id UUID DEFAULT NULL,
+    p_user_id UUID DEFAULT NULL,
+    p_identity_provider_id UUID DEFAULT NULL,
     p_event_type TEXT,
     p_client_id TEXT DEFAULT NULL,
     p_ip_address INET DEFAULT NULL,
@@ -247,9 +247,9 @@ GRANT EXECUTE ON FUNCTION public.log_auth_audit_event(
 CREATE OR REPLACE FUNCTION public.sync_keycloak_user(
     p_identity_provider_id UUID,
     p_keycloak_user_id TEXT,
-    p_keycloak_username TEXT,
-    p_keycloak_email TEXT,
-    p_keycloak_realm TEXT,
+    p_keycloak_username TEXT DEFAULT NULL,
+    p_keycloak_email TEXT DEFAULT NULL,
+    p_keycloak_realm TEXT DEFAULT NULL,
     p_axionn_user_id UUID DEFAULT NULL
 )
 RETURNS public.keycloak_user_mappings

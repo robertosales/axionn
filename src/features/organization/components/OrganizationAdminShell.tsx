@@ -5,6 +5,7 @@ import {
   FileText,
   FolderKanban,
   Gauge,
+  GitBranch,
   Menu,
   Settings2,
   Users,

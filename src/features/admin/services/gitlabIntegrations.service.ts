@@ -91,7 +91,7 @@ export function buildGitlabIntegrationPayload(input: {
     webhook_secret_encrypted: input.webhookSecret?.trim() || null,
     events: input.events ?? ["push", "merge_request"],
     is_active: input.isActive ?? true,
-    sync_status: "idle",
+    sync_status: "pending",
     sync_error: null,
   };
 }

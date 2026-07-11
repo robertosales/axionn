@@ -16,7 +16,7 @@ describe("gitlab integration helpers", () => {
       repository_name: "project",
       api_url: "https://gitlab.com/api/v4",
       is_active: true,
-      sync_status: "idle",
+      sync_status: "pending",
       sync_error: null,
       access_token_encrypted: "token-123",
       webhook_url: "https://example.com/webhook",

@@ -7035,6 +7035,72 @@ export type Database = {
           },
         ]
       }
+      integration_health_events: {
+        Row: {
+          check_type: string
+          checked_at: string
+          correlation_id: string | null
+          created_at: string
+          details: Json
+          error_code: string | null
+          error_message: string | null
+          id: string
+          integration_id: string
+          latency_ms: number | null
+          organization_id: string
+          project_id: string | null
+          provider: string
+          status: string
+        }
+        Insert: {
+          check_type?: string
+          checked_at?: string
+          correlation_id?: string | null
+          created_at?: string
+          details?: Json
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          integration_id: string
+          latency_ms?: number | null
+          organization_id: string
+          project_id?: string | null
+          provider: string
+          status: string
+        }
+        Update: {
+          check_type?: string
+          checked_at?: string
+          correlation_id?: string | null
+          created_at?: string
+          details?: Json
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          integration_id?: string
+          latency_ms?: number | null
+          organization_id?: string
+          project_id?: string | null
+          provider?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_health_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_health_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_usage_events: {
         Row: {
           correlation_id: string | null
@@ -13698,6 +13764,52 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_identity_provider_public_config: {
+        Args: { p_organization_id: string }
+        Returns: {
+          authorization_endpoint: string
+          claim_mapping: Json
+          client_id: string
+          id: string
+          is_default: boolean
+          issuer_url: string
+          jwks_url: string
+          name: string
+          organization_id: string
+          provider_type: string
+          scopes: string[]
+          token_endpoint: string
+          userinfo_endpoint: string
+        }[]
+      }
+      get_identity_provider_readiness: {
+        Args: { p_organization_id: string }
+        Returns: {
+          active_provider_count: number
+          default_provider_count: number
+          mapping_count: number
+          mapping_error_count: number
+          provider_count: number
+          providers_missing_required_config: number
+          readiness_ok: boolean
+        }[]
+      }
+      get_integration_registry: {
+        Args: { p_org_id: string }
+        Returns: {
+          integration_id: string
+          is_active: boolean
+          last_activity_at: string
+          last_error: string
+          last_health_at: string
+          last_health_latency_ms: number
+          last_health_status: string
+          name: string
+          operational_status: string
+          project_id: string
+          provider: string
+        }[]
       }
       get_my_backoffice_staff_profile: {
         Args: never

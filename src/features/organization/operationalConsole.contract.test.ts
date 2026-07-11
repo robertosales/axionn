@@ -39,6 +39,11 @@ describe("operational console routing contract", () => {
     expect(app).toContain("is_organization_operational_console_enabled");
     expect(app).toContain("is_legacy_operational_admin_fallback_enabled");
   });
+
+  it("does not redirect the gitlab integrations route to platform plans", () => {
+    expect(app).toContain('path="/admin/gitlab-integrations"');
+    expect(app).toContain('platformPath={undefined}');
+  });
 });
 
 describe("backoffice routing contract", () => {

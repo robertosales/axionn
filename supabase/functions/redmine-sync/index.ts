@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-redmine-api-key',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-integration-id, x-redmine-api-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -41,6 +41,12 @@ serve(async (req: Request) => {
 
   const correlationId = crypto.randomUUID();
   const startTime = Date.now();
+  let healthContext: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  } | null = null;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -67,6 +73,26 @@ serve(async (req: Request) => {
     }
 
     const organizationId = integration.organization_id;
+    healthContext = {
+      supabase,
+      organizationId,
+      projectId: integration.project_id ?? null,
+      integrationId,
+    };
+
+    if (!integration.is_active) {
+      await recordRedmineHealth(healthContext, {
+        status: 'degraded',
+        latencyMs: Date.now() - startTime,
+        correlationId,
+        errorCode: 'INTEGRATION_INACTIVE',
+        errorMessage: 'Redmine integration is inactive',
+      });
+      return new Response(JSON.stringify({ error: 'Integration is inactive' }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Verify webhook signature
     const signature = req.headers.get('x-redmine-api-key');
@@ -89,6 +115,37 @@ serve(async (req: Request) => {
       p_trigger_source: 'webhook',
       p_status: 'started',
       p_correlation_id: correlationId,
+    });
+
+    const completedWithErrors = issuesFailed > 0;
+    await supabase
+      .from('redmine_integrations')
+      .update({
+        last_sync_at: new Date().toISOString(),
+        last_sync_status: completedWithErrors ? 'partial' : 'success',
+        last_sync_items: issuesProcessed,
+        last_sync_error: completedWithErrors
+          ? `${issuesFailed} item(ns) failed during synchronization`
+          : null,
+      })
+      .eq('id', integrationId);
+
+    await recordRedmineHealth(healthContext, {
+      status: completedWithErrors ? 'degraded' : 'healthy',
+      latencyMs: Date.now() - startTime,
+      correlationId,
+      errorCode: completedWithErrors ? 'PARTIAL_SYNC' : undefined,
+      errorMessage: completedWithErrors
+        ? `${issuesFailed} item(ns) failed during synchronization`
+        : undefined,
+      details: {
+        event_type: eventType,
+        processed: issuesProcessed,
+        created: issuesCreated,
+        updated: issuesUpdated,
+        skipped: issuesSkipped,
+        failed: issuesFailed,
+      },
     });
 
     let issuesProcessed = 0;
@@ -144,6 +201,26 @@ serve(async (req: Request) => {
     });
   } catch (error) {
     console.error('[Redmine Sync] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (healthContext) {
+      await healthContext.supabase
+        .from('redmine_integrations')
+        .update({
+          last_sync_at: new Date().toISOString(),
+          last_sync_status: 'failed',
+          last_sync_error: errorMessage.slice(0, 500),
+        })
+        .eq('id', healthContext.integrationId);
+
+      await recordRedmineHealth(healthContext, {
+        status: 'unhealthy',
+        latencyMs: Date.now() - startTime,
+        correlationId,
+        errorCode: 'SYNC_FAILED',
+        errorMessage,
+      });
+    }
 
     // Log failure
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -166,7 +243,7 @@ serve(async (req: Request) => {
           p_trigger_source: 'webhook',
           p_status: 'failed',
           p_issues_failed: 1,
-          p_error_details: { error: error.message },
+          p_error_details: { error: errorMessage.slice(0, 500) },
           p_correlation_id: correlationId,
         });
       }
@@ -181,6 +258,44 @@ serve(async (req: Request) => {
     });
   }
 });
+
+async function recordRedmineHealth(
+  context: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  },
+  event: {
+    status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    latencyMs: number;
+    correlationId: string;
+    errorCode?: string;
+    errorMessage?: string;
+    details?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await context.supabase
+    .from('integration_health_events')
+    .insert({
+      organization_id: context.organizationId,
+      project_id: context.projectId,
+      provider: 'redmine',
+      integration_id: context.integrationId,
+      check_type: 'sync',
+      status: event.status,
+      latency_ms: event.latencyMs,
+      error_code: event.errorCode ?? null,
+      error_message: event.errorMessage?.slice(0, 500) ?? null,
+      details: event.details ?? {},
+      correlation_id: event.correlationId,
+    });
+
+  if (error) {
+    // Health telemetry must not interrupt the synchronization workflow.
+    console.error('[Redmine Sync] Failed to record integration health:', error);
+  }
+}
 
 async function processIssue(
   supabase: any,

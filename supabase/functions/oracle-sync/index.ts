@@ -21,6 +21,14 @@ serve(async (req: Request) => {
 
   const correlationId = crypto.randomUUID();
   const startTime = Date.now();
+  let jobId: string | null = null;
+  let triggerType = 'manual';
+  let healthContext: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  } | null = null;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -29,6 +37,8 @@ serve(async (req: Request) => {
 
     const body = await req.json();
     const { job_id, trigger_type = 'manual' } = body;
+    jobId = job_id ?? null;
+    triggerType = trigger_type;
 
     if (!job_id) {
       return new Response(JSON.stringify({ error: 'job_id is required' }), {
@@ -50,6 +60,27 @@ serve(async (req: Request) => {
 
     const integration = job.oracle_integrations;
     const organizationId = integration.organization_id;
+    healthContext = {
+      supabase,
+      organizationId,
+      projectId: integration.project_id ?? null,
+      integrationId: integration.id,
+    };
+
+    if (!job.is_active || !integration.is_active) {
+      await recordOracleHealth(healthContext, {
+        status: 'degraded',
+        latencyMs: Date.now() - startTime,
+        correlationId,
+        errorCode: 'INTEGRATION_OR_JOB_INACTIVE',
+        errorMessage: 'Oracle integration or sync job is inactive',
+        details: { job_id },
+      });
+      return new Response(JSON.stringify({ error: 'Integration or job is inactive' }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Log start
     await supabase.rpc('log_oracle_sync_event', {
@@ -81,6 +112,8 @@ serve(async (req: Request) => {
     }
 
     const totalDuration = Date.now() - startTime;
+    const connectorUnavailable = result.simulated === true;
+    const completedWithErrors = result.failed > 0 || connectorUnavailable;
 
     // Log completion
     await supabase.rpc('log_oracle_sync_event', {
@@ -88,7 +121,7 @@ serve(async (req: Request) => {
       p_integration_id: integration.id,
       p_organization_id: organizationId,
       p_trigger_type: trigger_type,
-      p_status: result.failed > 0 ? 'partial' : 'completed',
+      p_status: completedWithErrors ? 'partial' : 'completed',
       p_rows_extracted: result.extracted,
       p_rows_transformed: result.transformed,
       p_rows_loaded: result.loaded,
@@ -105,13 +138,42 @@ serve(async (req: Request) => {
       .from('oracle_sync_jobs')
       .update({
         last_run_at: new Date().toISOString(),
-        last_run_status: result.failed > 0 ? 'partial' : 'success',
+        last_run_status: completedWithErrors ? 'partial' : 'success',
         last_run_rows: result.loaded,
         last_run_duration_ms: totalDuration,
-        last_run_error: result.failed > 0 ? `Failed rows: ${result.failed}` : null,
+        last_run_error: connectorUnavailable
+          ? 'Oracle connector is not configured in this runtime'
+          : result.failed > 0
+            ? `Failed rows: ${result.failed}`
+            : null,
         incremental_watermark: result.newWatermark,
       })
       .eq('id', job_id);
+
+    await recordOracleHealth(healthContext, {
+      status: completedWithErrors ? 'degraded' : 'healthy',
+      latencyMs: totalDuration,
+      correlationId,
+      errorCode: connectorUnavailable
+        ? 'ORACLE_CONNECTOR_NOT_CONFIGURED'
+        : result.failed > 0
+          ? 'PARTIAL_SYNC'
+          : undefined,
+      errorMessage: connectorUnavailable
+        ? 'Oracle connector is not configured in this runtime'
+        : result.failed > 0
+          ? `${result.failed} row(s) failed during synchronization`
+          : undefined,
+      details: {
+        job_id,
+        trigger_type,
+        extracted: result.extracted,
+        transformed: result.transformed,
+        loaded: result.loaded,
+        failed: result.failed,
+        simulated: connectorUnavailable,
+      },
+    });
 
     return new Response(JSON.stringify({
       success: true,
@@ -124,13 +186,34 @@ serve(async (req: Request) => {
     });
   } catch (error) {
     console.error('[Oracle Sync] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (healthContext) {
+      if (jobId) {
+        await healthContext.supabase
+          .from('oracle_sync_jobs')
+          .update({
+            last_run_at: new Date().toISOString(),
+            last_run_status: 'failed',
+            last_run_duration_ms: Date.now() - startTime,
+            last_run_error: errorMessage.slice(0, 500),
+          })
+          .eq('id', jobId);
+      }
+
+      await recordOracleHealth(healthContext, {
+        status: 'unhealthy',
+        latencyMs: Date.now() - startTime,
+        correlationId,
+        errorCode: 'SYNC_FAILED',
+        errorMessage,
+        details: { job_id: jobId },
+      });
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const body = await req.json().catch(() => ({}));
-    const jobId = body.job_id;
 
     if (jobId) {
       const { data: job } = await supabase
@@ -144,9 +227,9 @@ serve(async (req: Request) => {
           p_job_id: jobId,
           p_integration_id: job.oracle_integrations.id,
           p_organization_id: job.organization_id,
-          p_trigger_type: 'manual',
+          p_trigger_type: triggerType,
           p_status: 'failed',
-          p_error_details: { error: error.message },
+          p_error_details: { error: errorMessage.slice(0, 500) },
           p_correlation_id: correlationId,
         });
       }
@@ -155,13 +238,50 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({
       error: 'Internal server error',
       correlation_id: correlationId,
-      message: error.message,
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
+
+async function recordOracleHealth(
+  context: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  },
+  event: {
+    status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    latencyMs: number;
+    correlationId: string;
+    errorCode?: string;
+    errorMessage?: string;
+    details?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await context.supabase
+    .from('integration_health_events')
+    .insert({
+      organization_id: context.organizationId,
+      project_id: context.projectId,
+      provider: 'oracle',
+      integration_id: context.integrationId,
+      check_type: 'sync',
+      status: event.status,
+      latency_ms: event.latencyMs,
+      error_code: event.errorCode ?? null,
+      error_message: event.errorMessage?.slice(0, 500) ?? null,
+      details: event.details ?? {},
+      correlation_id: event.correlationId,
+    });
+
+  if (error) {
+    // Health telemetry must not interrupt the synchronization workflow.
+    console.error('[Oracle Sync] Failed to record integration health:', error);
+  }
+}
 
 async function syncIncrementalTimestamp(
   supabase: any,
@@ -270,6 +390,7 @@ async function executeSync(
     transformDuration,
     loadDuration,
     newWatermark,
+    simulated: true,
   };
 }
 

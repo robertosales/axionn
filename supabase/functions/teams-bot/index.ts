@@ -100,6 +100,7 @@ async function handleMessageActivity(
   activity: TeamsActivity,
   correlationId: string
 ): Promise<void> {
+  const startTime = Date.now();
   const text = activity.text?.trim() || '';
   const userId = activity.from.id;
   const userName = activity.from.name;
@@ -112,12 +113,19 @@ async function handleMessageActivity(
   const teamName = activity.channelData?.team?.name;
 
   // Find integration by tenant/conversation
-  const { data: integration } = await supabase
+  const { data: integration, error: integrationError } = await supabase
     .from('teams_integrations')
     .select('*, teams_channel_mappings(*)')
-    .eq('tenant_id', tenantId)
+    .eq('azure_tenant_id', tenantId)
     .eq('is_active', true)
-    .single();
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (integrationError) {
+    console.error('[Teams Bot] Failed to resolve integration:', integrationError);
+    throw integrationError;
+  }
 
   if (!integration) {
     console.log('[Teams Bot] No integration found for tenant:', tenantId);
@@ -125,31 +133,101 @@ async function handleMessageActivity(
   }
 
   const organizationId = integration.organization_id;
+  const healthContext = {
+    supabase,
+    organizationId,
+    projectId: integration.project_id ?? null,
+    integrationId: integration.id,
+  };
 
-  // Log interaction
-  await logInteraction(supabase, {
-    integration_id: integration.id,
-    organization_id: organizationId,
-    teams_user_id: userId,
-    teams_user_name: userName,
-    teams_user_aad_object_id: userAadId,
-    team_id: teamId,
-    team_name: teamName,
-    channel_id: channelId,
-    channel_name: channelName,
-    conversation_id: conversationId,
-    interaction_type: 'message',
-    command_name: extractCommand(text),
-    command_args: extractArgs(text),
-    correlation_id: correlationId,
-  });
+  try {
+    // Log interaction
+    await logInteraction(supabase, {
+      integration_id: integration.id,
+      organization_id: organizationId,
+      teams_user_id: userId,
+      teams_user_name: userName,
+      teams_user_aad_object_id: userAadId,
+      team_id: teamId,
+      team_name: teamName,
+      channel_id: channelId,
+      channel_name: channelName,
+      conversation_id: conversationId,
+      interaction_type: 'message',
+      command_name: extractCommand(text),
+      command_args: extractArgs(text),
+      correlation_id: correlationId,
+    });
 
-  // Handle commands
-  if (text.startsWith('/axionn') || text.startsWith('@Axionn')) {
-    await handleCommand(supabase, integration, activity, text, correlationId);
-  } else if (text.startsWith('/')) {
-    // Custom commands
-    await handleCustomCommand(supabase, integration, activity, text, correlationId);
+    // Handle commands
+    if (text.startsWith('/axionn') || text.startsWith('@Axionn')) {
+      await handleCommand(supabase, integration, activity, text, correlationId);
+    } else if (text.startsWith('/')) {
+      // Custom commands
+      await handleCustomCommand(supabase, integration, activity, text, correlationId);
+    }
+
+    await supabase
+      .from('teams_integrations')
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq('id', integration.id);
+
+    await recordTeamsHealth(healthContext, {
+      status: 'healthy',
+      latencyMs: Date.now() - startTime,
+      correlationId,
+      details: {
+        activity_type: activity.type,
+        command: extractCommand(text),
+      },
+    });
+  } catch (error) {
+    await recordTeamsHealth(healthContext, {
+      status: 'unhealthy',
+      latencyMs: Date.now() - startTime,
+      correlationId,
+      errorCode: 'MESSAGE_PROCESSING_FAILED',
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+}
+
+async function recordTeamsHealth(
+  context: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  },
+  event: {
+    status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    latencyMs: number;
+    correlationId: string;
+    errorCode?: string;
+    errorMessage?: string;
+    details?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await context.supabase
+    .from('integration_health_events')
+    .insert({
+      organization_id: context.organizationId,
+      project_id: context.projectId,
+      provider: 'teams',
+      integration_id: context.integrationId,
+      check_type: 'webhook',
+      status: event.status,
+      latency_ms: event.latencyMs,
+      error_code: event.errorCode ?? null,
+      error_message: event.errorMessage ?? null,
+      details: event.details ?? {},
+      correlation_id: event.correlationId,
+    });
+
+  if (error) {
+    // Health telemetry must never interrupt Teams activity processing.
+    console.error('[Teams Bot] Failed to record integration health:', error);
   }
 }
 

@@ -482,7 +482,11 @@ function AppRoutes() {
           />
           <Route
             path="/admin/gitlab-integrations"
-            element={<ProtectedRoute><LegacyOperationalRoute organizationPath="/organization/admin" platformPath={undefined}><AdminGuard><AdminGitlabIntegrationsPage /></AdminGuard></LegacyOperationalRoute></ProtectedRoute>}
+            element={
+              <OrganizationConsoleRoute>
+                <AdminGuard><AdminGitlabIntegrationsPage /></AdminGuard>
+              </OrganizationConsoleRoute>
+            }
           />
 
           <Route

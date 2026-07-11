@@ -12,6 +12,7 @@
 //   POST /actions/summarize-project
 //   POST /actions/query-metrics
 
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const VERSION = "0.1.0";
@@ -26,8 +27,8 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 }
 
-function errorResponse(code: string, message: string, status: number): Response {
-  return json({ error: { code, message } }, status);
+function errorResponse(code: string, message: string, status: number, details?: Record<string, unknown>): Response {
+  return json({ error: { code, message, ...(details ? { details } : {}) } }, status);
 }
 
 function normalizePath(url: URL): string {
@@ -80,6 +81,65 @@ async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   }
 }
 
+async function recordPluginHealth(
+  context: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string | null;
+  },
+  event: {
+    status: "healthy" | "degraded" | "unhealthy" | "unknown";
+    correlationId: string;
+    latencyMs: number;
+    errorCode?: string;
+    errorMessage?: string;
+    details?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await context.supabase.from("integration_health_events").insert({
+    organization_id: context.organizationId,
+    project_id: context.projectId,
+    provider: "copilot-plugin",
+    integration_id: context.integrationId,
+    check_type: "plugin",
+    status: event.status,
+    latency_ms: event.latencyMs,
+    error_code: event.errorCode ?? null,
+    error_message: event.errorMessage ?? null,
+    details: event.details ?? {},
+    correlation_id: event.correlationId,
+  });
+
+  if (error) {
+    console.error("[copilot-plugin] failed to record integration health:", error);
+  }
+}
+
+function getSupabaseClient(req: Request): { client: any; organizationId: string; projectId: string | null; integrationId: string | null } | null {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY");
+
+  if (!url || !key) {
+    return null;
+  }
+
+  const client = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const organizationId = req.headers.get("x-organization-id") ?? "";
+  const projectId = req.headers.get("x-project-id") ?? null;
+  const integrationId = req.headers.get("x-integration-id") ?? null;
+
+  return {
+    client,
+    organizationId,
+    projectId,
+    integrationId,
+  };
+}
+
 // ── Handlers ────────────────────────────────────────────────────────────────
 
 function handleHealth(): Response {
@@ -88,6 +148,8 @@ function handleHealth(): Response {
     function: FUNCTION_NAME,
     version: VERSION,
     timestamp: new Date().toISOString(),
+    capabilities: ["chat", "summarize-project", "query-metrics"],
+    authenticated: true,
   });
 }
 
@@ -98,6 +160,10 @@ function handleManifest(): Response {
       "Plugin backend do Axionn para integração com GitHub Copilot. Permite resumir contexto e consultar métricas do projeto.",
     version: VERSION,
     auth: { type: "bearer", header: "Authorization" },
+    security: {
+      required: true,
+      tokenEnv: "COPILOT_PLUGIN_TOKEN",
+    },
     endpoints: [
       { method: "GET", path: "/health", description: "Status da function." },
       { method: "GET", path: "/manifest", description: "Metadados do plugin." },
@@ -124,6 +190,11 @@ async function handleChat(req: Request): Promise<Response> {
       { id: "summarize-project", label: "Resumir projeto", path: "/actions/summarize-project" },
       { id: "query-metrics", label: "Consultar métricas", path: "/actions/query-metrics" },
     ],
+    metadata: {
+      function: FUNCTION_NAME,
+      version: VERSION,
+      timestamp: new Date().toISOString(),
+    },
   });
 }
 
@@ -136,6 +207,11 @@ async function handleSummarizeProject(req: Request): Promise<Response> {
       "Resumo mockado do projeto Axionn. Fase atual: SaaS Phase 2b. Módulos ativos: Sala Ágil, Sustentação, Backoffice. Integração real será conectada em iteração futura.",
     sources: projectId ? [{ type: "project", id: projectId }] : [],
     actions: [],
+    metadata: {
+      function: FUNCTION_NAME,
+      version: VERSION,
+      timestamp: new Date().toISOString(),
+    },
   });
 }
 
@@ -156,12 +232,21 @@ async function handleQueryMetrics(req: Request): Promise<Response> {
         { label: "Sprints ativas", value: 0 },
       ],
     },
+    metadata: {
+      function: FUNCTION_NAME,
+      version: VERSION,
+      timestamp: new Date().toISOString(),
+    },
   });
 }
 
 // ── Router ──────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const startTime = Date.now();
+  const correlationId = crypto.randomUUID();
+  const context = getSupabaseClient(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -171,26 +256,118 @@ Deno.serve(async (req) => {
     const path = normalizePath(url);
     const method = req.method.toUpperCase();
 
-    // Rotas públicas
-    if (method === "GET" && path === "/health") return handleHealth();
+    if (method === "GET" && path === "/health") {
+      if (context) {
+        await recordPluginHealth(
+          {
+            supabase: context.client,
+            organizationId: context.organizationId,
+            projectId: context.projectId,
+            integrationId: context.integrationId,
+          },
+          {
+            status: "healthy",
+            correlationId,
+            latencyMs: Date.now() - startTime,
+            details: { route: "/health" },
+          },
+        );
+      }
+      return handleHealth();
+    }
 
-    // A partir daqui, exige autenticação
     const auth = authenticate(req);
-    if (!auth.ok) return auth.response;
-
-    if (method === "GET" && path === "/manifest") return handleManifest();
-    if (method === "POST" && path === "/chat") return handleChat(req);
-    if (method === "POST" && path === "/actions/summarize-project") {
-      return handleSummarizeProject(req);
+    if (!auth.ok) {
+      if (context) {
+        await recordPluginHealth(
+          {
+            supabase: context.client,
+            organizationId: context.organizationId,
+            projectId: context.projectId,
+            integrationId: context.integrationId,
+          },
+          {
+            status: "degraded",
+            correlationId,
+            latencyMs: Date.now() - startTime,
+            errorCode: "UNAUTHORIZED",
+            errorMessage: "Authorization Bearer token ausente ou inválido.",
+            details: { route: path, method },
+          },
+        );
+      }
+      return auth.response;
     }
-    if (method === "POST" && path === "/actions/query-metrics") {
-      return handleQueryMetrics(req);
+
+    let response: Response;
+    if (method === "GET" && path === "/manifest") {
+      response = handleManifest();
+    } else if (method === "POST" && path === "/chat") {
+      response = await handleChat(req);
+    } else if (method === "POST" && path === "/actions/summarize-project") {
+      response = await handleSummarizeProject(req);
+    } else if (method === "POST" && path === "/actions/query-metrics") {
+      response = await handleQueryMetrics(req);
+    } else {
+      response = errorResponse("not_found", `Rota não encontrada: ${method} ${path}`, 404);
     }
 
-    return errorResponse("not_found", `Rota não encontrada: ${method} ${path}`, 404);
+    if (context && response.status >= 400) {
+      await recordPluginHealth(
+        {
+          supabase: context.client,
+          organizationId: context.organizationId,
+          projectId: context.projectId,
+          integrationId: context.integrationId,
+        },
+        {
+          status: response.status >= 500 ? "unhealthy" : "degraded",
+          correlationId,
+          latencyMs: Date.now() - startTime,
+          errorCode: response.status === 404 ? "NOT_FOUND" : "REQUEST_ERROR",
+          errorMessage: response.statusText || "Erro na requisição do plugin.",
+          details: { route: path, method, status: response.status },
+        },
+      );
+    } else if (context) {
+      await recordPluginHealth(
+        {
+          supabase: context.client,
+          organizationId: context.organizationId,
+          projectId: context.projectId,
+          integrationId: context.integrationId,
+        },
+        {
+          status: "healthy",
+          correlationId,
+          latencyMs: Date.now() - startTime,
+          details: { route: path, method, status: response.status },
+        },
+      );
+    }
+
+    return response;
   } catch (err) {
     console.error("[copilot-plugin] erro inesperado:", err);
     const message = err instanceof Error ? err.message : "Erro interno.";
+    if (context) {
+      await recordPluginHealth(
+        {
+          supabase: context.client,
+          organizationId: context.organizationId,
+          projectId: context.projectId,
+          integrationId: context.integrationId,
+        },
+        {
+          status: "unhealthy",
+          correlationId,
+          latencyMs: Date.now() - startTime,
+          errorCode: "INTERNAL_ERROR",
+          errorMessage: message,
+          details: { route: "*", method: req.method.toUpperCase() },
+        },
+      );
+    }
     return errorResponse("internal_error", message, 500);
   }
 });

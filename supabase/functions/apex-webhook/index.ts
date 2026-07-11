@@ -31,6 +31,12 @@ serve(async (req: Request) => {
 
   const correlationId = crypto.randomUUID();
   const startTime = Date.now();
+  let healthContext: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  } | null = null;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -60,19 +66,54 @@ serve(async (req: Request) => {
       });
     }
 
+    const organizationId = integration.organization_id;
+    healthContext = {
+      supabase,
+      organizationId,
+      projectId: integration.project_id ?? null,
+      integrationId: integration.id,
+    };
+
+    if (!integration.is_active) {
+      await recordApexHealth(healthContext, {
+        status: 'degraded',
+        latencyMs: Date.now() - startTime,
+        correlationId,
+        errorCode: 'INTEGRATION_INACTIVE',
+        errorMessage: 'Apex integration is inactive',
+        details: { application_id: appId },
+      });
+      return new Response(JSON.stringify({ error: 'Integration is inactive' }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    healthContext = {
+      supabase,
+      organizationId,
+      projectId: integration.project_id ?? null,
+      integrationId: integration.id,
+    };
+
     // Verify signature if configured
     if (integration.webhook_secret_encrypted && signature) {
       const isValid = await verifyApexSignature(rawBody, signature, integration.webhook_secret_encrypted);
       if (!isValid) {
         console.warn('[APEX Webhook] Invalid signature');
+        await recordApexHealth(healthContext, {
+          status: 'unhealthy',
+          latencyMs: Date.now() - startTime,
+          correlationId,
+          errorCode: 'INVALID_SIGNATURE',
+          errorMessage: 'Webhook signature validation failed',
+          details: { application_id: appId },
+        });
         return new Response(JSON.stringify({ error: 'Invalid signature' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
     }
-
-    const organizationId = integration.organization_id;
 
     // Log usage event
     await supabase.rpc('log_apex_usage_event', {
@@ -95,6 +136,17 @@ serve(async (req: Request) => {
     // Process event based on type
     await processApexEvent(supabase, integration, payload, correlationId);
 
+    await recordApexHealth(healthContext, {
+      status: 'healthy',
+      latencyMs: Date.now() - startTime,
+      correlationId,
+      details: {
+        event_type: payload.event_type,
+        application_id: payload.application_id,
+        session_id: payload.session_id,
+      },
+    });
+
     return new Response(JSON.stringify({
       success: true,
       correlation_id: correlationId,
@@ -104,16 +156,62 @@ serve(async (req: Request) => {
     });
   } catch (error) {
     console.error('[APEX Webhook] Error:', error);
+    if (healthContext) {
+      await recordApexHealth(healthContext, {
+        status: 'unhealthy',
+        latencyMs: Date.now() - startTime,
+        correlationId,
+        errorCode: 'WEBHOOK_PROCESSING_FAILED',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
     return new Response(JSON.stringify({
       error: 'Internal server error',
       correlation_id: correlationId,
-      message: error.message,
+      message: error instanceof Error ? error.message : String(error),
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
+
+async function recordApexHealth(
+  context: {
+    supabase: any;
+    organizationId: string;
+    projectId: string | null;
+    integrationId: string;
+  },
+  event: {
+    status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    latencyMs: number;
+    correlationId: string;
+    errorCode?: string;
+    errorMessage?: string;
+    details?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await context.supabase
+    .from('integration_health_events')
+    .insert({
+      organization_id: context.organizationId,
+      project_id: context.projectId,
+      provider: 'apex',
+      integration_id: context.integrationId,
+      check_type: 'webhook',
+      status: event.status,
+      latency_ms: event.latencyMs,
+      error_code: event.errorCode ?? null,
+      error_message: event.errorMessage ?? null,
+      details: event.details ?? {},
+      correlation_id: event.correlationId,
+    });
+
+  if (error) {
+    console.error('[APEX Webhook] Failed to record integration health:', error);
+  }
+}
 
 async function verifyApexSignature(payload: string, signature: string, secret: string): Promise<boolean> {
   // APEX typically uses HMAC-SHA256

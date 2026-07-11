@@ -359,15 +359,15 @@ async function executeSync(
   const extractStart = Date.now();
   const batchSize = job.batch_size || 10000;
 
-  // In a real implementation, this would use Oracle's native driver (oracledb)
-  // For this example, we'll simulate with a placeholder
+  // In a real implementation, this would use Oracle's native driver (oracledb).
+  // This runtime remains a placeholder and should not be treated as a successful
+  // data extraction until a real Oracle connector is implemented and validated.
   // Real implementation would:
   // 1. Connect to Oracle using oracledb or node-oracledb
   // 2. Execute query with bind parameters
   // 3. Stream results in batches
   // 4. Transform and load to PostgreSQL/Supabase
 
-  // Simulated extraction
   const extractedRows = await simulateOracleExtract(query, params, batchSize);
   const extractDuration = Date.now() - extractStart;
 
@@ -395,9 +395,10 @@ async function executeSync(
 }
 
 async function simulateOracleExtract(query: string, params: any, batchSize: number): Promise<any[]> {
-  // Placeholder - in reality would connect to Oracle
-  // This simulates returning some rows
-  console.log('[Oracle Sync] Would execute:', query, params);
+  // Placeholder - this runtime does not yet connect to Oracle.
+  // It intentionally returns zero rows so the job is marked as degraded and
+  // the operational health remains truthful.
+  console.log('[Oracle Sync] Placeholder execution; no Oracle connection established:', query, params, { batchSize });
   return [];
 }
 

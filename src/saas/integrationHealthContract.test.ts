@@ -15,6 +15,7 @@ describe("integration health contract", () => {
   const teamsBot = source("supabase/functions/teams-bot/index.ts");
   const redmineSync = source("supabase/functions/redmine-sync/index.ts");
   const oracleSync = source("supabase/functions/oracle-sync/index.ts");
+  const apexWebhook = source("supabase/functions/apex-webhook/index.ts");
 
   it("keeps health writes restricted to the backend", () => {
     expect(migration).toContain(
@@ -56,6 +57,28 @@ describe("integration health contract", () => {
     expect(redmineSync).toContain("check_type: 'sync'");
     expect(redmineSync).toContain("last_sync_status: 'failed'");
     expect(redmineSync).toContain("status: completedWithErrors ? 'degraded' : 'healthy'");
+  });
+
+  it("initializes Redmine sync counters before composing the health summary", () => {
+    const redmineCountersStart = redmineSync.indexOf("let issuesProcessed = 0;");
+    const completedWithErrorsLine = redmineSync.indexOf("const completedWithErrors = issuesFailed > 0;");
+
+    expect(redmineCountersStart).toBeGreaterThan(-1);
+    expect(completedWithErrorsLine).toBeGreaterThan(-1);
+    expect(redmineCountersStart).toBeLessThan(completedWithErrorsLine);
+  });
+
+  it("records APEX webhook health with normalized status", () => {
+    expect(apexWebhook).toContain(".from('integration_health_events')");
+    expect(apexWebhook).toContain("provider: 'apex'");
+    expect(apexWebhook).toContain("check_type: 'webhook'");
+    expect(apexWebhook).toContain("errorCode: 'INVALID_SIGNATURE'");
+    expect(apexWebhook).toContain("errorCode: 'WEBHOOK_PROCESSING_FAILED'");
+  });
+
+  it("treats inactive APEX integrations as degraded and returns 409", () => {
+    expect(apexWebhook).toContain("errorCode: 'INTEGRATION_INACTIVE'");
+    expect(apexWebhook).toContain("status: 409");
   });
 
   it("does not report the Oracle placeholder as healthy", () => {

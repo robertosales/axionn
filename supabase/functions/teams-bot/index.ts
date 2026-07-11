@@ -129,6 +129,26 @@ async function handleMessageActivity(
 
   if (!integration) {
     console.log('[Teams Bot] No integration found for tenant:', tenantId);
+    await recordTeamsHealth(
+      {
+        supabase,
+        organizationId: '',
+        projectId: null,
+        integrationId: '',
+      },
+      {
+        status: 'degraded',
+        latencyMs: Date.now() - startTime,
+        correlationId,
+        errorCode: 'INTEGRATION_NOT_CONFIGURED',
+        errorMessage: 'Teams integration is not configured for this tenant',
+        details: {
+          activity_type: activity.type,
+          tenant_id: tenantId,
+          command: extractCommand(text),
+        },
+      },
+    );
     return;
   }
 

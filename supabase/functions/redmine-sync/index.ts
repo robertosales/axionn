@@ -107,6 +107,12 @@ serve(async (req: Request) => {
     const payload = await req.json();
     const eventType = payload.event_type || 'unknown';
 
+    let issuesProcessed = 0;
+    let issuesCreated = 0;
+    let issuesUpdated = 0;
+    let issuesSkipped = 0;
+    let issuesFailed = 0;
+
     // Log sync event start
     await supabase.rpc('log_redmine_sync_event', {
       p_integration_id: integrationId,
@@ -116,6 +122,24 @@ serve(async (req: Request) => {
       p_status: 'started',
       p_correlation_id: correlationId,
     });
+
+    // Handle different webhook events
+    if (eventType === 'issue_updated' || eventType === 'issue_created') {
+      const issue = payload.issue as RedmineIssue;
+      const result = await processIssue(supabase, integration, issue, correlationId);
+      issuesProcessed++;
+      if (result.action === 'created') issuesCreated++;
+      else if (result.action === 'updated') issuesUpdated++;
+      else issuesSkipped++;
+    } else if (eventType === 'issues_bulk') {
+      // Bulk sync from schedule
+      const result = await bulkSyncIssues(supabase, integration, correlationId);
+      issuesProcessed = result.processed;
+      issuesCreated = result.created;
+      issuesUpdated = result.updated;
+      issuesSkipped = result.skipped;
+      issuesFailed = result.failed;
+    }
 
     const completedWithErrors = issuesFailed > 0;
     await supabase
@@ -147,30 +171,6 @@ serve(async (req: Request) => {
         failed: issuesFailed,
       },
     });
-
-    let issuesProcessed = 0;
-    let issuesCreated = 0;
-    let issuesUpdated = 0;
-    let issuesSkipped = 0;
-    let issuesFailed = 0;
-
-    // Handle different webhook events
-    if (eventType === 'issue_updated' || eventType === 'issue_created') {
-      const issue = payload.issue as RedmineIssue;
-      const result = await processIssue(supabase, integration, issue, correlationId);
-      issuesProcessed++;
-      if (result.action === 'created') issuesCreated++;
-      else if (result.action === 'updated') issuesUpdated++;
-      else issuesSkipped++;
-    } else if (eventType === 'issues_bulk') {
-      // Bulk sync from schedule
-      const result = await bulkSyncIssues(supabase, integration, correlationId);
-      issuesProcessed = result.processed;
-      issuesCreated = result.created;
-      issuesUpdated = result.updated;
-      issuesSkipped = result.skipped;
-      issuesFailed = result.failed;
-    }
 
     // Log completion
     await supabase.rpc('log_redmine_sync_event', {

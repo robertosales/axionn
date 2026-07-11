@@ -482,6 +482,10 @@ function AppRoutes() {
           />
           <Route
             path="/admin/gitlab-integrations"
+            element={<Navigate to="/organization/gitlab-integrations" replace />}
+          />
+          <Route
+            path="/organization/gitlab-integrations"
             element={
               <OrganizationConsoleRoute>
                 <AdminGuard><AdminGitlabIntegrationsPage /></AdminGuard>

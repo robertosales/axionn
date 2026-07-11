@@ -27,7 +27,7 @@ const shortcuts = [
   { to: "/organization/members", label: "Usuarios", icon: Users },
   { to: "/organization/usage", label: "Plano e uso", icon: Gauge },
   { to: "/organization/settings", label: "Configuracoes", icon: Settings2 },
-  { to: "/admin/gitlab-integrations", label: "GitLab", icon: GitBranch },
+  { to: "/organization/gitlab-integrations", label: "GitLab", icon: GitBranch },
 ] as const;
 
 function MetricCard({

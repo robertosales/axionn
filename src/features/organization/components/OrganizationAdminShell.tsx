@@ -33,7 +33,7 @@ const navItems = [
   { to: "/organization/members", label: "Usuários", icon: Users },
   { to: "/organization/usage", label: "Plano e uso", icon: Gauge },
   { to: "/organization/settings", label: "Configurações", icon: Settings2 },
-  { to: "/admin/gitlab-integrations", label: "GitLab", icon: GitBranch },
+  { to: "/organization/gitlab-integrations", label: "GitLab", icon: GitBranch },
 ] as const;
 
 function ShellNav({ onNavigate }: { onNavigate?: () => void }) {

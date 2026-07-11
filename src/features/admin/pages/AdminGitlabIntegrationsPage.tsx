@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -186,82 +187,92 @@ export function AdminGitlabIntegrationsPage() {
   }, [items]);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Integrações GitLab</h1>
-          <p className="text-sm text-muted-foreground">
-            Cadastre e gerencie integrações GitLab vinculadas à organização ativa.
-          </p>
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white px-6 py-5 shadow-sm shadow-slate-900/5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3 text-slate-900">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                <GitBranch className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold">Integrações GitLab</h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  Gerencie integrações GitLab atreladas à sua organização e configure webhooks para sincronização.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button onClick={openCreate} className="gap-2" size="lg">
+              <Plus className="h-4 w-4" /> Nova integração
+            </Button>
+          </div>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Nova integração
-        </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         {[
-          ["Total", kpis.total],
-          ["Ativas", kpis.active],
-          ["Inativas", kpis.inactive],
-        ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-xl border bg-card p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="mt-2 text-2xl font-semibold">{value}</p>
-          </div>
+          { label: "Total", value: kpis.total, tone: "slate" },
+          { label: "Ativas", value: kpis.active, tone: "emerald" },
+          { label: "Inativas", value: kpis.inactive, tone: "rose" },
+        ].map(({ label, value, tone }) => (
+          <Card key={label} className="border-slate-200 bg-white">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-slate-500">{label}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className={`text-3xl font-semibold text-${tone}-600`}>{value}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      <div className="rounded-xl border bg-card">
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
         {loading ? (
-          <div className="space-y-3 p-4">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
+          <div className="space-y-3">
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-14 text-center">
-            <GitBranch className="h-9 w-9 text-muted-foreground/50" />
+          <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+            <GitBranch className="h-12 w-12 text-slate-400" />
             <div>
-              <p className="font-medium">Nenhuma integração GitLab cadastrada</p>
-              <p className="text-sm text-muted-foreground">Crie a primeira integração dentro deste tenant.</p>
+              <h2 className="text-lg font-semibold text-slate-900">Nenhuma integração GitLab cadastrada</h2>
+              <p className="mt-2 text-sm text-slate-500">Cadastre uma integração para começar a receber eventos do GitLab no Axionn.</p>
             </div>
-            <Button variant="outline" onClick={openCreate}>Nova integração</Button>
+            <Button variant="secondary" onClick={openCreate}>Adicionar integração</Button>
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="space-y-3">
             {items.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-4 p-4">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
-                    <GitBranch className="h-5 w-5 text-muted-foreground" />
+              <div key={item.id} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-600 shadow-sm">
+                      <GitBranch className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-slate-900">{item.name}</p>
+                      <p className="mt-1 truncate text-sm text-slate-500">
+                        {item.repositoryPath ?? "—"} • {item.baseUrl}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{item.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {item.repositoryPath ?? "—"} · {item.baseUrl}
-                    </p>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <Badge variant={item.isActive ? "secondary" : "outline"}>
+                      {item.isActive ? "Ativa" : "Inativa"}
+                    </Badge>
+                    <Button variant="ghost" size="icon" aria-label={`Editar ${item.name}`} onClick={() => openEdit(item)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="gap-2 text-slate-600" onClick={() => setDeleteTarget(item)}>
+                      <Trash2 className="h-4 w-4" /> Excluir
+                    </Button>
                   </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge variant={item.isActive ? "secondary" : "outline"}>
-                    {item.isActive ? "Ativa" : "Inativa"}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Editar ${item.name}`}
-                    onClick={() => openEdit(item)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-2 text-muted-foreground"
-                    onClick={() => setDeleteTarget(item)}
-                  >
-                    <Trash2 className="h-4 w-4" /> Excluir
-                  </Button>
                 </div>
               </div>
             ))}
@@ -269,8 +280,11 @@ export function AdminGitlabIntegrationsPage() {
         )}
       </div>
 
-      <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-        Tokens e segredos são armazenados de forma cifrada. Configure o webhook no GitLab apontando para a URL informada.
+      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+        <p className="font-medium text-slate-900">Nota</p>
+        <p className="mt-1">
+          Tokens e segredos são armazenados de forma cifrada. Configure o webhook no GitLab apontando para a URL informada abaixo.
+        </p>
       </div>
 
       <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
@@ -284,8 +298,8 @@ export function AdminGitlabIntegrationsPage() {
 
           <div className="grid gap-4 py-2 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="gl-name">Nome *</Label>
-              <Input id="gl-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="GitLab principal" />
+              <Label htmlFor="gl-name">Nome da integração *</Label>
+              <Input id="gl-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: GitLab principal" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="gl-base">URL base *</Label>
@@ -301,33 +315,38 @@ export function AdminGitlabIntegrationsPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="gl-repo">Nome do repositório</Label>
-              <Input id="gl-repo" value={form.repositoryName} onChange={(e) => setForm({ ...form, repositoryName: e.target.value })} placeholder="projeto" />
+              <Input id="gl-repo" value={form.repositoryName} onChange={(e) => setForm({ ...form, repositoryName: e.target.value })} placeholder="nome-do-repositorio" />
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="gl-token">Token de acesso</Label>
               <Input id="gl-token" type="password" value={form.accessToken} onChange={(e) => setForm({ ...form, accessToken: e.target.value })} placeholder="glpat-..." />
+              <p className="text-xs text-slate-500">
+                Use um token GitLab com escopo de leitura de repositório e webhooks.
+              </p>
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="gl-webhook">Webhook URL</Label>
               <Input id="gl-webhook" value={form.webhookUrl} onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })} placeholder="https://..." />
-              <p className="text-xs text-muted-foreground">
-                Opcional. Configure no GitLab para enviar eventos ao Axionn.
+              <p className="text-xs text-slate-500">
+                Opcional. Informe o endpoint público para que o GitLab envie eventos ao Axionn.
               </p>
             </div>
-            <div className="sm:col-span-2 flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-              <div>
-                <p className="text-sm font-medium">Ativa</p>
-                <p className="text-xs text-muted-foreground">Habilita o fluxo de sincronização para esta integração.</p>
+            <div className="sm:col-span-2 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Ativa</p>
+                  <p className="text-xs text-slate-500">Habilita o fluxo de sincronização para esta integração.</p>
+                </div>
+                <Switch checked={form.isActive} onCheckedChange={(value) => setForm({ ...form, isActive: value })} />
               </div>
-              <Switch checked={form.isActive} onCheckedChange={(value) => setForm({ ...form, isActive: value })} />
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">
             <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
             <Button onClick={() => void submit()} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salvar
+              Salvar integração
             </Button>
           </DialogFooter>
         </DialogContent>

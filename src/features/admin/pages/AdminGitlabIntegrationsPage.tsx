@@ -4,11 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Loader2, Plus, Edit3, Trash2, GitBranch } from "lucide-react";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { PageHeader } from "../components/PageHeader";
 import {
   listGitlabIntegrations,
   createGitlabIntegration,
@@ -173,70 +175,68 @@ export function AdminGitlabIntegrationsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <GitBranch className="h-4 w-4 text-primary" />
-          <div>
-            <h2 className="text-sm font-semibold">Integrações GitLab</h2>
-            <p className="text-xs text-muted-foreground">Cadastre e gerencie integrações GitLab por organização.</p>
-          </div>
-        </div>
-        <Button size="sm" onClick={openCreate} className="gap-1.5">
-          <Plus className="h-3.5 w-3.5" /> Nova integração
-        </Button>
-      </div>
+      <PageHeader
+        icon={GitBranch}
+        iconColor="text-sky-400"
+        description="Cadastre e gerencie integrações GitLab por organização"
+        actions={[{ label: "Nova integração", icon: Plus, onClick: openCreate }]}
+      />
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
+        <Card className="rounded-xl p-10">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </Card>
       ) : emptyState ? (
-        <div className="rounded-lg border border-dashed py-16 text-center">
-          <GitBranch className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+        <Card className="rounded-xl border-dashed border-2 border-muted-foreground/20 p-12 text-center">
+          <GitBranch className="h-10 w-10 text-muted-foreground/60 mx-auto mb-4" />
           <p className="text-sm text-muted-foreground">Nenhuma integração GitLab cadastrada.</p>
-        </div>
+        </Card>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Repositório</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <div className="font-medium">{item.name}</div>
-                    <div className="text-xs text-muted-foreground">{item.baseUrl}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{item.repositoryPath ?? "—"}</div>
-                    <div className="text-xs text-muted-foreground">{item.repositoryName ?? "—"}</div>
-                  </TableCell>
-                  <TableCell>
-                    {item.isActive ? (
-                      <Badge className="bg-emerald-100 text-emerald-700">Ativa</Badge>
-                    ) : (
-                      <Badge variant="outline">Inativa</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                      <Edit3 className="mr-1 h-3.5 w-3.5" /> Editar
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => askDelete(item)}>
-                      <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
-                    </Button>
-                  </TableCell>
+        <Card className="rounded-xl border">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Repositório</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="font-medium">{item.name}</div>
+                      <div className="text-xs text-muted-foreground">{item.baseUrl}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{item.repositoryPath ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">{item.repositoryName ?? "—"}</div>
+                    </TableCell>
+                    <TableCell>
+                      {item.isActive ? (
+                        <Badge className="bg-emerald-100 text-emerald-700">Ativa</Badge>
+                      ) : (
+                        <Badge variant="outline">Inativa</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                        <Edit3 className="mr-1 h-3.5 w-3.5" /> Editar
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => askDelete(item)}>
+                        <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -273,13 +273,16 @@ export function AdminGitlabIntegrationsPage() {
             <div className="grid gap-2">
               <Label>Webhook URL</Label>
               <Input value={form.webhookUrl} onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })} placeholder="https://..." />
+              <p className="text-xs text-muted-foreground">Opcional agora. Use quando estiver configurando o webhook no GitLab para enviar eventos ao Axionn.</p>
             </div>
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <div>
-                <div className="text-sm font-medium">Ativa</div>
-                <div className="text-xs text-muted-foreground">Habilita o fluxo de sincronização para esta integração.</div>
+            <div className="rounded-xl border border-muted-foreground/10 bg-muted/5 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-sm font-semibold">Ativa</div>
+                  <p className="text-xs text-muted-foreground">Habilita o fluxo de sincronização para esta integração.</p>
+                </div>
+                <Switch checked={form.isActive} onCheckedChange={(value) => setForm({ ...form, isActive: value })} />
               </div>
-              <Switch checked={form.isActive} onCheckedChange={(value) => setForm({ ...form, isActive: value })} />
             </div>
           </div>
           <DialogFooter>

@@ -61,9 +61,32 @@ serve(async (req: Request) => {
     const activity: TeamsActivity = await req.json();
     console.log('[Teams Bot] Activity received:', activity.type, correlationId);
 
+    // Guard against malformed payloads: Teams activities must include type/from/conversation
+    if (!activity || typeof activity.type !== 'string') {
+      return new Response(JSON.stringify({
+        error: 'Malformed activity payload',
+        error_code: 'INVALID_ACTIVITY',
+        correlation_id: correlationId,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Handle different activity types
     switch (activity.type) {
       case 'message':
+        if (!activity.from || !activity.conversation) {
+          console.warn('[Teams Bot] Message activity missing from/conversation', correlationId);
+          return new Response(JSON.stringify({
+            success: false,
+            error_code: 'INVALID_MESSAGE_ACTIVITY',
+            correlation_id: correlationId,
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
         await handleMessageActivity(supabase, activity, correlationId);
         break;
       case 'invoke':

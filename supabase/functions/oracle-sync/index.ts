@@ -55,7 +55,15 @@ serve(async (req: Request) => {
       .single();
 
     if (jobError || !job) {
-      throw new Error('Job not found');
+      console.warn('[Oracle Sync] Job not found:', job_id);
+      return new Response(JSON.stringify({
+        error: 'Job not found',
+        error_code: 'JOB_NOT_FOUND',
+        correlation_id: correlationId,
+      }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const integration = job.oracle_integrations;

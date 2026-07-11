@@ -69,7 +69,15 @@ serve(async (req: Request) => {
       .single();
 
     if (integrationError || !integration) {
-      throw new Error('Integration not found');
+      console.warn('[Redmine Sync] Integration not found:', integrationId);
+      return new Response(JSON.stringify({
+        error: 'Integration not found',
+        error_code: 'INTEGRATION_NOT_FOUND',
+        correlation_id: correlationId,
+      }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const organizationId = integration.organization_id;

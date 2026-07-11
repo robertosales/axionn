@@ -82,6 +82,11 @@ const AdminContratosPage = lazy(() =>
     default: module.AdminContratosPage,
   })),
 );
+const AdminGitlabIntegrationsPage = lazy(() =>
+  import("./features/admin/pages/AdminGitlabIntegrationsPage").then((module) => ({
+    default: module.AdminGitlabIntegrationsPage,
+  })),
+);
 const AdminTimesPage = lazy(() =>
   import("./features/admin/pages/AdminTimesPage").then((module) => ({
     default: module.AdminTimesPage,
@@ -474,6 +479,10 @@ function AppRoutes() {
           <Route
             path="/platform/ai-providers"
             element={<ProtectedRoute><PlatformAdminGuard><PlatformAIProvidersPage /></PlatformAdminGuard></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/gitlab-integrations"
+            element={<ProtectedRoute><LegacyOperationalRoute organizationPath="/organization/admin" platformPath="/platform"><AdminGuard><AdminGitlabIntegrationsPage /></AdminGuard></LegacyOperationalRoute></ProtectedRoute>}
           />
 
           <Route

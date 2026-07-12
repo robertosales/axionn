@@ -27,6 +27,15 @@ import {
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, Trash2, GitBranch } from "lucide-react";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { GitlabEventsPanel } from "@/components/gitlab/GitlabEventsPanel";
 import {
   listGitlabIntegrations,
   createGitlabIntegration,
@@ -70,6 +79,8 @@ export function AdminGitlabIntegrationsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GitlabIntegration | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [tab, setTab] = useState<"config" | "events">("config");
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null);
 
   const load = async () => {
     if (!currentOrganizationId) {
@@ -91,6 +102,14 @@ export function AdminGitlabIntegrationsPage() {
   useEffect(() => {
     load();
   }, [currentOrganizationId]);
+
+  useEffect(() => {
+    if (items.length && !selectedIntegrationId) {
+      setSelectedIntegrationId(items[0].id);
+    } else if (selectedIntegrationId && !items.find((i) => i.id === selectedIntegrationId)) {
+      setSelectedIntegrationId(items[0]?.id ?? null);
+    }
+  }, [items, selectedIntegrationId]);
 
   const openCreate = () => {
     setForm(EMPTY);

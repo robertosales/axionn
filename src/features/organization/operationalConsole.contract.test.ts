@@ -176,6 +176,7 @@ describe("platform AI security contract", () => {
     expect(config).toContain("[functions.apf-generate]");
     expect(config).toContain("[functions.platform-ai-provider-test]");
     expect(config).toContain("[functions.process-ai-briefing]");
-    expect(config.match(/verify_jwt = true/g)).toHaveLength(3);
+    expect(config).toContain("[functions.gitlab-webhook-register]");
+    expect(config.match(/verify_jwt = true/g)).toHaveLength(4);
   });
 });

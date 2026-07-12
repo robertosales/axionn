@@ -25,7 +25,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, Pencil, Trash2, GitBranch } from "lucide-react";
+import { Copy, Loader2, Plus, Pencil, RefreshCw, Trash2, GitBranch } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -54,7 +55,6 @@ interface FormState {
   repositoryName: string;
   apiUrl: string;
   accessToken: string;
-  webhookUrl: string;
   webhookSecret: string;
   isActive: boolean;
 }
@@ -66,7 +66,6 @@ const EMPTY: FormState = {
   repositoryName: "",
   apiUrl: "https://gitlab.com/api/v4",
   accessToken: "",
-  webhookUrl: "",
   webhookSecret: "",
   isActive: true,
 };
@@ -77,6 +76,7 @@ export function AdminGitlabIntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [registering, setRegistering] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GitlabIntegration | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [tab, setTab] = useState<"config" | "events">("config");
@@ -125,7 +125,6 @@ export function AdminGitlabIntegrationsPage() {
       repositoryName: item.repositoryName ?? "",
       apiUrl: item.apiUrl ?? "",
       accessToken: item.accessToken ?? "",
-      webhookUrl: item.webhookUrl ?? "",
       webhookSecret: item.webhookSecret ?? "",
       isActive: item.isActive,
     });
@@ -145,7 +144,6 @@ export function AdminGitlabIntegrationsPage() {
       repositoryName: form.repositoryName,
       apiUrl: form.apiUrl,
       accessToken: form.accessToken,
-      webhookUrl: form.webhookUrl,
       webhookSecret: form.webhookSecret,
       isActive: form.isActive,
     });
@@ -165,7 +163,6 @@ export function AdminGitlabIntegrationsPage() {
         repositoryName: form.repositoryName,
         apiUrl: form.apiUrl,
         accessToken: form.accessToken,
-        webhookUrl: form.webhookUrl,
         webhookSecret: form.webhookSecret,
         isActive: form.isActive,
       });
@@ -174,8 +171,18 @@ export function AdminGitlabIntegrationsPage() {
         await updateGitlabIntegration(form.id, payload);
         toast.success("Integração GitLab atualizada");
       } else {
-        await createGitlabIntegration(payload);
+        const created = await createGitlabIntegration(payload);
         toast.success("Integração GitLab criada");
+        if (form.accessToken) {
+          const { error } = await supabase.functions.invoke("gitlab-webhook-register", {
+            body: { integrationId: created.id },
+          });
+          if (error) {
+            toast.warning("Integração salva. Registre o webhook manualmente no GitLab se necessário.");
+          } else {
+            toast.success("Webhook registrado automaticamente no GitLab ✓");
+          }
+        }
       }
 
       setOpen(false);
@@ -292,6 +299,18 @@ export function AdminGitlabIntegrationsPage() {
                     <Badge variant={item.isActive ? "secondary" : "outline"}>
                       {item.isActive ? "Ativa" : "Inativa"}
                     </Badge>
+                    {item.syncStatus === "completed" && item.webhookId ? (
+                      <Badge className="bg-emerald-100 text-emerald-700 border-0 gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+                        Webhook ativo
+                      </Badge>
+                    ) : item.syncStatus === "error" ? (
+                      <Badge className="bg-rose-100 text-rose-700 border-0" title={item.syncError ?? ""}>
+                        Webhook com erro
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-slate-100 text-slate-500 border-0">Webhook pendente</Badge>
+                    )}
                     <Button variant="ghost" size="icon" aria-label={`Editar ${item.name}`} onClick={() => openEdit(item)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -375,10 +394,19 @@ export function AdminGitlabIntegrationsPage() {
               </p>
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="gl-webhook">Webhook URL</Label>
-              <Input id="gl-webhook" value={form.webhookUrl} onChange={(e) => setForm({ ...form, webhookUrl: e.target.value })} placeholder="https://..." />
+              <Label>Webhook URL (gerado automaticamente)</Label>
+              <div className="flex gap-2">
+                <Input readOnly value="https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler" className="text-xs font-mono bg-slate-50 text-slate-600 cursor-default" />
+                <Button type="button" variant="outline" size="icon" aria-label="Copiar URL do webhook" onClick={async () => {
+                  await navigator.clipboard.writeText("https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler");
+                  toast.success("URL copiada");
+                }}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
               <p className="text-xs text-slate-500">
-                Opcional. Informe o endpoint público para que o GitLab envie eventos ao Axionn.
+                Esta URL é registrada automaticamente no GitLab ao salvar com token de acesso preenchido.
+                Headers de identificação (x-integration-id, x-git-provider) são injetados automaticamente.
               </p>
             </div>
             <div className="sm:col-span-2 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -393,6 +421,24 @@ export function AdminGitlabIntegrationsPage() {
           </div>
 
           <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            {form.id && form.accessToken && (
+              <Button type="button" variant="outline" className="gap-2 mr-auto" disabled={saving || registering} onClick={async () => {
+                setRegistering(true);
+                try {
+                  const { error } = await supabase.functions.invoke("gitlab-webhook-register", { body: { integrationId: form.id } });
+                  if (error) throw error;
+                  toast.success("Webhook re-registrado no GitLab com sucesso ✓");
+                  await load();
+                } catch {
+                  toast.error("Falha ao re-registrar webhook. Verifique o token de acesso.");
+                } finally {
+                  setRegistering(false);
+                }
+              }}>
+                {registering ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Re-registrar webhook
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
             <Button onClick={() => void submit()} disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

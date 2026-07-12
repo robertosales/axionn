@@ -11,6 +11,7 @@ export interface GitlabIntegration {
   accessToken: string | null;
   webhookUrl: string | null;
   webhookSecret: string | null;
+  webhookId: string | null;
   events: string[];
   isActive: boolean;
   syncStatus: string | null;
@@ -54,6 +55,7 @@ export function normalizeGitlabIntegration(row: Record<string, unknown>): Gitlab
     accessToken: row.access_token_encrypted ? String(row.access_token_encrypted) : null,
     webhookUrl: row.webhook_url ? String(row.webhook_url) : null,
     webhookSecret: row.webhook_secret_encrypted ? String(row.webhook_secret_encrypted) : null,
+    webhookId: row.webhook_id ? String(row.webhook_id) : null,
     events: Array.isArray(row.events) ? (row.events as string[]) : ["push", "merge_request"],
     isActive: Boolean(row.is_active),
     syncStatus: row.sync_status ? String(row.sync_status) : null,

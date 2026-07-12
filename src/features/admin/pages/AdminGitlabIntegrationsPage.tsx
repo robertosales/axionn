@@ -231,6 +231,13 @@ export function AdminGitlabIntegrationsPage() {
         </div>
       </div>
 
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "config" | "events")}>
+        <TabsList>
+          <TabsTrigger value="config">Configuração</TabsTrigger>
+          <TabsTrigger value="events" disabled={items.length === 0}>Eventos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="config" className="space-y-6">
       <div className="grid gap-3 md:grid-cols-3">
         {[
           { label: "Total", value: kpis.total, tone: "slate" },
@@ -305,6 +312,30 @@ export function AdminGitlabIntegrationsPage() {
           Tokens e segredos são armazenados de forma cifrada. Configure o webhook no GitLab apontando para a URL informada abaixo.
         </p>
       </div>
+        </TabsContent>
+
+        <TabsContent value="events" className="space-y-4">
+          {items.length > 1 && (
+            <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4">
+              <span className="text-sm font-medium text-slate-700">Integração:</span>
+              <Select
+                value={selectedIntegrationId ?? ""}
+                onValueChange={(v) => setSelectedIntegrationId(v)}
+              >
+                <SelectTrigger className="w-[320px]">
+                  <SelectValue placeholder="Selecione uma integração" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <GitlabEventsPanel integrationId={selectedIntegrationId} />
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
         <DialogContent className="sm:max-w-lg">

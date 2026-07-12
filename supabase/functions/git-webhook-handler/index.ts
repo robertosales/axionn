@@ -123,6 +123,22 @@ serve(async (req: Request) => {
       }
     }
 
+    // Capturar headers relevantes para auditoria
+    const relevantHeaders: Record<string, string> = {};
+    [
+      'x-integration-id', 'x-git-provider', 'x-gitlab-event', 'x-github-event',
+      'x-gitlab-token', 'x-hub-signature-256', 'content-type', 'user-agent',
+      'x-forwarded-for', 'x-real-ip',
+    ].forEach(k => {
+      const v = req.headers.get(k);
+      if (v) relevantHeaders[k] = v;
+    });
+
+    // Gerar provider_event_id determinístico para garantia de idempotência.
+    const providerEventId =
+      extractProviderEventId(provider, eventType, payload) ??
+      `${integrationId}-${eventType}-${correlationId}`;
+
     // Store raw event for audit and async processing
     const { data: gitEvent, error: eventError } = await supabase
       .from('git_events')
@@ -130,8 +146,11 @@ serve(async (req: Request) => {
         integration_id: integrationId,
         organization_id: organizationId,
         event_type: eventType,
+        event_action: extractEventAction(eventType, payload),
+        provider_event_id: providerEventId,
         provider,
         payload: payload,
+        headers: relevantHeaders,
         correlation_id: correlationId,
         processed: false,
       })
@@ -139,18 +158,42 @@ serve(async (req: Request) => {
       .single();
 
     if (eventError) {
-      console.error('[Git Webhook] Failed to store event:', eventError);
+      // 23505 = unique violation → evento duplicado, retornar 200 idempotente
+      if (eventError.code === '23505') {
+        console.log('[Git Webhook] Duplicate event (idempotent), skipping:', providerEventId);
+        await recordIntegrationHealth(healthContext, {
+          status: 'healthy',
+          correlationId,
+          latencyMs: Date.now() - startTime,
+          details: { event_type: eventType, provider, duplicate: true },
+        });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            duplicate: true,
+            provider_event_id: providerEventId,
+            correlation_id: correlationId,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      console.error('[Git Webhook] Failed to store event:', eventError.code, eventError.message);
       await recordIntegrationHealth(healthContext, {
         status: 'unhealthy',
         errorCode: 'EVENT_PERSISTENCE_FAILED',
-        errorMessage: eventError.message,
+        errorMessage: `${eventError.code}: ${eventError.message}`,
         correlationId,
         latencyMs: Date.now() - startTime,
       });
-      return new Response(JSON.stringify({ error: 'Failed to store event' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to store event',
+          code: eventError.code,
+          correlation_id: correlationId,
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
 
     // Process event asynchronously based on type
@@ -673,4 +716,71 @@ async function logIntegrationEvent(
     p_correlation_id: correlationId,
     p_metadata_json: metadata,
   });
+}
+
+/**
+ * Extrai um ID único do evento no provedor para idempotência.
+ */
+function extractProviderEventId(
+  provider: string,
+  eventType: string,
+  payload: Record<string, unknown>,
+): string | null {
+  try {
+    if (provider === 'gitlab') {
+      const project = payload.project as Record<string, unknown> | undefined;
+      const projectId = (project?.id as number | string | undefined) ?? payload.project_id;
+      const attrs = payload.object_attributes as Record<string, unknown> | undefined;
+      const key = eventType.toLowerCase().replace(' hook', '').replace(' events', '').trim();
+      switch (key) {
+        case 'push':
+        case 'tag_push': {
+          const commits = (payload.commits as unknown[]) ?? [];
+          const first = commits[0] as Record<string, unknown> | undefined;
+          const sha = (first?.id as string | undefined) ?? (payload.checkout_sha as string | undefined) ?? (payload.after as string | undefined);
+          return projectId && sha ? `gitlab-push-${projectId}-${sha}` : null;
+        }
+        case 'merge_request':
+          return attrs?.id ? `gitlab-mr-${attrs.id}` : null;
+        case 'pipeline':
+          return attrs?.id ? `gitlab-pipeline-${attrs.id}` : null;
+        case 'job':
+          return payload.build_id ? `gitlab-job-${payload.build_id}` : null;
+        case 'deployment':
+          return payload.deployment_id ? `gitlab-deploy-${payload.deployment_id}` : null;
+        case 'note':
+          return attrs?.id ? `gitlab-note-${attrs.id}` : null;
+        default:
+          return null;
+      }
+    }
+    if (provider === 'github') {
+      const delivery = payload['x-github-delivery'] as string | undefined;
+      return delivery ? `github-${eventType}-${delivery}` : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extrai ação específica de um evento (opened, merged, success, etc.).
+ */
+function extractEventAction(
+  _eventType: string,
+  payload: Record<string, unknown>,
+): string | null {
+  try {
+    const attrs = payload.object_attributes as Record<string, unknown> | undefined;
+    return (
+      (attrs?.action as string | undefined) ??
+      (attrs?.state as string | undefined) ??
+      (attrs?.status as string | undefined) ??
+      (payload.action as string | undefined) ??
+      null
+    );
+  } catch {
+    return null;
+  }
 }

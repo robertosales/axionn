@@ -27,6 +27,15 @@ import {
 import { toast } from "sonner";
 import { Loader2, Plus, Pencil, Trash2, GitBranch } from "lucide-react";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { GitlabEventsPanel } from "@/components/gitlab/GitlabEventsPanel";
 import {
   listGitlabIntegrations,
   createGitlabIntegration,
@@ -70,6 +79,8 @@ export function AdminGitlabIntegrationsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GitlabIntegration | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [tab, setTab] = useState<"config" | "events">("config");
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null);
 
   const load = async () => {
     if (!currentOrganizationId) {
@@ -91,6 +102,14 @@ export function AdminGitlabIntegrationsPage() {
   useEffect(() => {
     load();
   }, [currentOrganizationId]);
+
+  useEffect(() => {
+    if (items.length && !selectedIntegrationId) {
+      setSelectedIntegrationId(items[0].id);
+    } else if (selectedIntegrationId && !items.find((i) => i.id === selectedIntegrationId)) {
+      setSelectedIntegrationId(items[0]?.id ?? null);
+    }
+  }, [items, selectedIntegrationId]);
 
   const openCreate = () => {
     setForm(EMPTY);
@@ -212,6 +231,13 @@ export function AdminGitlabIntegrationsPage() {
         </div>
       </div>
 
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "config" | "events")}>
+        <TabsList>
+          <TabsTrigger value="config">Configuração</TabsTrigger>
+          <TabsTrigger value="events" disabled={items.length === 0}>Eventos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="config" className="space-y-6">
       <div className="grid gap-3 md:grid-cols-3">
         {[
           { label: "Total", value: kpis.total, tone: "slate" },
@@ -286,6 +312,30 @@ export function AdminGitlabIntegrationsPage() {
           Tokens e segredos são armazenados de forma cifrada. Configure o webhook no GitLab apontando para a URL informada abaixo.
         </p>
       </div>
+        </TabsContent>
+
+        <TabsContent value="events" className="space-y-4">
+          {items.length > 1 && (
+            <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4">
+              <span className="text-sm font-medium text-slate-700">Integração:</span>
+              <Select
+                value={selectedIntegrationId ?? ""}
+                onValueChange={(v) => setSelectedIntegrationId(v)}
+              >
+                <SelectTrigger className="w-[320px]">
+                  <SelectValue placeholder="Selecione uma integração" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <GitlabEventsPanel integrationId={selectedIntegrationId} />
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
         <DialogContent className="sm:max-w-lg">

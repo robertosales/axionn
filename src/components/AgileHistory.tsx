@@ -877,7 +877,7 @@ export function AgileHistory() {
                     (detailHuStatus === "divergence" ? hu.hadDivergence : !hu.hadDivergence);
                   return matchesSearch && matchesStatus;
                 });
-                const pageSize = 6;
+                const pageSize = 5;
                 const totalPages = Math.max(1, Math.ceil(filteredHus.length / pageSize));
                 const currentPage = Math.min(detailHuPage, totalPages);
                 const visibleHus = filteredHus.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -965,7 +965,7 @@ export function AgileHistory() {
                           <span>Votos</span>
                         </div>
 
-                        <div className="divide-y divide-border/70">
+                        <div className="max-h-[28vh] min-h-0 divide-y divide-border/70 overflow-y-scroll overscroll-contain [scrollbar-gutter:stable]">
                           {visibleHus.map((hu) => (
                             <div
                               key={hu.huId}

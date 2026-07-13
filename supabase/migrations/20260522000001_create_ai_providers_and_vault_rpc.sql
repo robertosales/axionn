@@ -11,7 +11,12 @@ CREATE TABLE IF NOT EXISTS public.ai_providers (
   id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   name            text        NOT NULL,
   provider_type   text        NOT NULL
-    CHECK (provider_type IN ('lovable', 'openai', 'gemini', 'anthropic', 'perplexity')),
+    CHECK (provider_type IN (
+      'lovable', 'openai', 'gemini', 'anthropic',
+      'perplexity', 'nemotron', 'sakana', 'groq',
+      'manus', 'deepseek', 'mistral', 'ollama', 'xai',
+      'azure_openai', 'cohere', 'custom', 'openrouter'
+    )),
   model           text,
   vault_secret_id uuid,        -- UUID do secret em vault.secrets
   is_active       boolean     NOT NULL DEFAULT true,

@@ -75,9 +75,16 @@ const BOFinanceiro = lazy(() => import("./backoffice/pages/BOFinanceiro"));
 const BOSuporte = lazy(() => import("./backoffice/pages/BOSuporte"));
 const BOAnalitico = lazy(() => import("./backoffice/pages/BOAnalitico"));
 const BOConfiguracoes = lazy(() => import("./backoffice/pages/BOConfiguracoes"));
+const BOBriefingIA = lazy(() => import("./backoffice/pages/BOBriefingIA"));
+const BORetentionConfig = lazy(() => import("./backoffice/pages/BORetentionConfig"));
 const AdminContratosPage = lazy(() =>
   import("./features/admin/pages/AdminContratosPage").then((module) => ({
     default: module.AdminContratosPage,
+  })),
+);
+const AdminGitlabIntegrationsPage = lazy(() =>
+  import("./features/admin/pages/AdminGitlabIntegrationsPage").then((module) => ({
+    default: module.AdminGitlabIntegrationsPage,
   })),
 );
 const AdminTimesPage = lazy(() =>
@@ -444,6 +451,8 @@ function AppRoutes() {
           <Route path="/backoffice/equipe" element={<BackofficeRoute requiredRoles={["admin"]}><BOEquipe /></BackofficeRoute>} />
           <Route path="/backoffice/suporte" element={<BackofficeRoute requiredRoles={["admin", "suporte", "comercial"]}><BOSuporte /></BackofficeRoute>} />
           <Route path="/backoffice/analitico" element={<BackofficeRoute requiredRoles={["admin", "financeiro", "comercial"]}><BOAnalitico /></BackofficeRoute>} />
+          <Route path="/backoffice/briefing-ia" element={<BackofficeRoute requiredRoles={["admin", "dev"]}><BOBriefingIA /></BackofficeRoute>} />
+          <Route path="/backoffice/retencao-briefing" element={<BackofficeRoute requiredRoles={["admin"]}><BORetentionConfig /></BackofficeRoute>} />
           <Route path="/backoffice/configuracoes" element={<BackofficeRoute requiredRoles={["admin"]}><BOConfiguracoes /></BackofficeRoute>} />
 
           <Route path="/organization/admin" element={<OrganizationConsoleRoute><OrganizationAdminOverviewPage /></OrganizationConsoleRoute>} />
@@ -470,6 +479,18 @@ function AppRoutes() {
           <Route
             path="/platform/ai-providers"
             element={<ProtectedRoute><PlatformAdminGuard><PlatformAIProvidersPage /></PlatformAdminGuard></ProtectedRoute>}
+          />
+          <Route
+            path="/admin/gitlab-integrations"
+            element={<Navigate to="/organization/gitlab-integrations" replace />}
+          />
+          <Route
+            path="/organization/gitlab-integrations"
+            element={
+              <OrganizationConsoleRoute>
+                <AdminGuard><AdminGitlabIntegrationsPage /></AdminGuard>
+              </OrganizationConsoleRoute>
+            }
           />
 
           <Route

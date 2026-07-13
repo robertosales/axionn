@@ -28,6 +28,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTeamAssignees } from "@/hooks/useTeamAssignees";
 import { useSalaAgilPermission } from "@/hooks/useSalaAgilPermissions";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
+import { HUGitActivitySection } from "@/components/gitlab/HUGitActivitySection";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 interface Props {
   huId: string | null;
@@ -54,6 +56,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     developers,
   } = useSprint() as any;
   const { currentTeamId } = useAuth();
+  const { currentOrganizationId: organizationId } = useOrganization();
   const canReportImpediment = useSalaAgilPermission("report_impediment");
 
   const [title, setTitle]             = useState("");
@@ -507,6 +510,11 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
                 </div>
               </div>
             </div>
+            {huId && organizationId && (
+              <div className="px-5 py-4 border-t border-slate-100">
+                <HUGitActivitySection huId={huId} organizationId={organizationId} />
+              </div>
+            )}
           </div>
 
           {/* FOOTER */}

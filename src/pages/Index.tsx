@@ -14,6 +14,7 @@ import { DeveloperManager } from "@/components/DeveloperManager";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DashboardHome } from "@/components/DashboardHome";
 import { DemandasPorTimeSection } from "@/features/contracts/DemandasPorTimeSection";
+import { ImpedimentList } from "@/components/ImpedimentManager";
 
 // ─── Componentes pesados — lazy loaded  ───────────────────────────────────────
 const AgileHistory = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
@@ -29,9 +30,6 @@ const ActivityManager = lazy(() =>
 );
 const MetricsDashboard = lazy(() =>
   import("@/components/MetricsDashboard").then((m) => ({ default: m.MetricsDashboard })),
-);
-const ImpedimentList = lazy(() =>
-  import("@/components/ImpedimentManager").then((m) => ({ default: m.ImpedimentList })),
 );
 const EpicManager = lazy(() => import("@/components/EpicManager").then((m) => ({ default: m.EpicManager })));
 const WorkflowManager = lazy(() =>
@@ -55,6 +53,7 @@ const ApfGeneratorPage = lazy(() =>
 const SalaAgilReportsPage = lazy(() =>
   import("@/features/reports/pages/SalaAgilReportsPage").then((m) => ({ default: m.SalaAgilReportsPage })),
 );
+const BriefingPage = lazy(() => import("@/features/briefing/pages/BriefingPage"));
 
 // ─── Skeleton de seção ────────────────────────────────────────────────────────
 function SectionSkeleton() {
@@ -125,6 +124,7 @@ const VALID_SECTIONS = [
   "board",
   "planning-poker",
   "retrospectiva",
+  "briefing",
   "releases",
   "relatorios",
   "notificacoes",
@@ -327,6 +327,14 @@ const Index = () => {
               <LazySection name="Retrospectiva">
                 <RetroManager />
               </LazySection>
+            )}
+
+            {active === "briefing" && (
+              <SectionGuard permission="view_dashboard">
+                <LazySection name="Axionn Briefing">
+                  <BriefingPage />
+                </LazySection>
+              </SectionGuard>
             )}
 
             {active === "gerador-apf" && (

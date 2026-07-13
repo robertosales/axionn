@@ -1,0 +1,483 @@
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { Copy, Loader2, Plus, Pencil, RefreshCw, Trash2, GitBranch } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useOrganization } from "@/contexts/OrganizationContext";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { GitlabEventsPanel } from "@/components/gitlab/GitlabEventsPanel";
+import {
+  listGitlabIntegrations,
+  createGitlabIntegration,
+  updateGitlabIntegration,
+  deleteGitlabIntegration,
+  buildGitlabIntegrationPayload,
+  validateGitlabIntegrationPayload,
+  type GitlabIntegration,
+} from "../services/gitlabIntegrations.service";
+
+interface FormState {
+  id?: string;
+  name: string;
+  baseUrl: string;
+  repositoryPath: string;
+  repositoryName: string;
+  apiUrl: string;
+  accessToken: string;
+  webhookSecret: string;
+  isActive: boolean;
+}
+
+const EMPTY: FormState = {
+  name: "",
+  baseUrl: "https://gitlab.com",
+  repositoryPath: "",
+  repositoryName: "",
+  apiUrl: "https://gitlab.com/api/v4",
+  accessToken: "",
+  webhookSecret: "",
+  isActive: true,
+};
+
+export function AdminGitlabIntegrationsPage() {
+  const { currentOrganizationId } = useOrganization();
+  const [items, setItems] = useState<GitlabIntegration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<GitlabIntegration | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY);
+  const [tab, setTab] = useState<"config" | "events">("config");
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null);
+
+  const load = async () => {
+    if (!currentOrganizationId) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await listGitlabIntegrations(currentOrganizationId);
+      setItems(data);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Erro ao carregar integrações GitLab");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [currentOrganizationId]);
+
+  useEffect(() => {
+    if (items.length && !selectedIntegrationId) {
+      setSelectedIntegrationId(items[0].id);
+    } else if (selectedIntegrationId && !items.find((i) => i.id === selectedIntegrationId)) {
+      setSelectedIntegrationId(items[0]?.id ?? null);
+    }
+  }, [items, selectedIntegrationId]);
+
+  const openCreate = () => {
+    setForm(EMPTY);
+    setOpen(true);
+  };
+
+  const openEdit = (item: GitlabIntegration) => {
+    setForm({
+      id: item.id,
+      name: item.name,
+      baseUrl: item.baseUrl,
+      repositoryPath: item.repositoryPath ?? "",
+      repositoryName: item.repositoryName ?? "",
+      apiUrl: item.apiUrl ?? "",
+      accessToken: item.accessToken ?? "",
+      webhookSecret: item.webhookSecret ?? "",
+      isActive: item.isActive,
+    });
+    setOpen(true);
+  };
+
+  const submit = async () => {
+    if (!currentOrganizationId) {
+      toast.error("Selecione uma organização primeiro.");
+      return;
+    }
+
+    const validation = validateGitlabIntegrationPayload({
+      name: form.name,
+      baseUrl: form.baseUrl,
+      repositoryPath: form.repositoryPath,
+      repositoryName: form.repositoryName,
+      apiUrl: form.apiUrl,
+      accessToken: form.accessToken,
+      webhookSecret: form.webhookSecret,
+      isActive: form.isActive,
+    });
+
+    if (!validation.ok) {
+      toast.error("Preencha pelo menos nome, URL base e caminho do repositório.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = buildGitlabIntegrationPayload({
+        organizationId: currentOrganizationId,
+        name: form.name,
+        baseUrl: form.baseUrl,
+        repositoryPath: form.repositoryPath,
+        repositoryName: form.repositoryName,
+        apiUrl: form.apiUrl,
+        accessToken: form.accessToken,
+        webhookSecret: form.webhookSecret,
+        isActive: form.isActive,
+      });
+
+      if (form.id) {
+        await updateGitlabIntegration(form.id, payload);
+        toast.success("Integração GitLab atualizada");
+      } else {
+        const created = await createGitlabIntegration(payload);
+        toast.success("Integração GitLab criada");
+        if (form.accessToken) {
+          const { error } = await supabase.functions.invoke("gitlab-webhook-register", {
+            body: { integrationId: created.id },
+          });
+          if (error) {
+            toast.error(
+              `Integração salva, mas o auto-registro do webhook falhou: ${error.message ?? "erro desconhecido"}. Use "Re-registrar webhook" após revisar o token.`,
+            );
+          } else {
+            toast.success("Webhook registrado automaticamente no GitLab ✓");
+          }
+        }
+      }
+
+      setOpen(false);
+      await load();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Erro ao salvar integração GitLab");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteGitlabIntegration(deleteTarget.id);
+      toast.success("Integração removida");
+      setDeleteTarget(null);
+      await load();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Erro ao remover integração");
+    }
+  };
+
+  const kpis = useMemo(() => {
+    const total = items.length;
+    const active = items.filter((i) => i.isActive).length;
+    return { total, active, inactive: total - active };
+  }, [items]);
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white px-6 py-5 shadow-sm shadow-slate-900/5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3 text-slate-900">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                <GitBranch className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold">Integrações GitLab</h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  Gerencie integrações GitLab atreladas à sua organização e configure webhooks para sincronização.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button onClick={openCreate} className="gap-2" size="lg">
+              <Plus className="h-4 w-4" /> Nova integração
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "config" | "events")}>
+        <TabsList>
+          <TabsTrigger value="config">Configuração</TabsTrigger>
+          <TabsTrigger value="events" disabled={items.length === 0}>Eventos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="config" className="space-y-6">
+      <div className="grid gap-3 md:grid-cols-3">
+        {[
+          { label: "Total", value: kpis.total, tone: "slate" },
+          { label: "Ativas", value: kpis.active, tone: "emerald" },
+          { label: "Inativas", value: kpis.inactive, tone: "rose" },
+        ].map(({ label, value, tone }) => (
+          <Card key={label} className="border-slate-200 bg-white">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-slate-500">{label}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className={`text-3xl font-semibold text-${tone}-600`}>{value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
+            <Skeleton className="h-20 w-full rounded-2xl" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+            <GitBranch className="h-12 w-12 text-slate-400" />
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Nenhuma integração GitLab cadastrada</h2>
+              <p className="mt-2 text-sm text-slate-500">Cadastre uma integração para começar a receber eventos do GitLab no Axionn.</p>
+            </div>
+            <Button variant="secondary" onClick={openCreate}>Adicionar integração</Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item) => (
+              <div key={item.id} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-600 shadow-sm">
+                      <GitBranch className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-slate-900">{item.name}</p>
+                      <p className="mt-1 truncate text-sm text-slate-500">
+                        {item.repositoryPath ?? "—"} • {item.baseUrl}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <Badge variant={item.isActive ? "secondary" : "outline"}>
+                      {item.isActive ? "Ativa" : "Inativa"}
+                    </Badge>
+                    {item.syncStatus === "completed" && item.webhookId ? (
+                      <Badge className="bg-emerald-100 text-emerald-700 border-0 gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
+                        Webhook ativo
+                      </Badge>
+                    ) : item.syncStatus === "error" ? (
+                      <Badge
+                        className="bg-rose-100 text-rose-700 border-0 gap-1"
+                        title={item.syncError ?? "Erro no registro do webhook"}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500 inline-block" />
+                        Webhook com erro
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-slate-100 text-slate-500 border-0 gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 inline-block" />
+                        Webhook pendente
+                      </Badge>
+                    )}
+                    <Button variant="ghost" size="icon" aria-label={`Editar ${item.name}`} onClick={() => openEdit(item)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="gap-2 text-slate-600" onClick={() => setDeleteTarget(item)}>
+                      <Trash2 className="h-4 w-4" /> Excluir
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+        <p className="font-medium text-slate-900">Nota</p>
+        <p className="mt-1">
+          Tokens e segredos são armazenados de forma cifrada. Configure o webhook no GitLab apontando para a URL informada abaixo.
+        </p>
+      </div>
+        </TabsContent>
+
+        <TabsContent value="events" className="space-y-4">
+          {items.length > 1 && (
+            <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4">
+              <span className="text-sm font-medium text-slate-700">Integração:</span>
+              <Select
+                value={selectedIntegrationId ?? ""}
+                onValueChange={(v) => setSelectedIntegrationId(v)}
+              >
+                <SelectTrigger className="w-[320px]">
+                  <SelectValue placeholder="Selecione uma integração" />
+                </SelectTrigger>
+                <SelectContent>
+                  {items.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <GitlabEventsPanel integrationId={selectedIntegrationId} />
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{form.id ? "Editar integração GitLab" : "Nova integração GitLab"}</DialogTitle>
+            <DialogDescription>
+              Cadastre o repositório GitLab e os dados mínimos para o fluxo de sincronização.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-2 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="gl-name">Nome da integração *</Label>
+              <Input id="gl-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: GitLab principal" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gl-base">URL base *</Label>
+              <Input id="gl-base" value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://gitlab.com" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gl-api">API URL</Label>
+              <Input id="gl-api" value={form.apiUrl} onChange={(e) => setForm({ ...form, apiUrl: e.target.value })} placeholder="https://gitlab.com/api/v4" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gl-path">Repositório (caminho) *</Label>
+              <Input id="gl-path" value={form.repositoryPath} onChange={(e) => setForm({ ...form, repositoryPath: e.target.value })} placeholder="grupo/projeto" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gl-repo">Nome do repositório</Label>
+              <Input id="gl-repo" value={form.repositoryName} onChange={(e) => setForm({ ...form, repositoryName: e.target.value })} placeholder="nome-do-repositorio" />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="gl-token">Token de acesso</Label>
+              <Input id="gl-token" type="password" value={form.accessToken} onChange={(e) => setForm({ ...form, accessToken: e.target.value })} placeholder="glpat-..." />
+              <p className="text-xs text-slate-500">
+                Use um token GitLab com escopo de leitura de repositório e webhooks.
+              </p>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Webhook URL (gerado automaticamente)</Label>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  aria-readonly
+                  tabIndex={-1}
+                  value="https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler"
+                  className="text-xs font-mono bg-slate-50 text-slate-600 cursor-default"
+                />
+                <Button type="button" variant="outline" size="icon" aria-label="Copiar URL do webhook" onClick={async () => {
+                  await navigator.clipboard.writeText("https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler");
+                  toast.success("URL copiada");
+                }}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500">
+                URL fixa do Axionn. Ao salvar com um token de acesso válido, o webhook é registrado
+                automaticamente no GitLab — não é necessário copiar ou configurar manualmente.
+                O botão "Re-registrar webhook" abaixo serve apenas como fallback caso o auto-registro falhe.
+              </p>
+            </div>
+            <div className="sm:col-span-2 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Ativa</p>
+                  <p className="text-xs text-slate-500">Habilita o fluxo de sincronização para esta integração.</p>
+                </div>
+                <Switch checked={form.isActive} onCheckedChange={(value) => setForm({ ...form, isActive: value })} />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            {form.id && form.accessToken && (
+              <Button type="button" variant="outline" className="gap-2 mr-auto" disabled={saving || registering} onClick={async () => {
+                setRegistering(true);
+                try {
+                  const { error } = await supabase.functions.invoke("gitlab-webhook-register", { body: { integrationId: form.id } });
+                  if (error) throw error;
+                  toast.success("Webhook re-registrado no GitLab com sucesso ✓");
+                  await load();
+                } catch {
+                  toast.error("Falha ao re-registrar webhook. Verifique o token de acesso.");
+                } finally {
+                  setRegistering(false);
+                }
+              }}>
+                {registering ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Re-registrar webhook
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={() => void submit()} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar integração
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover integração?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.name} será removida do cadastro da organização ativa.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmDelete()}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

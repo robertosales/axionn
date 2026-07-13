@@ -10,6 +10,8 @@ import {
   Receipt,
   Settings2,
   ShieldCheck,
+  Sparkles,
+  Timer,
   Users,
 } from "lucide-react";
 import { useBackofficeAuth } from "@/backoffice/hooks/useBackofficeAuth";
@@ -27,6 +29,8 @@ const navItems = [
   { to: "/backoffice/equipe", label: "Equipe", icon: Users },
   { to: "/backoffice/suporte", label: "Suporte", icon: Headphones },
   { to: "/backoffice/analitico", label: "Analitico", icon: BarChart3 },
+  { to: "/backoffice/briefing-ia", label: "Briefing IA", icon: Sparkles },
+  { to: "/backoffice/retencao-briefing", label: "Retencao Briefing", icon: Timer },
   { to: "/backoffice/configuracoes", label: "Configuracoes", icon: Settings2 },
 ] as const;
 

@@ -39,6 +39,14 @@ describe("operational console routing contract", () => {
     expect(app).toContain("is_organization_operational_console_enabled");
     expect(app).toContain("is_legacy_operational_admin_fallback_enabled");
   });
+
+  it("does not redirect the gitlab integrations route to platform plans", () => {
+    expect(app).toContain('path="/admin/gitlab-integrations"');
+    expect(app).toContain('to="/organization/gitlab-integrations"');
+    expect(app).toMatch(
+      /path="\/admin\/gitlab-integrations"\s+element=\{<Navigate to="\/organization\/gitlab-integrations" replace \/>\}/,
+    );
+  });
 });
 
 describe("backoffice routing contract", () => {
@@ -58,9 +66,18 @@ describe("backoffice routing contract", () => {
     "/backoffice/equipe",
     "/backoffice/suporte",
     "/backoffice/analitico",
+    "/backoffice/briefing-ia",
+    "/backoffice/retencao-briefing",
     "/backoffice/configuracoes",
   ])("keeps the backoffice route %s registered", (route) => {
     expect(app).toContain(`path=\"${route}\"`);
+  });
+
+  it("keeps briefing backoffice entries visible in the sidebar", () => {
+    const layout = source("src/backoffice/components/BackofficeLayout.tsx");
+
+    expect(layout).toContain('to: "/backoffice/briefing-ia"');
+    expect(layout).toContain('to: "/backoffice/retencao-briefing"');
   });
 
   it("keeps backoffice outside the organization operational guard", () => {
@@ -88,9 +105,21 @@ describe("platform plan management contract", () => {
     "supabase/migrations/20260708133000_platform_plan_management.sql",
   );
   const planService = source("src/features/platform/services/plans.service.ts");
+  const platformShell = source("src/features/platform/components/PlatformShell.tsx");
+  const aiProvidersPage = source(
+    "src/features/platform/pages/PlatformAIProvidersPage.tsx",
+  );
 
   it("routes the platform home to plan management", () => {
     expect(app).toContain('Navigate to="/platform/plans"');
+  });
+
+  it("keeps platform administration on the standard sidebar shell", () => {
+    expect(platformShell).toContain("<aside");
+    expect(platformShell).toContain('to: "/platform/plans"');
+    expect(platformShell).toContain('to: "/platform/subscriptions"');
+    expect(platformShell).toContain('to: "/platform/ai-providers"');
+    expect(aiProvidersPage).toContain("<PlatformShell>");
   });
 
   it("exposes only platform-admin RPCs for plan and subscription mutations", () => {
@@ -146,9 +175,11 @@ describe("platform AI security contract", () => {
     expect(edgeTest).not.toContain("rawError");
   });
 
-  it("keeps JWT verification enabled for both functions", () => {
+  it("keeps JWT verification enabled for all AI functions", () => {
     expect(config).toContain("[functions.apf-generate]");
     expect(config).toContain("[functions.platform-ai-provider-test]");
-    expect(config.match(/verify_jwt = true/g)).toHaveLength(2);
+    expect(config).toContain("[functions.process-ai-briefing]");
+    expect(config).toContain("[functions.gitlab-webhook-register]");
+    expect(config.match(/verify_jwt = true/g)).toHaveLength(4);
   });
 });

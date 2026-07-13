@@ -58,8 +58,10 @@ interface PlanningSessionHistory {
   finishedAt: string | null;
   createdBy: string;
   participantCount: number;
+  participantIds: string[];
   husVoted: number;
   totalHours: number;
+  divergenceCount: number;
 }
 
 interface HuVoteSummary {
@@ -309,40 +311,38 @@ function PlanningSessionCard({
   onView: () => void;
 }) {
   return (
-    <Card className="border-success/20 hover:border-success/40 transition-colors">
-      <CardContent className="p-0">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>{formatDate(session.createdAt)}</span>
-            </div>
-            <Separator orientation="vertical" className="h-4" />
-            <span className="text-sm font-semibold">{session.sprintName}</span>
-            <StatusBadge status={session.status} />
-          </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground mr-2">
-            <span className="flex items-center gap-1">
-              <Hash className="h-3 w-3" />
-              {session.husVoted} HUs
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              {session.participantCount}
-            </span>
-            <span className="flex items-center gap-1 font-semibold text-success">
-              <Clock className="h-3 w-3" />
-              {session.totalHours}h
-            </span>
-            <span>{DECK_MODE_LABELS[session.deckMode] ?? session.deckMode}</span>
-            <span>{profiles[session.createdBy] ?? "—"}</span>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={onView}>
-              <Eye className="h-3 w-3" /> Ver
-            </Button>
-          </div>
+    <div className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/25 lg:grid-cols-[minmax(15rem,1fr)_8rem_6rem_6rem_7rem_8rem_4rem] lg:items-center lg:gap-4">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold">{session.sprintName}</span>
+          <StatusBadge status={session.status} />
         </div>
-      </CardContent>
-    </Card>
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="font-mono">#{session.id.slice(0, 8)}</span>
+          <span aria-hidden="true">·</span>
+          <Calendar className="h-3 w-3" />
+          {formatDate(session.createdAt)}
+          <span aria-hidden="true">·</span>
+          {profiles[session.createdBy] ?? "Responsável não identificado"}
+        </p>
+      </div>
+      <span className="text-xs text-muted-foreground">{DECK_MODE_LABELS[session.deckMode] ?? session.deckMode}</span>
+      <span className="text-sm font-semibold tabular-nums">{session.participantCount}</span>
+      <span className="text-sm font-semibold tabular-nums">{session.husVoted}</span>
+      <span className="text-sm font-semibold tabular-nums text-success">{session.totalHours}h</span>
+      {session.divergenceCount > 0 ? (
+        <Badge variant="outline" className="w-fit gap-1 border-warning/30 bg-warning/10 text-warning">
+          <AlertTriangle className="h-3 w-3" /> {session.divergenceCount}
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="w-fit gap-1 border-success/30 bg-success/10 text-success">
+          <ThumbsUp className="h-3 w-3" /> Consenso
+        </Badge>
+      )}
+      <Button variant="ghost" size="sm" className="h-8 w-fit gap-1 px-2 text-xs" onClick={onView}>
+        <Eye className="h-3.5 w-3.5" /> Ver
+      </Button>
+    </div>
   );
 }
 
@@ -359,6 +359,10 @@ export function AgileHistory() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sprintFilter, setSprintFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [planningStatusFilter, setPlanningStatusFilter] = useState("all");
+  const [planningPeriodFilter, setPlanningPeriodFilter] = useState("all");
+  const [planningResponsibleFilter, setPlanningResponsibleFilter] = useState("all");
+  const [planningPage, setPlanningPage] = useState(1);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [sprintScores, setSprintScores] = useState<Record<string, SprintScoreBreakdown>>({});
 
@@ -411,7 +415,9 @@ export function AgileHistory() {
 
       const votesArr = (votes ?? []) as Array<{ hu_id: string; user_id: string; vote_value: string }>;
       const uniqueHus = new Set(votesArr.map((v) => v.hu_id));
+      const participantIds = [...new Set(votesArr.map((v) => v.user_id))];
       let sessionTotalHours = 0;
+      let divergenceCount = 0;
 
       if (votesArr.length) {
         const sprintId = s.sprint_id;
@@ -428,6 +434,7 @@ export function AgileHistory() {
         Object.values(byHu).forEach((huVotes) => {
           const validVotes = huVotes.filter((v) => v !== "—");
           if (!validVotes.length) return;
+          if (calcDivergenceLevel(validVotes, s.deck_mode) !== "none") divergenceCount++;
           const modeVote = getModeVote(validVotes);
           const size: SizeKey | null =
             s.deck_mode === "hours"
@@ -454,9 +461,11 @@ export function AgileHistory() {
         createdAt: s.created_at,
         finishedAt: s.finished_at,
         createdBy: s.created_by,
-        participantCount: new Set(votesArr.map((v) => v.user_id)).size,
+        participantCount: participantIds.length,
+        participantIds,
         husVoted: uniqueHus.size,
         totalHours: sessionTotalHours,
+        divergenceCount,
       });
     }
 
@@ -516,12 +525,23 @@ export function AgileHistory() {
   const filteredPlanning = useMemo(() => {
     let list = planningSessions;
     if (sprintFilter !== "all") list = list.filter((s) => s.sprintId === sprintFilter);
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      list = list.filter((s) => s.sprintName.toLowerCase().includes(q));
+    if (planningStatusFilter !== "all") list = list.filter((s) => s.status === planningStatusFilter);
+    if (planningResponsibleFilter !== "all") list = list.filter((s) => s.createdBy === planningResponsibleFilter);
+    if (planningPeriodFilter !== "all") {
+      const days = Number(planningPeriodFilter);
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+      list = list.filter((s) => new Date(s.createdAt).getTime() >= cutoff);
+    }
+    if (searchTerm.trim()) {
+      const q = searchTerm.trim().toLocaleLowerCase("pt-BR");
+      list = list.filter((s) =>
+        s.sprintName.toLocaleLowerCase("pt-BR").includes(q) ||
+        s.id.toLocaleLowerCase("pt-BR").includes(q) ||
+        (profiles[s.createdBy] ?? "").toLocaleLowerCase("pt-BR").includes(q),
+      );
     }
     return list;
-  }, [planningSessions, sprintFilter, searchTerm]);
+  }, [planningSessions, sprintFilter, planningStatusFilter, planningResponsibleFilter, planningPeriodFilter, searchTerm, profiles]);
 
   const filteredRetro = useMemo(() => {
     let list = retroSessions;
@@ -543,11 +563,13 @@ export function AgileHistory() {
     const totalHus = base.reduce((sum, s) => sum + s.husVoted, 0);
     const totalParticipants = base.reduce((sum, s) => sum + s.participantCount, 0);
     const totalHours = base.reduce((sum, s) => sum + s.totalHours, 0);
+    const totalDivergences = base.reduce((sum, s) => sum + s.divergenceCount, 0);
     return {
       sessions: base.length,
-      avgHusPerSession: base.length > 0 ? (totalHus / base.length).toFixed(1) : "0",
-      avgParticipants: base.length > 0 ? (totalParticipants / base.length).toFixed(1) : "0",
+      totalHus,
+      totalParticipants,
       totalHours,
+      totalDivergences,
     };
   }, [filteredPlanning]);
 
@@ -563,16 +585,38 @@ export function AgileHistory() {
     };
   }, [filteredRetro]);
 
-  // ─── Última sessão concluída por sprint ───────────────────────────────────
+  const planningPageSize = 10;
+  const planningTotalPages = Math.max(1, Math.ceil(filteredPlanning.length / planningPageSize));
+  const currentPlanningPage = Math.min(planningPage, planningTotalPages);
+  const visiblePlanningSessions = filteredPlanning.slice(
+    (currentPlanningPage - 1) * planningPageSize,
+    currentPlanningPage * planningPageSize,
+  );
 
-  const lastSessionPerSprint = useMemo(() => {
-    const seen = new Set<string>();
-    return filteredPlanning.filter((s) => {
-      if (seen.has(s.sprintId)) return false;
-      seen.add(s.sprintId);
-      return true;
+  const responsibleOptions = useMemo(
+    () => [...new Set(planningSessions.map((session) => session.createdBy))]
+      .sort((a, b) => (profiles[a] ?? a).localeCompare(profiles[b] ?? b, "pt-BR")),
+    [planningSessions, profiles],
+  );
+
+  const participationRanking = useMemo(() => {
+    const counts = new Map<string, number>();
+    filteredPlanning.forEach((session) => {
+      session.participantIds.forEach((userId) => counts.set(userId, (counts.get(userId) ?? 0) + 1));
     });
-  }, [filteredPlanning]);
+    return [...counts.entries()]
+      .map(([userId, count]) => ({ userId, count, name: profiles[userId] ?? "Participante não identificado" }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "pt-BR"));
+  }, [filteredPlanning, profiles]);
+
+  const hasPlanningFilters = Boolean(
+    searchTerm || sprintFilter !== "all" || planningStatusFilter !== "all" ||
+    planningPeriodFilter !== "all" || planningResponsibleFilter !== "all",
+  );
+
+  useEffect(() => {
+    setPlanningPage(1);
+  }, [searchTerm, sprintFilter, planningStatusFilter, planningPeriodFilter, planningResponsibleFilter]);
 
   // ─── Score da sprint selecionada ──────────────────────────────────────────
 
@@ -685,10 +729,10 @@ export function AgileHistory() {
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" /> Histórico Ágil
+        <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+          <BarChart3 className="h-5 w-5 text-primary" /> Relatórios operacionais
         </h2>
-        <p className="text-sm text-muted-foreground">Sessões passadas de Planning Poker e Retrospectiva</p>
+        <p className="mt-1 text-sm text-muted-foreground">Sessões, estimativas, participação e resultados da operação ágil.</p>
       </div>
 
       {loadError && (
@@ -696,33 +740,6 @@ export function AgileHistory() {
           {loadError}
         </div>
       )}
-
-      {/* Filtros */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar..."
-            className="pl-8 h-8 text-xs"
-          />
-        </div>
-        <Select value={sprintFilter} onValueChange={setSprintFilter}>
-          <SelectTrigger className="h-8 w-[180px] text-xs">
-            <Filter className="h-3 w-3 mr-1" />
-            <SelectValue placeholder="Sprint" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as Sprints</SelectItem>
-            {sprints.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="grid w-full grid-cols-2 max-w-md">
@@ -735,43 +752,165 @@ export function AgileHistory() {
         </TabsList>
 
         {/* ── Tab Planning ───────────────────────────────────────────── */}
-        <TabsContent value="planning" className="space-y-4 mt-4">
-          {/* Métricas — sempre refletem o filtro ativo */}
-          <div className="grid grid-cols-4 gap-3">
-            <MetricCard label="Sessões Concluídas" value={planningMetrics.sessions} />
-            <MetricCard label="Média HUs/Sessão" value={planningMetrics.avgHusPerSession} />
-            <MetricCard label="Média Participantes" value={planningMetrics.avgParticipants} />
+        <TabsContent value="planning" className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+            <MetricCard label="Sessões" value={planningMetrics.sessions} />
+            <MetricCard label="HUs estimadas" value={planningMetrics.totalHus} />
+            <MetricCard label="Total de horas" value={`${planningMetrics.totalHours}h`} valueClass="text-success" />
             <MetricCard
-              label={sprintFilter === "all" ? "Total de Horas (Todas)" : "Total de Horas (Sprint)"}
-              value={`${planningMetrics.totalHours}h`}
-              valueClass="text-success"
+              label="Divergências"
+              value={planningMetrics.totalDivergences}
+              valueClass={planningMetrics.totalDivergences > 0 ? "text-warning" : "text-success"}
             />
           </div>
+
+          <Card className="shadow-none">
+            <CardContent className="space-y-3 p-3 sm:p-4">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_11rem_10rem_10rem_12rem_auto]">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Buscar por nome, ID ou responsável"
+                    aria-label="Buscar sessões de Planning"
+                    className="h-9 pl-9 text-xs"
+                  />
+                </div>
+                <Select value={sprintFilter} onValueChange={setSprintFilter}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sessão" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as sessões</SelectItem>
+                    {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={planningStatusFilter} onValueChange={setPlanningStatusFilter}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os status</SelectItem>
+                    <SelectItem value="finished">Concluídas</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={planningPeriodFilter} onValueChange={setPlanningPeriodFilter}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Período" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todo o período</SelectItem>
+                    <SelectItem value="7">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30">Últimos 30 dias</SelectItem>
+                    <SelectItem value="90">Últimos 90 dias</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={planningResponsibleFilter} onValueChange={setPlanningResponsibleFilter}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os responsáveis</SelectItem>
+                    {responsibleOptions.map((userId) => (
+                      <SelectItem key={userId} value={userId}>{profiles[userId] ?? "Não identificado"}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!hasPlanningFilters}
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSprintFilter("all");
+                    setPlanningStatusFilter("all");
+                    setPlanningPeriodFilter("all");
+                    setPlanningResponsibleFilter("all");
+                  }}
+                  className="h-9 px-3 text-xs"
+                >
+                  Limpar
+                </Button>
+              </div>
+
+              {hasPlanningFilters && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
+                  <span className="mr-1 text-[11px] font-medium text-muted-foreground">Filtros aplicados:</span>
+                  {searchTerm && <Badge variant="secondary">Busca: {searchTerm}</Badge>}
+                  {sprintFilter !== "all" && <Badge variant="secondary">Sessão: {sprints.find((s) => s.id === sprintFilter)?.name}</Badge>}
+                  {planningStatusFilter !== "all" && <Badge variant="secondary">Status: Concluída</Badge>}
+                  {planningPeriodFilter !== "all" && <Badge variant="secondary">Período: {planningPeriodFilter} dias</Badge>}
+                  {planningResponsibleFilter !== "all" && (
+                    <Badge variant="secondary">Responsável: {profiles[planningResponsibleFilter] ?? "Não identificado"}</Badge>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* ✅ Card de estimativas: só aparece quando uma sprint específica está selecionada */}
           {sprintFilter !== "all" && activeScore && (
             <SprintScoreCard sprintName={activeSprintName} score={activeScore} />
           )}
 
-          {/* ✅ Lista: somente a última sessão concluída por sprint */}
-          <div className="space-y-2">
-            {lastSessionPerSprint.length > 0 ? (
-              lastSessionPerSprint.map((session) => (
-                <PlanningSessionCard
-                  key={session.id}
-                  session={session}
-                  profiles={profiles}
-                  onView={() => openPlanningDetail(session)}
-                />
-              ))
-            ) : (
-              <div className="text-center text-sm text-muted-foreground py-12">Nenhuma sessão concluída encontrada</div>
-            )}
+          <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+            <div className="hidden grid-cols-[minmax(15rem,1fr)_8rem_6rem_6rem_7rem_8rem_4rem] gap-4 border-b border-border/70 bg-muted/35 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground lg:grid">
+              <span>Sessão</span><span>Formato</span><span>Participantes</span><span>HUs</span><span>Horas</span><span>Resultado</span><span>Ação</span>
+            </div>
+            <div className="divide-y divide-border/70">
+              {visiblePlanningSessions.length > 0 ? visiblePlanningSessions.map((session) => (
+                <PlanningSessionCard key={session.id} session={session} profiles={profiles} onView={() => openPlanningDetail(session)} />
+              )) : (
+                <div className="px-4 py-12 text-center">
+                  <p className="text-sm font-medium">Nenhuma sessão encontrada</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Ajuste ou limpe os filtros para visualizar outros registros.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                {visiblePlanningSessions.length} visíveis de {filteredPlanning.length} resultados · Página {currentPlanningPage} de {planningTotalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={currentPlanningPage === 1} onClick={() => setPlanningPage(currentPlanningPage - 1)} className="h-8 gap-1 text-xs">
+                  <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+                </Button>
+                <Button variant="outline" size="sm" disabled={currentPlanningPage === planningTotalPages} onClick={() => setPlanningPage(currentPlanningPage + 1)} className="h-8 gap-1 text-xs">
+                  Próxima <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
           </div>
+
+          <Card className="shadow-none">
+            <CardHeader className="px-4 pb-2 pt-4">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold"><Users className="h-4 w-4 text-muted-foreground" /> Participação</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              {participationRanking.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {participationRanking.map((participant) => (
+                    <Badge key={participant.userId} variant="outline" className="gap-1.5 py-1 text-xs font-normal">
+                      <span className="font-medium">{participant.name}</span>
+                      <span className="text-muted-foreground">{participant.count} {participant.count === 1 ? "sessão" : "sessões"}</span>
+                    </Badge>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-muted-foreground">Nenhuma participação encontrada para os filtros aplicados.</p>}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── Tab Retro ──────────────────────────────────────────────── */}
         <TabsContent value="retro" className="space-y-4 mt-4">
+          <Card className="shadow-none">
+            <CardContent className="flex flex-col gap-2 p-3 sm:flex-row sm:p-4">
+              <div className="relative flex-1 sm:max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Buscar retrospectiva" className="h-9 pl-9 text-xs" />
+              </div>
+              <Select value={sprintFilter} onValueChange={setSprintFilter}>
+                <SelectTrigger className="h-9 text-xs sm:w-52"><SelectValue placeholder="Sprint" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as sprints</SelectItem>
+                  {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
           <div className="grid grid-cols-4 gap-3">
             <MetricCard label="Sessões Concluídas" value={retroMetrics.sessions} />
             <MetricCard label="Média Cards" value={retroMetrics.avgCards} />

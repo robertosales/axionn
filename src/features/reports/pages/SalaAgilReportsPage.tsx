@@ -2,6 +2,9 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { SalaAgilRelatorios } from "@/components/sala-agil/reports/SalaAgilRelatorios";
+import { AgileHistory } from "@/components/AgileHistory";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BarChart3, Library } from "lucide-react";
 import { fetchActiveMemberIds, filterActiveDevelopers } from "@/lib/teamMemberFilter";
 
 /**
@@ -17,6 +20,7 @@ export function SalaAgilReportsPage() {
   const currentTeam = agileTeams.find((t: any) => t.id === currentTeamId);
 
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("operational");
   const [data, setData] = useState({
     sprints: [] as any[],
     hus: [] as any[],
@@ -69,7 +73,7 @@ export function SalaAgilReportsPage() {
     return () => { cancelled = true; };
   }, [currentTeamId, agileTeams, isAdmin]);
 
-  if (loading) {
+  if (loading && view === "catalog") {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-success" />
@@ -78,14 +82,29 @@ export function SalaAgilReportsPage() {
   }
 
   return (
-    <SalaAgilRelatorios
-      sprints={data.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}
-      developers={data.developers.map((d: any) => ({
-        id: d.id, name: d.name, role: d.role || "developer", user_id: d.user_id,
-      })) as any}
-      rawData={data}
-      teamName={currentTeam?.name ?? "Todos os times"}
-      currentUserName={(user as any)?.user_metadata?.name ?? (user as any)?.email ?? "Usuário"}
-    />
+    <Tabs value={view} onValueChange={setView} className="space-y-4">
+      <TabsList className="grid h-9 w-full max-w-md grid-cols-2">
+        <TabsTrigger value="operational" className="gap-1.5 text-xs">
+          <BarChart3 className="h-3.5 w-3.5" /> Operacional
+        </TabsTrigger>
+        <TabsTrigger value="catalog" className="gap-1.5 text-xs">
+          <Library className="h-3.5 w-3.5" /> Catálogo de relatórios
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="operational" className="mt-0">
+        <AgileHistory />
+      </TabsContent>
+      <TabsContent value="catalog" className="mt-0">
+        <SalaAgilRelatorios
+          sprints={data.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}
+          developers={data.developers.map((d: any) => ({
+            id: d.id, name: d.name, role: d.role || "developer", user_id: d.user_id,
+          })) as any}
+          rawData={data}
+          teamName={currentTeam?.name ?? "Todos os times"}
+          currentUserName={(user as any)?.user_metadata?.name ?? (user as any)?.email ?? "Usuário"}
+        />
+      </TabsContent>
+    </Tabs>
   );
 }

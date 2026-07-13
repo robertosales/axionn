@@ -178,7 +178,9 @@ export function AdminGitlabIntegrationsPage() {
             body: { integrationId: created.id },
           });
           if (error) {
-            toast.warning("Integração salva. Registre o webhook manualmente no GitLab se necessário.");
+            toast.error(
+              `Integração salva, mas o auto-registro do webhook falhou: ${error.message ?? "erro desconhecido"}. Use "Re-registrar webhook" após revisar o token.`,
+            );
           } else {
             toast.success("Webhook registrado automaticamente no GitLab ✓");
           }
@@ -305,8 +307,11 @@ export function AdminGitlabIntegrationsPage() {
                         Webhook ativo
                       </Badge>
                     ) : item.syncStatus === "error" ? (
-                      <Badge className="bg-rose-100 text-rose-700 border-0" title={item.syncError ?? ""}>
-                        Webhook com erro
+                      <Badge
+                        className="bg-rose-100 text-rose-700 border-0 max-w-[280px] truncate"
+                        title={item.syncError ?? "Erro no registro do webhook"}
+                      >
+                        Webhook com erro{item.syncError ? `: ${item.syncError}` : ""}
                       </Badge>
                     ) : (
                       <Badge className="bg-slate-100 text-slate-500 border-0">Webhook pendente</Badge>
@@ -396,7 +401,13 @@ export function AdminGitlabIntegrationsPage() {
             <div className="space-y-2 sm:col-span-2">
               <Label>Webhook URL (gerado automaticamente)</Label>
               <div className="flex gap-2">
-                <Input readOnly value="https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler" className="text-xs font-mono bg-slate-50 text-slate-600 cursor-default" />
+                <Input
+                  readOnly
+                  aria-readonly
+                  tabIndex={-1}
+                  value="https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler"
+                  className="text-xs font-mono bg-slate-50 text-slate-600 cursor-default"
+                />
                 <Button type="button" variant="outline" size="icon" aria-label="Copiar URL do webhook" onClick={async () => {
                   await navigator.clipboard.writeText("https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler");
                   toast.success("URL copiada");
@@ -405,8 +416,9 @@ export function AdminGitlabIntegrationsPage() {
                 </Button>
               </div>
               <p className="text-xs text-slate-500">
-                Esta URL é registrada automaticamente no GitLab ao salvar com token de acesso preenchido.
-                Headers de identificação (x-integration-id, x-git-provider) são injetados automaticamente.
+                URL fixa do Axionn. Ao salvar com um token de acesso válido, o webhook é registrado
+                automaticamente no GitLab — não é necessário copiar ou configurar manualmente.
+                O botão "Re-registrar webhook" abaixo serve apenas como fallback caso o auto-registro falhe.
               </p>
             </div>
             <div className="sm:col-span-2 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">

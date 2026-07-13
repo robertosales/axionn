@@ -17,7 +17,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-950">
+    <div className="min-h-screen bg-background text-foreground">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-800 bg-slate-950 text-slate-100 lg:flex">
         <div className="flex h-16 items-center gap-3 border-b border-white/10 px-4">
           <AxionLogo size={28} />
@@ -46,7 +46,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
               to={to}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   isActive
                     ? "bg-violet-400 text-slate-950"
                     : "text-slate-300 hover:bg-slate-800 hover:text-white",
@@ -70,7 +70,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="min-h-screen lg:pl-64">
-        <header className="sticky top-0 z-20 flex min-h-16 items-center gap-4 border-b bg-white/95 px-4 backdrop-blur lg:px-6">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-4 border-b border-border/70 bg-background/90 px-4 backdrop-blur-md lg:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-3 lg:hidden">
             <Button asChild variant="ghost" size="sm" className="gap-2">
               <Link to="/modulos">
@@ -115,7 +115,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
           <UserAccountMenu variant="compact" />
         </header>
 
-        <main className="p-4 lg:p-6">{children}</main>
+        <main className="p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

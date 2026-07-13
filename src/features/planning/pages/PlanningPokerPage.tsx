@@ -42,7 +42,7 @@ export function PlanningPokerPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-lg font-bold flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
             <Spade className="h-5 w-5 text-primary" /> Planning Poker
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">Estime HUs de forma colaborativa e em tempo real.</p>

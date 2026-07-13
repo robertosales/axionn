@@ -219,16 +219,16 @@ export function AdminGitlabIntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white px-6 py-5 shadow-sm shadow-slate-900/5">
+      <div className="rounded-xl border border-border/70 bg-card px-5 py-5 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-2xl">
-            <div className="flex items-center gap-3 text-slate-900">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+            <div className="flex items-center gap-3 text-foreground">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                 <GitBranch className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold">Integrações GitLab</h1>
-                <p className="mt-1 text-sm text-slate-500">
+                <h1 className="text-xl font-semibold tracking-tight">Integrações GitLab</h1>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                   Gerencie integrações GitLab atreladas à sua organização e configure webhooks para sincronização.
                 </p>
               </div>
@@ -267,7 +267,7 @@ export function AdminGitlabIntegrationsPage() {
         ))}
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
+      <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-20 w-full rounded-2xl" />
@@ -278,23 +278,23 @@ export function AdminGitlabIntegrationsPage() {
           <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
             <GitBranch className="h-12 w-12 text-slate-400" />
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Nenhuma integração GitLab cadastrada</h2>
-              <p className="mt-2 text-sm text-slate-500">Cadastre uma integração para começar a receber eventos do GitLab no Axionn.</p>
+              <h2 className="text-lg font-semibold text-foreground">Nenhuma integração GitLab cadastrada</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Cadastre uma integração para começar a receber eventos do GitLab no Axionn.</p>
             </div>
             <Button variant="secondary" onClick={openCreate}>Adicionar integração</Button>
           </div>
         ) : (
           <div className="space-y-3">
             {items.map((item) => (
-              <div key={item.id} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
+              <div key={item.id} className="rounded-xl border border-border/70 bg-muted/30 px-4 py-4 sm:px-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-600 shadow-sm">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-background text-muted-foreground shadow-sm">
                       <GitBranch className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-base font-semibold text-slate-900">{item.name}</p>
-                      <p className="mt-1 truncate text-sm text-slate-500">
+                      <p className="truncate text-base font-semibold text-foreground">{item.name}</p>
+                      <p className="mt-1 truncate text-sm text-muted-foreground">
                         {item.repositoryPath ?? "—"} • {item.baseUrl}
                       </p>
                     </div>
@@ -337,8 +337,8 @@ export function AdminGitlabIntegrationsPage() {
         )}
       </div>
 
-      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
-        <p className="font-medium text-slate-900">Nota</p>
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 px-5 py-4 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">Nota</p>
         <p className="mt-1">
           Tokens e segredos são armazenados de forma cifrada. O webhook é registrado automaticamente no GitLab ao salvar a integração.
         </p>
@@ -347,7 +347,7 @@ export function AdminGitlabIntegrationsPage() {
 
         <TabsContent value="events" className="space-y-4">
           {items.length > 1 && (
-            <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-card p-4">
               <span className="text-sm font-medium text-slate-700">Integração:</span>
               <Select
                 value={selectedIntegrationId ?? ""}

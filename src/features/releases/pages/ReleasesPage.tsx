@@ -250,7 +250,7 @@ export function ReleasesPage() {
     <div className="space-y-6 p-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
             <Tag className="h-5 w-5 text-primary" /> Releases
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">

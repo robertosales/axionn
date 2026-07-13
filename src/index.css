@@ -125,6 +125,11 @@ body {
   margin: 0;
 }
 
+::selection {
+  background: hsl(var(--primary) / 0.18);
+  color: hsl(var(--foreground));
+}
+
 /* ── Scrollbar global (área de conteúdo) ── */
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -177,4 +182,15 @@ a, button, [role="button"] {
   outline:        2px solid hsl(var(--ring));
   outline-offset: 2px;
   border-radius:  calc(var(--radius) - 2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

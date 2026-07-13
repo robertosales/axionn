@@ -47,7 +47,7 @@ function ShellNav({ onNavigate }: { onNavigate?: () => void }) {
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               isActive
                 ? "bg-[hsl(var(--sidebar-active))] text-white"
                 : "text-[hsl(var(--sidebar-foreground))]/70 hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]",
@@ -163,7 +163,7 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
         )}
 
         <div className="flex min-h-screen flex-col lg:pl-64">
-          <header className="sticky top-0 z-20 flex min-h-16 items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur lg:px-6">
+          <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border/70 bg-background/90 px-4 backdrop-blur-md lg:px-6">
             <Button
               variant="ghost"
               size="icon"
@@ -190,7 +190,7 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
             </div>
           </header>
 
-          <main className="flex-1 p-4 lg:p-6">{pageContent}</main>
+          <main className="flex-1 p-4 sm:p-6 lg:p-8">{pageContent}</main>
         </div>
       </div>
     </ContractProvider>

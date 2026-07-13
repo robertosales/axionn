@@ -30,7 +30,7 @@ export function ReportsPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-lg font-bold flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
             <FileText className="h-5 w-5 text-primary" /> Relatórios
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">Gere e exporte relatórios do time em CSV ou JSON.</p>

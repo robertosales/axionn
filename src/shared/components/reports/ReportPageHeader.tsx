@@ -60,7 +60,7 @@ export function ReportPageHeader({
   }
 
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="flex items-start gap-3">
         {onBack && (
           <Button
@@ -73,16 +73,16 @@ export function ReportPageHeader({
             Voltar
           </Button>
         )}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             {iconNode && <span className="text-primary">{iconNode}</span>}
-            <h1 className="text-xl font-bold tracking-tight">{resolvedTitle}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{resolvedTitle}</h1>
             {resolvedBadge && (
               <Badge variant={badgeVariant} className="text-[11px]">{resolvedBadge}</Badge>
             )}
           </div>
           {resolvedDesc && (
-            <p className="text-sm text-muted-foreground">{resolvedDesc}</p>
+            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{resolvedDesc}</p>
           )}
           {periodoLabel && (
             <p className="text-xs text-muted-foreground">{periodoLabel}</p>

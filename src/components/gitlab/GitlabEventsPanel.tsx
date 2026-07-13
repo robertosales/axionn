@@ -157,7 +157,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
 
   if (!integrationId) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center text-sm text-muted-foreground">
         Selecione uma integração para visualizar os eventos recebidos.
       </div>
     );
@@ -183,7 +183,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
         ))}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-3xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <Select value={typeFilter} onValueChange={(v) => { setPage(1); setTypeFilter(v); }}>
             <SelectTrigger className="w-[170px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
@@ -220,7 +220,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
         </Button>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
         {query.isLoading ? (
           <div className="space-y-3 p-4">
             {Array.from({ length: 5 }).map((_, i) => (

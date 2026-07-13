@@ -45,7 +45,7 @@ export function AutomationRulesPage() {
     <div className="space-y-6 p-4 max-w-3xl mx-auto">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold flex items-center gap-2"><Zap className="h-5 w-5 text-primary" /> Automações</h1>
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><Zap className="h-5 w-5 text-primary" /> Automações</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Regras automáticas disparadas por eventos do time.</p>
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5" /> Nova Regra</Button>

@@ -164,7 +164,7 @@ export default function OrganizationUsagePage() {
               <Gauge className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold">Plano e uso</h1>
+              <h1 className="truncate text-xl font-semibold tracking-tight">Plano e uso</h1>
               <p className="truncate text-sm text-muted-foreground">
                 {organization.name}
               </p>

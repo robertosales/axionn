@@ -796,7 +796,7 @@ export default function OrganizationMembersPage() {
               <Building2 className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold">Membros da organização</h1>
+              <h1 className="truncate text-xl font-semibold tracking-tight">Membros da organização</h1>
               <p className="truncate text-sm text-muted-foreground">{organization.name}</p>
             </div>
           </div>

@@ -596,7 +596,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
           collapsed ? "lg:w-16 w-60" : sidebarWidth,
         )}
-          style={{ background: SB.bg, borderColor: SB.border, boxShadow: "2px 0 24px rgba(15,23,42,0.28)" }}>
+          style={{ background: SB.bg, borderColor: SB.border }}>
           <div className={cn("flex items-center h-14 shrink-0 px-3", collapsed ? "justify-center" : "justify-between")}
             style={{ borderBottom: `1px solid ${SB.border}` }}>
             {collapsed ? (

@@ -138,6 +138,21 @@ function classifyVoteToSize(value: string): SizeKey | null {
   return map[value] ?? null;
 }
 
+function formatVoteEstimate(value: string): { label: string; size: SizeKey | null } {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue || normalizedValue === "—") {
+    return { label: "Sem estimativa", size: null };
+  }
+
+  const directSize = SIZE_KEYS.includes(normalizedValue as SizeKey) ? (normalizedValue as SizeKey) : null;
+  const size = directSize ?? classifyVoteToSize(normalizedValue);
+
+  return size
+    ? { label: `${size} ${HOURS_MAP[size]}h`, size }
+    : { label: normalizedValue, size: null };
+}
+
 function getModeVote(voteValues: string[]): string {
   const freq: Record<string, number> = {};
   voteValues.forEach((v) => {
@@ -1006,12 +1021,25 @@ export function AgileHistory() {
                               </div>
 
                               <div className="flex min-w-0 flex-wrap gap-1">
-                                {hu.votes.map((vote, index) => (
-                                  <span key={index} className="inline-flex max-w-full items-center gap-1 rounded-md bg-muted/70 px-1.5 py-1 text-[10px]">
-                                    <span className="max-w-20 truncate text-muted-foreground">{profiles[vote.userId] ?? "?"}</span>
-                                    <span className="font-semibold">{vote.value === "—" ? "N/V" : vote.value}</span>
-                                  </span>
-                                ))}
+                                {hu.votes.map((vote, index) => {
+                                  const estimate = formatVoteEstimate(vote.value);
+                                  const participantName = profiles[vote.userId];
+
+                                  return (
+                                    <span
+                                      key={index}
+                                      title={participantName ? `Voto de ${participantName}` : "Participante não identificado"}
+                                      className={cn(
+                                        "inline-flex max-w-full items-center rounded-md border px-2 py-1 text-[10px] font-semibold",
+                                        estimate.size
+                                          ? SIZE_COLORS[estimate.size].badge
+                                          : "border-border bg-muted/70 text-muted-foreground",
+                                      )}
+                                    >
+                                      {estimate.label}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             </div>
                           ))}

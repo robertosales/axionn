@@ -167,23 +167,26 @@ export function AdminGitlabIntegrationsPage() {
         isActive: form.isActive,
       });
 
+      const saved = form.id
+        ? await updateGitlabIntegration(form.id, payload)
+        : await createGitlabIntegration(payload);
+
       if (form.id) {
-        await updateGitlabIntegration(form.id, payload);
         toast.success("Integração GitLab atualizada");
       } else {
-        const created = await createGitlabIntegration(payload);
         toast.success("Integração GitLab criada");
-        if (form.accessToken) {
-          const { error } = await supabase.functions.invoke("gitlab-webhook-register", {
-            body: { integrationId: created.id },
-          });
-          if (error) {
-            toast.error(
-              `Integração salva, mas o auto-registro do webhook falhou: ${error.message ?? "erro desconhecido"}. Use "Re-registrar webhook" após revisar o token.`,
-            );
-          } else {
-            toast.success("Webhook registrado automaticamente no GitLab ✓");
-          }
+      }
+
+      if (form.accessToken) {
+        const { error } = await supabase.functions.invoke("gitlab-webhook-register", {
+          body: { integrationId: saved.id },
+        });
+        if (error) {
+          toast.error(
+            `Integração salva, mas o auto-registro do webhook falhou: ${error.message ?? "erro desconhecido"}. Use "Re-registrar webhook" após revisar o token.`,
+          );
+        } else {
+          toast.success("Webhook registrado automaticamente no GitLab ✓");
         }
       }
 
@@ -411,7 +414,7 @@ export function AdminGitlabIntegrationsPage() {
               <Label htmlFor="gl-token">Token de acesso</Label>
               <Input id="gl-token" type="password" value={form.accessToken} onChange={(e) => setForm({ ...form, accessToken: e.target.value })} placeholder="glpat-..." />
               <p className="text-xs leading-relaxed text-slate-600">
-                Use um token GitLab com escopo de leitura de repositório e webhooks.
+                Use um PAT do GitLab com escopo de API. Ele autentica apenas as chamadas à API; o secret do webhook é separado.
               </p>
               </div>
             </section>

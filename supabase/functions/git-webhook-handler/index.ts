@@ -101,8 +101,14 @@ serve(async (req: Request) => {
     }
 
     // Verify webhook signature if configured
-    if (integration.webhook_secret && signature) {
-      const isValid = await verifyWebhookSignature(provider, rawBody, signature, integration.webhook_secret);
+    if (integration.webhook_secret_encrypted) {
+      if (!signature) {
+        return new Response(JSON.stringify({ error: 'Missing webhook signature' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const isValid = await verifyWebhookSignature(provider, rawBody, signature, integration.webhook_secret_encrypted);
       if (!isValid) {
         console.warn('[Git Webhook] Invalid signature for integration:', integrationId);
         await logIntegrationEvent(supabase, organizationId, integrationId, 'webhook_received', 'error', {

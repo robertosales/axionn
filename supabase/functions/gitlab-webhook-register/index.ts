@@ -16,12 +16,14 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
+  let supabase: any = null;
+  let integrationId: string | null = null;
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !serviceRoleKey) return json({ error: "Server configuration error" }, 500);
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { integrationId } = await req.json();
+    supabase = createClient(supabaseUrl, serviceRoleKey);
+    ({ integrationId } = await req.json());
     if (!integrationId) return json({ error: "integrationId required" }, 400);
 
     const { data: integration, error: fetchError } = await supabase.from("git_integrations")
@@ -32,6 +34,14 @@ serve(async (req: Request) => {
       return json({ error: "Repository path and access token are required" }, 422);
     }
 
+    const webhookSecret = integration.webhook_secret_encrypted ?? crypto.randomUUID();
+    const { error: syncingError } = await supabase.from("git_integrations").update({
+      webhook_secret_encrypted: webhookSecret,
+      sync_status: "syncing",
+      sync_error: null,
+    }).eq("id", integrationId);
+    if (syncingError) return json({ error: "Failed to update integration status" }, 500);
+
     const apiBase = (integration.api_url ?? "https://gitlab.com/api/v4").replace(/\/$/, "");
     const hooksUrl = `${apiBase}/projects/${encodeURIComponent(integration.repository_path)}/hooks`;
     const tokenHeaders = { "PRIVATE-TOKEN": integration.access_token_encrypted };
@@ -39,40 +49,62 @@ serve(async (req: Request) => {
     if (!listRes.ok) return await fail(listRes, "Failed to list GitLab webhooks", integrationId, supabase);
 
     const hooks = await listRes.json() as Array<{ id?: number; url?: string }>;
-    const existing = hooks.find((hook) => hook.url === WEBHOOK_HANDLER_URL);
+    const existing = hooks.find((hook) => hook.url === WEBHOOK_HANDLER_URL && hook.id != null);
+    const webhookBody = {
+      url: WEBHOOK_HANDLER_URL,
+      token: webhookSecret,
+      push_events: true,
+      merge_requests_events: true,
+      pipeline_events: true,
+      job_events: true,
+      deployment_events: true,
+      note_events: true,
+      tag_push_events: true,
+      custom_headers: [
+        { key: "x-integration-id", value: integration.id },
+        { key: "x-git-provider", value: "gitlab" },
+      ],
+    };
+
     if (existing) {
-      await supabase.from("git_integrations").update({
+      const updateRes = await fetch(`${hooksUrl}/${existing.id}`, {
+        method: "PUT",
+        headers: { ...tokenHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify(webhookBody),
+      });
+      if (!updateRes.ok) return await fail(updateRes, "Failed to update GitLab webhook", integrationId, supabase);
+
+      const { error: updateError } = await supabase.from("git_integrations").update({
         webhook_id: existing.id ? String(existing.id) : null,
         webhook_url: WEBHOOK_HANDLER_URL, sync_status: "completed", sync_error: null,
         last_sync_at: new Date().toISOString(),
       }).eq("id", integrationId);
+      if (updateError) return json({ error: "Webhook updated, but status persistence failed" }, 500);
       return json({ ok: true, already_registered: true, webhook_id: existing.id });
     }
 
     const createRes = await fetch(hooksUrl, {
       method: "POST",
       headers: { ...tokenHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: WEBHOOK_HANDLER_URL,
-        token: integration.webhook_secret_encrypted ?? "",
-        push_events: true, merge_requests_events: true, pipeline_events: true,
-        job_events: true, deployment_events: true, note_events: true, tag_push_events: true,
-        custom_headers: [
-          { key: "x-integration-id", value: integration.id },
-          { key: "x-git-provider", value: "gitlab" },
-        ],
-      }),
+      body: JSON.stringify(webhookBody),
     });
     if (!createRes.ok) return await fail(createRes, "Failed to register webhook on GitLab", integrationId, supabase);
 
     const hook = await createRes.json() as { id: number };
-    await supabase.from("git_integrations").update({
+    const { error: updateError } = await supabase.from("git_integrations").update({
       webhook_id: String(hook.id), webhook_url: WEBHOOK_HANDLER_URL,
       sync_status: "completed", sync_error: null, last_sync_at: new Date().toISOString(),
     }).eq("id", integrationId);
+    if (updateError) return json({ error: "Webhook created, but status persistence failed" }, 500);
     return json({ ok: true, webhook_id: hook.id, webhook_url: WEBHOOK_HANDLER_URL });
   } catch (error) {
     console.error("[gitlab-webhook-register]", error);
+    if (supabase && integrationId) {
+      await supabase.from("git_integrations").update({
+        sync_status: "error",
+        sync_error: error instanceof Error ? error.message : "Unexpected webhook registration error",
+      }).eq("id", integrationId);
+    }
     return json({ error: "Internal server error" }, 500);
   }
 });

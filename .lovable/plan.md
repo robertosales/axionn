@@ -1,21 +1,46 @@
-## Objetivo
-Reativar `roberto.sales@gmail.com` para que consiga acessar o sistema normalmente.
+## Pendência 1 — Corrigir teste `operationalConsole.contract.test.ts`
 
-## Diagnóstico
-- Auth do Supabase: OK (login retorna 200, `email_confirmed_at` preenchido, sem `banned_until`/`deleted_at`).
-- `profiles.is_active = false` — foi desativado pela limpeza de usuários de Sustentação executada anteriormente (o filtro pegou usuários que pertenciam a times marcados como `module = 'sustentacao'`, e Roberto era um deles).
-- Consequência: o app bloqueia a entrada de perfis inativos, mesmo com a autenticação sendo bem-sucedida.
+O App.tsx atual não usa mais `LegacyOperationalRoute` para `/admin/gitlab-integrations`; ele redireciona diretamente:
 
-## Alteração
-Usar o tool de dados para rodar:
-
-```sql
-UPDATE public.profiles
-SET is_active = true
-WHERE user_id = '3c472f37-eabb-4a95-a859-1a1cf89f5d37';
+```tsx
+<Route path="/admin/gitlab-integrations"
+  element={<Navigate to="/organization/gitlab-integrations" replace />} />
+<Route path="/organization/gitlab-integrations" element={<AdminGitlabIntegrationsPage />} />
 ```
 
-## Fora de escopo
-- Não mexer em roles, times ou memberships de organização (o membership admin dele em SALES CONSULTORIA já está garantido pela operação `20260704_02c`).
-- Não alterar código nem RLS.
-- Não reativar outros usuários da limpeza — se houver mais casos, trate individualmente.
+A assertion `expect(app).toContain('platformPath={undefined}')` está obsoleta.
+
+**Ação (somente no teste, sem tocar produção):**
+
+Em `src/features/organization/operationalConsole.contract.test.ts`, no bloco `it("does not redirect the gitlab integrations route to platform plans", ...)`, substituir:
+
+```ts
+expect(app).toContain('path="/admin/gitlab-integrations"');
+expect(app).toContain('platformPath={undefined}');
+```
+
+por asserções que refletem o comportamento atual:
+
+```ts
+expect(app).toContain('path="/admin/gitlab-integrations"');
+expect(app).toContain('to="/organization/gitlab-integrations"');
+expect(app).not.toContain('platformPath="/platform"\n              >\n                <AdminGitlabIntegrationsPage');
+```
+
+(a última garante que a rota gitlab não está mais envolvida por `LegacyOperationalRoute` com redirect para platform).
+
+Resultado esperado: 149/149 testes passando.
+
+## Pendência 2 — Deploy da Edge Function `gitlab-webhook-register`
+
+Importante esclarecer: no Lovable Cloud **não existe `npx supabase login` nem deploy manual via CLI** — as Edge Functions são deployadas automaticamente pela plataforma quando o código muda, e podem ser re-deployadas via a ferramenta interna `supabase--deploy_edge_functions`.
+
+**Ação:**
+
+1. Chamar `supabase--deploy_edge_functions(["gitlab-webhook-register"])` para forçar o redeploy.
+2. Fazer um smoke test via `supabase--curl_edge_functions` em `/gitlab-webhook-register` com um `integrationId` inexistente para confirmar que a função responde 404 (prova de que está ativa e alcançável).
+3. Reportar ao usuário que o smoke test end-to-end (criar integração real com token GitLab válido) só pode ser feito por ele na UI, já que exige credenciais reais do GitLab — e indicar a tabela de troubleshooting já fornecida caso o toast retorne "Registre o webhook manualmente".
+
+## Fora de escopo (confirmado)
+
+Nenhuma alteração em: `git-webhook-handler`, `HUEditDrawer.tsx`, `AdminGitlabIntegrationsPage.tsx`, migrations, ou qualquer componente de produção.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { ActivityType, ACTIVITY_TYPE_LABELS } from "@/types/sprint";
 import { toast } from "sonner";
 import { FileUploader } from "@/components/FileUploader";
 import { supabase } from "@/integrations/supabase/client";
+import { canonicalizeDevelopers } from "@/lib/developerIdentity";
 
 interface QuickActivityDialogProps {
   open: boolean;
@@ -40,6 +41,7 @@ export function QuickActivityDialog({ open, onClose, huId, defaultType = "task" 
 
   const hu = userStories.find((h) => h.id === huId);
   const isLimitado = ["task", "bug"].includes(activityType);
+  const developerOptions = useMemo(() => canonicalizeDevelopers(developers), [developers]);
 
   const reset = () => {
     setTitle("");
@@ -179,7 +181,7 @@ export function QuickActivityDialog({ open, onClose, huId, defaultType = "task" 
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    {developers.map((dev) => (
+                    {developerOptions.map((dev) => (
                       <SelectItem key={dev.id} value={dev.id}>
                         {dev.name}
                       </SelectItem>

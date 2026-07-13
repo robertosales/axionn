@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { canonicalizeDevelopers } from "@/lib/developerIdentity";
 
 export interface AssigneeOption {
   id: string;
@@ -38,17 +39,8 @@ export function useTeamAssignees(
     return () => { cancelled = true; };
   }, [teamId]);
 
-  const byUser = new Map<string, AssigneeOption>();
-  for (const d of developers ?? []) {
-    if (!d?.user_id || !activeUserIds.has(d.user_id)) continue;
-    if (!byUser.has(d.user_id)) {
-      byUser.set(d.user_id, { id: d.id, name: d.name });
-    }
-  }
-
-  const list = Array.from(byUser.values()).sort((a, b) =>
-    a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
-  );
+  const active = developers.filter((d) => d.user_id && activeUserIds.has(d.user_id));
+  const list: AssigneeOption[] = canonicalizeDevelopers(active).map((d) => ({ id: d.id, name: d.name }));
 
   if (currentAssigneeId && !list.some((o) => o.id === currentAssigneeId)) {
     const dev = (developers ?? []).find((d) => d.id === currentAssigneeId);

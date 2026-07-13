@@ -5,6 +5,7 @@ import { SalaAgilRelatorios } from "@/components/sala-agil/reports/SalaAgilRelat
 import { AgileHistory } from "@/components/AgileHistory";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, Library } from "lucide-react";
+import { canonicalizeDevelopers } from "@/lib/developerIdentity";
 
 /**
  * Página dedicada de Relatórios — Sala Ágil.
@@ -62,7 +63,7 @@ export function SalaAgilReportsPage() {
         allImps.push(...(iR.data || []));
         // Relatórios precisam preservar os responsáveis históricos referenciados
         // por activities.assignee_id. Filtrar por team_members quebra essa junção.
-        allDevs.push(...(dR.data || []));
+        allDevs.push(...canonicalizeDevelopers((dR.data || []) as any[]));
       }
       if (cancelled) return;
       setData({

@@ -33,6 +33,7 @@ import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { useDebounce } from "@/shared/hooks/useDebounce";
+import { canonicalizeDevelopers, developerIdMatches } from "@/lib/developerIdentity";
 
 function durationToDecimal(value: string): number {
   const [h = "0", m = "0"] = value.split(":");
@@ -90,6 +91,7 @@ export function ActivityManager() {
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const isLimitado = ["task", "bug"].includes(activityType);
+  const developerOptions = useMemo(() => canonicalizeDevelopers(developers), [developers]);
 
   // Ref para scroll até a atividade destacada
   const highlightRef = useRef<HTMLDivElement | null>(null);
@@ -137,7 +139,8 @@ export function ActivityManager() {
       acts = acts.filter((a) => visibleHuIds.has(a.huId));
     }
     if (assigneeFilter !== "all") {
-      acts = acts.filter((a) => a.assigneeId === assigneeFilter);
+      const selected = developerOptions.find((developer) => developer.id === assigneeFilter);
+      acts = selected ? acts.filter((a) => developerIdMatches(selected, a.assigneeId)) : [];
     }
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
@@ -151,7 +154,7 @@ export function ActivityManager() {
       if (a.isClosed !== b.isClosed) return a.isClosed ? 1 : -1;
       return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
     });
-  }, [activities, visibleStories, sprintFilter, assigneeFilter, debouncedSearch, typeFilter, statusFilter]);
+  }, [activities, visibleStories, sprintFilter, assigneeFilter, debouncedSearch, typeFilter, statusFilter, developerOptions]);
 
   const {
     paginatedItems: pageActivities,
@@ -339,7 +342,7 @@ export function ActivityManager() {
                   <Select value={assigneeId} onValueChange={(v) => { setAssigneeId(v); setErrors((p) => ({ ...p, assigneeId: "" })); }}>
                     <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
                     <SelectContent>
-                      {developers.map((dev) => (
+                      {developerOptions.map((dev) => (
                         <SelectItem key={dev.id} value={dev.id}>{dev.name} — {dev.role}</SelectItem>
                       ))}
                     </SelectContent>
@@ -409,7 +412,7 @@ export function ActivityManager() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos responsáveis</SelectItem>
-            {developers.map((dev) => (
+            {developerOptions.map((dev) => (
               <SelectItem key={dev.id} value={dev.id}>{dev.name}</SelectItem>
             ))}
           </SelectContent>

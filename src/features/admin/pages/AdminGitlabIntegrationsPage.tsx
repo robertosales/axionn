@@ -302,21 +302,21 @@ export function AdminGitlabIntegrationsPage() {
                       {item.isActive ? "Ativa" : "Inativa"}
                     </Badge>
                     {item.syncStatus === "completed" && item.webhookId ? (
-                      <Badge className="bg-emerald-100 text-emerald-700 border-0 gap-1">
+                      <Badge className="h-6 gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 text-[11px] font-semibold text-emerald-700">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
                         Webhook ativo
                       </Badge>
                     ) : item.syncStatus === "error" ? (
                       <Badge
-                        className="bg-rose-100 text-rose-700 border-0 gap-1"
+                        className="h-6 gap-1.5 rounded-full border border-rose-400/40 bg-rose-500/10 px-3 text-[11px] font-semibold text-rose-700"
                         title={item.syncError ?? "Erro no registro do webhook"}
                       >
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-500 inline-block" />
                         Webhook com erro
                       </Badge>
                     ) : (
-                      <Badge className="bg-slate-100 text-slate-500 border-0 gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 inline-block" />
+                      <Badge className="h-6 gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 text-[11px] font-semibold text-amber-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block" />
                         Webhook pendente
                       </Badge>
                     )}
@@ -366,7 +366,7 @@ export function AdminGitlabIntegrationsPage() {
       </Tabs>
 
       <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{form.id ? "Editar integração GitLab" : "Nova integração GitLab"}</DialogTitle>
             <DialogDescription>
@@ -374,35 +374,54 @@ export function AdminGitlabIntegrationsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="gl-name">Nome da integração *</Label>
-              <Input id="gl-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: GitLab principal" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gl-base">URL base *</Label>
-              <Input id="gl-base" value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://gitlab.com" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gl-api">API URL</Label>
-              <Input id="gl-api" value={form.apiUrl} onChange={(e) => setForm({ ...form, apiUrl: e.target.value })} placeholder="https://gitlab.com/api/v4" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gl-path">Repositório (caminho) *</Label>
-              <Input id="gl-path" value={form.repositoryPath} onChange={(e) => setForm({ ...form, repositoryPath: e.target.value })} placeholder="grupo/projeto" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gl-repo">Nome do repositório</Label>
-              <Input id="gl-repo" value={form.repositoryName} onChange={(e) => setForm({ ...form, repositoryName: e.target.value })} placeholder="nome-do-repositorio" />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
+          <div className="space-y-5 py-2">
+            <section className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <h3 className="text-sm font-semibold text-slate-900">Identificação</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">Dados usados para localizar e reconhecer o repositório.</p>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="gl-name">Nome da integração *</Label>
+                <Input id="gl-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: GitLab principal" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gl-base">URL base *</Label>
+                <Input id="gl-base" value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://gitlab.com" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gl-api">API URL</Label>
+                <Input id="gl-api" value={form.apiUrl} onChange={(e) => setForm({ ...form, apiUrl: e.target.value })} placeholder="https://gitlab.com/api/v4" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gl-path">Repositório (caminho) *</Label>
+                <Input id="gl-path" value={form.repositoryPath} onChange={(e) => setForm({ ...form, repositoryPath: e.target.value })} placeholder="grupo/projeto" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gl-repo">Nome do repositório</Label>
+                <Input id="gl-repo" value={form.repositoryName} onChange={(e) => setForm({ ...form, repositoryName: e.target.value })} placeholder="nome-do-repositorio" />
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Acesso</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">Credencial usada para conectar o Axionn ao GitLab.</p>
+              </div>
+              <div className="space-y-2">
               <Label htmlFor="gl-token">Token de acesso</Label>
               <Input id="gl-token" type="password" value={form.accessToken} onChange={(e) => setForm({ ...form, accessToken: e.target.value })} placeholder="glpat-..." />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs leading-relaxed text-slate-600">
                 Use um token GitLab com escopo de leitura de repositório e webhooks.
               </p>
-            </div>
-            <div className="space-y-2 sm:col-span-2">
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Automação</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">O webhook é configurado automaticamente ao salvar a integração.</p>
+              </div>
+              <div className="space-y-2">
               <Label>Webhook URL (gerado automaticamente)</Label>
               <div className="flex gap-2">
                 <Input
@@ -410,7 +429,7 @@ export function AdminGitlabIntegrationsPage() {
                   aria-readonly
                   tabIndex={-1}
                   value="https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler"
-                  className="text-xs font-mono bg-slate-50 text-slate-600 cursor-default"
+                  className="cursor-default bg-slate-50 font-mono text-xs text-slate-700"
                 />
                 <Button type="button" variant="outline" size="icon" aria-label="Copiar URL do webhook" onClick={async () => {
                   await navigator.clipboard.writeText("https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler");
@@ -419,13 +438,15 @@ export function AdminGitlabIntegrationsPage() {
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs leading-relaxed text-slate-600">
                 URL fixa do Axionn. Ao salvar com um token de acesso válido, o webhook é registrado
                 automaticamente no GitLab — não é necessário copiar ou configurar manualmente.
                 O botão "Re-registrar webhook" abaixo serve apenas como fallback caso o auto-registro falhe.
               </p>
-            </div>
-            <div className="sm:col-span-2 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
+              </div>
+            </section>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">Ativa</p>

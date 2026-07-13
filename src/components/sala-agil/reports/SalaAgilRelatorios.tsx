@@ -15,7 +15,7 @@ const ApfGeneratorPage = lazy(() =>
 
 interface SalaAgilRelatoriosProps {
   sprints: { id: string; name: string; isActive?: boolean }[];
-  developers: { id: string; name: string; role: string }[];
+  developers: { id: string; name: string; role: string; user_id?: string | null; email?: string | null }[];
   rawData: {
     sprints: any[];
     hus: any[];

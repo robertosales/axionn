@@ -31,7 +31,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   sprints:     { id: string; name: string; isActive?: boolean; start_date?: string; end_date?: string }[];
-  developers:  { id: string; name: string; role: string; user_id?: string | null }[];
+  developers:  { id: string; name: string; role: string; user_id?: string | null; email?: string | null }[];
   rawData: {
     sprints:      any[];
     hus:          any[];
@@ -403,15 +403,45 @@ async function buildPDFBlob(
 
 // Recebe TODAS as atividades filtradas por sprint/data, SEM filtro de analista,
 // para garantir que todos os membros apareçam na tabela de Produtividade.
+function normalizeIdentityValue(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+}
+
+function personNameSignature(name: unknown): string {
+  const parts = normalizeIdentityValue(name).match(/[a-z0-9]+/g) ?? [];
+  return parts.length > 1 ? `${parts[0]}:${parts[parts.length - 1]}` : parts[0] ?? "";
+}
+
 function activityBelongsToDeveloper(
   activity: any,
   developer: Props["developers"][number],
   developerRecords: any[],
 ): boolean {
+  // Activities may still reference a historical developer row after an account
+  // recreation. Resolve the person by progressively weaker stable identifiers.
   if (activity.assignee_id === developer.id) return true;
-  if (!developer.user_id) return false;
   const persistedAssignee = developerRecords.find((record: any) => record.id === activity.assignee_id);
-  return Boolean(persistedAssignee?.user_id && persistedAssignee.user_id === developer.user_id);
+  if (!persistedAssignee) return false;
+
+  if (developer.user_id && persistedAssignee.user_id === developer.user_id) return true;
+
+  const normalizedDeveloperEmail = normalizeIdentityValue(developer.email);
+  const normalizedPersistedEmail = normalizeIdentityValue(persistedAssignee.email);
+  if (normalizedDeveloperEmail && normalizedPersistedEmail === normalizedDeveloperEmail) return true;
+
+  const developerSignature = personNameSignature(developer.name);
+  const persistedSignature = personNameSignature(persistedAssignee.name);
+  const developerRole = normalizeIdentityValue(developer.role);
+  const persistedRole = normalizeIdentityValue(persistedAssignee.role);
+  return Boolean(
+    developerSignature &&
+    developerSignature === persistedSignature &&
+    (!developerRole || !persistedRole || developerRole === persistedRole),
+  );
 }
 
 function resolveActivityDeveloper(

@@ -102,7 +102,7 @@ export function SalaAgilReportsPage() {
         <SalaAgilRelatorios
           sprints={data.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}
           developers={data.developers.map((d: any) => ({
-            id: d.id, name: d.name, role: d.role || "developer", user_id: d.user_id,
+            id: d.id, name: d.name, role: d.role || "developer", user_id: d.user_id, email: d.email,
           })) as any}
           rawData={data}
           teamName={currentTeam?.name ?? "Todos os times"}

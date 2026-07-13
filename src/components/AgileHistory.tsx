@@ -27,6 +27,8 @@ import {
   Calendar,
   Hash,
   TrendingUp,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -350,6 +352,9 @@ export function AgileHistory() {
   const [detailHuSummaries, setDetailHuSummaries] = useState<HuVoteSummary[]>([]);
   const [detailCards, setDetailCards] = useState<any[]>([]);
   const [detailActions, setDetailActions] = useState<any[]>([]);
+  const [detailHuSearch, setDetailHuSearch] = useState("");
+  const [detailHuStatus, setDetailHuStatus] = useState<"all" | "consensus" | "divergence">("all");
+  const [detailHuPage, setDetailHuPage] = useState(1);
 
   // ─── Loaders ──────────────────────────────────────────────────────────────
 
@@ -644,6 +649,9 @@ export function AgileHistory() {
     setDetailHuSummaries([]);
     setDetailCards([]);
     setDetailActions([]);
+    setDetailHuSearch("");
+    setDetailHuStatus("all");
+    setDetailHuPage(1);
   };
 
   // ─── Loading ──────────────────────────────────────────────────────────────
@@ -813,9 +821,9 @@ export function AgileHistory() {
           if (!open) closeDetail();
         }}
       >
-        <DialogContent className="flex max-h-[88vh] max-w-3xl flex-col gap-3 overflow-hidden">
+        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border/60 pb-3">
-            <DialogTitle className="flex items-center gap-2 text-base">
+            <DialogTitle className="flex items-center gap-2 px-6 pt-5 text-lg">
               {detailType === "planning" ? (
                 <>
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -832,9 +840,27 @@ export function AgileHistory() {
                 </>
               )}
             </DialogTitle>
+            {detailSession && detailType === "planning" && (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-1">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {(detailSession as PlanningSessionHistory).sprintName}
+                  </p>
+                  <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {formatDate((detailSession as PlanningSessionHistory).createdAt)}
+                    <span aria-hidden="true">·</span>
+                    {DECK_MODE_LABELS[(detailSession as PlanningSessionHistory).deckMode] ?? (detailSession as PlanningSessionHistory).deckMode}
+                    <span aria-hidden="true">·</span>
+                    {profiles[(detailSession as PlanningSessionHistory).createdBy] ?? "—"}
+                  </p>
+                </div>
+                <StatusBadge status={(detailSession as PlanningSessionHistory).status} />
+              </div>
+            )}
           </DialogHeader>
 
-          <ScrollArea className="min-h-0 flex-1 pr-3">
+          <ScrollArea className="min-h-0 flex-1">
             {/* ── Detalhe Planning ─────────────────────────────────── */}
             {detailSession &&
               detailType === "planning" &&
@@ -842,133 +868,191 @@ export function AgileHistory() {
                 const s = detailSession as PlanningSessionHistory;
                 const totalDetailHours = detailHuSummaries.reduce((sum, hu) => sum + hu.consensusHours, 0);
                 const divergedCount = detailHuSummaries.filter((hu) => hu.hadDivergence).length;
+                const normalizedSearch = detailHuSearch.trim().toLocaleLowerCase("pt-BR");
+                const filteredHus = detailHuSummaries.filter((hu) => {
+                  const matchesSearch = !normalizedSearch ||
+                    hu.huCode.toLocaleLowerCase("pt-BR").includes(normalizedSearch) ||
+                    hu.huTitle.toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+                  const matchesStatus = detailHuStatus === "all" ||
+                    (detailHuStatus === "divergence" ? hu.hadDivergence : !hu.hadDivergence);
+                  return matchesSearch && matchesStatus;
+                });
+                const pageSize = 6;
+                const totalPages = Math.max(1, Math.ceil(filteredHus.length / pageSize));
+                const currentPage = Math.min(detailHuPage, totalPages);
+                const visibleHus = filteredHus.slice((currentPage - 1) * pageSize, currentPage * pageSize);
                 return (
-                  <div className="space-y-4 pt-1">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold leading-tight">{s.sprintName}</p>
-                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(s.createdAt)}
-                          <span className="mx-1">·</span>
-                          {DECK_MODE_LABELS[s.deckMode] ?? s.deckMode}
-                          <span className="mx-1">·</span>
-                          {profiles[s.createdBy] ?? "—"}
-                        </p>
-                      </div>
-                      <StatusBadge status={s.status} />
-                    </div>
-
-                    <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-border/70 bg-muted/20 sm:grid-cols-4">
-                      <Card className="rounded-none border-0 border-b border-r border-border/60 bg-transparent shadow-none sm:border-b-0">
-                        <CardContent className="px-3 py-2.5 text-center">
+                  <div className="space-y-5 p-4 sm:p-6">
+                    <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+                      <Card className="shadow-none">
+                        <CardContent className="px-4 py-3 text-center">
                           <p className="text-[10px] font-medium text-muted-foreground">HUs Estimadas</p>
-                          <p className="mt-0.5 text-lg font-semibold tabular-nums">{s.husVoted}</p>
+                          <p className="mt-1 text-xl font-semibold tabular-nums">{s.husVoted}</p>
                         </CardContent>
                       </Card>
-                      <Card className="rounded-none border-0 border-b border-border/60 bg-transparent shadow-none sm:border-b-0 sm:border-r">
-                        <CardContent className="px-3 py-2.5 text-center">
+                      <Card className="shadow-none">
+                        <CardContent className="px-4 py-3 text-center">
                           <p className="text-[10px] font-medium text-muted-foreground">Participantes</p>
-                          <p className="mt-0.5 text-lg font-semibold tabular-nums">{s.participantCount}</p>
+                          <p className="mt-1 text-xl font-semibold tabular-nums">{s.participantCount}</p>
                         </CardContent>
                       </Card>
-                      <Card className="rounded-none border-0 border-r border-border/60 bg-transparent shadow-none">
-                        <CardContent className="px-3 py-2.5 text-center">
+                      <Card className="border-success/20 bg-success/[0.03] shadow-none">
+                        <CardContent className="px-4 py-3 text-center">
                           <p className="text-[10px] font-medium text-muted-foreground">Total de Horas</p>
-                          <p className="mt-0.5 text-lg font-semibold tabular-nums text-success">{totalDetailHours}h</p>
+                          <p className="mt-1 text-xl font-semibold tabular-nums text-success">{totalDetailHours}h</p>
                         </CardContent>
                       </Card>
-                      <Card className="rounded-none border-0 bg-transparent shadow-none">
-                        <CardContent className="px-3 py-2.5 text-center">
+                      <Card className={cn("shadow-none", divergedCount > 0 && "border-warning/20 bg-warning/[0.03]")}>
+                        <CardContent className="px-4 py-3 text-center">
                           <p className="text-[10px] font-medium text-muted-foreground">Com Divergência</p>
-                          <p className={cn("mt-0.5 text-lg font-semibold tabular-nums", divergedCount > 0 ? "text-warning" : "text-success")}>
+                          <p className={cn("mt-1 text-xl font-semibold tabular-nums", divergedCount > 0 ? "text-warning" : "text-success")}>
                             {divergedCount}
                           </p>
                         </CardContent>
                       </Card>
                     </div>
 
-                    <Separator className="opacity-70" />
+                    <section className="space-y-3" aria-labelledby="planning-hus-title">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                          <h3 id="planning-hus-title" className="flex items-center gap-2 text-sm font-semibold">
+                            <Hash className="h-4 w-4 text-muted-foreground" /> HUs estimadas
+                          </h3>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {filteredHus.length} de {detailHuSummaries.length} registros
+                          </p>
+                        </div>
 
-                    <div>
-                      <h3 className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                        <Hash className="h-3.5 w-3.5" /> HUs Estimadas ({detailHuSummaries.length})
-                      </h3>
-                      <div className="space-y-1.5">
-                        {detailHuSummaries.map((hu) => (
-                          <Card
-                            key={hu.huId}
-                            className={cn(
-                              "border shadow-none",
-                              hu.hadDivergence ? "border-warning/25 bg-warning/[0.03]" : "border-border/70 bg-card",
-                            )}
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <div className="relative sm:w-64">
+                            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              value={detailHuSearch}
+                              onChange={(event) => {
+                                setDetailHuSearch(event.target.value);
+                                setDetailHuPage(1);
+                              }}
+                              placeholder="Buscar por código ou título"
+                              aria-label="Buscar HUs da sessão"
+                              className="h-9 pl-9 text-xs"
+                            />
+                          </div>
+                          <Select
+                            value={detailHuStatus}
+                            onValueChange={(value) => {
+                              setDetailHuStatus(value as "all" | "consensus" | "divergence");
+                              setDetailHuPage(1);
+                            }}
                           >
-                            <CardContent className="px-3 py-2.5">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="mb-1 flex items-center gap-1.5">
-                                    <Badge variant="outline" className="font-mono text-[10px]">
-                                      {hu.huCode}
-                                    </Badge>
-                                    {hu.hadDivergence ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[9px] bg-warning/10 text-warning border-warning/30 gap-1"
-                                      >
-                                        <AlertTriangle className="h-2.5 w-2.5" /> Divergência
-                                      </Badge>
-                                    ) : (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[9px] bg-success/10 text-success border-success/30 gap-1"
-                                      >
-                                        <ThumbsUp className="h-2.5 w-2.5" /> Consenso
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="truncate text-xs font-medium leading-tight">{hu.huTitle}</p>
-                                </div>
-                                {hu.consensusKey && (
-                                  <div className="flex shrink-0 items-center gap-2">
-                                    <Badge
-                                      className={cn(
-                                        "min-w-9 justify-center px-2 py-1 text-xs font-semibold",
-                                        SIZE_COLORS[hu.consensusKey as SizeKey]?.badge ?? "bg-muted",
-                                      )}
-                                    >
-                                      {hu.consensusKey}
-                                    </Badge>
-                                    <span className="text-[10px] text-muted-foreground">
-                                      {hu.consensusHours}h
-                                    </span>
-                                  </div>
+                            <SelectTrigger className="h-9 w-full text-xs sm:w-40" aria-label="Filtrar HUs por resultado">
+                              <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Todos os resultados</SelectItem>
+                              <SelectItem value="consensus">Com consenso</SelectItem>
+                              <SelectItem value="divergence">Com divergência</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+                        <div className="hidden grid-cols-[minmax(0,1fr)_7rem_6rem_12rem] gap-4 border-b border-border/70 bg-muted/35 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground md:grid">
+                          <span>História de usuário</span>
+                          <span>Resultado</span>
+                          <span>Estimativa</span>
+                          <span>Votos</span>
+                        </div>
+
+                        <div className="divide-y divide-border/70">
+                          {visibleHus.map((hu) => (
+                            <div
+                              key={hu.huId}
+                              className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/25 md:grid-cols-[minmax(0,1fr)_7rem_6rem_12rem] md:items-center md:gap-4"
+                            >
+                              <div className="min-w-0">
+                                <Badge variant="outline" className="mb-1.5 font-mono text-[10px]">
+                                  {hu.huCode}
+                                </Badge>
+                                <p className="whitespace-normal break-words text-sm font-medium leading-snug text-foreground">
+                                  {hu.huTitle}
+                                </p>
+                              </div>
+
+                              <div>
+                                {hu.hadDivergence ? (
+                                  <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-warning">
+                                    <AlertTriangle className="h-3 w-3" /> Divergência
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success">
+                                    <ThumbsUp className="h-3 w-3" /> Consenso
+                                  </Badge>
                                 )}
                               </div>
-                              <div className="mt-2 flex flex-wrap gap-1 border-t border-border/50 pt-2">
-                                {hu.votes.map((v, i) => (
-                                  <div key={i} className="flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5">
-                                    <span className="text-[10px] text-muted-foreground">
-                                      {profiles[v.userId] ?? "?"}
-                                    </span>
-                                    <span className="text-[10px] font-bold">{v.value === "—" ? "N/V" : v.value}</span>
-                                    {v.value !== "—" && HOURS_MAP[v.value as SizeKey] && (
-                                      <span className="text-[9px] text-muted-foreground">
-                                        ({HOURS_MAP[v.value as SizeKey]}h)
-                                      </span>
-                                    )}
-                                  </div>
+
+                              <div className="flex items-center gap-2 md:block">
+                                {hu.consensusKey ? (
+                                  <>
+                                    <Badge className={cn("min-w-9 justify-center", SIZE_COLORS[hu.consensusKey as SizeKey]?.badge ?? "bg-muted")}>
+                                      {hu.consensusKey}
+                                    </Badge>
+                                    <p className="mt-1 text-xs text-muted-foreground">{hu.consensusHours}h</p>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </div>
+
+                              <div className="flex min-w-0 flex-wrap gap-1">
+                                {hu.votes.map((vote, index) => (
+                                  <span key={index} className="inline-flex max-w-full items-center gap-1 rounded-md bg-muted/70 px-1.5 py-1 text-[10px]">
+                                    <span className="max-w-20 truncate text-muted-foreground">{profiles[vote.userId] ?? "?"}</span>
+                                    <span className="font-semibold">{vote.value === "—" ? "N/V" : vote.value}</span>
+                                  </span>
                                 ))}
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                        {detailHuSummaries.length === 0 && (
-                          <p className="text-xs text-muted-foreground text-center py-4">
-                            Nenhum voto registrado nesta sessão
+                            </div>
+                          ))}
+
+                          {visibleHus.length === 0 && (
+                            <div className="px-4 py-10 text-center">
+                              <p className="text-sm font-medium">Nenhuma HU encontrada</p>
+                              <p className="mt-1 text-xs text-muted-foreground">Ajuste os filtros para visualizar outros resultados.</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            Página {currentPage} de {totalPages}
                           </p>
-                        )}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={currentPage === 1}
+                              onClick={() => setDetailHuPage(Math.max(1, currentPage - 1))}
+                              className="h-8 gap-1.5 px-2.5 text-xs"
+                            >
+                              <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={currentPage === totalPages}
+                              onClick={() => setDetailHuPage(Math.min(totalPages, currentPage + 1))}
+                              className="h-8 gap-1.5 px-2.5 text-xs"
+                            >
+                              Próxima <ChevronRight className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    </section>
                   </div>
                 );
               })()}
@@ -979,7 +1063,7 @@ export function AgileHistory() {
               (() => {
                 const s = detailSession as RetroSessionHistory;
                 return (
-                  <div className="space-y-5 pt-1">
+                  <div className="space-y-5 p-4 sm:p-6">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
                         <p className="text-base font-bold">{s.sprintName}</p>

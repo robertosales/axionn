@@ -38,6 +38,7 @@ interface Props {
     activities:   any[];
     impediments:  any[];
     developers:   any[];
+    developerRecords?: any[];
   };
   teamName:        string;
   currentUserName: string;
@@ -402,9 +403,28 @@ async function buildPDFBlob(
 
 // Recebe TODAS as atividades filtradas por sprint/data, SEM filtro de analista,
 // para garantir que todos os membros apareçam na tabela de Produtividade.
-function buildMemberMetrics(developers: Props["developers"], allActivities: any[]) {
+function activityBelongsToDeveloper(
+  activity: any,
+  developer: Props["developers"][number],
+  developerRecords: any[],
+): boolean {
+  if (activity.assignee_id === developer.id) return true;
+  if (!developer.user_id) return false;
+  const persistedAssignee = developerRecords.find((record: any) => record.id === activity.assignee_id);
+  return Boolean(persistedAssignee?.user_id && persistedAssignee.user_id === developer.user_id);
+}
+
+function resolveActivityDeveloper(
+  activity: any,
+  developers: Props["developers"],
+  developerRecords: any[],
+) {
+  return developers.find((developer) => activityBelongsToDeveloper(activity, developer, developerRecords));
+}
+
+function buildMemberMetrics(developers: Props["developers"], allActivities: any[], developerRecords: any[]) {
   return developers.map((dev) => {
-    const acts       = allActivities.filter((a: any) => a.assignee_id === dev.id);
+    const acts       = allActivities.filter((a: any) => activityBelongsToDeveloper(a, dev, developerRecords));
     const closed     = acts.filter((a: any) => a.is_closed);
     const hoursP     = acts.reduce((s: number, a: any) => s + Number(a.hours), 0);
     const hoursC     = closed.reduce((s: number, a: any) => s + Number(a.hours), 0);
@@ -432,6 +452,7 @@ function buildMemberMetrics(developers: Props["developers"], allActivities: any[
 
 export function RelatorioAtividades({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
   const { user, isAdmin } = useAuth();
+  const developerRecords = rawData.developerRecords ?? rawData.developers;
 
   // FIX 1: Resolve o developer do usuário logado a partir de rawData.developers
   // (que inclui user_id), usado apenas para travar o filtro de não-admins.
@@ -503,14 +524,19 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   // Atividades filtradas incluindo o analista — usadas nos KPIs e no Detalhamento.
   const filteredActivities = useMemo(() => {
     let acts = activitiesBySprintAndDate;
-    if (filters.memberId !== "all") acts = acts.filter((a: any) => a.assignee_id === filters.memberId);
+    if (filters.memberId !== "all") {
+      const selectedDeveloper = developers.find((developer) => developer.id === filters.memberId);
+      acts = selectedDeveloper
+        ? acts.filter((activity: any) => activityBelongsToDeveloper(activity, selectedDeveloper, developerRecords))
+        : [];
+    }
     return acts;
-  }, [activitiesBySprintAndDate, filters.memberId]);
+  }, [activitiesBySprintAndDate, filters.memberId, developers, developerRecords]);
 
   // Produtividade usa sempre TODOS os membros (sem filtro de analista)
   const memberMetrics = useMemo(
-    () => buildMemberMetrics(developers, activitiesBySprintAndDate),
-    [activitiesBySprintAndDate, developers],
+    () => buildMemberMetrics(developers, activitiesBySprintAndDate, developerRecords),
+    [activitiesBySprintAndDate, developers, developerRecords],
   );
 
   const totalActs   = filteredActivities.length;
@@ -547,12 +573,12 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         const entry: any = { sprint: sprint.name };
         developers.forEach((dev) => {
           entry[dev.name.split(" ")[0]] = rawData.activities.filter(
-            (a: any) => huIds.has(a.hu_id) && a.assignee_id === dev.id && a.is_closed,
+            (a: any) => huIds.has(a.hu_id) && activityBelongsToDeveloper(a, dev, developerRecords) && a.is_closed,
           ).length;
         });
         return entry;
       });
-  }, [rawData, developers]);
+  }, [rawData, developers, developerRecords]);
 
   const radarData = memberMetrics.slice(0, 6).map((m) => ({
     analista:          m.name.split(" ")[0],
@@ -564,7 +590,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   // tableData respeita o filtro de analista — só aparece quando analista selecionado
   const tableData = useMemo(() => {
     return filteredActivities.map((a: any) => {
-      const dev    = developers.find((d) => d.id === a.assignee_id);
+      const dev    = resolveActivityDeveloper(a, developers, developerRecords);
       const hu     = rawData.hus.find((h: any) => h.id === a.hu_id);
       const sprint = hu ? rawData.sprints.find((s: any) => s.id === hu.sprint_id) : null;
       return {
@@ -582,7 +608,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         _sprintName: sprint?.name || "",
       };
     });
-  }, [filteredActivities, developers, rawData]);
+  }, [filteredActivities, developers, developerRecords, rawData]);
 
   function handleExportCSV() {
     exportToCSV(

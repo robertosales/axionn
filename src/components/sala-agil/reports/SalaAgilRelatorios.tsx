@@ -22,6 +22,7 @@ interface SalaAgilRelatoriosProps {
     activities: any[];
     impediments: any[];
     developers: any[];
+    developerRecords?: any[];
   };
   teamName: string;
   currentUserName: string;

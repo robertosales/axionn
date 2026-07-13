@@ -27,6 +27,7 @@ export function SalaAgilReportsPage() {
     activities: [] as any[],
     impediments: [] as any[],
     developers: [] as any[],
+    developerRecords: [] as any[],
   });
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export function SalaAgilReportsPage() {
         ? agileTeams
         : agileTeams.filter((t: any) => t.id === currentTeamId);
       if (teamsToLoad.length === 0) {
-        setData({ sprints: [], hus: [], activities: [], impediments: [], developers: [] });
+        setData({ sprints: [], hus: [], activities: [], impediments: [], developers: [], developerRecords: [] });
         setLoading(false);
         return;
       }
@@ -46,6 +47,7 @@ export function SalaAgilReportsPage() {
       const allActs: any[] = [];
       const allImps: any[] = [];
       const allDevs: any[] = [];
+      const allDeveloperRecords: any[] = [];
       for (const team of teamsToLoad) {
         const [sR, hR, aR, iR, dR] = await Promise.all([
           supabase.from("sprints").select("*").eq("team_id", team.id),
@@ -56,6 +58,7 @@ export function SalaAgilReportsPage() {
         ]);
         const memberIds = await fetchActiveMemberIds(team.id);
         const devsFiltered = filterActiveDevelopers((dR.data || []) as any[], memberIds);
+        allDeveloperRecords.push(...(dR.data || []));
         allSprints.push(...(sR.data || []));
         allHUs.push(...(hR.data || []));
         allActs.push(...(aR.data || []));
@@ -66,6 +69,7 @@ export function SalaAgilReportsPage() {
       setData({
         sprints: allSprints, hus: allHUs, activities: allActs,
         impediments: allImps, developers: allDevs,
+        developerRecords: allDeveloperRecords,
       });
       setLoading(false);
     }

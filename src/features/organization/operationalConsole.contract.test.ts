@@ -43,7 +43,9 @@ describe("operational console routing contract", () => {
   it("does not redirect the gitlab integrations route to platform plans", () => {
     expect(app).toContain('path="/admin/gitlab-integrations"');
     expect(app).toContain('to="/organization/gitlab-integrations"');
-    expect(app).not.toMatch(/gitlab-integrations[\s\S]*?platformPath="\/platform"/);
+    expect(app).toMatch(
+      /path="\/admin\/gitlab-integrations"\s+element=\{<Navigate to="\/organization\/gitlab-integrations" replace \/>\}/,
+    );
   });
 });
 

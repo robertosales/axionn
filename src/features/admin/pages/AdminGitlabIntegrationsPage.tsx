@@ -337,7 +337,7 @@ export function AdminGitlabIntegrationsPage() {
       <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
         <p className="font-medium text-slate-900">Nota</p>
         <p className="mt-1">
-          Tokens e segredos são armazenados de forma cifrada. Configure o webhook no GitLab apontando para a URL informada abaixo.
+          Tokens e segredos são armazenados de forma cifrada. O webhook é registrado automaticamente no GitLab ao salvar a integração.
         </p>
       </div>
         </TabsContent>
@@ -440,8 +440,8 @@ export function AdminGitlabIntegrationsPage() {
               </div>
               <p className="text-xs leading-relaxed text-slate-600">
                 URL fixa do Axionn. Ao salvar com um token de acesso válido, o webhook é registrado
-                automaticamente no GitLab — não é necessário copiar ou configurar manualmente.
-                O botão "Re-registrar webhook" abaixo serve apenas como fallback caso o auto-registro falhe.
+                automaticamente no GitLab — não é necessário configurar nada manualmente. Se o auto-registro
+                falhar, a integração ainda será salva e o botão "Re-registrar webhook" poderá ser usado como fallback.
               </p>
               </div>
             </section>

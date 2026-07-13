@@ -517,15 +517,17 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   const totalClosed = filteredActivities.filter((a: any) => a.is_closed).length;
   const totalMinP   = filteredActivities.reduce((s: number, a: any) => s + toMin(a.hours), 0);
   const totalMinC   = filteredActivities.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + toMin(a.hours), 0);
+  const isIndividualView = filters.memberId !== "all";
+  const teamTotalActs = activitiesBySprintAndDate.length;
   const avgEff      = memberMetrics.length > 0
     ? Math.round(memberMetrics.reduce((s, m) => s + m.eff, 0) / memberMetrics.length)
     : 0;
 
   const kpis = [
-    { label: "Atividades",       value: totalActs,               sub: totalActs > 0 ? `${totalClosed} concluídas` : "Nenhuma no recorte atual", icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
-    { label: "Horas Concluídas", value: formatMinutes(totalMinC), sub: totalMinP > 0 ? `de ${formatMinutes(totalMinP)} planejadas` : "Sem horas registradas", icon: <Clock className="h-4 w-4" />, status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "neutral" as any },
-    { label: "Eficiência Média", value: `${avgEff}%`,            sub: totalActs > 0 ? "meta >= 80%" : "Sem base para cálculo", icon: <Zap className="h-4 w-4" />, status: totalActs > 0 ? effStatus(avgEff) : "neutral" as any },
-    { label: "Analistas Ativos", value: memberMetrics.length,    sub: memberMetrics.length > 0 ? `de ${developers.length} no time` : "Nenhum no recorte atual", icon: <User className="h-4 w-4" />, status: "neutral" as any },
+    { label: isIndividualView ? "Atividades do Analista" : "Atividades do Time", value: totalActs, sub: totalActs > 0 ? `${totalClosed} concluídas` : isIndividualView && teamTotalActs > 0 ? `${teamTotalActs} atividades no time` : "Nenhuma no recorte atual", icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
+    { label: isIndividualView ? "Horas do Analista" : "Horas Concluídas", value: formatMinutes(totalMinC), sub: totalMinP > 0 ? `de ${formatMinutes(totalMinP)} planejadas` : isIndividualView && teamTotalActs > 0 ? "Analista sem horas neste recorte" : "Sem horas registradas", icon: <Clock className="h-4 w-4" />, status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "neutral" as any },
+    { label: "Eficiência Média do Time", value: `${avgEff}%`, sub: memberMetrics.length > 0 ? "Visão agregada · meta >= 80%" : "Sem base para cálculo", icon: <Zap className="h-4 w-4" />, status: memberMetrics.length > 0 ? effStatus(avgEff) : "neutral" as any },
+    { label: "Analistas Ativos no Time", value: memberMetrics.length, sub: memberMetrics.length > 0 ? `de ${developers.length} no recorte agregado` : "Nenhum no recorte atual", icon: <User className="h-4 w-4" />, status: "neutral" as any },
   ];
 
   const hoursBarData = memberMetrics.map((m) => ({
@@ -686,16 +688,16 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     ? `${selectedMember.name} não possui atividades neste recorte`
     : "Nenhuma atividade encontrada no período";
   const emptyStateDescription = selectedMember && !hasNoPeriodActivities
-    ? "Há registros no período, mas nenhum está associado ao analista selecionado."
+    ? `Existem ${teamTotalActs} atividades no time, mas nenhuma para este analista no recorte atual.`
     : "Não há atividades registradas para a sprint e o período selecionados.";
   const emptyChartContent = (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center">
       <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Inbox className="h-4 w-4" />
       </span>
-      <p className="text-sm font-medium text-foreground">Sem dados para exibir</p>
+      <p className="text-sm font-medium text-foreground">Sem dados agregados para exibir</p>
       <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-        Revise o analista, a sprint ou o período selecionado.
+        Não há atividades do time para a sprint e o período selecionados.
       </p>
     </div>
   );
@@ -758,7 +760,10 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
       <ReportLayout>
         <ReportPageHeader
           title="Atividades & Produtividade Individual"
-          description={`Time: ${teamName} · ${totalActs} atividades no período`}
+          description={isIndividualView
+            ? `Recorte individual · ${selectedMember?.name ?? "Analista"} · ${totalActs} atividades · ${teamTotalActs} no time`
+            : `Visão agregada do time ${teamName} · ${teamTotalActs} atividades no período`
+          }
           icon={<User className="h-5 w-5" />}
           badge="Ágil"
           onBack={onBack}
@@ -791,15 +796,33 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
               <CalendarDays className="h-4 w-4" />
             </span>
             <div className="min-w-0">
-              <p className="text-xs font-medium text-foreground">Contexto do relatório</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold text-foreground">
+                  {isIndividualView ? "Visualização individual" : "Visualização agregada do time"}
+                </p>
+                <Badge variant="secondary" className="h-5 text-[10px] font-medium">
+                  {isIndividualView ? "Recorte individual" : "Time completo"}
+                </Badge>
+              </div>
               <p className="mt-0.5 whitespace-normal break-words text-xs text-muted-foreground">
-                {selectedMember?.name ?? "Todos os analistas"} · {selectedSprint?.name ?? "Todas as sprints"} · {periodLabel}
+                {isIndividualView
+                  ? `Você está vendo o recorte individual de ${selectedMember?.name ?? "analista selecionado"}.`
+                  : `Você está vendo o resultado agregado de todos os analistas de ${teamName}.`
+                }
+                {" "}{selectedSprint?.name ?? "Todas as sprints"} · {periodLabel}
               </p>
             </div>
           </div>
-          <Badge variant="outline" className="w-fit shrink-0 bg-background text-[10px] font-medium text-muted-foreground">
-            {totalActs} {totalActs === 1 ? "atividade" : "atividades"}
-          </Badge>
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            <Badge variant="outline" className="w-fit bg-background text-[10px] font-medium text-muted-foreground">
+              {totalActs} {totalActs === 1 ? "atividade no recorte" : "atividades no recorte"}
+            </Badge>
+            {isIndividualView && (
+              <Badge variant="outline" className="w-fit bg-background text-[10px] font-medium text-muted-foreground">
+                {teamTotalActs} {teamTotalActs === 1 ? "atividade no time" : "atividades no time"}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {hasNoFilteredActivities && (
@@ -819,8 +842,8 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         <ReportKPISummary items={kpis} cols={4} />
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <ReportChart title="Horas por Analista" subtitle="Concluídas vs. pendentes" height="h-72">
-            {hasNoFilteredActivities ? emptyChartContent : (
+          <ReportChart title="Horas por Analista" subtitle="Visão agregada do time · concluídas vs. pendentes" height="h-72">
+            {hasNoPeriodActivities ? emptyChartContent : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hoursBarData} margin={{ top: 12, right: 8, left: -8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -837,8 +860,8 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
             )}
           </ReportChart>
 
-          <ReportChart title="Throughput por Sprint" subtitle="Atividades concluídas por analista" height="h-72">
-            {hasNoFilteredActivities ? emptyChartContent : (
+          <ReportChart title="Throughput por Sprint" subtitle="Histórico agregado do time · atividades concluídas por analista" height="h-72">
+            {hasNoPeriodActivities ? emptyChartContent : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={throughputData} margin={{ top: 12, right: 16, left: -8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -859,8 +882,8 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         </div>
 
         {radarData.length > 1 && (
-          <ReportChart title="Comparação de Produtividade" subtitle="Eficiência, conclusões e bugs (%)" height="h-72">
-            {hasNoFilteredActivities ? emptyChartContent : (
+          <ReportChart title="Comparação de Produtividade" subtitle="Visão agregada do time · eficiência, conclusões e bugs (%)" height="h-72">
+            {hasNoPeriodActivities ? emptyChartContent : (
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
                   <PolarGrid stroke="hsl(var(--border))" />
@@ -880,6 +903,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         {/* ── Produtividade: sempre mostra todos os analistas ── */}
         <ReportDataTable
           title="Produtividade por Analista"
+          subtitle="Visão agregada do time para a sprint e o período selecionados."
           badge={memberMetrics.length}
           data={memberMetrics}
           emptyMessage="Nenhum analista possui atividades registradas para a sprint e o período selecionados."
@@ -924,7 +948,8 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         {/* ── Detalhamento: só exibe quando um analista específico estiver selecionado ── */}
         {filters.memberId !== "all" && (
           <ReportDataTable
-            title="Detalhamento"
+            title="Detalhamento individual"
+            subtitle={`Atividades associadas a ${selectedMember?.name ?? "analista selecionado"} no recorte atual.`}
             badge={tableData.length}
             data={tableData}
             emptyMessage={`${selectedMember?.name ?? "O analista selecionado"} não possui atividades registradas neste recorte.`}

@@ -5,7 +5,6 @@ import { SalaAgilRelatorios } from "@/components/sala-agil/reports/SalaAgilRelat
 import { AgileHistory } from "@/components/AgileHistory";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, Library } from "lucide-react";
-import { fetchActiveMemberIds, filterActiveDevelopers } from "@/lib/teamMemberFilter";
 
 /**
  * Página dedicada de Relatórios — Sala Ágil.
@@ -56,14 +55,14 @@ export function SalaAgilReportsPage() {
           supabase.from("impediments").select("*").eq("team_id", team.id),
           supabase.from("developers").select("*").eq("team_id", team.id),
         ]);
-        const memberIds = await fetchActiveMemberIds(team.id);
-        const devsFiltered = filterActiveDevelopers((dR.data || []) as any[], memberIds);
         allDeveloperRecords.push(...(dR.data || []));
         allSprints.push(...(sR.data || []));
         allHUs.push(...(hR.data || []));
         allActs.push(...(aR.data || []));
         allImps.push(...(iR.data || []));
-        allDevs.push(...devsFiltered);
+        // Relatórios precisam preservar os responsáveis históricos referenciados
+        // por activities.assignee_id. Filtrar por team_members quebra essa junção.
+        allDevs.push(...(dR.data || []));
       }
       if (cancelled) return;
       setData({

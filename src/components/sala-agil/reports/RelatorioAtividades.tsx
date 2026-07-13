@@ -416,45 +416,52 @@ function personNameSignature(name: unknown): string {
   return parts.length > 1 ? `${parts[0]}:${parts[parts.length - 1]}` : parts[0] ?? "";
 }
 
-function activityBelongsToDeveloper(
-  activity: any,
-  developer: Props["developers"][number],
-  developerRecords: any[],
-): boolean {
-  // Activities may still reference a historical developer row after an account
-  // recreation. Resolve the person by progressively weaker stable identifiers.
-  if (activity.assignee_id === developer.id) return true;
-  const persistedAssignee = developerRecords.find((record: any) => record.id === activity.assignee_id);
-  if (!persistedAssignee) return false;
-
-  if (developer.user_id && persistedAssignee.user_id === developer.user_id) return true;
-
-  const normalizedDeveloperEmail = normalizeIdentityValue(developer.email);
-  const normalizedPersistedEmail = normalizeIdentityValue(persistedAssignee.email);
-  if (normalizedDeveloperEmail && normalizedPersistedEmail === normalizedDeveloperEmail) return true;
-
-  const developerSignature = personNameSignature(developer.name);
-  const persistedSignature = personNameSignature(persistedAssignee.name);
-  const developerRole = normalizeIdentityValue(developer.role);
-  const persistedRole = normalizeIdentityValue(persistedAssignee.role);
-  return Boolean(
-    developerSignature &&
-    developerSignature === persistedSignature &&
-    (!developerRole || !persistedRole || developerRole === persistedRole),
-  );
-}
-
 function resolveActivityDeveloper(
   activity: any,
   developers: Props["developers"],
   developerRecords: any[],
 ) {
-  return developers.find((developer) => activityBelongsToDeveloper(activity, developer, developerRecords));
+  // Preserve the original FK semantics first. This also guarantees that one
+  // activity cannot be counted for two developer records representing one person.
+  const exactDeveloper = developers.find((developer) => developer.id === activity.assignee_id);
+  if (exactDeveloper) return exactDeveloper;
+
+  const persistedAssignee = developerRecords.find((record: any) => record.id === activity.assignee_id);
+  if (!persistedAssignee) return undefined;
+
+  const byUserId = persistedAssignee.user_id
+    ? developers.find((developer) => developer.user_id === persistedAssignee.user_id)
+    : undefined;
+  if (byUserId) return byUserId;
+
+  const normalizedPersistedEmail = normalizeIdentityValue(persistedAssignee.email);
+  const byEmail = normalizedPersistedEmail
+    ? developers.find((developer) => normalizeIdentityValue(developer.email) === normalizedPersistedEmail)
+    : undefined;
+  if (byEmail) return byEmail;
+
+  const persistedSignature = personNameSignature(persistedAssignee.name);
+  const persistedRole = normalizeIdentityValue(persistedAssignee.role);
+  return developers.find(
+    (developer) =>
+      persistedSignature &&
+      personNameSignature(developer.name) === persistedSignature &&
+      (!developer.role || !persistedRole || normalizeIdentityValue(developer.role) === persistedRole),
+  );
+}
+
+function activityBelongsToDeveloper(
+  activity: any,
+  developer: Props["developers"][number],
+  developers: Props["developers"],
+  developerRecords: any[],
+): boolean {
+  return resolveActivityDeveloper(activity, developers, developerRecords)?.id === developer.id;
 }
 
 function buildMemberMetrics(developers: Props["developers"], allActivities: any[], developerRecords: any[]) {
   return developers.map((dev) => {
-    const acts       = allActivities.filter((a: any) => activityBelongsToDeveloper(a, dev, developerRecords));
+    const acts       = allActivities.filter((a: any) => activityBelongsToDeveloper(a, dev, developers, developerRecords));
     const closed     = acts.filter((a: any) => a.is_closed);
     const hoursP     = acts.reduce((s: number, a: any) => s + Number(a.hours), 0);
     const hoursC     = closed.reduce((s: number, a: any) => s + Number(a.hours), 0);
@@ -557,7 +564,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     if (filters.memberId !== "all") {
       const selectedDeveloper = developers.find((developer) => developer.id === filters.memberId);
       acts = selectedDeveloper
-        ? acts.filter((activity: any) => activityBelongsToDeveloper(activity, selectedDeveloper, developerRecords))
+        ? acts.filter((activity: any) => activityBelongsToDeveloper(activity, selectedDeveloper, developers, developerRecords))
         : [];
     }
     return acts;
@@ -603,7 +610,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         const entry: any = { sprint: sprint.name };
         developers.forEach((dev) => {
           entry[dev.name.split(" ")[0]] = rawData.activities.filter(
-            (a: any) => huIds.has(a.hu_id) && activityBelongsToDeveloper(a, dev, developerRecords) && a.is_closed,
+            (a: any) => huIds.has(a.hu_id) && activityBelongsToDeveloper(a, dev, developers, developerRecords) && a.is_closed,
           ).length;
         });
         return entry;

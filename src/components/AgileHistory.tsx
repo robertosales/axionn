@@ -311,14 +311,14 @@ function PlanningSessionCard({
   onView: () => void;
 }) {
   return (
-    <div className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/25 lg:grid-cols-[minmax(15rem,1fr)_8rem_6rem_6rem_7rem_8rem_4rem] lg:items-center lg:gap-4">
+    <div className="grid gap-2.5 px-4 py-3.5 transition-colors hover:bg-muted/20 lg:grid-cols-[minmax(13rem,1fr)_7rem_5rem_4rem_5rem_7rem_4rem] lg:items-center lg:gap-3 xl:grid-cols-[minmax(15rem,1fr)_8rem_6rem_5rem_6rem_8rem_4rem] xl:gap-4">
       <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-semibold">{session.sprintName}</span>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="truncate text-sm font-semibold leading-5 text-foreground">{session.sprintName}</span>
           <StatusBadge status={session.status} />
         </div>
-        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="font-mono">#{session.id.slice(0, 8)}</span>
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
+          <span className="rounded bg-muted/70 px-1 font-mono text-[10px]">#{session.id.slice(0, 8)}</span>
           <span aria-hidden="true">·</span>
           <Calendar className="h-3 w-3" />
           {formatDate(session.createdAt)}
@@ -326,9 +326,9 @@ function PlanningSessionCard({
           {profiles[session.createdBy] ?? "Responsável não identificado"}
         </p>
       </div>
-      <span className="text-xs text-muted-foreground">{DECK_MODE_LABELS[session.deckMode] ?? session.deckMode}</span>
-      <span className="text-sm font-semibold tabular-nums">{session.participantCount}</span>
-      <span className="text-sm font-semibold tabular-nums">{session.husVoted}</span>
+      <span className="text-xs font-medium text-muted-foreground">{DECK_MODE_LABELS[session.deckMode] ?? session.deckMode}</span>
+      <span className="text-sm font-medium tabular-nums text-foreground">{session.participantCount}</span>
+      <span className="text-sm font-medium tabular-nums text-foreground">{session.husVoted}</span>
       <span className="text-sm font-semibold tabular-nums text-success">{session.totalHours}h</span>
       {session.divergenceCount > 0 ? (
         <Badge variant="outline" className="w-fit gap-1 border-warning/30 bg-warning/10 text-warning">
@@ -339,7 +339,7 @@ function PlanningSessionCard({
           <ThumbsUp className="h-3 w-3" /> Consenso
         </Badge>
       )}
-      <Button variant="ghost" size="sm" className="h-8 w-fit gap-1 px-2 text-xs" onClick={onView}>
+      <Button variant="ghost" size="sm" className="h-8 w-fit gap-1 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={onView}>
         <Eye className="h-3.5 w-3.5" /> Ver
       </Button>
     </div>
@@ -726,7 +726,7 @@ export function AgileHistory() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Header */}
       <div>
         <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
@@ -752,7 +752,7 @@ export function AgileHistory() {
         </TabsList>
 
         {/* ── Tab Planning ───────────────────────────────────────────── */}
-        <TabsContent value="planning" className="mt-4 space-y-4">
+        <TabsContent value="planning" className="mt-4 space-y-5">
           <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
             <MetricCard label="Sessões" value={planningMetrics.sessions} />
             <MetricCard label="HUs estimadas" value={planningMetrics.totalHus} />
@@ -764,9 +764,9 @@ export function AgileHistory() {
             />
           </div>
 
-          <Card className="shadow-none">
-            <CardContent className="space-y-3 p-3 sm:p-4">
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_11rem_10rem_10rem_12rem_auto]">
+          <Card className="border-border/60 bg-muted/[0.08] shadow-none">
+            <CardContent className="space-y-2.5 p-2.5 sm:p-3">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1.6fr)_10rem_9rem_9rem_11rem_auto] xl:items-center">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -774,25 +774,25 @@ export function AgileHistory() {
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder="Buscar por nome, ID ou responsável"
                     aria-label="Buscar sessões de Planning"
-                    className="h-9 pl-9 text-xs"
+                    className="h-9 bg-background pl-9 text-xs shadow-sm"
                   />
                 </div>
                 <Select value={sprintFilter} onValueChange={setSprintFilter}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Sessão" /></SelectTrigger>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Sessão" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas as sessões</SelectItem>
                     {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={planningStatusFilter} onValueChange={setPlanningStatusFilter}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os status</SelectItem>
                     <SelectItem value="finished">Concluídas</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={planningPeriodFilter} onValueChange={setPlanningPeriodFilter}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Período" /></SelectTrigger>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Período" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todo o período</SelectItem>
                     <SelectItem value="7">Últimos 7 dias</SelectItem>
@@ -801,7 +801,7 @@ export function AgileHistory() {
                   </SelectContent>
                 </Select>
                 <Select value={planningResponsibleFilter} onValueChange={setPlanningResponsibleFilter}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os responsáveis</SelectItem>
                     {responsibleOptions.map((userId) => (
@@ -820,14 +820,14 @@ export function AgileHistory() {
                     setPlanningPeriodFilter("all");
                     setPlanningResponsibleFilter("all");
                   }}
-                  className="h-9 px-3 text-xs"
+                  className="h-8 justify-self-start px-2.5 text-xs xl:justify-self-end"
                 >
                   Limpar
                 </Button>
               </div>
 
               {hasPlanningFilters && (
-                <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-border/50 px-0.5 pt-2.5">
                   <span className="mr-1 text-[11px] font-medium text-muted-foreground">Filtros aplicados:</span>
                   {searchTerm && <Badge variant="secondary">Busca: {searchTerm}</Badge>}
                   {sprintFilter !== "all" && <Badge variant="secondary">Sessão: {sprints.find((s) => s.id === sprintFilter)?.name}</Badge>}
@@ -846,11 +846,11 @@ export function AgileHistory() {
             <SprintScoreCard sprintName={activeSprintName} score={activeScore} />
           )}
 
-          <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
-            <div className="hidden grid-cols-[minmax(15rem,1fr)_8rem_6rem_6rem_7rem_8rem_4rem] gap-4 border-b border-border/70 bg-muted/35 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground lg:grid">
+          <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm shadow-foreground/[0.02]">
+            <div className="hidden grid-cols-[minmax(13rem,1fr)_7rem_5rem_4rem_5rem_7rem_4rem] gap-3 border-b border-border/70 bg-muted/30 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid xl:grid-cols-[minmax(15rem,1fr)_8rem_6rem_5rem_6rem_8rem_4rem] xl:gap-4">
               <span>Sessão</span><span>Formato</span><span>Participantes</span><span>HUs</span><span>Horas</span><span>Resultado</span><span>Ação</span>
             </div>
-            <div className="divide-y divide-border/70">
+            <div className="divide-y divide-border/60">
               {visiblePlanningSessions.length > 0 ? visiblePlanningSessions.map((session) => (
                 <PlanningSessionCard key={session.id} session={session} profiles={profiles} onView={() => openPlanningDetail(session)} />
               )) : (
@@ -860,30 +860,32 @@ export function AgileHistory() {
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted-foreground">
-                {visiblePlanningSessions.length} visíveis de {filteredPlanning.length} resultados · Página {currentPlanningPage} de {planningTotalPages}
-              </p>
+            <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/[0.16] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span><strong className="font-medium text-foreground">{visiblePlanningSessions.length}</strong> visíveis de {filteredPlanning.length} resultados</span>
+                <span className="hidden h-3 w-px bg-border sm:block" aria-hidden="true" />
+                <span>Página <strong className="font-medium text-foreground">{currentPlanningPage}</strong> de {planningTotalPages}</span>
+              </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={currentPlanningPage === 1} onClick={() => setPlanningPage(currentPlanningPage - 1)} className="h-8 gap-1 text-xs">
+                <Button variant="outline" size="sm" disabled={currentPlanningPage === 1} onClick={() => setPlanningPage(currentPlanningPage - 1)} className="h-8 gap-1 bg-background px-2.5 text-xs">
                   <ChevronLeft className="h-3.5 w-3.5" /> Anterior
                 </Button>
-                <Button variant="outline" size="sm" disabled={currentPlanningPage === planningTotalPages} onClick={() => setPlanningPage(currentPlanningPage + 1)} className="h-8 gap-1 text-xs">
+                <Button variant="outline" size="sm" disabled={currentPlanningPage === planningTotalPages} onClick={() => setPlanningPage(currentPlanningPage + 1)} className="h-8 gap-1 bg-background px-2.5 text-xs">
                   Próxima <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
           </div>
 
-          <Card className="shadow-none">
-            <CardHeader className="px-4 pb-2 pt-4">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold"><Users className="h-4 w-4 text-muted-foreground" /> Participação</CardTitle>
+          <Card className="border-border/50 bg-muted/[0.06] shadow-none">
+            <CardHeader className="px-4 pb-1.5 pt-3.5">
+              <CardTitle className="flex items-center gap-2 text-xs font-semibold text-muted-foreground"><Users className="h-3.5 w-3.5" /> Participação</CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-4">
+            <CardContent className="px-4 pb-3.5">
               {participationRanking.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {participationRanking.map((participant) => (
-                    <Badge key={participant.userId} variant="outline" className="gap-1.5 py-1 text-xs font-normal">
+                    <Badge key={participant.userId} variant="outline" className="gap-1.5 border-border/60 bg-background/70 py-0.5 text-[11px] font-normal">
                       <span className="font-medium">{participant.name}</span>
                       <span className="text-muted-foreground">{participant.count} {participant.count === 1 ? "sessão" : "sessões"}</span>
                     </Badge>

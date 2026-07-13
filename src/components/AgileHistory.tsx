@@ -193,10 +193,10 @@ function calcDivergenceLevel(voteValues: string[], deckMode: string): "none" | "
 
 function MetricCard({ label, value, valueClass }: { label: string; value: string | number; valueClass?: string }) {
   return (
-    <Card>
-      <CardContent className="p-3 text-center">
-        <p className="text-[10px] text-muted-foreground uppercase mb-1">{label}</p>
-        <p className={cn("text-2xl font-bold", valueClass)}>{value}</p>
+    <Card className="border-border/60 shadow-none">
+      <CardContent className="px-3 py-2.5 text-center">
+        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className={cn("text-xl font-semibold tabular-nums tracking-tight", valueClass)}>{value}</p>
       </CardContent>
     </Card>
   );
@@ -313,9 +313,9 @@ function PlanningSessionCard({
   return (
     <div className="grid gap-2.5 px-4 py-3.5 transition-colors hover:bg-muted/20 lg:grid-cols-[minmax(13rem,1fr)_7rem_5rem_4rem_5rem_7rem_4rem] lg:items-center lg:gap-3 xl:grid-cols-[minmax(15rem,1fr)_8rem_6rem_5rem_6rem_8rem_4rem] xl:gap-4">
       <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="truncate text-sm font-semibold leading-5 text-foreground">{session.sprintName}</span>
-          <StatusBadge status={session.status} />
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="min-w-0 break-words text-sm font-semibold leading-5 text-foreground">{session.sprintName}</span>
+          <span className="shrink-0"><StatusBadge status={session.status} /></span>
         </div>
         <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
           <span className="rounded bg-muted/70 px-1 font-mono text-[10px]">#{session.id.slice(0, 8)}</span>
@@ -728,7 +728,7 @@ export function AgileHistory() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
+      <div className="max-w-3xl">
         <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           <BarChart3 className="h-5 w-5 text-primary" /> Relatórios operacionais
         </h2>
@@ -742,7 +742,7 @@ export function AgileHistory() {
       )}
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid h-9 w-full max-w-md grid-cols-2">
           <TabsTrigger value="planning" className="gap-1.5 text-xs">
             <Spade className="h-3.5 w-3.5" /> Planning Poker
           </TabsTrigger>
@@ -767,14 +767,14 @@ export function AgileHistory() {
           <Card className="border-border/60 bg-muted/[0.08] shadow-none">
             <CardContent className="space-y-2.5 p-2.5 sm:p-3">
               <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1.6fr)_10rem_9rem_9rem_11rem_auto] xl:items-center">
-                <div className="relative">
+                <div className="relative md:col-span-2 xl:col-span-1">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder="Buscar por nome, ID ou responsável"
                     aria-label="Buscar sessões de Planning"
-                    className="h-9 bg-background pl-9 text-xs shadow-sm"
+                    className="h-8 border-primary/20 bg-background pl-9 text-xs"
                   />
                 </div>
                 <Select value={sprintFilter} onValueChange={setSprintFilter}>
@@ -846,7 +846,7 @@ export function AgileHistory() {
             <SprintScoreCard sprintName={activeSprintName} score={activeScore} />
           )}
 
-          <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm shadow-foreground/[0.02]">
+          <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm shadow-foreground/[0.025]">
             <div className="hidden grid-cols-[minmax(13rem,1fr)_7rem_5rem_4rem_5rem_7rem_4rem] gap-3 border-b border-border/70 bg-muted/30 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid xl:grid-cols-[minmax(15rem,1fr)_8rem_6rem_5rem_6rem_8rem_4rem] xl:gap-4">
               <span>Sessão</span><span>Formato</span><span>Participantes</span><span>HUs</span><span>Horas</span><span>Resultado</span><span>Ação</span>
             </div>

@@ -148,7 +148,6 @@ serve(async (req: Request) => {
         event_type: eventType,
         event_action: extractEventAction(eventType, payload),
         provider_event_id: providerEventId,
-        provider,
         payload: payload,
         headers: relevantHeaders,
         correlation_id: correlationId,
@@ -178,7 +177,13 @@ serve(async (req: Request) => {
         );
       }
 
-      console.error('[Git Webhook] Failed to store event:', eventError.code, eventError.message);
+      console.error('[Git Webhook] Failed to store event:', {
+        code: eventError.code,
+        message: eventError.message,
+        details: eventError.details,
+        hint: eventError.hint,
+        correlation_id: correlationId,
+      });
       await recordIntegrationHealth(healthContext, {
         status: 'unhealthy',
         errorCode: 'EVENT_PERSISTENCE_FAILED',

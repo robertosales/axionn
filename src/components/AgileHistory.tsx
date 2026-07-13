@@ -813,22 +813,28 @@ export function AgileHistory() {
           if (!open) closeDetail();
         }}
       >
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="flex max-h-[88vh] max-w-3xl flex-col gap-3 overflow-hidden">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="flex items-center gap-2 text-base">
               {detailType === "planning" ? (
                 <>
-                  <Spade className="h-4 w-4 text-primary" /> Detalhes da Sessão de Planning
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Spade className="h-3.5 w-3.5" />
+                  </span>
+                  Detalhes da Sessão de Planning
                 </>
               ) : (
                 <>
-                  <MessageSquare className="h-4 w-4 text-primary" /> Detalhes da Retrospectiva
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  </span>
+                  Detalhes da Retrospectiva
                 </>
               )}
             </DialogTitle>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 pr-2">
+          <ScrollArea className="min-h-0 flex-1 pr-3">
             {/* ── Detalhe Planning ─────────────────────────────────── */}
             {detailSession &&
               detailType === "planning" &&
@@ -837,11 +843,11 @@ export function AgileHistory() {
                 const totalDetailHours = detailHuSummaries.reduce((sum, hu) => sum + hu.consensusHours, 0);
                 const divergedCount = detailHuSummaries.filter((hu) => hu.hadDivergence).length;
                 return (
-                  <div className="space-y-5 pt-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="space-y-4 pt-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p className="text-base font-bold">{s.sprintName}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <p className="text-sm font-semibold leading-tight">{s.sprintName}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                           <Calendar className="h-3 w-3" />
                           {formatDate(s.createdAt)}
                           <span className="mx-1">·</span>
@@ -853,54 +859,54 @@ export function AgileHistory() {
                       <StatusBadge status={s.status} />
                     </div>
 
-                    <div className="grid grid-cols-4 gap-3">
-                      <Card>
-                        <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">HUs Estimadas</p>
-                          <p className="text-2xl font-bold">{s.husVoted}</p>
+                    <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-border/70 bg-muted/20 sm:grid-cols-4">
+                      <Card className="rounded-none border-0 border-b border-r border-border/60 bg-transparent shadow-none sm:border-b-0">
+                        <CardContent className="px-3 py-2.5 text-center">
+                          <p className="text-[10px] font-medium text-muted-foreground">HUs Estimadas</p>
+                          <p className="mt-0.5 text-lg font-semibold tabular-nums">{s.husVoted}</p>
                         </CardContent>
                       </Card>
-                      <Card>
-                        <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">Participantes</p>
-                          <p className="text-2xl font-bold">{s.participantCount}</p>
+                      <Card className="rounded-none border-0 border-b border-border/60 bg-transparent shadow-none sm:border-b-0 sm:border-r">
+                        <CardContent className="px-3 py-2.5 text-center">
+                          <p className="text-[10px] font-medium text-muted-foreground">Participantes</p>
+                          <p className="mt-0.5 text-lg font-semibold tabular-nums">{s.participantCount}</p>
                         </CardContent>
                       </Card>
-                      <Card className="border-success/30 bg-success/5">
-                        <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">Total de Horas</p>
-                          <p className="text-2xl font-bold text-success">{totalDetailHours}h</p>
+                      <Card className="rounded-none border-0 border-r border-border/60 bg-transparent shadow-none">
+                        <CardContent className="px-3 py-2.5 text-center">
+                          <p className="text-[10px] font-medium text-muted-foreground">Total de Horas</p>
+                          <p className="mt-0.5 text-lg font-semibold tabular-nums text-success">{totalDetailHours}h</p>
                         </CardContent>
                       </Card>
-                      <Card className={cn(divergedCount > 0 && "border-warning/30 bg-warning/5")}>
-                        <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">Com Divergência</p>
-                          <p className={cn("text-2xl font-bold", divergedCount > 0 ? "text-warning" : "text-success")}>
+                      <Card className="rounded-none border-0 bg-transparent shadow-none">
+                        <CardContent className="px-3 py-2.5 text-center">
+                          <p className="text-[10px] font-medium text-muted-foreground">Com Divergência</p>
+                          <p className={cn("mt-0.5 text-lg font-semibold tabular-nums", divergedCount > 0 ? "text-warning" : "text-success")}>
                             {divergedCount}
                           </p>
                         </CardContent>
                       </Card>
                     </div>
 
-                    <Separator />
+                    <Separator className="opacity-70" />
 
                     <div>
-                      <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
-                        <Hash className="h-4 w-4" /> HUs Estimadas ({detailHuSummaries.length})
+                      <h3 className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                        <Hash className="h-3.5 w-3.5" /> HUs Estimadas ({detailHuSummaries.length})
                       </h3>
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {detailHuSummaries.map((hu) => (
                           <Card
                             key={hu.huId}
                             className={cn(
-                              "border",
-                              hu.hadDivergence ? "border-warning/30 bg-warning/5" : "border-success/20 bg-success/5",
+                              "border shadow-none",
+                              hu.hadDivergence ? "border-warning/25 bg-warning/[0.03]" : "border-border/70 bg-card",
                             )}
                           >
-                            <CardContent className="p-3">
-                              <div className="flex items-start justify-between gap-3">
+                            <CardContent className="px-3 py-2.5">
+                              <div className="flex items-center justify-between gap-3">
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
+                                  <div className="mb-1 flex items-center gap-1.5">
                                     <Badge variant="outline" className="font-mono text-[10px]">
                                       {hu.huCode}
                                     </Badge>
@@ -920,27 +926,27 @@ export function AgileHistory() {
                                       </Badge>
                                     )}
                                   </div>
-                                  <p className="text-xs font-medium truncate">{hu.huTitle}</p>
+                                  <p className="truncate text-xs font-medium leading-tight">{hu.huTitle}</p>
                                 </div>
                                 {hu.consensusKey && (
-                                  <div className="flex flex-col items-end shrink-0">
+                                  <div className="flex shrink-0 items-center gap-2">
                                     <Badge
                                       className={cn(
-                                        "text-sm font-bold px-3 py-1",
+                                        "min-w-9 justify-center px-2 py-1 text-xs font-semibold",
                                         SIZE_COLORS[hu.consensusKey as SizeKey]?.badge ?? "bg-muted",
                                       )}
                                     >
                                       {hu.consensusKey}
                                     </Badge>
-                                    <span className="text-[10px] text-muted-foreground mt-0.5">
+                                    <span className="text-[10px] text-muted-foreground">
                                       {hu.consensusHours}h
                                     </span>
                                   </div>
                                 )}
                               </div>
-                              <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-current/10">
+                              <div className="mt-2 flex flex-wrap gap-1 border-t border-border/50 pt-2">
                                 {hu.votes.map((v, i) => (
-                                  <div key={i} className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
+                                  <div key={i} className="flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5">
                                     <span className="text-[10px] text-muted-foreground">
                                       {profiles[v.userId] ?? "?"}
                                     </span>

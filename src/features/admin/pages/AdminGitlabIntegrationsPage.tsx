@@ -308,13 +308,17 @@ export function AdminGitlabIntegrationsPage() {
                       </Badge>
                     ) : item.syncStatus === "error" ? (
                       <Badge
-                        className="bg-rose-100 text-rose-700 border-0 max-w-[280px] truncate"
+                        className="bg-rose-100 text-rose-700 border-0 gap-1"
                         title={item.syncError ?? "Erro no registro do webhook"}
                       >
-                        Webhook com erro{item.syncError ? `: ${item.syncError}` : ""}
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500 inline-block" />
+                        Webhook com erro
                       </Badge>
                     ) : (
-                      <Badge className="bg-slate-100 text-slate-500 border-0">Webhook pendente</Badge>
+                      <Badge className="bg-slate-100 text-slate-500 border-0 gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 inline-block" />
+                        Webhook pendente
+                      </Badge>
                     )}
                     <Button variant="ghost" size="icon" aria-label={`Editar ${item.name}`} onClick={() => openEdit(item)}>
                       <Pencil className="h-4 w-4" />

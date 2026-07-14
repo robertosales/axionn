@@ -297,9 +297,9 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
   }
 
   const summaries = [
-    { label: "Total de eventos", value: kpis.data?.total ?? 0, icon: Inbox, tone: "text-foreground" },
-    { label: "Processados", value: kpis.data?.processed ?? 0, icon: CheckCircle2, tone: "text-emerald-600" },
-    { label: "Com erro", value: kpis.data?.errored ?? 0, icon: AlertCircle, tone: "text-rose-600" },
+    { label: "Recebidos no período", value: kpis.data?.total ?? 0, icon: Inbox, tone: "text-foreground" },
+    { label: "Processados sem erro", value: kpis.data?.processed ?? 0, icon: CheckCircle2, tone: "text-emerald-600" },
+    { label: "Falhas de processamento", value: kpis.data?.errored ?? 0, icon: AlertCircle, tone: "text-rose-600" },
     { label: "Taxa de sucesso", value: `${successRate}%`, icon: CircleDot, tone: "text-blue-600" },
   ];
 
@@ -307,8 +307,8 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
     <div className="space-y-5">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumo dos eventos">
         {summaries.map(({ label, value, icon: Icon, tone }) => (
-          <Card key={label} className="border-border/70 shadow-none">
-            <CardContent className="flex items-center justify-between p-4">
+          <Card key={label} className="border-border/60 shadow-none">
+            <CardContent className="flex items-center justify-between px-4 py-3.5">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">{label}</p>
                 {kpis.isLoading ? (
@@ -317,7 +317,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                   <p className={cn("mt-1 text-2xl font-semibold tracking-tight", tone)}>{value}</p>
                 )}
               </div>
-              <div className="rounded-lg border border-border/70 bg-muted/30 p-2.5">
+              <div className="rounded-lg bg-muted/40 p-2">
                 <Icon className={cn("h-4 w-4", tone)} aria-hidden="true" />
               </div>
             </CardContent>
@@ -325,11 +325,11 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
         ))}
       </section>
 
-      <section className="rounded-xl border border-border/70 bg-card p-3.5" aria-label="Filtros de eventos">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <section className="rounded-xl border border-border/60 bg-card p-3" aria-label="Filtros de eventos">
+        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
           <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Select value={typeFilter} onValueChange={(value) => { setTypeFilter(value); setPage(1); }}>
-              <SelectTrigger aria-label="Filtrar por tipo"><SelectValue placeholder="Tipo de evento" /></SelectTrigger>
+              <SelectTrigger className="h-9" aria-label="Filtrar por tipo"><SelectValue placeholder="Tipo de evento" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os tipos</SelectItem>
                 {EVENT_TYPES.map((type) => (
@@ -338,7 +338,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value); setPage(1); }}>
-              <SelectTrigger aria-label="Filtrar por status"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="h-9" aria-label="Filtrar por status"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os status</SelectItem>
                 <SelectItem value="processado">Processado</SelectItem>
@@ -347,7 +347,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
               </SelectContent>
             </Select>
             <Select value={period} onValueChange={(value) => { setPeriod(value as Period); setPage(1); }}>
-              <SelectTrigger aria-label="Filtrar por período"><SelectValue placeholder="Período" /></SelectTrigger>
+              <SelectTrigger className="h-9" aria-label="Filtrar por período"><SelectValue placeholder="Período" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="24h">Últimas 24 horas</SelectItem>
                 <SelectItem value="7d">Últimos 7 dias</SelectItem>
@@ -355,14 +355,14 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
               </SelectContent>
             </Select>
             <Select value={projectFilter} onValueChange={setProjectFilter} disabled={projects.length === 0}>
-              <SelectTrigger aria-label="Filtrar por projeto"><SelectValue placeholder="Projeto/repositório" /></SelectTrigger>
+              <SelectTrigger className="h-9" aria-label="Filtrar por projeto"><SelectValue placeholder="Projeto/repositório" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os projetos</SelectItem>
                 {projects.map((project) => <SelectItem key={project} value={project!}>{project}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center justify-end gap-1.5">
             {hasFilters && (
               <Button variant="ghost" size="sm" className="gap-2" onClick={clearFilters}>
                 <RotateCcw className="h-3.5 w-3.5" /> Limpar
@@ -374,14 +374,14 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
             </Button>
           </div>
         </div>
-        <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground">
           <span className={cn("h-2 w-2 rounded-full", query.isError ? "bg-rose-500" : "bg-emerald-500")} />
           Atualização automática a cada 30 segundos
           {query.data && <span>• {query.data.count} evento(s) no período</span>}
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-border/70 bg-card" aria-label="Eventos GitLab">
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-card" aria-label="Eventos GitLab">
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Fluxo de eventos</h3>
@@ -425,7 +425,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
             {hasFilters && <Button variant="outline" size="sm" className="mt-4" onClick={clearFilters}>Limpar filtros</Button>}
           </div>
         ) : (
-          <div className="divide-y divide-border/60">
+          <div className="divide-y divide-border/50">
             {visibleRows.map((row) => {
               const status = getEventStatus(row);
               const eventMeta = EVENT_META[row.event_type] ?? {
@@ -437,43 +437,54 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
               const project = getEventProject(row.payload);
 
               return (
-                <article key={row.id} className="group px-4 py-4 transition-colors hover:bg-muted/20">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-                    <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border", eventMeta.className)}>
+                <article
+                  key={row.id}
+                  className={cn(
+                    "group relative border-l-2 px-3 py-3.5 transition-colors hover:bg-muted/20 sm:px-4",
+                    status === "processed" && "border-l-emerald-400",
+                    status === "pending" && "border-l-amber-400",
+                    status === "error" && "border-l-rose-400",
+                  )}
+                >
+                  <div className="flex gap-3">
+                    <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border", eventMeta.className)}>
                       <EventIcon className="h-4 w-4" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-sm font-semibold text-foreground">{eventMeta.label}</h4>
-                        {row.event_action && <Badge variant="secondary" className="font-normal">{row.event_action}</Badge>}
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <h4 className="text-sm font-semibold text-foreground">{eventMeta.label}</h4>
+                            {row.event_action && <Badge variant="secondary" className="h-5 font-normal">{row.event_action}</Badge>}
+                          </div>
+                          <p className={cn("mt-1 truncate text-sm font-medium", project ? "text-foreground/80" : "italic text-muted-foreground")} title={project ?? undefined}>
+                            {project ?? "Projeto não informado"}
+                          </p>
+                        </div>
                         <StatusBadge status={status} />
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1.5">
-                          <GitBranch className="h-3.5 w-3.5" />
-                          <span className={cn(!project && "italic")}>{project ?? "Projeto não informado"}</span>
-                        </span>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1.5">
                           <Clock3 className="h-3.5 w-3.5" /> Recebido em {formatDateTime(row.received_at)}
                         </span>
-                        {row.processed_at && <span>Processado em {formatDateTime(row.processed_at)}</span>}
+                        {row.processed_at && <span className="hidden lg:inline">• Processado em {formatDateTime(row.processed_at)}</span>}
                       </div>
-                      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                        <div className="rounded-md bg-muted/40 px-2.5 py-2">
-                          <span className="text-muted-foreground">Provider ID </span>
-                          <span className="font-mono text-foreground" title={row.provider_event_id ?? undefined}>{compactId(row.provider_event_id, 24)}</span>
-                        </div>
-                        <div className="flex items-center rounded-md bg-muted/40 px-2.5 py-2">
-                          <span className="mr-1 text-muted-foreground">Correlação </span>
-                          <span className="min-w-0 truncate font-mono text-foreground" title={row.correlation_id ?? undefined}>{compactId(row.correlation_id, 18)}</span>
+                      <div className="mt-2.5 flex flex-col gap-2 border-t border-border/40 pt-2.5 text-[11px] sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+                          <span>
+                            Provider <span className="font-mono text-foreground/75" title={row.provider_event_id ?? undefined}>{compactId(row.provider_event_id, 20)}</span>
+                          </span>
+                          <span className="flex min-w-0 items-center">
+                            Correlação&nbsp;<span className="max-w-[180px] truncate font-mono text-foreground/75" title={row.correlation_id ?? undefined}>{compactId(row.correlation_id, 18)}</span>
                           {row.correlation_id && (
-                            <Button variant="ghost" size="icon" className="ml-1 h-5 w-5 shrink-0" aria-label="Copiar ID de correlação" onClick={() => copyText(row.correlation_id!)}>
+                            <Button variant="ghost" size="icon" className="ml-0.5 h-5 w-5 shrink-0" aria-label="Copiar ID de correlação" onClick={() => copyText(row.correlation_id!)}>
                               <Copy className="h-3 w-3" />
                             </Button>
                           )}
+                          </span>
                         </div>
-                        <Button variant="ghost" size="sm" className="h-8 justify-start gap-2 xl:justify-center" onClick={() => setViewingPayload(row)}>
-                          <Eye className="h-3.5 w-3.5" /> Ver payload
+                        <Button variant="ghost" size="sm" className="h-7 shrink-0 justify-start gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setViewingPayload(row)}>
+                          <Eye className="h-3.5 w-3.5" /> Ver detalhes
                         </Button>
                       </div>
                       {row.processing_error && (
@@ -515,6 +526,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
             <SheetDescription>
               {viewingPayload && (EVENT_META[viewingPayload.event_type]?.label ?? viewingPayload.event_type)}
               {viewingPayload?.provider_event_id ? ` • ${viewingPayload.provider_event_id}` : ""}
+              {viewingPayload ? ` • ${formatDateTime(viewingPayload.received_at)}` : ""}
             </SheetDescription>
           </SheetHeader>
 

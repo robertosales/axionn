@@ -13871,6 +13871,13 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: Json
       }
+      get_organization_account_statuses: {
+        Args: { p_org_id: string }
+        Returns: {
+          is_active: boolean
+          user_id: string
+        }[]
+      }
       get_organization_contract_form_options_v2: {
         Args: { p_org_id: string }
         Returns: Json

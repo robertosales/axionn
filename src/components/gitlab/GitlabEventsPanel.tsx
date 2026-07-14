@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
+  BookOpen,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -56,8 +57,28 @@ interface GitEventRow {
   payload: unknown;
 }
 
+interface HUCorrelation {
+  hu_id: string;
+  correlation_id: string;
+  git_entity_type: string;
+  code: string;
+  title: string;
+  status: string;
+}
+
+interface HUCorrelationQueryRow {
+  hu_id: string;
+  correlation_id: string | null;
+  git_entity_type: string;
+  user_stories:
+    | { code: string; title: string; status: string }
+    | { code: string; title: string; status: string }[]
+    | null;
+}
+
 type Period = "24h" | "7d" | "30d";
 type EventStatus = "processed" | "pending" | "error";
+type HUCorrelationState = "loading" | "error" | "ready";
 
 const PAGE_SIZE = 20;
 const EVENT_TYPES = ["push", "merge_request", "pipeline", "deployment", "job", "note"];
@@ -192,6 +213,84 @@ function StatusBadge({ status }: { status: EventStatus }) {
   );
 }
 
+function WorkItemContext({
+  correlations,
+  state,
+  variant,
+}: {
+  correlations: HUCorrelation[];
+  state: HUCorrelationState;
+  variant: "timeline" | "details";
+}) {
+  if (variant === "timeline") {
+    return (
+      <div
+        data-slot="event-work-item-context"
+        className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+      >
+        <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {state === "loading" ? (
+          <span>Verificando vínculo com HU</span>
+        ) : state === "error" ? (
+          <span>Vínculo com HU indisponível</span>
+        ) : correlations.length > 0 ? (
+          <span
+            className="min-w-0 truncate"
+            title={`${correlations[0].code} — ${correlations[0].title}`}
+          >
+            <span className="font-mono font-medium text-foreground/75">
+              {correlations[0].code}
+            </span>
+            <span> — {correlations[0].title}</span>
+            {correlations.length > 1 && <span> +{correlations.length - 1}</span>}
+          </span>
+        ) : (
+          <span>HU não vinculada</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div data-slot="event-work-item-details" className="rounded-xl border border-border/70 p-4">
+      <div className="flex items-center gap-2">
+        <BookOpen className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <h3 className="text-sm font-semibold text-foreground">Contexto de trabalho</h3>
+      </div>
+      {state === "loading" ? (
+        <Skeleton className="mt-3 h-10 w-full rounded-lg" />
+      ) : state === "error" ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          O vínculo com HU não pôde ser consultado neste momento.
+        </p>
+      ) : correlations.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {correlations.map((correlation) => (
+            <div key={correlation.hu_id} className="rounded-lg bg-muted/30 px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs font-semibold text-foreground">
+                  {correlation.code}
+                </span>
+                <Badge variant="secondary" className="h-5 font-normal">
+                  {correlation.status}
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm text-foreground/80">{correlation.title}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Vínculo por {correlation.git_entity_type.replaceAll("_", " ")}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-lg bg-muted/20 px-3 py-2.5">
+          <p className="text-sm text-muted-foreground">HU não vinculada a este evento.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
   const [typeFilter, setTypeFilter] = useState("todos");
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -259,6 +358,59 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
     refetchInterval: 30_000,
   });
 
+  const eventCorrelationIds = useMemo(
+    () =>
+      Array.from(
+        new Set((query.data?.rows ?? []).map((row) => row.correlation_id).filter(Boolean)),
+      ) as string[],
+    [query.data?.rows],
+  );
+
+  const huCorrelations = useQuery({
+    queryKey: ["gitlab-event-hu-correlations", integrationId, eventCorrelationIds],
+    queryFn: async (): Promise<HUCorrelation[]> => {
+      if (!integrationId || eventCorrelationIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("hu_git_links")
+        .select(
+          "hu_id, correlation_id, git_entity_type, user_stories!hu_git_links_hu_id_fkey(code, title, status)",
+        )
+        .eq("integration_id", integrationId)
+        .in("correlation_id", eventCorrelationIds);
+      if (error) throw error;
+
+      const links = (data ?? []) as unknown as HUCorrelationQueryRow[];
+      return links.flatMap((link) => {
+        const story = Array.isArray(link.user_stories)
+          ? link.user_stories[0]
+          : link.user_stories;
+        if (!link.correlation_id || !story?.code || !story?.title) return [];
+        return [{
+          hu_id: link.hu_id,
+          correlation_id: link.correlation_id,
+          git_entity_type: link.git_entity_type,
+          code: story.code,
+          title: story.title,
+          status: story.status,
+        }];
+      });
+    },
+    enabled: !!integrationId && eventCorrelationIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const correlationsByEvent = useMemo(() => {
+    const map = new Map<string, HUCorrelation[]>();
+    for (const correlation of huCorrelations.data ?? []) {
+      const current = map.get(correlation.correlation_id) ?? [];
+      if (!current.some((item) => item.hu_id === correlation.hu_id)) {
+        current.push(correlation);
+        map.set(correlation.correlation_id, current);
+      }
+    }
+    return map;
+  }, [huCorrelations.data]);
+
   const projects = useMemo(
     () =>
       Array.from(
@@ -282,6 +434,14 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
     () => formatPayload(viewingPayload?.payload),
     [viewingPayload?.payload],
   );
+  const selectedHUCorrelations = viewingPayload?.correlation_id
+    ? correlationsByEvent.get(viewingPayload.correlation_id) ?? []
+    : [];
+  const correlationQueryState: HUCorrelationState = huCorrelations.isLoading
+    ? "loading"
+    : huCorrelations.isError
+      ? "error"
+      : "ready";
   const hasFilters =
     typeFilter !== "todos" || statusFilter !== "todos" || projectFilter !== "todos" || period !== "7d";
 
@@ -453,6 +613,9 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
               };
               const EventIcon = eventMeta.icon;
               const project = getEventProject(row.payload);
+              const linkedHUs = row.correlation_id
+                ? correlationsByEvent.get(row.correlation_id) ?? []
+                : [];
 
               return (
                 <article
@@ -481,6 +644,11 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                           <p className={cn("mt-1 truncate text-sm font-medium", project ? "text-foreground/80" : "italic text-muted-foreground")} title={project ?? undefined}>
                             {project ?? "Projeto não informado"}
                           </p>
+                          <WorkItemContext
+                            correlations={linkedHUs}
+                            state={row.correlation_id ? correlationQueryState : "ready"}
+                            variant="timeline"
+                          />
                         </div>
                         <StatusBadge status={status} />
                       </div>
@@ -596,6 +764,12 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                   </div>
                 </div>
               </div>
+
+              <WorkItemContext
+                correlations={selectedHUCorrelations}
+                state={viewingPayload.correlation_id ? correlationQueryState : "ready"}
+                variant="details"
+              />
 
               {viewingPayload.processing_error && (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">

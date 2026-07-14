@@ -715,7 +715,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                 <SelectItem value="30d">Últimos 30 dias</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={projectFilter} onValueChange={setProjectFilter} disabled={projects.length === 0}>
+            <Select value={projectFilter} onValueChange={(value) => { setProjectFilter(value); setPage(1); }} disabled={projects.length === 0}>
               <SelectTrigger className="h-9" aria-label="Filtrar por projeto"><SelectValue placeholder="Projeto/repositório" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os projetos</SelectItem>
@@ -978,10 +978,10 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
           <div className="flex items-center justify-between border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
              <span>Página {safePage} de {totalPages}</span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="gap-1" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
+              <Button variant="outline" size="sm" className="gap-1" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>
                 <ChevronLeft className="h-3.5 w-3.5" /> Anterior
               </Button>
-              <Button variant="outline" size="sm" className="gap-1" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
+              <Button variant="outline" size="sm" className="gap-1" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>
                 Próxima <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>

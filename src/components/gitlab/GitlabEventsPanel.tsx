@@ -150,6 +150,20 @@ function compactId(value: string | null, size = 12) {
   return value.length > size ? `${value.slice(0, size)}…` : value;
 }
 
+function formatPayload(payload: unknown): { content: string | null; error: boolean } {
+  if (payload == null) return { content: null, error: false };
+  if (Array.isArray(payload) && payload.length === 0) return { content: null, error: false };
+  if (asRecord(payload) && Object.keys(payload as Record<string, unknown>).length === 0) {
+    return { content: null, error: false };
+  }
+
+  try {
+    return { content: JSON.stringify(payload, null, 2), error: false };
+  } catch {
+    return { content: null, error: true };
+  }
+}
+
 function StatusBadge({ status }: { status: EventStatus }) {
   const meta = {
     processed: {
@@ -264,6 +278,10 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
     return total ? Math.round(((kpis.data?.processed ?? 0) / total) * 1000) / 10 : 0;
   }, [kpis.data]);
   const totalPages = Math.max(1, Math.ceil((query.data?.count ?? 0) / PAGE_SIZE));
+  const payloadView = useMemo(
+    () => formatPayload(viewingPayload?.payload),
+    [viewingPayload?.payload],
+  );
   const hasFilters =
     typeFilter !== "todos" || statusFilter !== "todos" || projectFilter !== "todos" || period !== "7d";
 
@@ -451,7 +469,10 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                       <EventIcon className="h-4 w-4" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div
+                        data-slot="event-primary-context"
+                        className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                      >
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <h4 className="text-sm font-semibold text-foreground">{eventMeta.label}</h4>
@@ -463,13 +484,19 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                         </div>
                         <StatusBadge status={status} />
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <div
+                        data-slot="event-operational-metadata"
+                        className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+                      >
                         <span className="flex items-center gap-1.5">
                           <Clock3 className="h-3.5 w-3.5" /> Recebido em {formatDateTime(row.received_at)}
                         </span>
                         {row.processed_at && <span className="hidden lg:inline">• Processado em {formatDateTime(row.processed_at)}</span>}
                       </div>
-                      <div className="mt-2.5 flex flex-col gap-2 border-t border-border/40 pt-2.5 text-[11px] sm:flex-row sm:items-center sm:justify-between">
+                      <div
+                        data-slot="event-technical-context"
+                        className="mt-2.5 flex flex-col gap-2 border-t border-border/40 pt-2.5 text-[11px] sm:flex-row sm:items-center sm:justify-between"
+                      >
                         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
                           <span>
                             Provider <span className="font-mono text-foreground/75" title={row.provider_event_id ?? undefined}>{compactId(row.provider_event_id, 20)}</span>
@@ -532,7 +559,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
 
           {viewingPayload && (
             <div className="mt-6 space-y-5">
-              <div className="grid gap-3 rounded-xl border border-border/70 bg-muted/20 p-4 sm:grid-cols-2">
+              <div className="grid gap-x-4 gap-y-3 rounded-xl border border-border/70 bg-muted/20 p-4 sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Projeto/repositório</p>
                   <p className="mt-1 text-sm font-medium">{getEventProject(viewingPayload.payload) ?? "Não informado"}</p>
@@ -541,6 +568,22 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                   <p className="text-xs text-muted-foreground">Recebido em</p>
                   <p className="mt-1 text-sm font-medium">{formatDateTime(viewingPayload.received_at)}</p>
                 </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Ação</p>
+                  <p className="mt-1 text-sm font-medium">{viewingPayload.event_action ?? "Não informada"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Provider Event ID</p>
+                  <p className="mt-1 break-all font-mono text-xs text-foreground">
+                    {viewingPayload.provider_event_id ?? "Não informado"}
+                  </p>
+                </div>
+                {viewingPayload.processed_at && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Processado em</p>
+                    <p className="mt-1 text-sm font-medium">{formatDateTime(viewingPayload.processed_at)}</p>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <p className="text-xs text-muted-foreground">Correlation ID</p>
                   <div className="mt-1 flex items-center gap-2">
@@ -569,13 +612,32 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                     <h3 className="text-sm font-semibold">Payload técnico</h3>
                     <p className="mt-0.5 text-xs text-muted-foreground">Conteúdo original recebido pelo webhook</p>
                   </div>
-                  <Button variant="outline" size="sm" className="gap-2" onClick={() => copyText(JSON.stringify(viewingPayload.payload, null, 2))}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={!payloadView.content}
+                    onClick={() => payloadView.content && copyText(payloadView.content)}
+                  >
                     <Copy className="h-3.5 w-3.5" /> Copiar JSON
                   </Button>
                 </div>
-                <pre className="mt-3 max-h-[58vh] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs leading-relaxed text-slate-100">
-                  {JSON.stringify(viewingPayload.payload, null, 2)}
-                </pre>
+                {payloadView.content ? (
+                  <pre className="mt-3 max-h-[58vh] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs leading-relaxed text-slate-100">
+                    {payloadView.content}
+                  </pre>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+                    <p className="text-sm font-medium text-foreground">
+                      {payloadView.error ? "Payload inválido" : "Payload vazio"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {payloadView.error
+                        ? "O conteúdo recebido não pôde ser formatado como JSON."
+                        : "Este evento não possui conteúdo técnico para exibição."}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}

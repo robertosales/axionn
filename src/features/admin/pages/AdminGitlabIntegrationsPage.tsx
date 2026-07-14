@@ -37,7 +37,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { GitlabEventsPanel } from "@/components/gitlab/GitlabEventsPanel";
-import { AppShell } from "@/components/navigation/AppShell";
 import {
   listGitlabIntegrations,
   createGitlabIntegration,
@@ -219,8 +218,7 @@ export function AdminGitlabIntegrationsPage() {
   }, [items]);
 
   return (
-    <AppShell title="GitLab Integrations" subtitle="Gerencie integrações, eventos e contexto operacional" className="border-0 bg-transparent p-0 shadow-none">
-      <div className="space-y-6">
+    <div className="space-y-6">
       <div className="rounded-xl border border-border/70 bg-card px-5 py-5 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-2xl">
@@ -504,7 +502,6 @@ export function AdminGitlabIntegrationsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      </div>
-    </AppShell>
+    </div>
   );
 }

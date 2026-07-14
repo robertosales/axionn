@@ -14,7 +14,9 @@ import {
   GitBranch,
   GitMerge,
   Inbox,
+  MessageSquare,
   RefreshCw,
+  Rocket,
   RotateCcw,
   ServerCog,
 } from "lucide-react";
@@ -122,17 +124,17 @@ const EVENT_META: Record<
   },
   deployment: {
     label: "Deployment Hook",
-    icon: ServerCog,
+    icon: Rocket,
     className: "border-cyan-200 bg-cyan-50 text-cyan-700",
   },
   job: {
     label: "Job Hook",
-    icon: ServerCog,
+    icon: CircleDot,
     className: "border-slate-200 bg-slate-50 text-slate-700",
   },
   note: {
     label: "Note Hook",
-    icon: CircleDot,
+    icon: MessageSquare,
     className: "border-slate-200 bg-slate-50 text-slate-700",
   },
 };
@@ -538,6 +540,21 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
       ),
     [displayedTimelineEntries],
   );
+  const selectedHUTimeRange = useMemo(() => {
+    if (timelineView !== "hu" || !selectedHU || displayedTimelineEntries.length === 0) {
+      return null;
+    }
+
+    const timestamps = displayedTimelineEntries
+      .map((entry) => new Date(entry.event.received_at).getTime())
+      .filter(Number.isFinite);
+    if (timestamps.length === 0) return null;
+
+    return {
+      firstEventAt: new Date(Math.min(...timestamps)).toISOString(),
+      lastEventAt: new Date(Math.max(...timestamps)).toISOString(),
+    };
+  }, [displayedTimelineEntries, selectedHU, timelineView]);
   const hasFilters =
     typeFilter !== "todos" || statusFilter !== "todos" || projectFilter !== "todos" || period !== "7d";
 
@@ -705,7 +722,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
         {timelineView === "hu" && (
           <div className="border-b border-border/60 bg-muted/15 px-4 py-3">
             {selectedHU ? (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 items-start gap-2.5">
                   <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <div className="min-w-0">
@@ -722,11 +739,29 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                     </p>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground sm:max-w-[45%] sm:text-right">
-                  Projeto: {selectedHUProjects.length > 0
-                    ? selectedHUProjects.join(", ")
-                    : "indisponível nos eventos atuais"}
-                </p>
+                <div className="space-y-2 text-xs text-muted-foreground sm:max-w-[55%] sm:text-right">
+                  <p>
+                    Projeto: {selectedHUProjects.length > 0
+                      ? selectedHUProjects.join(", ")
+                      : "indisponível nos eventos atuais"}
+                  </p>
+                  {selectedHUTimeRange && (
+                    <dl className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-x-4">
+                      <div className="flex gap-1.5 sm:justify-end">
+                        <dt>Primeiro evento:</dt>
+                        <dd className="font-medium text-foreground/80">
+                          {formatDateTime(selectedHUTimeRange.firstEventAt)}
+                        </dd>
+                      </div>
+                      <div className="flex gap-1.5 sm:justify-end">
+                        <dt>Último evento:</dt>
+                        <dd className="font-medium text-foreground/80">
+                          {formatDateTime(selectedHUTimeRange.lastEventAt)}
+                        </dd>
+                      </div>
+                    </dl>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

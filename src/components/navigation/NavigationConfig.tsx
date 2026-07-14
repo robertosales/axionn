@@ -194,7 +194,7 @@ export const sustentacaoNavigationConfig: NavigationSection[] = [
     id: "sustentacao-sprints",
     label: "Sprints",
     items: [
-      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, route: "/sustentacao" },
+      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, route: "/sustentacao/dashboard" },
       { id: "board", label: "Board Kanban", icon: Kanban, route: "/sustentacao/board" },
       { id: "demandas", label: "Demandas", icon: ListTodo, route: "/sustentacao/demandas" },
     ],

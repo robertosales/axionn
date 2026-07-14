@@ -522,7 +522,15 @@ function AppRoutes() {
           <Route path="/sala-agil/planning-poker" element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>} />
           <Route path="/sala-agil/retrospectiva" element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>} />
           <Route path="/sala-agil/:section" element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>} />
+          <Route
+            path="/sustentacao"
+            element={<ProtectedRoute><ModuleGuard module="sustentacao"><Navigate to="/sustentacao/dashboard" replace /></ModuleGuard></ProtectedRoute>}
+          />
           <Route path="/sustentacao/*" element={<ProtectedRoute><ModuleGuard module="sustentacao"><SustentacaoPage /></ModuleGuard></ProtectedRoute>} />
+          <Route
+            path="/rdm"
+            element={<ProtectedRoute><ModuleGuard module="rdm"><Navigate to="/rdm/dashboard" replace /></ModuleGuard></ProtectedRoute>}
+          />
           <Route path="/rdm/*" element={<ProtectedRoute><ModuleGuard module="rdm"><RdmPage /></ModuleGuard></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -220,24 +220,62 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const { error: updErr } = await adminClient
+      const { data: currentProfile, error: profileReadError } = await adminClient
+        .from("profiles")
+        .select("is_active")
+        .eq("user_id", user_id)
+        .maybeSingle();
+      if (profileReadError) throw profileReadError;
+      if (!currentProfile) {
+        return new Response(JSON.stringify({ error: "Perfil do usuário não encontrado" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const previousActive = currentProfile.is_active ?? true;
+      const { data: updatedProfiles, error: updErr } = await adminClient
         .from("profiles")
         .update({ is_active })
-        .eq("user_id", user_id);
+        .eq("user_id", user_id)
+        .select("user_id");
       if (updErr) throw updErr;
+      if (!updatedProfiles?.length) throw new Error("Perfil do usuário não foi atualizado");
 
-      // Sincroniza banimento no auth (não obrigatório, best-effort)
-      try {
+      const { data: authUpdate, error: authUpdateError } =
         await adminClient.auth.admin.updateUserById(user_id, {
           ban_duration: is_active ? "none" : "876000h",
         } as any);
-      } catch (banErr) {
-        console.warn("[admin-user-management] toggle_active ban sync falhou:", banErr);
+
+      if (authUpdateError || !authUpdate.user) {
+        const { error: rollbackError } = await adminClient
+          .from("profiles")
+          .update({ is_active: previousActive })
+          .eq("user_id", user_id);
+        if (rollbackError) {
+          console.error("[admin-user-management] rollback do perfil falhou:", rollbackError);
+        }
+        return new Response(
+          JSON.stringify({
+            error: "Não foi possível sincronizar o status com a autenticação. Nenhuma alteração foi confirmada.",
+          }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
 
-      await auditLog("toggle_active", { status: is_active ? "ativado" : "desativado" });
+      await auditLog("toggle_active", {
+        status: is_active ? "ativado" : "desativado",
+        rbac_active: is_active,
+        auth_active: is_active,
+      });
       return new Response(
-        JSON.stringify({ success: true, is_active }),
+        JSON.stringify({
+          success: true,
+          is_active,
+          rbac_active: is_active,
+          auth_active: is_active,
+          auth_sync: "synced",
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

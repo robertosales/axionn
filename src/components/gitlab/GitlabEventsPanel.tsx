@@ -519,16 +519,10 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
     return normalizedRows;
   }, [projectFilter, query.data?.rows, typeFilter]);
 
-  const safePage = Math.min(page, Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE)));
-  const visibleRows = useMemo(
-    () => filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filteredRows, safePage],
-  );
   const successRate = useMemo(() => {
     const total = kpis.data?.total ?? 0;
     return total ? Math.round(((kpis.data?.processed ?? 0) / total) * 1000) / 10 : 0;
   }, [kpis.data]);
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const payloadView = useMemo(
     () => formatPayload(viewingPayload?.payload),
     [viewingPayload?.payload],
@@ -543,7 +537,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
       : "ready";
   const timelineEntries = useMemo<GitlabTimelineEntry[]>(
     () =>
-      visibleRows.map((event) => {
+      filteredRows.map((event) => {
         const workItems = event.correlation_id
           ? correlationsByEvent.get(event.correlation_id) ?? []
           : [];
@@ -562,7 +556,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
           },
         };
       }),
-    [correlationQueryState, correlationsByEvent, visibleRows],
+    [correlationQueryState, correlationsByEvent, filteredRows],
   );
   const knownHUs = useMemo(
     () => {
@@ -586,6 +580,12 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
           )
         : timelineEntries,
     [selectedHUId, timelineEntries, timelineView],
+  );
+  const totalPages = Math.max(1, Math.ceil(displayedTimelineEntries.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visibleEntries = useMemo(
+    () => displayedTimelineEntries.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [displayedTimelineEntries, safePage],
   );
   const selectedHUProjects = useMemo(
     () =>
@@ -628,11 +628,13 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
     if (value === "general") {
       setTimelineView("general");
       setSelectedHUId(null);
+      setPage(1);
       return;
     }
 
     setTimelineView("hu");
     setSelectedHUId(value);
+    setPage(1);
   };
   const copyText = async (text: string) => {
     try {
@@ -875,8 +877,8 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
             )}
           </div>
         ) : (
-          <div className="divide-y divide-border/50">
-            {displayedTimelineEntries.map(({ event: row, project, workItems, workItemState }) => {
+           <div className="divide-y divide-border/50">
+             {visibleEntries.map(({ event: row, project, workItems, workItemState }) => {
               const status = getEventStatus(row);
               const normalizedType = normalizeEventType(row.event_type, row.payload);
               const eventMeta = EVENT_META[normalizedType as GitlabEventType] ?? {
@@ -974,7 +976,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
-            <span>Página {page} de {totalPages}</span>
+             <span>Página {safePage} de {totalPages}</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="gap-1" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
                 <ChevronLeft className="h-3.5 w-3.5" /> Anterior

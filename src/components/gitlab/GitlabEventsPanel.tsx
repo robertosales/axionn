@@ -4,6 +4,7 @@ import {
   AlertCircle,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleDot,
@@ -22,6 +23,11 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -79,6 +85,17 @@ interface HUCorrelationQueryRow {
 type Period = "24h" | "7d" | "30d";
 type EventStatus = "processed" | "pending" | "error";
 type HUCorrelationState = "loading" | "error" | "ready";
+
+interface GitlabTimelineEntry {
+  event: GitEventRow;
+  project: string | null;
+  workItems: HUCorrelation[];
+  workItemState: HUCorrelationState;
+  groupingContext: {
+    huIds: string[];
+    project: string | null;
+  };
+}
 
 const PAGE_SIZE = 20;
 const EVENT_TYPES = ["push", "merge_request", "pipeline", "deployment", "job", "note"];
@@ -226,7 +243,8 @@ function WorkItemContext({
     return (
       <div
         data-slot="event-work-item-context"
-        className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+        className="mt-2 flex min-w-0 items-center gap-1.5 rounded-md bg-muted/35 px-2 py-1.5 text-xs text-muted-foreground sm:w-fit sm:max-w-full"
+        aria-live="polite"
       >
         <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         {state === "loading" ? (
@@ -242,7 +260,11 @@ function WorkItemContext({
               {correlations[0].code}
             </span>
             <span> — {correlations[0].title}</span>
-            {correlations.length > 1 && <span> +{correlations.length - 1}</span>}
+            {correlations.length > 1 && (
+              <span className="whitespace-nowrap text-muted-foreground">
+                {" "}+{correlations.length - 1} HU{correlations.length > 2 ? "s" : ""}
+              </span>
+            )}
           </span>
         ) : (
           <span>HU não vinculada</span>
@@ -253,9 +275,14 @@ function WorkItemContext({
 
   return (
     <div data-slot="event-work-item-details" className="rounded-xl border border-border/70 p-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2">
         <BookOpen className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <h3 className="text-sm font-semibold text-foreground">Contexto de trabalho</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Contexto de trabalho</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Vínculos confirmados com este evento
+          </p>
+        </div>
       </div>
       {state === "loading" ? (
         <Skeleton className="mt-3 h-10 w-full rounded-lg" />
@@ -277,14 +304,17 @@ function WorkItemContext({
               </div>
               <p className="mt-1 text-sm text-foreground/80">{correlation.title}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Vínculo por {correlation.git_entity_type.replaceAll("_", " ")}
+                Entidade Git vinculada: {correlation.git_entity_type.replaceAll("_", " ")}
               </p>
             </div>
           ))}
         </div>
       ) : (
         <div className="mt-3 rounded-lg bg-muted/20 px-3 py-2.5">
-          <p className="text-sm text-muted-foreground">HU não vinculada a este evento.</p>
+          <p className="text-sm font-medium text-foreground/80">HU não vinculada</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Não há vínculo confirmado para este evento.
+          </p>
         </div>
       )}
     </div>
@@ -298,6 +328,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
   const [period, setPeriod] = useState<Period>("7d");
   const [page, setPage] = useState(1);
   const [viewingPayload, setViewingPayload] = useState<GitEventRow | null>(null);
+  const [payloadOpen, setPayloadOpen] = useState(false);
   const from = periodStart(period);
 
   const query = useQuery({
@@ -442,6 +473,29 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
     : huCorrelations.isError
       ? "error"
       : "ready";
+  const timelineEntries = useMemo<GitlabTimelineEntry[]>(
+    () =>
+      visibleRows.map((event) => {
+        const workItems = event.correlation_id
+          ? correlationsByEvent.get(event.correlation_id) ?? []
+          : [];
+        const project = getEventProject(event.payload);
+
+        return {
+          event,
+          project,
+          workItems,
+          workItemState: event.correlation_id ? correlationQueryState : "ready",
+          // Apenas contexto confirmado. Este modelo permite futuros modos de
+          // agrupamento sem alterar a timeline cronológica atual.
+          groupingContext: {
+            huIds: workItems.map((item) => item.hu_id),
+            project,
+          },
+        };
+      }),
+    [correlationQueryState, correlationsByEvent, visibleRows],
+  );
   const hasFilters =
     typeFilter !== "todos" || statusFilter !== "todos" || projectFilter !== "todos" || period !== "7d";
 
@@ -589,7 +643,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
               <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
             </Button>
           </div>
-        ) : visibleRows.length === 0 ? (
+        ) : timelineEntries.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-14 text-center">
             <GitBranch className="h-9 w-9 text-muted-foreground/60" aria-hidden="true" />
             <p className="mt-4 text-sm font-medium text-foreground">
@@ -604,7 +658,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
           </div>
         ) : (
           <div className="divide-y divide-border/50">
-            {visibleRows.map((row) => {
+            {timelineEntries.map(({ event: row, project, workItems, workItemState }) => {
               const status = getEventStatus(row);
               const eventMeta = EVENT_META[row.event_type] ?? {
                 label: row.event_type,
@@ -612,11 +666,6 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                 className: "border-slate-200 bg-slate-50 text-slate-700",
               };
               const EventIcon = eventMeta.icon;
-              const project = getEventProject(row.payload);
-              const linkedHUs = row.correlation_id
-                ? correlationsByEvent.get(row.correlation_id) ?? []
-                : [];
-
               return (
                 <article
                   key={row.id}
@@ -645,8 +694,8 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                             {project ?? "Projeto não informado"}
                           </p>
                           <WorkItemContext
-                            correlations={linkedHUs}
-                            state={row.correlation_id ? correlationQueryState : "ready"}
+                            correlations={workItems}
+                            state={workItemState}
                             variant="timeline"
                           />
                         </div>
@@ -678,7 +727,15 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                           )}
                           </span>
                         </div>
-                        <Button variant="ghost" size="sm" className="h-7 shrink-0 justify-start gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setViewingPayload(row)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 shrink-0 justify-start gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setPayloadOpen(false);
+                            setViewingPayload(row);
+                          }}
+                        >
                           <Eye className="h-3.5 w-3.5" /> Ver detalhes
                         </Button>
                       </div>
@@ -711,7 +768,15 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
         )}
       </section>
 
-      <Sheet open={!!viewingPayload} onOpenChange={(open) => !open && setViewingPayload(null)}>
+      <Sheet
+        open={!!viewingPayload}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingPayload(null);
+            setPayloadOpen(false);
+          }
+        }}
+      >
         <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
           <SheetHeader className="pr-8 text-left">
             <div className="flex flex-wrap items-center gap-2">
@@ -727,6 +792,21 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
 
           {viewingPayload && (
             <div className="mt-6 space-y-5">
+              <WorkItemContext
+                correlations={selectedHUCorrelations}
+                state={viewingPayload.correlation_id ? correlationQueryState : "ready"}
+                variant="details"
+              />
+
+              <section aria-labelledby="event-operational-context">
+                <div className="mb-2">
+                  <h3 id="event-operational-context" className="text-sm font-semibold">
+                    Contexto operacional
+                  </h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Dados recebidos e estado de processamento
+                  </p>
+                </div>
               <div className="grid gap-x-4 gap-y-3 rounded-xl border border-border/70 bg-muted/20 p-4 sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-muted-foreground">Projeto/repositório</p>
@@ -764,12 +844,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                   </div>
                 </div>
               </div>
-
-              <WorkItemContext
-                correlations={selectedHUCorrelations}
-                state={viewingPayload.correlation_id ? correlationQueryState : "ready"}
-                variant="details"
-              />
+              </section>
 
               {viewingPayload.processing_error && (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
@@ -780,24 +855,38 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                 </div>
               )}
 
-              <div>
-                <div className="flex items-center justify-between">
+              <Collapsible open={payloadOpen} onOpenChange={setPayloadOpen}>
+                <div className="rounded-xl border border-border/70">
+                <div className="flex items-center justify-between gap-3 p-4">
                   <div>
-                    <h3 className="text-sm font-semibold">Payload técnico</h3>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Conteúdo original recebido pelo webhook</p>
+                    <h3 className="text-sm font-semibold">Detalhe técnico</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Payload original recebido pelo webhook
+                    </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    disabled={!payloadView.content}
-                    onClick={() => payloadView.content && copyText(payloadView.content)}
-                  >
-                    <Copy className="h-3.5 w-3.5" /> Copiar JSON
-                  </Button>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" size="sm" className="shrink-0 gap-2">
+                      {payloadOpen ? "Ocultar payload" : "Ver payload"}
+                      <ChevronDown
+                        className={cn("h-3.5 w-3.5 transition-transform", payloadOpen && "rotate-180")}
+                      />
+                    </Button>
+                  </CollapsibleTrigger>
                 </div>
+                <CollapsibleContent className="border-t border-border/70 p-4">
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2"
+                      disabled={!payloadView.content}
+                      onClick={() => payloadView.content && copyText(payloadView.content)}
+                    >
+                      <Copy className="h-3.5 w-3.5" /> Copiar JSON
+                    </Button>
+                  </div>
                 {payloadView.content ? (
-                  <pre className="mt-3 max-h-[58vh] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs leading-relaxed text-slate-100">
+                  <pre className="mt-2 max-h-[58vh] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs leading-relaxed text-slate-100">
                     {payloadView.content}
                   </pre>
                 ) : (
@@ -812,7 +901,9 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                     </p>
                   </div>
                 )}
-              </div>
+                </CollapsibleContent>
+                </div>
+              </Collapsible>
             </div>
           )}
         </SheetContent>

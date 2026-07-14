@@ -85,6 +85,7 @@ interface HUCorrelationQueryRow {
 type Period = "24h" | "7d" | "30d";
 type EventStatus = "processed" | "pending" | "error";
 type HUCorrelationState = "loading" | "error" | "ready";
+type TimelineView = "general" | "hu";
 
 interface GitlabTimelineEntry {
   event: GitEventRow;
@@ -234,10 +235,12 @@ function WorkItemContext({
   correlations,
   state,
   variant,
+  project,
 }: {
   correlations: HUCorrelation[];
   state: HUCorrelationState;
   variant: "timeline" | "details";
+  project?: string | null;
 }) {
   if (variant === "timeline") {
     return (
@@ -284,6 +287,9 @@ function WorkItemContext({
           </p>
         </div>
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Projeto: <span className="font-medium text-foreground/80">{project ?? "não informado"}</span>
+      </p>
       {state === "loading" ? (
         <Skeleton className="mt-3 h-10 w-full rounded-lg" />
       ) : state === "error" ? (
@@ -329,6 +335,8 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
   const [page, setPage] = useState(1);
   const [viewingPayload, setViewingPayload] = useState<GitEventRow | null>(null);
   const [payloadOpen, setPayloadOpen] = useState(false);
+  const [timelineView, setTimelineView] = useState<TimelineView>("general");
+  const [selectedHUId, setSelectedHUId] = useState<string | null>(null);
   const from = periodStart(period);
 
   const query = useQuery({
@@ -496,6 +504,40 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
       }),
     [correlationQueryState, correlationsByEvent, visibleRows],
   );
+  const knownHUs = useMemo(
+    () => {
+      const byId = new Map<string, HUCorrelation>();
+      for (const correlation of huCorrelations.data ?? []) {
+        if (!byId.has(correlation.hu_id)) byId.set(correlation.hu_id, correlation);
+      }
+      return Array.from(byId.values()).sort((a, b) => a.code.localeCompare(b.code));
+    },
+    [huCorrelations.data],
+  );
+  const selectedHU = useMemo(
+    () => knownHUs.find((hu) => hu.hu_id === selectedHUId) ?? null,
+    [knownHUs, selectedHUId],
+  );
+  const displayedTimelineEntries = useMemo(
+    () =>
+      timelineView === "hu" && selectedHUId
+        ? timelineEntries.filter((entry) =>
+            entry.groupingContext.huIds.includes(selectedHUId),
+          )
+        : timelineEntries,
+    [selectedHUId, timelineEntries, timelineView],
+  );
+  const selectedHUProjects = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          displayedTimelineEntries
+            .map((entry) => entry.groupingContext.project)
+            .filter((project): project is string => Boolean(project)),
+        ),
+      ),
+    [displayedTimelineEntries],
+  );
   const hasFilters =
     typeFilter !== "todos" || statusFilter !== "todos" || projectFilter !== "todos" || period !== "7d";
 
@@ -506,6 +548,16 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
     setProjectFilter("todos");
     setPeriod("7d");
     setPage(1);
+  };
+  const changeTimelineView = (value: string) => {
+    if (value === "general") {
+      setTimelineView("general");
+      setSelectedHUId(null);
+      return;
+    }
+
+    setTimelineView("hu");
+    setSelectedHUId(value);
   };
   const copyText = async (text: string) => {
     try {
@@ -614,17 +666,76 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
       </section>
 
       <section className="overflow-hidden rounded-xl border border-border/60 bg-card" aria-label="Eventos GitLab">
-        <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+        <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Fluxo de eventos</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">Mais recentes primeiro</p>
+            <h3 className="text-sm font-semibold text-foreground">
+              {timelineView === "hu" ? "Fluxo por HU" : "Fluxo de eventos"}
+            </h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {timelineView === "hu"
+                ? "Somente eventos com vínculo confirmado à HU selecionada"
+                : "Mais recentes primeiro"}
+            </p>
           </div>
-          {query.isFetching && !query.isLoading && (
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              <RefreshCw className="h-3 w-3 animate-spin" /> Sincronizando
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {query.isFetching && !query.isLoading && (
+              <span className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+                <RefreshCw className="h-3 w-3 animate-spin" /> Sincronizando
+              </span>
+            )}
+            <Select
+              value={timelineView === "hu" && selectedHUId ? selectedHUId : "general"}
+              onValueChange={changeTimelineView}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-[260px]" aria-label="Modo da timeline">
+                <SelectValue placeholder="Selecionar visão" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="general">Eventos GitLab gerais</SelectItem>
+                {knownHUs.map((hu) => (
+                  <SelectItem key={hu.hu_id} value={hu.hu_id}>
+                    {hu.code} — {hu.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {timelineView === "hu" && (
+          <div className="border-b border-border/60 bg-muted/15 px-4 py-3">
+            {selectedHU ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs font-semibold text-foreground">
+                        {selectedHU.code}
+                      </span>
+                      <Badge variant="secondary" className="h-5 font-normal">
+                        {selectedHU.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 truncate text-sm font-medium text-foreground/80" title={selectedHU.title}>
+                      {selectedHU.title}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground sm:max-w-[45%] sm:text-right">
+                  Projeto: {selectedHUProjects.length > 0
+                    ? selectedHUProjects.join(", ")
+                    : "indisponível nos eventos atuais"}
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Contexto da HU indisponível nos dados atuais.
+              </div>
+            )}
+          </div>
+        )}
 
         {query.isLoading ? (
           <div className="space-y-3 p-4" aria-label="Carregando eventos">
@@ -643,22 +754,36 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
               <RefreshCw className="h-3.5 w-3.5" /> Tentar novamente
             </Button>
           </div>
-        ) : timelineEntries.length === 0 ? (
+        ) : displayedTimelineEntries.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-14 text-center">
-            <GitBranch className="h-9 w-9 text-muted-foreground/60" aria-hidden="true" />
+            {timelineView === "hu" ? (
+              <BookOpen className="h-9 w-9 text-muted-foreground/60" aria-hidden="true" />
+            ) : (
+              <GitBranch className="h-9 w-9 text-muted-foreground/60" aria-hidden="true" />
+            )}
             <p className="mt-4 text-sm font-medium text-foreground">
-              {hasFilters ? "Nenhum evento corresponde aos filtros" : "Nenhum evento recebido ainda"}
+              {timelineView === "hu"
+                ? "Nenhum evento correlacionado a esta HU"
+                : hasFilters
+                  ? "Nenhum evento corresponde aos filtros"
+                  : "Nenhum evento recebido ainda"}
             </p>
             <p className="mt-1 max-w-lg text-sm text-muted-foreground">
-              {hasFilters
-                ? "Ajuste ou limpe os filtros para ampliar a busca."
-                : "Quando os webhooks do GitLab enviarem Push Hooks, Merge Request Hooks ou outros eventos, eles aparecerão aqui."}
+              {timelineView === "hu"
+                ? "Não há vínculo confirmado entre os eventos exibidos e a HU selecionada."
+                : hasFilters
+                  ? "Ajuste ou limpe os filtros para ampliar a busca."
+                  : "Quando os webhooks do GitLab enviarem Push Hooks, Merge Request Hooks ou outros eventos, eles aparecerão aqui."}
             </p>
-            {hasFilters && <Button variant="outline" size="sm" className="mt-4" onClick={clearFilters}>Limpar filtros</Button>}
+            {timelineView === "general" && hasFilters && (
+              <Button variant="outline" size="sm" className="mt-4" onClick={clearFilters}>
+                Limpar filtros
+              </Button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-border/50">
-            {timelineEntries.map(({ event: row, project, workItems, workItemState }) => {
+            {displayedTimelineEntries.map(({ event: row, project, workItems, workItemState }) => {
               const status = getEventStatus(row);
               const eventMeta = EVENT_META[row.event_type] ?? {
                 label: row.event_type,
@@ -796,6 +921,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
                 correlations={selectedHUCorrelations}
                 state={viewingPayload.correlation_id ? correlationQueryState : "ready"}
                 variant="details"
+                project={getEventProject(viewingPayload.payload)}
               />
 
               <section aria-labelledby="event-operational-context">

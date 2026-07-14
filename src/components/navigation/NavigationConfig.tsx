@@ -5,6 +5,8 @@ import {
   BarChart3,
   Building2,
   Calendar,
+  CheckSquare,
+  ClipboardList,
   FileText,
   GitBranch,
   History,
@@ -222,6 +224,28 @@ export const sustentacaoNavigationConfig: NavigationSection[] = [
       { id: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, route: "/sustentacao/perfis" },
       { id: "campos", label: "Campos Custom", icon: Settings, route: "/sustentacao/campos" },
       { id: "automacoes", label: "Automações", icon: Repeat, route: "/sustentacao/automacoes" },
+    ],
+  },
+];
+
+export const rdmNavigationConfig: NavigationSection[] = [
+  {
+    id: "rdm-sprints",
+    label: "Sprints",
+    items: [
+      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, route: "/rdm/dashboard" },
+      { id: "rdms", label: "RDMs", icon: ClipboardList, route: "/rdm/rdms" },
+      { id: "checklist", label: "Checklists", icon: CheckSquare, route: "/rdm/checklist" },
+      { id: "gonogo", label: "Go/No-Go", icon: ArrowLeftRight, route: "/rdm/gonogo" },
+    ],
+  },
+  {
+    id: "rdm-config",
+    label: "Configurações",
+    items: [
+      { id: "times", label: "Times", icon: Users, route: "/rdm/times" },
+      { id: "membros", label: "Membros", icon: User, route: "/rdm/membros" },
+      { id: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, route: "/rdm/perfis" },
     ],
   },
 ];

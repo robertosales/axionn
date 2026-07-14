@@ -63,7 +63,7 @@ export default function SustentacaoPage() {
   const needsTeam = !moduleTeamId && active !== "times";
 
   return (
-    <AppShell module="sustentacao" activeKey={active}>
+    <AppShell module="sustentacao">
       <TeamSelectionModal
         open={showTeamModal}
         teams={moduleTeams}

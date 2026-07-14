@@ -270,7 +270,7 @@ const Index = () => {
   const teamKey = currentTeamId ?? "no-team";
 
   return (
-    <AppShell module="sala_agil" activeKey={active} onNavigate={handleNavigate}>
+    <AppShell module="sala_agil">
       <TeamSelectionModal
         open={showTeamModal}
         teams={moduleTeams}

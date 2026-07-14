@@ -43,7 +43,7 @@ export default function RdmPage() {
   const needsTeam = !authLoading && !currentTeamId && active !== "times";
 
   return (
-    <AppShell module="rdm" activeKey={active}>
+    <AppShell module="rdm">
       <TeamSelectionModal
         open={showTeamModal}
         teams={moduleTeams}

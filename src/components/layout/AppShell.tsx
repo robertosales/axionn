@@ -43,8 +43,6 @@ type ActiveModule = "sala_agil" | "sustentacao" | "rdm";
 interface AppShellProps {
   module: ActiveModule;
   children: React.ReactNode;
-  activeKey?: string;
-  onNavigate?: (key: string) => void;
 }
 
 const ACCENT = {

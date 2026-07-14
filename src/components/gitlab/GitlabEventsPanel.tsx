@@ -101,12 +101,20 @@ interface GitlabTimelineEntry {
 }
 
 const PAGE_SIZE = 20;
-const EVENT_TYPES = ["push", "merge_request", "pipeline", "deployment", "job", "note"];
 
-const EVENT_META: Record<
-  string,
-  { label: string; icon: typeof GitBranch; className: string }
-> = {
+type GitlabEventType = "push" | "merge_request" | "pipeline" | "deployment" | "job" | "note";
+type NormalizedGitlabEventType = GitlabEventType | "unknown";
+
+const EVENT_TYPES: GitlabEventType[] = [
+  "push",
+  "merge_request",
+  "pipeline",
+  "deployment",
+  "job",
+  "note",
+];
+
+const EVENT_META: Record<GitlabEventType, { label: string; icon: typeof GitBranch; className: string }> = {
   push: {
     label: "Push Hook",
     icon: GitBranch,
@@ -146,6 +154,48 @@ function periodStart(range: Period): string {
     "30d": 30 * 24 * 3600e3,
   };
   return new Date(Date.now() - intervals[range]).toISOString();
+}
+
+export function normalizeEventType(
+  rawType: string | null | undefined,
+  payload: unknown,
+): NormalizedGitlabEventType {
+  const payloadRecord = asRecord(payload);
+  const payloadCandidates = [
+    typeof rawType === "string" ? rawType : null,
+    payloadRecord?.object_kind,
+    payloadRecord?.event_type,
+    payloadRecord?.event_name,
+    payloadRecord?.kind,
+  ];
+
+  for (const candidate of payloadCandidates) {
+    if (typeof candidate !== "string") continue;
+
+    const value = candidate.trim().toLowerCase();
+    if (!value) continue;
+
+    const compactValue = value.replace(/[\s-]+/g, "_").replace(/_hook$/, "").replace(/_event$/, "").replace(/_events$/, "");
+
+    if (compactValue.includes("merge_request") || compactValue.includes("merge")) {
+      return "merge_request";
+    }
+    if (compactValue.includes("push")) return "push";
+    if (compactValue.includes("pipeline")) return "pipeline";
+    if (compactValue.includes("deployment")) return "deployment";
+    if (compactValue.includes("job")) return "job";
+    if (compactValue.includes("note") || compactValue.includes("comment") || compactValue.includes("discussion")) {
+      return "note";
+    }
+  }
+
+  const objectAttributes = asRecord(payloadRecord?.object_attributes);
+  const action = typeof objectAttributes?.action === "string" ? objectAttributes.action.trim().toLowerCase() : "";
+  if (action.includes("comment") || action.includes("note")) {
+    return "note";
+  }
+
+  return "unknown";
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -342,7 +392,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
   const from = periodStart(period);
 
   const query = useQuery({
-    queryKey: ["gitlab-events", integrationId, typeFilter, statusFilter, period, page],
+    queryKey: ["gitlab-events", integrationId, typeFilter, statusFilter, period],
     queryFn: async () => {
       if (!integrationId) return { rows: [] as GitEventRow[], count: 0 };
       let request = supabase
@@ -353,10 +403,8 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
         )
         .eq("integration_id", integrationId)
         .gte("received_at", from)
-        .order("received_at", { ascending: false })
-        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+        .order("received_at", { ascending: false });
 
-      if (typeFilter !== "todos") request = request.eq("event_type", typeFilter);
       if (statusFilter === "processado") {
         request = request.eq("processed", true).is("processing_error", null);
       }
@@ -459,18 +507,28 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
       ).sort((a, b) => String(a).localeCompare(String(b))),
     [query.data?.rows],
   );
+  const filteredRows = useMemo(() => {
+    const normalizedRows = (query.data?.rows ?? []).filter((row) => {
+      const matchesType =
+        typeFilter === "todos" || normalizeEventType(row.event_type, row.payload) === typeFilter;
+      const matchesProject =
+        projectFilter === "todos" || getEventProject(row.payload) === projectFilter;
+      return matchesType && matchesProject;
+    });
+
+    return normalizedRows;
+  }, [projectFilter, query.data?.rows, typeFilter]);
+
+  const safePage = Math.min(page, Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE)));
   const visibleRows = useMemo(
-    () =>
-      (query.data?.rows ?? []).filter(
-        (row) => projectFilter === "todos" || getEventProject(row.payload) === projectFilter,
-      ),
-    [projectFilter, query.data?.rows],
+    () => filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filteredRows, safePage],
   );
   const successRate = useMemo(() => {
     const total = kpis.data?.total ?? 0;
     return total ? Math.round(((kpis.data?.processed ?? 0) / total) * 1000) / 10 : 0;
   }, [kpis.data]);
-  const totalPages = Math.max(1, Math.ceil((query.data?.count ?? 0) / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const payloadView = useMemo(
     () => formatPayload(viewingPayload?.payload),
     [viewingPayload?.payload],
@@ -678,7 +736,7 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
         <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground">
           <span className={cn("h-2 w-2 rounded-full", query.isError ? "bg-rose-500" : "bg-emerald-500")} />
           Atualização automática a cada 30 segundos
-          {query.data && <span>• {query.data.count} evento(s) no período</span>}
+          {query.data && <span>• {filteredRows.length} evento(s) no período</span>}
         </div>
       </section>
 
@@ -820,8 +878,9 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
           <div className="divide-y divide-border/50">
             {displayedTimelineEntries.map(({ event: row, project, workItems, workItemState }) => {
               const status = getEventStatus(row);
-              const eventMeta = EVENT_META[row.event_type] ?? {
-                label: row.event_type,
+              const normalizedType = normalizeEventType(row.event_type, row.payload);
+              const eventMeta = EVENT_META[normalizedType as GitlabEventType] ?? {
+                label: normalizedType === "unknown" ? row.event_type : normalizedType,
                 icon: CircleDot,
                 className: "border-slate-200 bg-slate-50 text-slate-700",
               };
@@ -944,7 +1003,9 @@ export function GitlabEventsPanel({ integrationId }: GitlabEventsPanelProps) {
               {viewingPayload && <StatusBadge status={getEventStatus(viewingPayload)} />}
             </div>
             <SheetDescription>
-              {viewingPayload && (EVENT_META[viewingPayload.event_type]?.label ?? viewingPayload.event_type)}
+              {viewingPayload &&
+                (EVENT_META[normalizeEventType(viewingPayload.event_type, viewingPayload.payload) as GitlabEventType]?.label ??
+                  viewingPayload.event_type)}
               {viewingPayload?.provider_event_id ? ` • ${viewingPayload.provider_event_id}` : ""}
               {viewingPayload ? ` • ${formatDateTime(viewingPayload.received_at)}` : ""}
             </SheetDescription>

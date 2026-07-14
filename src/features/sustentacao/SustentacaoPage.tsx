@@ -5,6 +5,7 @@
  * Gestão de projetos foi centralizada no painel Admin (fase 5c).
  */
 import { useState, useCallback, useEffect }   from "react";
+import { useLocation, useNavigate }            from "react-router-dom";
 import { SustentacaoBoard }                   from "./components/SustentacaoBoard";
 import type { Demanda }                        from "./types/demanda";
 import { useDemandas }                         from "./hooks/useDemandas";
@@ -33,7 +34,9 @@ import { Button }                           from "@/components/ui/button";
 import { toast }                            from "sonner";
 
 export default function SustentacaoPage() {
-  const [active, setActive]       = useState("dashboard");
+  const { pathname }              = useLocation();
+  const navigate                  = useNavigate();
+  const active                    = pathname.split("/")[2] || "dashboard";
   const { loading: authLoading, hasPermission } = useAuth();
   const qc                        = useQueryClient();
 
@@ -60,7 +63,7 @@ export default function SustentacaoPage() {
   const needsTeam = !moduleTeamId && active !== "times";
 
   return (
-    <AppShell module="sustentacao" activeKey={active} onNavigate={setActive}>
+    <AppShell module="sustentacao" activeKey={active}>
       <TeamSelectionModal
         open={showTeamModal}
         teams={moduleTeams}
@@ -83,7 +86,7 @@ export default function SustentacaoPage() {
               Selecione ou crie um time para começar
             </p>
             {hasPermission("manage_teams") && (
-              <Button onClick={() => setActive("times")} size="lg">
+              <Button onClick={() => navigate("/sustentacao/times")} size="lg">
                 <Building2 className="h-4 w-4 mr-2" /> Ir para Times
               </Button>
             )}

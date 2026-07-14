@@ -20,6 +20,13 @@ import {
   Sparkles,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
+import { NavigationList } from "@/components/navigation/PrimarySidebar";
+import {
+  salaAgilNavigationConfig,
+  sustentacaoNavigationConfig,
+  buildBreadcrumbs,
+} from "@/components/navigation/NavigationConfig";
+import { BreadcrumbsContextual } from "@/components/navigation/BreadcrumbsContextual";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
@@ -250,7 +257,21 @@ function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
 }) {
   const location = useLocation();
   const { hasPermission } = useAuth();
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
+
+  if (module === "sala_agil" || module === "sustentacao") {
+    const config = module === "sala_agil" ? salaAgilNavigationConfig : sustentacaoNavigationConfig;
+    return (
+      <nav className="flex-1 overflow-y-auto px-2 py-1 min-h-0 scrollbar-none">
+        <NavigationList
+          sections={config}
+          activePath={location.pathname}
+          collapsed={collapsed}
+        />
+      </nav>
+    );
+  }
+
+  const items = NAV_RDM;
 
   const filteredItems = items.filter((item) => !item.roles || item.roles.some((r) => hasPermission(r as any)));
   const groupOrder = (["sprints", "cerimonias", "operacoes", "org", "config"] as const)
@@ -465,12 +486,23 @@ function Topbar({ module, activeKey, onOpenMobile }: { module: ActiveModule; act
         >
           <Menu className="h-4 w-4" />
         </button>
-        <span className="font-display text-[13px] text-muted-foreground font-bold hidden sm:block shrink-0">{accent.label}</span>
-        <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
-        <div className="flex items-center gap-2 min-w-0">
-          {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}
-          <span className="font-display text-[13px] font-bold text-foreground truncate">{pageLabel}</span>
-        </div>
+        {module === "sala_agil" || module === "sustentacao" ? (
+          <BreadcrumbsContextual
+            items={buildBreadcrumbs(
+              location.pathname,
+              module === "sala_agil" ? salaAgilNavigationConfig : sustentacaoNavigationConfig,
+            )}
+          />
+        ) : (
+          <>
+            <span className="font-display text-[13px] text-muted-foreground font-bold hidden sm:block shrink-0">{accent.label}</span>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
+            <div className="flex items-center gap-2 min-w-0">
+              {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}
+              <span className="font-display text-[13px] font-bold text-foreground truncate">{pageLabel}</span>
+            </div>
+          </>
+        )}
       </div>
       <button className="hidden h-9 min-w-[180px] items-center justify-between rounded-lg bg-muted/60 px-3 text-left text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:flex lg:min-w-[260px]">
         <span className="flex items-center gap-2"><Search className="h-3.5 w-3.5" />Search...</span>

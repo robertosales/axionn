@@ -12,11 +12,16 @@ interface PrimarySidebarProps {
   onNavigate?: (route: string) => void;
 }
 
-export function PrimarySidebar({ sections, activePath, onNavigate }: PrimarySidebarProps) {
+export interface NavigationListProps {
+  sections: NavigationSection[];
+  activePath?: string;
+  onNavigate?: (route: string) => void;
+  collapsed?: boolean;
+}
+
+export function NavigationList({ sections, activePath, onNavigate, collapsed = false }: NavigationListProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
-
   const activeRoute = activePath ?? location.pathname;
 
   const handleNavigate = (item: NavigationItem) => {
@@ -26,6 +31,47 @@ export function PrimarySidebar({ sections, activePath, onNavigate }: PrimarySide
     }
     navigate(item.route);
   };
+
+  return (
+    <div className="space-y-5">
+      {sections.map((section) => (
+        <section key={section.id}>
+          {!collapsed ? (
+            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/80">
+              {section.label}
+            </p>
+          ) : null}
+          <div className="space-y-1.5">
+            {section.items.map((item) => {
+              const isActive = activeRoute === item.route || activeRoute.startsWith(`${item.route}/`);
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavigate(item)}
+                  className={cn(
+                    "flex w-full items-center rounded-xl border px-3 py-2.5 text-left transition-all",
+                    collapsed ? "justify-center px-2" : "gap-2.5",
+                    isActive
+                      ? "border-primary/30 bg-primary/10 text-primary shadow-sm"
+                      : "border-transparent bg-transparent text-muted-foreground hover:border-border/70 hover:bg-muted/40 hover:text-foreground",
+                  )}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {!collapsed ? <span className="truncate text-sm font-medium">{item.label}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+export function PrimarySidebar({ sections, activePath, onNavigate }: PrimarySidebarProps) {
+  const [collapsed, setCollapsed] = useState(false);
 
   const shortcutLabel = useMemo(() => (collapsed ? "Expandir" : "Recolher"), [collapsed]);
 
@@ -46,40 +92,7 @@ export function PrimarySidebar({ sections, activePath, onNavigate }: PrimarySide
       </div>
 
       <ScrollArea className="flex-1 px-3 py-3">
-        <div className="space-y-5">
-          {sections.map((section) => (
-            <section key={section.id}>
-              {!collapsed ? (
-                <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/80">
-                  {section.label}
-                </p>
-              ) : null}
-              <div className="space-y-1.5">
-                {section.items.map((item) => {
-                  const isActive = activeRoute === item.route || activeRoute.startsWith(`${item.route}/`);
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => handleNavigate(item)}
-                      className={cn(
-                        "flex w-full items-center rounded-xl border px-3 py-2.5 text-left transition-all",
-                        collapsed ? "justify-center px-2" : "gap-2.5",
-                        isActive
-                          ? "border-primary/30 bg-primary/10 text-primary shadow-sm"
-                          : "border-transparent bg-transparent text-muted-foreground hover:border-border/70 hover:bg-muted/40 hover:text-foreground",
-                      )}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      {!collapsed ? <span className="truncate text-sm font-medium">{item.label}</span> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
+        <NavigationList sections={sections} activePath={activePath} collapsed={collapsed} onNavigate={onNavigate} />
       </ScrollArea>
 
       <div className="border-t border-border/70 p-3">

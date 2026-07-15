@@ -42,7 +42,7 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const provider = req.headers.get('x-git-provider') || 'gitlab';
-    const eventType = req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown';
+    const eventType = normalizeEventType(req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown');
     const signature = req.headers.get('x-gitlab-token') || req.headers.get('x-hub-signature-256');
 
     const rawBody = await req.text();
@@ -355,6 +355,10 @@ async function processGitEvent(
       case 'note_events':
         await processNoteEvent(supabase, integration, gitEvent, payload, correlationId);
         break;
+      case 'issue':
+      case 'work_item':
+        await processIssueEvent(supabase, integration, gitEvent, payload, correlationId);
+        break;
       default:
         console.log('[Git Webhook] Unhandled event type:', eventType);
     }
@@ -592,6 +596,55 @@ async function processNoteEvent(
     // Could trigger HU updates, notifications, etc.
     console.log('[Git Webhook] Note on MR:', noteableId);
   }
+}
+
+function normalizeEventType(raw: string | null): string {
+  if (!raw) return 'unknown';
+  return raw.toLowerCase().replace(/ hook$/, '').replace(/\s+/g, '_').trim();
+}
+
+async function processIssueEvent(
+  supabase: any, integration: any, gitEvent: any,
+  payload: Record<string, unknown>, correlationId: string
+): Promise<void> {
+  if (!integration.sync_issues_as_backlog) {
+    console.log('[Git Webhook] sync_issues_as_backlog desativado, ignorando issue');
+    return;
+  }
+  const issue = (payload.object_attributes || payload.issue || payload.work_item || payload) as Record<string, unknown>;
+  const issueId = issue.id; const iid = issue.iid;
+  if (!issueId) { console.log('[Git Webhook] Issue sem id, ignorando'); return; }
+  const title = (issue.title as string) || 'Sem título';
+  const description = (issue.description as string) || '';
+  const state = String(issue.state || 'opened').toLowerCase();
+  const status = state === 'closed' ? 'concluido' : 'aguardando_desenvolvimento';
+  let teamId: string | null = integration.team_id ?? null;
+  const labelMap: Record<string, string> = integration.issue_labels_team_map ?? {};
+  const rawLabels = (Array.isArray(payload.labels) ? payload.labels : []) as Array<Record<string, unknown> | string>;
+  for (const l of rawLabels) {
+    const labelTitle = typeof l === 'string' ? l : (l.title as string);
+    if (labelTitle && labelMap[labelTitle]) { teamId = labelMap[labelTitle]; break; }
+  }
+  if (!teamId) { console.log('[Git Webhook] Issue', String(issueId), 'sem time de destino; ignorando'); return; }
+  const { data: existing } = await supabase.from('hu_git_links')
+    .select('hu_id').eq('git_entity_type', 'issue').eq('git_entity_id', String(issueId)).maybeSingle();
+  if (existing?.hu_id) {
+    await supabase.from('user_stories').update({ title, description, status, updated_at: new Date().toISOString() }).eq('id', existing.hu_id);
+    return;
+  }
+  let code = `GL-${iid}`;
+  const { data: codeDup } = await supabase.from('user_stories').select('id').eq('team_id', teamId).eq('code', code).maybeSingle();
+  if (codeDup) code = `GL-${integration.repository_path}-${iid}`;
+  const { data: hu, error: huError } = await supabase.from('user_stories').insert({
+    team_id: teamId, sprint_id: null, code, title, description, story_points: 0, priority: 'media', status,
+  }).select('id').single();
+  if (huError || !hu) { console.error('[Git Webhook] Falha ao criar HU', String(issueId), huError); return; }
+  await supabase.from('hu_git_links').insert({
+    organization_id: integration.organization_id, project_id: integration.project_id ?? null,
+    hu_id: hu.id, git_entity_type: 'issue', git_entity_id: String(issueId),
+    git_entity_data: { iid, title, web_url: issue.url || issue.web_url || null },
+    integration_id: integration.id, linked_at: new Date().toISOString(), correlation_id: correlationId,
+  });
 }
 
 function extractHUIds(text: string): string[] {

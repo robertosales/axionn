@@ -60,6 +60,7 @@ serve(async (req: Request) => {
       deployment_events: true,
       note_events: true,
       tag_push_events: true,
+      issues_events: true,
       custom_headers: [
         { key: "x-integration-id", value: integration.id },
         { key: "x-git-provider", value: "gitlab" },

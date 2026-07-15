@@ -61,7 +61,8 @@ serve(async (req: Request) => {
     let skipped = 0;
 
     for (const issue of issues) {
-      const result = await upsertHuFromIssue(supabase, integration, issue, issues, correlationId);
+      const labels = Array.isArray(issue.labels) ? issue.labels : [];
+      const result = await upsertHuFromIssue(supabase, integration, issue, labels, correlationId);
       if (result === "created") created++;
       else if (result === "updated") updated++;
       else skipped++;
@@ -78,7 +79,7 @@ async function upsertHuFromIssue(
   supabase: any,
   integration: any,
   issue: Record<string, unknown>,
-  payloadLabels: Array<Record<string, unknown>>,
+  payloadLabels: Array<string | Record<string, unknown>>,
   correlationId: string,
 ): Promise<"created" | "updated" | "skipped"> {
   const issueId = issue.id;

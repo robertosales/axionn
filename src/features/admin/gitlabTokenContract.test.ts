@@ -17,11 +17,19 @@ describe("GitLab token separation contract", () => {
     expect(handler).not.toContain("integration.webhook_secret,");
   });
 
+  it("checks project access before requesting administrative hooks", () => {
+    expect(register).toContain("const projectRes = await fetch(projectUrl");
+    expect(register.indexOf("const projectRes = await fetch(projectUrl")).toBeLessThan(
+      register.indexOf("const listRes = await fetch(hooksUrl"),
+    );
+    expect(register).toContain("Maintainer ou Owner");
+  });
+
   it("persists consistent webhook synchronization states", () => {
     expect(register).toContain('sync_status: "syncing"');
     expect(register).toContain('sync_status: "completed"');
     expect(register).toContain('sync_status: "error"');
-    expect(register).toContain("webhook_id: String(hook.id)");
+    expect(register).toContain("webhook_id: String(hookId)");
     expect(register).toContain("sync_error: null");
   });
 });

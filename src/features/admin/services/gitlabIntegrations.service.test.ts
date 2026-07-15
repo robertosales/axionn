@@ -31,6 +31,8 @@ describe("gitlab integration helpers", () => {
     expect(normalized.repositoryPath).toBe("group/project");
     expect(normalized.events).toEqual(["push", "merge_request"]);
     expect(normalized.isActive).toBe(true);
+    expect(normalized.hasAccessToken).toBe(true);
+    expect(normalized.accessToken).toBeNull();
   });
 
   it("builds a payload with the expected GitLab defaults", () => {

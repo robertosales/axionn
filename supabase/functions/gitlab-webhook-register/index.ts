@@ -43,11 +43,33 @@ serve(async (req: Request) => {
     if (syncingError) return json({ error: "Failed to update integration status" }, 500);
 
     const apiBase = (integration.api_url ?? "https://gitlab.com/api/v4").replace(/\/$/, "");
-    const hooksUrl = `${apiBase}/projects/${encodeURIComponent(integration.repository_path)}/hooks`;
+    const encodedProject = encodeURIComponent(integration.repository_path);
+    const projectUrl = `${apiBase}/projects/${encodedProject}`;
+    const hooksUrl = `${projectUrl}/hooks`;
     const tokenHeaders = { "PRIVATE-TOKEN": integration.access_token_encrypted };
 
+    // Resolve the project separately so authentication/path failures are not
+    // hidden behind GitLab's generic webhook 404 response.
+    const projectRes = await fetch(projectUrl, { headers: tokenHeaders });
+    if (!projectRes.ok) {
+      const recovery = projectRes.status === 404
+        ? "Confirme o namespace completo do projeto e se o PAT possui acesso ao projeto privado."
+        : projectRes.status === 401
+          ? "O PAT foi rejeitado pelo GitLab. Gere um token válido com escopo api."
+          : projectRes.status === 403
+            ? "O PAT não possui permissão suficiente no projeto. Use um usuário Maintainer ou Owner."
+            : "Revise a API URL, o PAT e a disponibilidade do GitLab.";
+      return await fail(projectRes, "Não foi possível acessar o projeto no GitLab", integrationId, supabase, recovery);
+    }
+
     const listRes = await fetch(hooksUrl, { headers: tokenHeaders });
-    if (!listRes.ok) return await fail(listRes, "Falha ao listar webhooks do GitLab", integrationId, supabase);
+    if (!listRes.ok) return await fail(
+      listRes,
+      "Projeto encontrado, mas não foi possível listar os webhooks",
+      integrationId,
+      supabase,
+      "Confirme se o usuário do PAT é Maintainer ou Owner do projeto.",
+    );
 
     const hooks = await listRes.json() as Array<{ id?: number; url?: string }>;
     const normalizedTarget = WEBHOOK_HANDLER_URL.replace(/\/+$/, "").toLowerCase();
@@ -144,10 +166,10 @@ serve(async (req: Request) => {
   }
 });
 
-async function fail(response: Response, message: string, integrationId: string, supabase: any) {
+async function fail(response: Response, message: string, integrationId: string, supabase: any, recovery?: string) {
   const detail = (await response.text()).slice(0, 200);
   await supabase.from("git_integrations").update({
     sync_status: "error", sync_error: `GitLab API ${response.status}: ${detail}`,
   }).eq("id", integrationId);
-  return json({ error: message, gitlab_status: response.status, detail }, 502);
+  return json({ error: message, gitlab_status: response.status, detail, recovery }, 502);
 }

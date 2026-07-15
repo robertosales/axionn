@@ -51,7 +51,7 @@ import { useTeamsAdmin } from "@/features/admin/hooks/useTeamsAdmin";
 function describeInvokeError(error: any, data: any): string {
   const ctx = error?.context ?? data;
   if (ctx && typeof ctx === "object") {
-    const parts = [ctx.error, ctx.detail, ctx.gitlab_status && `HTTP ${ctx.gitlab_status}`].filter(Boolean);
+    const parts = [ctx.error, ctx.detail, ctx.recovery, ctx.gitlab_status && `HTTP ${ctx.gitlab_status}`].filter(Boolean);
     if (parts.length) return parts.join(" — ");
   }
   return error?.message ?? "erro desconhecido";
@@ -65,6 +65,7 @@ interface FormState {
   repositoryName: string;
   apiUrl: string;
   accessToken: string;
+  hasStoredAccessToken: boolean;
   webhookSecret: string;
   isActive: boolean;
   teamId: string;
@@ -79,6 +80,7 @@ const EMPTY: FormState = {
   repositoryName: "",
   apiUrl: "https://gitlab.com/api/v4",
   accessToken: "",
+  hasStoredAccessToken: false,
   webhookSecret: "",
   isActive: true,
   teamId: "",
@@ -143,8 +145,9 @@ export function AdminGitlabIntegrationsPage() {
       repositoryPath: item.repositoryPath ?? "",
       repositoryName: item.repositoryName ?? "",
       apiUrl: item.apiUrl ?? "",
-      accessToken: item.accessToken ?? "",
-      webhookSecret: item.webhookSecret ?? "",
+      accessToken: "",
+      hasStoredAccessToken: item.hasAccessToken,
+      webhookSecret: "",
       isActive: item.isActive,
       teamId: item.teamId ?? "",
       syncIssuesAsBacklog: item.syncIssuesAsBacklog,
@@ -201,13 +204,16 @@ export function AdminGitlabIntegrationsPage() {
         repositoryPath: form.repositoryPath,
         repositoryName: form.repositoryName,
         apiUrl: form.apiUrl,
-        accessToken: form.accessToken,
-        webhookSecret: form.webhookSecret,
+        accessToken: form.id && !form.accessToken.trim() ? undefined : form.accessToken,
+        webhookSecret: form.id && !form.webhookSecret.trim() ? undefined : form.webhookSecret,
         isActive: form.isActive,
         teamId: form.teamId || null,
         syncIssuesAsBacklog: form.syncIssuesAsBacklog,
         issueLabelsTeamMap,
       });
+
+      if (form.id && !form.accessToken.trim()) delete payload.access_token_encrypted;
+      if (form.id && !form.webhookSecret.trim()) delete payload.webhook_secret_encrypted;
 
       const saved = form.id
         ? await updateGitlabIntegration(form.id, payload)
@@ -219,7 +225,7 @@ export function AdminGitlabIntegrationsPage() {
         toast.success("Integração GitLab criada");
       }
 
-      if (form.accessToken) {
+      if (form.accessToken || form.hasStoredAccessToken) {
         const { error, data } = await supabase.functions.invoke("gitlab-webhook-register", {
           body: { integrationId: saved.id },
         });
@@ -411,16 +417,16 @@ export function AdminGitlabIntegrationsPage() {
       </Tabs>
 
       <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:max-w-3xl lg:max-w-5xl">
+          <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4 sm:px-6">
             <DialogTitle>{form.id ? "Editar integração GitLab" : "Nova integração GitLab"}</DialogTitle>
             <DialogDescription>
               Cadastre o repositório GitLab e os dados mínimos para o fluxo de sincronização.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2">
-            <section className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-2">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-4 sm:px-6 lg:grid-cols-2 lg:items-start">
+            <section className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-2 lg:col-span-2">
               <div className="sm:col-span-2">
                 <h3 className="text-sm font-semibold text-slate-900">Identificação</h3>
                 <p className="mt-0.5 text-xs leading-relaxed text-slate-600">Dados usados para localizar e reconhecer o repositório.</p>
@@ -454,9 +460,9 @@ export function AdminGitlabIntegrationsPage() {
               </div>
               <div className="space-y-2">
               <Label htmlFor="gl-token">Token de acesso</Label>
-              <Input id="gl-token" type="password" value={form.accessToken} onChange={(e) => setForm({ ...form, accessToken: e.target.value })} placeholder="glpat-..." />
+              <Input id="gl-token" type="password" value={form.accessToken} onChange={(e) => setForm({ ...form, accessToken: e.target.value })} placeholder={form.hasStoredAccessToken ? "Token salvo — deixe vazio para manter" : "glpat-..."} autoComplete="new-password" />
               <p className="text-xs leading-relaxed text-slate-600">
-                Use um PAT do GitLab com escopo de API. Ele autentica apenas as chamadas à API; o secret do webhook é separado.
+                Use um PAT com escopo <strong>api</strong> e acesso de Maintainer/Owner ao projeto. {form.hasStoredAccessToken && "Deixe vazio para manter o token atual."}
               </p>
               </div>
             </section>
@@ -598,7 +604,7 @@ export function AdminGitlabIntegrationsPage() {
               </div>
             </section>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 lg:col-span-2">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">Ativa</p>
@@ -609,8 +615,8 @@ export function AdminGitlabIntegrationsPage() {
             </div>
           </div>
 
-          <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            {form.id && form.accessToken && (
+          <DialogFooter className="shrink-0 px-5 py-4 sm:px-6">
+            {form.id && (form.accessToken || form.hasStoredAccessToken) && (
               <Button type="button" variant="outline" className="gap-2 mr-auto" disabled={saving || registering} onClick={async () => {
                 setRegistering(true);
                 try {
@@ -628,7 +634,7 @@ export function AdminGitlabIntegrationsPage() {
                 Re-registrar webhook
               </Button>
             )}
-            {form.id && form.accessToken && (
+            {form.id && (form.accessToken || form.hasStoredAccessToken) && (
               <Button
                 type="button"
                 variant="outline"

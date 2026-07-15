@@ -9,6 +9,7 @@ export interface GitlabIntegration {
   repositoryName: string | null;
   apiUrl: string | null;
   accessToken: string | null;
+  hasAccessToken: boolean;
   webhookUrl: string | null;
   webhookSecret: string | null;
   webhookId: string | null;
@@ -58,9 +59,12 @@ export function normalizeGitlabIntegration(row: Record<string, unknown>): Gitlab
     repositoryPath: row.repository_path ? String(row.repository_path) : null,
     repositoryName: row.repository_name ? String(row.repository_name) : null,
     apiUrl: row.api_url ? String(row.api_url) : null,
-    accessToken: row.access_token_encrypted ? String(row.access_token_encrypted) : null,
+    // Do not copy credentials back into an editable form. Keep only the
+    // presence flag so updates can preserve the stored PAT.
+    accessToken: null,
+    hasAccessToken: Boolean(row.access_token_encrypted),
     webhookUrl: row.webhook_url ? String(row.webhook_url) : null,
-    webhookSecret: row.webhook_secret_encrypted ? String(row.webhook_secret_encrypted) : null,
+    webhookSecret: null,
     webhookId: row.webhook_id ? String(row.webhook_id) : null,
     events: Array.isArray(row.events) ? (row.events as string[]) : ["push", "merge_request"],
     isActive: Boolean(row.is_active),

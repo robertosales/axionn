@@ -42,7 +42,7 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const provider = req.headers.get('x-git-provider') || 'gitlab';
-    const eventType = req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown';
+    const eventType = normalizeEventType(req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown');
     const signature = req.headers.get('x-gitlab-token') || req.headers.get('x-hub-signature-256');
 
     const rawBody = await req.text();
@@ -354,6 +354,10 @@ async function processGitEvent(
       case 'note':
       case 'note_events':
         await processNoteEvent(supabase, integration, gitEvent, payload, correlationId);
+        break;
+      case 'issue':
+      case 'work_item':
+        await processIssueEvent(supabase, integration, gitEvent, payload, correlationId);
         break;
       default:
         console.log('[Git Webhook] Unhandled event type:', eventType);

@@ -46,6 +46,7 @@ import {
   validateGitlabIntegrationPayload,
   type GitlabIntegration,
 } from "../services/gitlabIntegrations.service";
+import { useTeamsAdmin } from "@/features/admin/hooks/useTeamsAdmin";
 
 interface FormState {
   id?: string;
@@ -59,7 +60,7 @@ interface FormState {
   isActive: boolean;
   teamId: string;
   syncIssuesAsBacklog: boolean;
-  issueLabelsJson: string;
+  labelRules: { label: string; teamId: string }[];
 }
 
 const EMPTY: FormState = {
@@ -73,7 +74,7 @@ const EMPTY: FormState = {
   isActive: true,
   teamId: "",
   syncIssuesAsBacklog: true,
-  issueLabelsJson: "",
+  labelRules: [],
 };
 
 export function AdminGitlabIntegrationsPage() {
@@ -87,40 +88,9 @@ export function AdminGitlabIntegrationsPage() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [tab, setTab] = useState<"config" | "events">("config");
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null);
-  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    if (!currentOrganizationId) {
-      setTeams([]);
-      return;
-    }
-    (async () => {
-      const { data: contracts } = await supabase
-        .from("contracts")
-        .select("id")
-        .eq("org_id", currentOrganizationId);
-      const ids = (contracts ?? []).map((c: { id: string }) => c.id);
-      if (!ids.length) {
-        setTeams([]);
-        return;
-      }
-      const { data } = await supabase
-        .from("contract_teams")
-        .select("teams ( id, name )")
-        .in("contract_id", ids);
-      const seen = new Set<string>();
-      const out: { id: string; name: string }[] = [];
-      for (const row of (data ?? []) as unknown as Array<{ teams?: { id: string; name: string } | null }>) {
-        const t = row.teams;
-        if (t?.id && !seen.has(t.id)) {
-          seen.add(t.id);
-          out.push({ id: t.id, name: t.name });
-        }
-      }
-      setTeams(out);
-    })();
-  }, [currentOrganizationId]);
+  const { teams } = useTeamsAdmin();
 
   const load = async () => {
     if (!currentOrganizationId) {
@@ -169,9 +139,9 @@ export function AdminGitlabIntegrationsPage() {
       isActive: item.isActive,
       teamId: item.teamId ?? "",
       syncIssuesAsBacklog: item.syncIssuesAsBacklog,
-      issueLabelsJson: item.issueLabelsTeamMap && Object.keys(item.issueLabelsTeamMap).length
-        ? JSON.stringify(item.issueLabelsTeamMap)
-        : "",
+      labelRules: item.issueLabelsTeamMap
+        ? Object.entries(item.issueLabelsTeamMap).map(([label, teamId]) => ({ label, teamId }))
+        : [],
     });
     setOpen(true);
   };
@@ -203,12 +173,12 @@ export function AdminGitlabIntegrationsPage() {
       return;
     }
 
-    let issueLabelsTeamMap: Record<string, string> = {};
-    if (form.issueLabelsJson.trim()) {
-      try {
-        issueLabelsTeamMap = JSON.parse(form.issueLabelsJson);
-      } catch {
-        toast.error("Mapa de labels inválido (deve ser um JSON válido).");
+    const issueLabelsTeamMap: Record<string, string> = {};
+    for (const rule of form.labelRules) {
+      if (rule.label.trim() && rule.teamId) {
+        issueLabelsTeamMap[rule.label.trim()] = rule.teamId;
+      } else if (rule.label.trim() || rule.teamId) {
+        toast.error("Cada regra de label precisa de um rótulo e de um time.");
         return;
       }
     }
@@ -517,16 +487,74 @@ export function AdminGitlabIntegrationsPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="gl-labels">Mapa de labels → time (JSON, opcional)</Label>
-                <Input
-                  id="gl-labels"
-                  value={form.issueLabelsJson}
-                  onChange={(e) => setForm({ ...form, issueLabelsJson: e.target.value })}
-                  placeholder='{"time::A":"<team_id>","time::B":"<team_id>"}'
-                />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Roteamento por label (opcional)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setForm({ ...form, labelRules: [...form.labelRules, { label: "", teamId: "" }] })}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Adicionar
+                  </Button>
+                </div>
+                {form.labelRules.length === 0 ? (
+                  <p className="text-xs leading-relaxed text-slate-600">
+                    Sem regras, todas as issues vão para o time de destino acima.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.labelRules.map((rule, idx) => (
+                      <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="flex-1 space-y-1.5">
+                          <Label className="text-xs text-slate-500">Rótulo (ex: time::A)</Label>
+                          <Input
+                            value={rule.label}
+                            onChange={(e) => {
+                              const next = [...form.labelRules];
+                              next[idx] = { ...rule, label: e.target.value };
+                              setForm({ ...form, labelRules: next });
+                            }}
+                            placeholder="time::A"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                          <Label className="text-xs text-slate-500">Time</Label>
+                          <Select
+                            value={rule.teamId}
+                            onValueChange={(v) => {
+                              const next = [...form.labelRules];
+                              next[idx] = { ...rule, teamId: v };
+                              setForm({ ...form, labelRules: next });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o time" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {teams.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remover regra"
+                          onClick={() => setForm({ ...form, labelRules: form.labelRules.filter((_, i) => i !== idx) })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs leading-relaxed text-slate-600">
-                  Roteia a issue para um time diferente conforme o rótulo. Sem isso, usa o time de destino acima.
+                  Issue com rótulo correspondente é roteada para o time indicado; caso contrário, usa o time de destino acima.
                 </p>
               </div>
             </section>

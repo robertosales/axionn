@@ -34,6 +34,7 @@ import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 import { HUEditDrawer } from "@/components/HUEditDrawer";
 import { useTeamAssignees } from "@/hooks/useTeamAssignees";
 import { splitUserStoryContent } from "@/lib/userStoryContent";
+import { filterStoriesBySprint, resolveBacklogSprintId } from "@/lib/sprintStoryFilter";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string; dot: string }> = {
   baixa:   { label: "Baixa",   color: "bg-muted text-muted-foreground",                                      dot: "bg-muted-foreground" },
@@ -42,7 +43,12 @@ const PRIORITY_MAP: Record<string, { label: string; color: string; dot: string }
   critica: { label: "Crítica", color: "bg-destructive/10 text-destructive border border-destructive/30",     dot: "bg-destructive" },
 };
 
-export function UserStoryManager() {
+interface UserStoryManagerProps {
+  selectedSprintId?: string | null;
+  onSelectSprint?: (sprintId: string) => void;
+}
+
+export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStoryManagerProps) {
   const {
     userStories, addUserStory, removeUserStory, updateUserStory,
     activities, activeSprint, sprints, epics, workflowColumns,
@@ -79,29 +85,22 @@ export function UserStoryManager() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter]     = useState("all");
   const [epicFilter, setEpicFilter]         = useState("all");
-  const [sprintFilter, setSprintFilter]     = useState("all");
+  const [localSprintId, setLocalSprintId]   = useState<string | null>(null);
+  const effectiveSprintId = resolveBacklogSprintId(selectedSprintId ?? localSprintId, activeSprint?.id);
 
   const hasFilters =
     searchFilter !== "" ||
     priorityFilter !== "all" ||
     statusFilter !== "all" ||
-    epicFilter !== "all" ||
-    sprintFilter !== "all";
+    epicFilter !== "all";
 
   const clearFilters = () => {
     setSearchFilter(""); setPriorityFilter("all");
-    setStatusFilter("all"); setEpicFilter("all"); setSprintFilter("all");
+    setStatusFilter("all"); setEpicFilter("all");
   };
 
   const filteredStories = useMemo(() => {
-    let stories = [...userStories];
-    if (sprintFilter === "backlog") {
-      stories = stories.filter((hu) => !hu.sprintId);
-    } else if (sprintFilter !== "all") {
-      stories = stories.filter((hu) => hu.sprintId === sprintFilter);
-    } else if (activeSprint) {
-      stories = stories.filter((hu) => hu.sprintId === activeSprint.id || !hu.sprintId);
-    }
+    let stories = filterStoriesBySprint(userStories, effectiveSprintId);
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       stories = stories.filter((hu) => hu.title.toLowerCase().includes(q) || hu.code.toLowerCase().includes(q));
@@ -110,7 +109,7 @@ export function UserStoryManager() {
     if (statusFilter !== "all")   stories = stories.filter((hu) => hu.status === statusFilter);
     if (epicFilter !== "all")     stories = stories.filter((hu) => hu.epicId === epicFilter);
     return stories;
-  }, [activeSprint, userStories, debouncedSearch, priorityFilter, statusFilter, epicFilter, sprintFilter]);
+  }, [userStories, effectiveSprintId, debouncedSearch, priorityFilter, statusFilter, epicFilter]);
 
   const { paginatedItems: sprintStories, currentPage, setCurrentPage, totalItems, pageSize } =
     usePagination(filteredStories, { pageSize: 10 });
@@ -365,11 +364,13 @@ export function UserStoryManager() {
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <ListFilter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <Select value={sprintFilter} onValueChange={(v) => { setSprintFilter(v); setCurrentPage(1); }}>
+          <Select value={effectiveSprintId ?? ""} onValueChange={(value) => {
+            setLocalSprintId(value);
+            onSelectSprint?.(value);
+            setCurrentPage(1);
+          }}>
             <SelectTrigger className="h-8 w-[145px] text-xs bg-background"><SelectValue placeholder="Sprint" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas as sprints</SelectItem>
-              <SelectItem value="backlog">📋 Backlog</SelectItem>
               {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} {s.isActive ? "✦" : ""}</SelectItem>)}
             </SelectContent>
           </Select>

@@ -24,7 +24,12 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function SprintManager() {
+interface SprintManagerProps {
+  selectedSprintId?: string | null;
+  onSelectSprint?: (sprintId: string) => void;
+}
+
+export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManagerProps) {
   const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, closeSprint, userStories, workflowColumns, addImpediment } = useSprint() as any;
   const [open, setOpen] = useState(false);
   const canCreate = useSalaAgilPermission("create_sprint");
@@ -202,11 +207,20 @@ export function SprintManager() {
                   className={[
                     "group relative rounded-xl border bg-card cursor-pointer",
                     "transition-all duration-150 hover:shadow-md",
-                    sprint.isActive
+                    selectedSprintId === sprint.id
                       ? "border-primary shadow-sm ring-1 ring-primary/40"
                       : "border-border opacity-80 hover:opacity-100",
                   ].join(" ")}
-                  onClick={() => !sprint.closedAt && setActiveSprint(sprint.id)}
+                  onClick={() => onSelectSprint?.(sprint.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selectedSprintId === sprint.id}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectSprint?.(sprint.id);
+                    }
+                  }}
                 >
                   {/* Faixa superior colorida para sprint ativa */}
                   {sprint.isActive && (
@@ -272,6 +286,11 @@ export function SprintManager() {
               </ContextMenuTrigger>
 
               <ContextMenuContent className="w-52">
+                {!sprint.closedAt && !sprint.isActive && canEdit && (
+                  <ContextMenuItem onClick={(e) => { e.stopPropagation(); setActiveSprint(sprint.id); }}>
+                    <Zap className="h-3.5 w-3.5 mr-2 text-primary" />Definir como sprint ativa
+                  </ContextMenuItem>
+                )}
                 <ContextMenuItem onClick={(e) => { e.stopPropagation(); setDetailSprint(sprint); }}>
                   <Info className="h-3.5 w-3.5 mr-2 text-blue-500" />Detalhar Sprint
                 </ContextMenuItem>

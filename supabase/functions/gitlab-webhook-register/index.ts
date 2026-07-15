@@ -45,11 +45,18 @@ serve(async (req: Request) => {
     const apiBase = (integration.api_url ?? "https://gitlab.com/api/v4").replace(/\/$/, "");
     const hooksUrl = `${apiBase}/projects/${encodeURIComponent(integration.repository_path)}/hooks`;
     const tokenHeaders = { "PRIVATE-TOKEN": integration.access_token_encrypted };
+
     const listRes = await fetch(hooksUrl, { headers: tokenHeaders });
-    if (!listRes.ok) return await fail(listRes, "Failed to list GitLab webhooks", integrationId, supabase);
+    if (!listRes.ok) return await fail(listRes, "Falha ao listar webhooks do GitLab", integrationId, supabase);
 
     const hooks = await listRes.json() as Array<{ id?: number; url?: string }>;
-    const existing = hooks.find((hook) => hook.url === WEBHOOK_HANDLER_URL && hook.id != null);
+    const normalizedTarget = WEBHOOK_HANDLER_URL.replace(/\/+$/, "").toLowerCase();
+    const findExisting = (list: Array<{ id?: number; url?: string }>) =>
+      list.find((hook) => {
+        const u = hook.url?.replace(/\/+$/, "").toLowerCase();
+        return u && u === normalizedTarget && hook.id != null;
+      });
+
     const webhookBody = {
       url: WEBHOOK_HANDLER_URL,
       token: webhookSecret,
@@ -67,21 +74,31 @@ serve(async (req: Request) => {
       ],
     };
 
-    if (existing) {
-      const updateRes = await fetch(`${hooksUrl}/${existing.id}`, {
+    const persistOk = (hookId: number) =>
+      supabase.from("git_integrations").update({
+        webhook_id: String(hookId),
+        webhook_url: WEBHOOK_HANDLER_URL,
+        sync_status: "completed",
+        sync_error: null,
+        last_sync_at: new Date().toISOString(),
+      }).eq("id", integrationId);
+
+    const upsertExisting = async (hookId: number): Promise<Response | null> => {
+      const updateRes = await fetch(`${hooksUrl}/${hookId}`, {
         method: "PUT",
         headers: { ...tokenHeaders, "Content-Type": "application/json" },
         body: JSON.stringify(webhookBody),
       });
-      if (!updateRes.ok) return await fail(updateRes, "Failed to update GitLab webhook", integrationId, supabase);
+      if (!updateRes.ok) return await fail(updateRes, "Falha ao atualizar webhook no GitLab", integrationId, supabase);
+      const { error: updateError } = await persistOk(hookId);
+      if (updateError) return json({ error: "Webhook atualizado, mas falha ao persistir status" }, 500);
+      return json({ ok: true, already_registered: true, webhook_id: hookId });
+    };
 
-      const { error: updateError } = await supabase.from("git_integrations").update({
-        webhook_id: existing.id ? String(existing.id) : null,
-        webhook_url: WEBHOOK_HANDLER_URL, sync_status: "completed", sync_error: null,
-        last_sync_at: new Date().toISOString(),
-      }).eq("id", integrationId);
-      if (updateError) return json({ error: "Webhook updated, but status persistence failed" }, 500);
-      return json({ ok: true, already_registered: true, webhook_id: existing.id });
+    const existing = findExisting(hooks);
+    if (existing?.id != null) {
+      const result = await upsertExisting(existing.id);
+      if (result) return result;
     }
 
     const createRes = await fetch(hooksUrl, {
@@ -89,15 +106,32 @@ serve(async (req: Request) => {
       headers: { ...tokenHeaders, "Content-Type": "application/json" },
       body: JSON.stringify(webhookBody),
     });
-    if (!createRes.ok) return await fail(createRes, "Failed to register webhook on GitLab", integrationId, supabase);
 
-    const hook = await createRes.json() as { id: number };
-    const { error: updateError } = await supabase.from("git_integrations").update({
-      webhook_id: String(hook.id), webhook_url: WEBHOOK_HANDLER_URL,
-      sync_status: "completed", sync_error: null, last_sync_at: new Date().toISOString(),
+    if (createRes.ok) {
+      const hook = await createRes.json() as { id: number };
+      const { error: updateError } = await persistOk(hook.id);
+      if (updateError) return json({ error: "Webhook criado, mas falha ao persistir status" }, 500);
+      return json({ ok: true, webhook_id: hook.id, webhook_url: WEBHOOK_HANDLER_URL });
+    }
+
+    // GitLab rejeita webhook duplicado (422). Re-listar e atualizar o existente como fallback.
+    const createDetail = (await createRes.text()).slice(0, 400);
+    if (createRes.status === 422 && /already been taken|duplicat/i.test(createDetail)) {
+      const relistRes = await fetch(hooksUrl, { headers: tokenHeaders });
+      if (relistRes.ok) {
+        const dupe = findExisting(await relistRes.json() as Array<{ id?: number; url?: string }>);
+        if (dupe?.id != null) {
+          const result = await upsertExisting(dupe.id);
+          if (result) return result;
+        }
+      }
+    }
+
+    await supabase.from("git_integrations").update({
+      sync_status: "error",
+      sync_error: `GitLab API ${createRes.status}: ${createDetail}`,
     }).eq("id", integrationId);
-    if (updateError) return json({ error: "Webhook created, but status persistence failed" }, 500);
-    return json({ ok: true, webhook_id: hook.id, webhook_url: WEBHOOK_HANDLER_URL });
+    return json({ error: "Falha ao registrar webhook no GitLab", gitlab_status: createRes.status, detail: createDetail }, 502);
   } catch (error) {
     console.error("[gitlab-webhook-register]", error);
     if (supabase && integrationId) {

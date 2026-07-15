@@ -48,6 +48,15 @@ import {
 } from "../services/gitlabIntegrations.service";
 import { useTeamsAdmin } from "@/features/admin/hooks/useTeamsAdmin";
 
+function describeInvokeError(error: any, data: any): string {
+  const ctx = error?.context ?? data;
+  if (ctx && typeof ctx === "object") {
+    const parts = [ctx.error, ctx.detail, ctx.gitlab_status && `HTTP ${ctx.gitlab_status}`].filter(Boolean);
+    if (parts.length) return parts.join(" — ");
+  }
+  return error?.message ?? "erro desconhecido";
+}
+
 interface FormState {
   id?: string;
   name: string;
@@ -211,12 +220,12 @@ export function AdminGitlabIntegrationsPage() {
       }
 
       if (form.accessToken) {
-        const { error } = await supabase.functions.invoke("gitlab-webhook-register", {
+        const { error, data } = await supabase.functions.invoke("gitlab-webhook-register", {
           body: { integrationId: saved.id },
         });
         if (error) {
           toast.error(
-            `Integração salva, mas o auto-registro do webhook falhou: ${error.message ?? "erro desconhecido"}. Use "Re-registrar webhook" após revisar o token.`,
+            `Integração salva, mas o auto-registro do webhook falhou: ${describeInvokeError(error, data)}. Veja o detalhe no badge de erro da integração.`,
           );
         } else {
           toast.success("Webhook registrado automaticamente no GitLab ✓");
@@ -605,12 +614,12 @@ export function AdminGitlabIntegrationsPage() {
               <Button type="button" variant="outline" className="gap-2 mr-auto" disabled={saving || registering} onClick={async () => {
                 setRegistering(true);
                 try {
-                  const { error } = await supabase.functions.invoke("gitlab-webhook-register", { body: { integrationId: form.id } });
-                  if (error) throw error;
+                  const { error, data } = await supabase.functions.invoke("gitlab-webhook-register", { body: { integrationId: form.id } });
+                  if (error) throw new Error(describeInvokeError(error, data));
                   toast.success("Webhook re-registrado no GitLab com sucesso ✓");
                   await load();
-                } catch {
-                  toast.error("Falha ao re-registrar webhook. Verifique o token de acesso.");
+                } catch (e: any) {
+                  toast.error(`Falha ao re-registrar webhook: ${e?.message ?? "verifique o token de acesso."}`);
                 } finally {
                   setRegistering(false);
                 }

@@ -5919,6 +5919,7 @@ export type Database = {
           events: string[] | null
           id: string
           is_active: boolean | null
+          issue_labels_team_map: Json
           last_sync_at: string | null
           name: string
           organization_id: string
@@ -5930,7 +5931,9 @@ export type Database = {
           repository_path: string | null
           staging_branches: string[] | null
           sync_error: string | null
+          sync_issues_as_backlog: boolean
           sync_status: string | null
+          team_id: string | null
           updated_at: string
           webhook_id: string | null
           webhook_secret_encrypted: string | null
@@ -5946,6 +5949,7 @@ export type Database = {
           events?: string[] | null
           id?: string
           is_active?: boolean | null
+          issue_labels_team_map?: Json
           last_sync_at?: string | null
           name: string
           organization_id: string
@@ -5957,7 +5961,9 @@ export type Database = {
           repository_path?: string | null
           staging_branches?: string[] | null
           sync_error?: string | null
+          sync_issues_as_backlog?: boolean
           sync_status?: string | null
+          team_id?: string | null
           updated_at?: string
           webhook_id?: string | null
           webhook_secret_encrypted?: string | null
@@ -5973,6 +5979,7 @@ export type Database = {
           events?: string[] | null
           id?: string
           is_active?: boolean | null
+          issue_labels_team_map?: Json
           last_sync_at?: string | null
           name?: string
           organization_id?: string
@@ -5984,7 +5991,9 @@ export type Database = {
           repository_path?: string | null
           staging_branches?: string[] | null
           sync_error?: string | null
+          sync_issues_as_backlog?: boolean
           sync_status?: string | null
+          team_id?: string | null
           updated_at?: string
           webhook_id?: string | null
           webhook_secret_encrypted?: string | null
@@ -6003,6 +6012,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "git_integrations_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]

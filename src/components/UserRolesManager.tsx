@@ -297,10 +297,10 @@ export function UserRolesManager() {
           if (profileStatusRes.error) {
             throw profileStatusRes.error;
           }
-          const profileStatusMap = new Map(
+          const profileStatusMap = new Map<string, boolean>(
             (profileStatusRes.data ?? []).map((profile: any) => [
-              profile.user_id,
-              profile.is_active ?? true,
+              String(profile.user_id),
+              (profile.is_active ?? true) as boolean,
             ]),
           );
 
@@ -322,7 +322,7 @@ export function UserRolesManager() {
                 email:                String(member.email || ""),
                 module_access:        moduleKeys[0] || "sala_agil",
                 // Status da conta (RBAC/Auth), não o status da associação à organização.
-                is_active:            profileStatusMap.get(member.user_id) ?? Boolean(member.is_active),
+                is_active:            profileStatusMap.get(String(member.user_id)) ?? Boolean(member.is_active),
                 must_change_password: false,
                 teams:                [],
                 moduleRoles:          moduleKeys.map((moduleKey) => ({

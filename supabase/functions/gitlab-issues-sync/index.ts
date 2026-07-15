@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { parseUserStoryContent } from "../_shared/user-story-content.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,7 +88,7 @@ async function upsertHuFromIssue(
   if (!issueId) return "skipped";
 
   const title = (issue.title as string) || "Sem título";
-  const description = (issue.description as string) || "";
+  const parsedContent = parseUserStoryContent(issue.description);
   const state = String(issue.state || "opened").toLowerCase();
   const status = state === "closed" ? "concluido" : "aguardando_desenvolvimento";
 
@@ -113,7 +114,13 @@ async function upsertHuFromIssue(
   if (existing?.hu_id) {
     await supabase
       .from("user_stories")
-      .update({ title, description, status, updated_at: new Date().toISOString() })
+      .update({
+        title,
+        description: parsedContent.content,
+        acceptance_criteria: parsedContent.acceptanceCriteria,
+        status,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", existing.hu_id);
     return "updated";
   }
@@ -134,7 +141,8 @@ async function upsertHuFromIssue(
       sprint_id: null,
       code,
       title,
-      description,
+      description: parsedContent.content,
+      acceptance_criteria: parsedContent.acceptanceCriteria,
       story_points: 0,
       priority: "media",
       status,

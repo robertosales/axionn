@@ -9,4 +9,10 @@ describe("GitLab issues backlog contract", () => {
     expect(sync).toContain("issue, labels, correlationId");
     expect(sync).not.toContain("issue, issues, correlationId");
   });
+
+  it("persists unified markdown and derived acceptance criteria", () => {
+    expect(sync).toContain("parseUserStoryContent(issue.description)");
+    expect(sync).toContain("description: parsedContent.content");
+    expect(sync).toContain("acceptance_criteria: parsedContent.acceptanceCriteria");
+  });
 });

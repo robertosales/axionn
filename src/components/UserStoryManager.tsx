@@ -33,6 +33,7 @@ import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 import { HUEditDrawer } from "@/components/HUEditDrawer";
 import { useTeamAssignees } from "@/hooks/useTeamAssignees";
+import { splitUserStoryContent } from "@/lib/userStoryContent";
 
 const PRIORITY_MAP: Record<string, { label: string; color: string; dot: string }> = {
   baixa:   { label: "Baixa",   color: "bg-muted text-muted-foreground",                                      dot: "bg-muted-foreground" },
@@ -40,8 +41,6 @@ const PRIORITY_MAP: Record<string, { label: string; color: string; dot: string }
   alta:    { label: "Alta",    color: "bg-warning/10 text-warning border border-warning/30",                 dot: "bg-warning" },
   critica: { label: "Crítica", color: "bg-destructive/10 text-destructive border border-destructive/30",     dot: "bg-destructive" },
 };
-
-const AC_SEPARATOR = "\n\n---\n**Critérios de Aceite:**\n";
 
 export function UserStoryManager() {
   const {
@@ -55,8 +54,7 @@ export function UserStoryManager() {
 
   const [open, setOpen]                   = useState(false);
   const [title, setTitle]                 = useState("");
-  const [description, setDescription]     = useState("");
-  const [acceptanceCriteria, setAcceptanceCriteria] = useState("");
+  const [content, setContent]             = useState("");
   const [selectedSize, setSelectedSize]   = useState<string | null>(null);
   const [priority, setPriority]           = useState<"baixa"|"media"|"alta"|"critica">("media");
   const [epicId, setEpicId]               = useState<string>("");
@@ -118,7 +116,7 @@ export function UserStoryManager() {
     usePagination(filteredStories, { pageSize: 10 });
 
   const resetForm = () => {
-    setTitle(""); setDescription(""); setAcceptanceCriteria(""); setSelectedSize(null);
+    setTitle(""); setContent(""); setSelectedSize(null);
     setPriority("media"); setEpicId(""); setSprintId(activeSprint?.id || "");
     setStatusField(workflowColumns[0]?.key || ""); setStartDate(""); setEndDate("");
     setFunctionPoints(""); setAssigneeId(""); setCustomFieldValues({}); setErrors({});
@@ -147,11 +145,11 @@ export function UserStoryManager() {
         ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
         : { sizeReference: null, estimatedHours: null, storyPoints: 0 };
       const fp = functionPoints ? parseFloat(functionPoints) : null;
-      const fullDesc = acceptanceCriteria
-        ? `${description.trim()}${AC_SEPARATOR}${acceptanceCriteria.trim()}`
-        : description.trim();
+      const parsedContent = splitUserStoryContent(content);
       await addUserStory({
-        title: title.trim(), description: fullDesc, ...sizeData, priority,
+        title: title.trim(), description: parsedContent.content,
+        acceptanceCriteria: parsedContent.acceptanceCriteria || null,
+        ...sizeData, priority,
         sprintId: sprintId === "" ? null : sprintId,
         epicId: epicId || null, customFields: customFieldValues,
         startDate: startDate || undefined, endDate: endDate || undefined,
@@ -196,14 +194,11 @@ export function UserStoryManager() {
                 {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
               </div>
               <div>
-                <Label>Descrição</Label>
-                <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descrição detalhada da funcionalidade..." className="mt-1" rows={3} />
-              </div>
-              <div>
-                <Label>Critérios de Aceite</Label>
-                <Textarea value={acceptanceCriteria} onChange={(e) => setAcceptanceCriteria(e.target.value)}
-                  placeholder="1. Dado que... quando... então..." className="mt-1" rows={3} />
+                <Label>Descrição e critérios de aceite</Label>
+                <Textarea value={content} onChange={(e) => setContent(e.target.value)}
+                  placeholder={"## Descrição\n\nDescreva a funcionalidade...\n\n## Critérios de Aceite\n\n- Dado que... quando... então..."}
+                  className="mt-1 min-h-56 resize-y font-mono" rows={10} />
+                <p className="mt-1 text-xs text-muted-foreground">Use Markdown e o título “## Critérios de Aceite” para alimentar análises e APF.</p>
               </div>
               {customFields.length > 0 && (
                 <div className="space-y-3 border-t pt-3">

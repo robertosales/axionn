@@ -161,6 +161,7 @@ const mapImpediment = (imp: any): Impediment => ({
 
 const mapUserStory = (h: any, impData: any[]): UserStory => ({
   id: h.id, code: h.code, title: h.title, description: h.description || "",
+  acceptanceCriteria: h.acceptance_criteria || null,
   storyPoints: h.story_points, priority: h.priority, status: h.status,
   sprintId: h.sprint_id, epicId: h.epic_id,
   startDate: h.start_date || undefined, endDate: h.end_date || undefined,
@@ -617,7 +618,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.from("user_stories").insert({
       team_id: teamId, sprint_id: hu.sprintId, epic_id: hu.epicId || null,
       code: `HU-${String(count).padStart(3, "0")}`, title: hu.title,
-      description: hu.description, story_points: hu.storyPoints, priority: hu.priority,
+      description: hu.description, acceptance_criteria: hu.acceptanceCriteria || null,
+      story_points: hu.storyPoints, priority: hu.priority,
       status: targetStatus, position: lastPosition, custom_fields: hu.customFields || {},
       start_date: hu.startDate || null, end_date: hu.endDate || null,
       size_reference: (hu as any).sizeReference || null,
@@ -639,6 +641,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     const updateData: any = {};
     if (hu.title !== undefined) updateData.title = hu.title;
     if (hu.description !== undefined) updateData.description = hu.description;
+    if (hu.acceptanceCriteria !== undefined) updateData.acceptance_criteria = hu.acceptanceCriteria;
     if (hu.storyPoints !== undefined) updateData.story_points = hu.storyPoints;
     if (hu.priority !== undefined) updateData.priority = hu.priority;
     if (hu.status !== undefined) updateData.status = hu.status;

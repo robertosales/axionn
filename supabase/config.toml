@@ -11,3 +11,9 @@ verify_jwt = true
 
 [functions.gitlab-webhook-register]
 verify_jwt = true
+
+[functions.gitlab-issues-sync]
+verify_jwt = true
+
+[functions.gitlab-issues-reconcile]
+verify_jwt = true

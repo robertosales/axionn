@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseUserStoryContent } from "../_shared/user-story-content.ts";
+import { resolveGitlabBacklogPlacement } from "../_shared/gitlab-backlog-placement.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,13 +50,15 @@ serve(async (req: Request) => {
     }
 
     const apiBase = (integration.api_url ?? "https://gitlab.com/api/v4").replace(/\/$/, "");
-    const issuesUrl = `${apiBase}/projects/${encodeURIComponent(integration.repository_path)}/issues?state=opened&per_page=100`;
-    const listRes = await fetch(issuesUrl, { headers: { "PRIVATE-TOKEN": integration.access_token_encrypted } });
-    if (!listRes.ok) {
-      const detail = (await listRes.text()).slice(0, 300);
-      return json({ error: "Failed to list GitLab issues", gitlab_status: listRes.status, detail }, 502);
+    const issuesResult = await listAllIssues(apiBase, integration.repository_path, integration.access_token_encrypted);
+    if (!issuesResult.ok) {
+      return json({
+        error: "Failed to list GitLab issues",
+        gitlab_status: issuesResult.status,
+        detail: issuesResult.detail,
+      }, 502);
     }
-    const issues = (await listRes.json()) as Array<Record<string, unknown>>;
+    const issues = issuesResult.issues;
     const correlationId = crypto.randomUUID();
     let created = 0;
     let updated = 0;
@@ -76,6 +79,27 @@ serve(async (req: Request) => {
   }
 });
 
+async function listAllIssues(apiBase: string, repositoryPath: string, token: string): Promise<
+  | { ok: true; issues: Array<Record<string, unknown>> }
+  | { ok: false; status: number; detail: string }
+> {
+  const issues: Array<Record<string, unknown>> = [];
+  let page = 1;
+  while (page <= 100) {
+    const url = `${apiBase}/projects/${encodeURIComponent(repositoryPath)}/issues?state=all&per_page=100&page=${page}`;
+    const response = await fetch(url, { headers: { "PRIVATE-TOKEN": token } });
+    if (!response.ok) {
+      return { ok: false, status: response.status, detail: (await response.text()).slice(0, 300) };
+    }
+    issues.push(...await response.json() as Array<Record<string, unknown>>);
+    const nextPage = response.headers.get("x-next-page");
+    if (!nextPage) break;
+    page = Number(nextPage);
+    if (!Number.isFinite(page) || page < 1) break;
+  }
+  return { ok: true, issues };
+}
+
 async function upsertHuFromIssue(
   supabase: any,
   integration: any,
@@ -90,7 +114,6 @@ async function upsertHuFromIssue(
   const title = (issue.title as string) || "Sem título";
   const parsedContent = parseUserStoryContent(issue.description);
   const state = String(issue.state || "opened").toLowerCase();
-  const status = state === "closed" ? "concluido" : "aguardando_desenvolvimento";
 
   // Resolve team via label map (if any).
   let teamId: string | null = integration.team_id ?? null;
@@ -104,12 +127,20 @@ async function upsertHuFromIssue(
   }
   if (!teamId) return "skipped";
 
+  const placement = await resolveGitlabBacklogPlacement(supabase, teamId);
+  const status = state === "closed" ? placement.doneStatus : placement.backlogStatus;
+
   const { data: existing } = await supabase
     .from("hu_git_links")
     .select("hu_id")
     .eq("git_entity_type", "issue")
     .eq("git_entity_id", String(issueId))
     .maybeSingle();
+
+  // Closed issues are relevant only when they already have a corresponding HU.
+  // This repairs a missed close webhook without importing the project's entire
+  // historical archive as completed backlog items.
+  if (!existing?.hu_id && state === "closed") return "skipped";
 
   if (existing?.hu_id) {
     await supabase
@@ -118,6 +149,7 @@ async function upsertHuFromIssue(
         title,
         description: parsedContent.content,
         acceptance_criteria: parsedContent.acceptanceCriteria,
+        sprint_id: placement.sprintId,
         status,
         updated_at: new Date().toISOString(),
       })
@@ -138,7 +170,7 @@ async function upsertHuFromIssue(
     .from("user_stories")
     .insert({
       team_id: teamId,
-      sprint_id: null,
+      sprint_id: placement.sprintId,
       code,
       title,
       description: parsedContent.content,

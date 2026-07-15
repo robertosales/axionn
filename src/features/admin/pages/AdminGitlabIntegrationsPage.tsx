@@ -643,13 +643,15 @@ export function AdminGitlabIntegrationsPage() {
                 onClick={async () => {
                   setSyncing(true);
                   try {
-                    const { error } = await supabase.functions.invoke("gitlab-issues-sync", {
+                    const { error, data } = await supabase.functions.invoke("gitlab-issues-sync", {
                       body: { integrationId: form.id },
                     });
-                    if (error) throw error;
-                    toast.success("Issues existentes sincronizadas para o backlog ✓");
-                  } catch {
-                    toast.error("Falha ao sincronizar issues. Verifique o token de acesso.");
+                    if (error) throw new Error(describeInvokeError(error, data));
+                    toast.success(
+                      `Sincronização concluída: ${data?.created ?? 0} criada(s), ${data?.updated ?? 0} atualizada(s) e ${data?.skipped ?? 0} ignorada(s).`,
+                    );
+                  } catch (error: any) {
+                    toast.error(`Falha ao sincronizar issues: ${error?.message ?? "verifique o token de acesso."}`);
                   } finally {
                     setSyncing(false);
                   }

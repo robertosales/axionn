@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { parseUserStoryContent } from '../_shared/user-story-content.ts';
+import { resolveGitlabBacklogPlacement } from '../_shared/gitlab-backlog-placement.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -640,7 +641,6 @@ async function processIssueEvent(
   const title = (issue.title as string) || 'Sem título';
   const parsedContent = parseUserStoryContent(issue.description);
   const state = String(issue.state || 'opened').toLowerCase();
-  const status = state === 'closed' ? 'concluido' : 'aguardando_desenvolvimento';
 
   // Resolve o time de destino: integration.team_id ou via label.
   let teamId: string | null = integration.team_id ?? null;
@@ -658,6 +658,9 @@ async function processIssueEvent(
     return;
   }
 
+  const placement = await resolveGitlabBacklogPlacement(supabase, teamId);
+  const status = state === 'closed' ? placement.doneStatus : placement.backlogStatus;
+
   // Dedup: procura HU já vinculada a essa issue.
   const { data: existing } = await supabase
     .from('hu_git_links')
@@ -673,6 +676,7 @@ async function processIssueEvent(
         title,
         description: parsedContent.content,
         acceptance_criteria: parsedContent.acceptanceCriteria,
+        sprint_id: placement.sprintId,
         status,
         updated_at: new Date().toISOString(),
       })
@@ -694,7 +698,7 @@ async function processIssueEvent(
     .from('user_stories')
     .insert({
       team_id: teamId,
-      sprint_id: null,
+      sprint_id: placement.sprintId,
       code,
       title,
       description: parsedContent.content,

@@ -362,7 +362,7 @@ function WorkItemContext({
               </div>
               <p className="mt-1 text-sm text-foreground/80">{correlation.title}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Entidade Git vinculada: {correlation.git_entity_type.replaceAll("_", " ")}
+                Entidade Git vinculada: {correlation.git_entity_type.replace(/_/g, " ")}
               </p>
             </div>
           ))}

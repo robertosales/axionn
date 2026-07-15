@@ -16,6 +16,9 @@ export interface GitlabIntegration {
   isActive: boolean;
   syncStatus: string | null;
   syncError: string | null;
+  teamId: string | null;
+  syncIssuesAsBacklog: boolean;
+  issueLabelsTeamMap: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,6 +39,9 @@ export interface GitlabIntegrationPayload {
   is_active: boolean;
   sync_status?: string | null;
   sync_error?: string | null;
+  team_id?: string | null;
+  sync_issues_as_backlog?: boolean;
+  issue_labels_team_map?: Record<string, string>;
 }
 
 export interface GitlabIntegrationValidationResult {
@@ -58,6 +64,12 @@ export function normalizeGitlabIntegration(row: Record<string, unknown>): Gitlab
     webhookId: row.webhook_id ? String(row.webhook_id) : null,
     events: Array.isArray(row.events) ? (row.events as string[]) : ["push", "merge_request"],
     isActive: Boolean(row.is_active),
+    teamId: row.team_id ? String(row.team_id) : null,
+    syncIssuesAsBacklog: row.sync_issues_as_backlog != null ? Boolean(row.sync_issues_as_backlog) : true,
+    issueLabelsTeamMap:
+      row.issue_labels_team_map && typeof row.issue_labels_team_map === "object"
+        ? (row.issue_labels_team_map as Record<string, string>)
+        : {},
     syncStatus: row.sync_status ? String(row.sync_status) : null,
     syncError: row.sync_error ? String(row.sync_error) : null,
     createdAt: String(row.created_at ?? ""),
@@ -78,6 +90,9 @@ export function buildGitlabIntegrationPayload(input: {
   webhookSecret?: string | null;
   events?: string[];
   isActive?: boolean;
+  teamId?: string | null;
+  syncIssuesAsBacklog?: boolean;
+  issueLabelsTeamMap?: Record<string, string>;
 }): GitlabIntegrationPayload {
   return {
     organization_id: input.organizationId,
@@ -95,6 +110,9 @@ export function buildGitlabIntegrationPayload(input: {
     is_active: input.isActive ?? true,
     sync_status: "pending",
     sync_error: null,
+    team_id: input.teamId ?? null,
+    sync_issues_as_backlog: input.syncIssuesAsBacklog ?? true,
+    issue_labels_team_map: input.issueLabelsTeamMap ?? {},
   };
 }
 

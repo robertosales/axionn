@@ -57,6 +57,9 @@ interface FormState {
   accessToken: string;
   webhookSecret: string;
   isActive: boolean;
+  teamId: string;
+  syncIssuesAsBacklog: boolean;
+  issueLabelsJson: string;
 }
 
 const EMPTY: FormState = {
@@ -68,6 +71,9 @@ const EMPTY: FormState = {
   accessToken: "",
   webhookSecret: "",
   isActive: true,
+  teamId: "",
+  syncIssuesAsBacklog: true,
+  issueLabelsJson: "",
 };
 
 export function AdminGitlabIntegrationsPage() {
@@ -81,6 +87,40 @@ export function AdminGitlabIntegrationsPage() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [tab, setTab] = useState<"config" | "events">("config");
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null);
+  const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    if (!currentOrganizationId) {
+      setTeams([]);
+      return;
+    }
+    (async () => {
+      const { data: contracts } = await supabase
+        .from("contracts")
+        .select("id")
+        .eq("org_id", currentOrganizationId);
+      const ids = (contracts ?? []).map((c: { id: string }) => c.id);
+      if (!ids.length) {
+        setTeams([]);
+        return;
+      }
+      const { data } = await supabase
+        .from("contract_teams")
+        .select("teams ( id, name )")
+        .in("contract_id", ids);
+      const seen = new Set<string>();
+      const out: { id: string; name: string }[] = [];
+      for (const row of (data ?? []) as unknown as Array<{ teams?: { id: string; name: string } | null }>) {
+        const t = row.teams;
+        if (t?.id && !seen.has(t.id)) {
+          seen.add(t.id);
+          out.push({ id: t.id, name: t.name });
+        }
+      }
+      setTeams(out);
+    })();
+  }, [currentOrganizationId]);
 
   const load = async () => {
     if (!currentOrganizationId) {
@@ -127,6 +167,11 @@ export function AdminGitlabIntegrationsPage() {
       accessToken: item.accessToken ?? "",
       webhookSecret: item.webhookSecret ?? "",
       isActive: item.isActive,
+      teamId: item.teamId ?? "",
+      syncIssuesAsBacklog: item.syncIssuesAsBacklog,
+      issueLabelsJson: item.issueLabelsTeamMap && Object.keys(item.issueLabelsTeamMap).length
+        ? JSON.stringify(item.issueLabelsTeamMap)
+        : "",
     });
     setOpen(true);
   };
@@ -153,6 +198,21 @@ export function AdminGitlabIntegrationsPage() {
       return;
     }
 
+    if (form.syncIssuesAsBacklog && !form.teamId) {
+      toast.error("Selecione o Time de destino para importar issues como backlog.");
+      return;
+    }
+
+    let issueLabelsTeamMap: Record<string, string> = {};
+    if (form.issueLabelsJson.trim()) {
+      try {
+        issueLabelsTeamMap = JSON.parse(form.issueLabelsJson);
+      } catch {
+        toast.error("Mapa de labels inválido (deve ser um JSON válido).");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const payload = buildGitlabIntegrationPayload({
@@ -165,6 +225,9 @@ export function AdminGitlabIntegrationsPage() {
         accessToken: form.accessToken,
         webhookSecret: form.webhookSecret,
         isActive: form.isActive,
+        teamId: form.teamId || null,
+        syncIssuesAsBacklog: form.syncIssuesAsBacklog,
+        issueLabelsTeamMap,
       });
 
       const saved = form.id
@@ -421,6 +484,55 @@ export function AdminGitlabIntegrationsPage() {
 
             <section className="space-y-4 rounded-xl border border-slate-200 p-4">
               <div>
+                <h3 className="text-sm font-semibold text-slate-900">Backlog (issues do GitLab)</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+                  Issues criadas no GitLab viram Histórias de Usuário no backlog do time selecionado.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="gl-team">Time de destino</Label>
+                <Select value={form.teamId} onValueChange={(v) => setForm({ ...form, teamId: v })}>
+                  <SelectTrigger id="gl-team">
+                    <SelectValue placeholder="Selecione o time que recebe o backlog" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Importar issues como backlog</p>
+                    <p className="text-xs text-slate-500">Cria/atualiza HU a partir das issues do projeto.</p>
+                  </div>
+                  <Switch
+                    checked={form.syncIssuesAsBacklog}
+                    onCheckedChange={(value) => setForm({ ...form, syncIssuesAsBacklog: value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="gl-labels">Mapa de labels → time (JSON, opcional)</Label>
+                <Input
+                  id="gl-labels"
+                  value={form.issueLabelsJson}
+                  onChange={(e) => setForm({ ...form, issueLabelsJson: e.target.value })}
+                  placeholder='{"time::A":"<team_id>","time::B":"<team_id>"}'
+                />
+                <p className="text-xs leading-relaxed text-slate-600">
+                  Roteia a issue para um time diferente conforme o rótulo. Sem isso, usa o time de destino acima.
+                </p>
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 p-4">
+              <div>
                 <h3 className="text-sm font-semibold text-slate-900">Automação</h3>
                 <p className="mt-0.5 text-xs leading-relaxed text-slate-600">O webhook é configurado automaticamente ao salvar a integração.</p>
               </div>
@@ -477,6 +589,31 @@ export function AdminGitlabIntegrationsPage() {
               }}>
                 {registering ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 Re-registrar webhook
+              </Button>
+            )}
+            {form.id && form.accessToken && (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                disabled={saving || syncing}
+                onClick={async () => {
+                  setSyncing(true);
+                  try {
+                    const { error } = await supabase.functions.invoke("gitlab-issues-sync", {
+                      body: { integrationId: form.id },
+                    });
+                    if (error) throw error;
+                    toast.success("Issues existentes sincronizadas para o backlog ✓");
+                  } catch {
+                    toast.error("Falha ao sincronizar issues. Verifique o token de acesso.");
+                  } finally {
+                    setSyncing(false);
+                  }
+                }}
+              >
+                {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Sincronizar issues
               </Button>
             )}
             <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>

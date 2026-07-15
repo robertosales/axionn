@@ -1,0 +1,47 @@
+name: GitLab Issues Reconcile
+
+# Reconciliação a cada 10 minutos como rede de segurança caso webhooks do
+# GitLab sejam perdidos. Não substitui os webhooks, que continuam refletindo
+# alterações imediatamente. Sincronização manual pelo botão "Sincronizar
+# issues" também permanece disponível.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: gitlab-issues-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: POST gitlab-issues-reconcile
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY repo secret" >&2
+            exit 1
+          fi
+          HTTP_CODE=$(curl -sS -o /tmp/resp.json -w "%{http_code}" \
+            -X POST "${SUPABASE_URL}/functions/v1/gitlab-issues-reconcile" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          echo "HTTP ${HTTP_CODE}"
+          cat /tmp/resp.json || true
+          echo
+          if [ "${HTTP_CODE}" != "200" ]; then
+            exit 1
+          fi
+          FAILED=$(python3 -c "import json,sys;d=json.load(open('/tmp/resp.json'));print(d.get('failed',0))")
+          if [ "${FAILED}" != "0" ]; then
+            echo "reconcile reported failed=${FAILED}" >&2
+            exit 1
+          fi

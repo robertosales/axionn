@@ -11,10 +11,11 @@ serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) return json({ error: "Server configuration error" }, 500);
+  const reconcileSecret = Deno.env.get("GITLAB_RECONCILE_SECRET");
+  if (!supabaseUrl || !serviceRoleKey || !reconcileSecret) return json({ error: "Server configuration error" }, 500);
 
   const authorization = req.headers.get("authorization");
-  if (authorization !== `Bearer ${serviceRoleKey}`) return json({ error: "Unauthorized scheduled invocation" }, 401);
+  if (authorization !== `Bearer ${reconcileSecret}`) return json({ error: "Unauthorized scheduled invocation" }, 401);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   const { data: integrations, error } = await supabase

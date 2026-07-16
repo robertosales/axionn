@@ -1,24 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import type { OkrObjective, OkrStatus } from "../types";
-
-interface ObjectivePayload {
-  title: string;
-  description?: string;
-  owner_id?: string;
-  owner_name?: string;
-  team_id: string;
-  team_name?: string;
-  cycle: string;
-  status: OkrStatus;
-}
+import type { OkrHealth, OkrObjective, OkrObjectiveInput } from "../types";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSubmit: (payload: ObjectivePayload) => Promise<void>;
+  onSubmit: (payload: OkrObjectiveInput) => Promise<void>;
   teams: { id: string; name: string }[];
   defaultCycle: string;
   objective?: OkrObjective | null;
@@ -28,9 +17,13 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [teamId, setTeamId] = useState<string>("");
+  const [lifecycle, setLifecycle] = useState<OkrObjective["lifecycle_status"]>("active");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [healthOverride, setHealthOverride] = useState<OkrHealth | "">("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedTeam = useMemo(() => teams.find((t) => t.id === teamId), [teams, teamId]);
   const isEdit = !!objective;
 
   useEffect(() => {
@@ -40,6 +33,11 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
     // Prioriza: team do objective editado → primeiro time disponível → string vazia
     const resolvedTeamId = objective?.team_id ?? teams[0]?.id ?? "";
     setTeamId(resolvedTeamId);
+    setLifecycle(objective?.lifecycle_status ?? "active");
+    setStartDate(objective?.start_date ?? "");
+    setEndDate(objective?.end_date ?? "");
+    setHealthOverride(objective?.manual_health_override ?? "");
+    setOverrideReason(objective?.health_override_reason ?? "");
   }, [open, objective, teams]);
 
   if (!open) return null;
@@ -55,11 +53,13 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
         title: title.trim(),
         description: description.trim() || undefined,
         owner_id: objective?.owner_id ?? user?.id ?? undefined,
-        owner_name: objective?.owner_name ?? user?.email ?? undefined,
         team_id: teamId,
-        team_name: selectedTeam?.name,
         cycle: objective?.cycle ?? defaultCycle,
-        status: objective?.status ?? "on_track",
+        lifecycle_status: lifecycle,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        manual_health_override: healthOverride || null,
+        health_override_reason: healthOverride ? overrideReason.trim() : null,
       });
     } finally {
       setIsSubmitting(false);
@@ -74,6 +74,25 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
             <h3 className="text-base font-semibold">{isEdit ? "Editar objetivo" : "Novo objetivo"}</h3>
             <p className="text-xs text-muted-foreground">Defina o objetivo principal do ciclo.</p>
           </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Status do ciclo</label>
+              <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as OkrObjective["lifecycle_status"])} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+                <option value="draft">Rascunho</option><option value="active">Ativo</option><option value="completed">Concluído</option><option value="cancelled">Cancelado</option><option value="archived">Arquivado</option>
+              </select>
+            </div>
+            <div className="space-y-1.5"><label className="text-xs font-medium">Início</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-medium">Fim</label><input type="date" min={startDate || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" /></div>
+          </div>
+
+          {isEdit && (
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+              <div className="space-y-1.5"><label className="text-xs font-medium">Override manual de saúde</label><select value={healthOverride} onChange={(e) => setHealthOverride(e.target.value as OkrHealth | "")} className="h-10 w-full rounded-lg border bg-background px-3 text-sm"><option value="">Usar saúde calculada</option><option value="on_track">No prazo</option><option value="attention">Atenção</option><option value="at_risk">Em risco</option><option value="completed">Concluído</option></select></div>
+              {healthOverride && <div className="space-y-1.5"><label className="text-xs font-medium">Justificativa obrigatória</label><textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} className="min-h-[64px] w-full rounded-lg border bg-background px-3 py-2 text-sm" placeholder="Explique por que a avaliação calculada deve ser substituída" /></div>}
+              <p className="text-[11px] text-muted-foreground">O valor calculado permanece preservado como evidência.</p>
+            </div>
+          )}
           <Button variant="ghost" size="icon" onClick={onClose} disabled={isSubmitting}>
             <X className="h-4 w-4" />
           </Button>
@@ -133,7 +152,7 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
 
         <div className="flex items-center justify-end gap-2 border-t px-5 py-4">
           <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting || !isTeamValid || !title.trim()} className="gap-1.5">
+          <Button onClick={handleSubmit} disabled={isSubmitting || !isTeamValid || !title.trim() || (!!healthOverride && !overrideReason.trim()) || (!!startDate && !!endDate && endDate < startDate)} className="gap-1.5">
             {isSubmitting ? (
               <span className="flex items-center gap-1.5">
                 <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />

@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { MessageSquare, Pencil, Trash2, X, Check } from "lucide-react";
+import { MessageSquare, Pencil, Trash2, X, Check, RefreshCw, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { OkrKeyResult } from "../types";
+import { calculateKrProgress } from "../domain/okrCalculations";
+import { getOkrMetric } from "../domain/metricCatalog";
 
 const UNIT_OPTIONS: { value: OkrKeyResult["unit"]; label: string; display: string }[] = [
   { value: "%",     label: "Porcentagem (%)",  display: "%" },
@@ -22,15 +24,22 @@ function unitDisplay(unit: OkrKeyResult["unit"]): string {
 interface Props {
   kr: OkrKeyResult;
   onCheckIn: (kr: OkrKeyResult) => void;
+  onRefresh?: (id: string) => Promise<void>;
+  onHistory?: (kr: OkrKeyResult) => void;
   onUpdate?: (id: string, payload: { title?: string; unit?: OkrKeyResult["unit"]; target?: number }) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
 }
 
 export function krProgress(kr: OkrKeyResult): number {
-  if (kr.unit === "bugs")  return kr.current === 0 ? 100 : Math.max(0, 100 - kr.current * 20);
-  if (kr.unit === "bool")  return kr.current >= kr.target ? 100 : 0;
-  if (kr.target === 0)     return 100;
-  return Math.min(100, Math.round((kr.current / kr.target) * 100));
+  if (kr.calculated_progress != null) return Math.round(kr.calculated_progress);
+  return Math.round(calculateKrProgress({
+    baseline: kr.baseline_value ?? null,
+    current: kr.current_value ?? kr.current,
+    target: kr.target_value ?? kr.target,
+    targetMin: kr.target_min,
+    targetMax: kr.target_max,
+    direction: kr.direction ?? "increase",
+  }).progress ?? 0);
 }
 
 export function krProgressColor(pct: number): string {
@@ -54,8 +63,9 @@ function fmtValue(kr: OkrKeyResult): string {
   return `${kr.current} ${d} de ${kr.target} ${d}`;
 }
 
-export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {
+export function OkrKeyResultRow({ kr, onCheckIn, onRefresh, onHistory, onUpdate, onDelete }: Props) {
   const pct = krProgress(kr);
+  const metric = getOkrMetric(kr.metric_code);
 
   const [editing, setEditing]       = useState(false);
   const [editTitle, setEditTitle]   = useState(kr.title);
@@ -64,6 +74,7 @@ export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {
   const [isSaving, setIsSaving]     = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSave = async () => {
     if (!onUpdate || !editTitle.trim()) return;
@@ -110,9 +121,8 @@ export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-xs text-muted-foreground">{fmtValue(kr)}</span>
           <span className="text-xs font-bold w-10 text-right" style={{ color: krProgressTextColor(pct) }}>{pct}%</span>
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary" onClick={() => onCheckIn(kr)} title="Registrar check-in">
-            <MessageSquare className="h-3.5 w-3.5" />
-          </Button>
+          {kr.update_type === "manual" || !kr.update_type ? <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary" onClick={() => onCheckIn(kr)} title="Registrar check-in"><MessageSquare className="h-3.5 w-3.5" /></Button> : onRefresh && <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] gap-1 text-muted-foreground hover:text-primary" disabled={isRefreshing} onClick={async () => { setIsRefreshing(true); try { await onRefresh(kr.id); } finally { setIsRefreshing(false); } }} title="Atualizar agora"><RefreshCw className={cn("h-3 w-3", isRefreshing && "animate-spin")} /> Atualizar</Button>}
+          {onHistory && <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onHistory(kr)} title="Ver histórico e evidências"><History className="h-3.5 w-3.5" /></Button>}
           {onUpdate && !confirmDel && (
             <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-primary" onClick={() => { setEditing(true); setEditTitle(kr.title); setEditUnit(kr.unit); setEditTarget(String(kr.target)); }} title="Editar Key Result">
               <Pencil className="h-3 w-3" />
@@ -136,6 +146,14 @@ export function OkrKeyResultRow({ kr, onCheckIn, onUpdate, onDelete }: Props) {
       </div>
       <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
         <div className={cn("h-1.5 rounded-full transition-all duration-500", krProgressColor(pct))} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+        <span>Inicial: {kr.baseline_value ?? "Não configurado"}</span>
+        <span>Atual: {kr.current_value ?? kr.current}</span>
+        <span>Meta: {kr.target_value ?? kr.target} {unitDisplay(kr.unit)}</span>
+        <span>Tipo: {kr.update_type === "automatic" ? "Automático" : kr.update_type === "hybrid" ? "Híbrido" : "Manual"}</span>
+        <span>Fonte: {kr.source_label ?? metric?.name ?? "Check-in manual"}</span>
+        {kr.last_measured_at && <span>Atualizado: {new Date(kr.last_measured_at).toLocaleString("pt-BR")}</span>}
       </div>
       {kr.check_ins && kr.check_ins.length > 0 && (
         <p className="text-[11px] text-muted-foreground italic">Último check-in: &ldquo;{kr.check_ins[kr.check_ins.length - 1].note}&rdquo;</p>

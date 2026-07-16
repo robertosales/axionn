@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -7425,26 +7425,50 @@ export type Database = {
       okr_check_ins: {
         Row: {
           author_id: string | null
+          confidence: number | null
           created_at: string
+          evidence: Json
           id: string
           key_result_id: string
+          next_steps: string | null
           note: string | null
+          objective_id: string | null
+          previous_value: number | null
+          risks: string | null
+          summary: string | null
+          updated_at: string
           value: number
         }
         Insert: {
           author_id?: string | null
+          confidence?: number | null
           created_at?: string
+          evidence?: Json
           id?: string
           key_result_id: string
+          next_steps?: string | null
           note?: string | null
+          objective_id?: string | null
+          previous_value?: number | null
+          risks?: string | null
+          summary?: string | null
+          updated_at?: string
           value: number
         }
         Update: {
           author_id?: string | null
+          confidence?: number | null
           created_at?: string
+          evidence?: Json
           id?: string
           key_result_id?: string
+          next_steps?: string | null
           note?: string | null
+          objective_id?: string | null
+          previous_value?: number | null
+          risks?: string | null
+          summary?: string | null
+          updated_at?: string
           value?: number
         }
         Relationships: [
@@ -7459,34 +7483,90 @@ export type Database = {
       }
       okr_key_results: {
         Row: {
+          baseline_value: number | null
+          calculated_health: string
+          calculated_progress: number | null
           created_at: string
+          created_by: string | null
           current: number
+          current_value: number | null
+          description: string | null
+          direction: string
+          formula_version: string | null
+          frequency: string
           id: string
+          last_measured_at: string | null
+          lifecycle_status: string
+          measurement_quality: string
+          metric_code: string | null
+          metric_config: Json
           objective_id: string
+          owner_id: string | null
+          raw_progress: number | null
+          source_label: string | null
           target: number
+          target_max: number | null
+          target_min: number | null
+          target_value: number | null
           title: string
           unit: string
+          update_type: string
           updated_at: string
+          weight: number | null
         }
         Insert: {
+          baseline_value?: number | null
+          calculated_health?: string
+          calculated_progress?: number | null
           created_at?: string
+          created_by?: string | null
           current?: number
+          current_value?: number | null
+          description?: string | null
+          direction?: string
+          formula_version?: string | null
+          frequency?: string
           id?: string
           objective_id: string
+          owner_id?: string | null
+          raw_progress?: number | null
+          source_label?: string | null
           target?: number
+          target_max?: number | null
+          target_min?: number | null
+          target_value?: number | null
           title: string
           unit?: string
+          update_type?: string
           updated_at?: string
+          weight?: number | null
         }
         Update: {
+          baseline_value?: number | null
+          calculated_health?: string
+          calculated_progress?: number | null
           created_at?: string
+          created_by?: string | null
           current?: number
+          current_value?: number | null
+          description?: string | null
+          direction?: string
+          formula_version?: string | null
+          frequency?: string
           id?: string
           objective_id?: string
+          owner_id?: string | null
+          raw_progress?: number | null
+          source_label?: string | null
           target?: number
+          target_max?: number | null
+          target_min?: number | null
+          target_value?: number | null
           title?: string
           unit?: string
+          update_type?: string
           updated_at?: string
+          weight?: number | null
         }
         Relationships: [
           {
@@ -7500,10 +7580,21 @@ export type Database = {
       }
       okr_objectives: {
         Row: {
+          calculated_health: string
+          calculated_progress: number | null
           created_at: string
+          created_by: string | null
           cycle: string
           description: string | null
+          end_date: string | null
+          health_override_reason: string | null
+          health_reason: string | null
           id: string
+          last_calculated_at: string | null
+          legacy_progress: number | null
+          lifecycle_status: string
+          manual_health_override: string | null
+          measurement_status: string
           owner_id: string | null
           progress: number
           status: string
@@ -7512,10 +7603,21 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          calculated_health?: string
+          calculated_progress?: number | null
           created_at?: string
+          created_by?: string | null
           cycle: string
           description?: string | null
+          end_date?: string | null
+          health_override_reason?: string | null
+          health_reason?: string | null
           id?: string
+          last_calculated_at?: string | null
+          legacy_progress?: number | null
+          lifecycle_status?: string
+          manual_health_override?: string | null
+          measurement_status?: string
           owner_id?: string | null
           progress?: number
           status?: string
@@ -7524,10 +7626,21 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          calculated_health?: string
+          calculated_progress?: number | null
           created_at?: string
+          created_by?: string | null
           cycle?: string
           description?: string | null
+          end_date?: string | null
+          health_override_reason?: string | null
+          health_reason?: string | null
           id?: string
+          last_calculated_at?: string | null
+          legacy_progress?: number | null
+          lifecycle_status?: string
+          manual_health_override?: string | null
+          measurement_status?: string
           owner_id?: string | null
           progress?: number
           status?: string

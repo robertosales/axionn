@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Target, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Target, Plus, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,26 @@ import type { OkrObjective } from "./types";
 export function OkrPage() {
   const { teams } = useAuth();
   const { toast } = useToast();
-  const { objectives, cycles, filters, setFilters, isLoading, addCheckIn, addObjective, addKeyResult, updateKeyResult, deleteKeyResult, updateObjective, deleteObjective } = useOkr();
+  const { objectives, cycles, filters, setFilters, isLoading, addCheckIn, refreshKeyResult, addObjective, addKeyResult, updateKeyResult, deleteKeyResult, updateObjective, deleteObjective } = useOkr();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<OkrObjective | null>(null);
+  const [healthFilter, setHealthFilter] = useState("all");
+  const [lifecycleFilter, setLifecycleFilter] = useState("all");
+  const [ownerFilter, setOwnerFilter] = useState("all");
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
 
   const salaAgilTeams = teams.filter((t) => t.module === "sala_agil").map((t) => ({ id: t.id, name: t.name }));
+  const owners = useMemo(() => [...new Map(objectives.filter((objective) => objective.owner_id).map((objective) => [objective.owner_id, objective.owner_name || objective.owner_id])).entries()], [objectives]);
+  const visibleObjectives = useMemo(() => objectives.filter((objective) => {
+    const health = objective.calculated_health ?? objective.status;
+    const healthMatches = healthFilter === "all"
+      || healthFilter === "measured" && objective.calculated_progress != null
+      || healthFilter === "at_risk" && ["attention", "at_risk", "off_track"].includes(health)
+      || health === healthFilter;
+    return healthMatches
+      && (lifecycleFilter === "all" || objective.lifecycle_status === lifecycleFilter)
+      && (ownerFilter === "all" || objective.owner_id === ownerFilter);
+  }), [objectives, healthFilter, lifecycleFilter, ownerFilter]);
 
   const handleCreateSubmit = async (payload: Parameters<typeof addObjective>[0]) => {
     try {
@@ -85,6 +100,22 @@ export function OkrPage() {
     }
   };
 
+  const handleRefreshAll = async () => {
+    const automaticKrs = visibleObjectives.flatMap((objective) => objective.key_results).filter((kr) => kr.update_type === "automatic" || kr.update_type === "hybrid");
+    if (!automaticKrs.length) {
+      toast({ title: "Nenhuma medição automática", description: "Os objetivos visíveis não possuem KRs automáticos ou híbridos." });
+      return;
+    }
+    setIsRefreshingAll(true);
+    try {
+      const results = await Promise.allSettled(automaticKrs.map((kr) => refreshKeyResult(kr.id)));
+      const failures = results.filter((result) => result.status === "rejected").length;
+      toast({ title: `${automaticKrs.length - failures} medição(ões) atualizada(s)`, description: failures ? `${failures} medição(ões) não puderam ser atualizadas.` : "Todos os KRs automáticos visíveis foram recalculados.", variant: failures ? "destructive" : "default" });
+    } finally {
+      setIsRefreshingAll(false);
+    }
+  };
+
   return (
     <AppShell module="sala_agil">
       <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -98,13 +129,19 @@ export function OkrPage() {
               <p className="text-sm text-muted-foreground">Objetivos e Key Results · {filters.cycle}</p>
             </div>
           </div>
-          <Button size="sm" className="gap-1.5 h-9" onClick={() => setIsCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> Novo Objetivo
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={handleRefreshAll} disabled={isRefreshingAll}><RefreshCw className={`h-4 w-4 ${isRefreshingAll ? "animate-spin" : ""}`} /> Atualizar medições</Button>
+            <Button size="sm" className="gap-1.5 h-9" onClick={() => setIsCreateOpen(true)}><Plus className="h-4 w-4" /> Novo Objetivo</Button>
+          </div>
         </div>
 
         <OkrCycleSelector cycles={cycles} selectedCycle={filters.cycle} selectedTeam={filters.teamId} teams={salaAgilTeams} onCycleChange={(cycle) => setFilters({ cycle })} onTeamChange={(teamId) => setFilters({ teamId })} />
-        <OkrSummaryKpis objectives={objectives} />
+        <OkrSummaryKpis objectives={objectives} activeFilter={healthFilter} onFilterChange={setHealthFilter} />
+        <div className="flex flex-wrap gap-2">
+          <select value={lifecycleFilter} onChange={(e) => setLifecycleFilter(e.target.value)} className="h-8 rounded-lg border bg-background px-3 text-xs"><option value="all">Todos os status</option><option value="draft">Rascunho</option><option value="active">Ativo</option><option value="completed">Concluído</option><option value="archived">Arquivado</option></select>
+          <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className="h-8 rounded-lg border bg-background px-3 text-xs"><option value="all">Todos os responsáveis</option>{owners.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>
+          {(healthFilter !== "all" || lifecycleFilter !== "all" || ownerFilter !== "all") && <Button variant="ghost" size="sm" onClick={() => { setHealthFilter("all"); setLifecycleFilter("all"); setOwnerFilter("all"); }}>Limpar filtros</Button>}
+        </div>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
@@ -116,11 +153,15 @@ export function OkrPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {objectives.map((obj) => (
+            {visibleObjectives.map((obj) => (
               <OkrObjectiveCard
                 key={obj.id}
                 objective={obj}
                 onCheckIn={addCheckIn}
+                onRefreshKeyResult={async (krId) => {
+                  try { await refreshKeyResult(krId); toast({ title: "Medição atualizada" }); }
+                  catch (error: any) { toast({ title: "Erro ao atualizar medição", description: error?.message, variant: "destructive" }); }
+                }}
                 onEdit={setEditingObjective}
                 onDelete={handleDelete}
                 onAddKeyResult={handleAddKeyResult}

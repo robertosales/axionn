@@ -7422,6 +7422,124 @@ export type Database = {
           },
         ]
       }
+      okr_alerts: {
+        Row: {
+          alert_type: string
+          deduplication_key: string
+          detected_at: string
+          id: string
+          key_result_id: string | null
+          message: string
+          metadata: Json
+          objective_id: string
+          resolved_at: string | null
+          severity: string
+          status: string
+        }
+        Insert: {
+          alert_type: string
+          deduplication_key: string
+          detected_at?: string
+          id?: string
+          key_result_id?: string | null
+          message: string
+          metadata?: Json
+          objective_id: string
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+        }
+        Update: {
+          alert_type?: string
+          deduplication_key?: string
+          detected_at?: string
+          id?: string
+          key_result_id?: string | null
+          message?: string
+          metadata?: Json
+          objective_id?: string
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_alerts_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_alerts_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after_data: Json | null
+          before_data: Json | null
+          created_at: string
+          id: string
+          initiative_id: string | null
+          key_result_id: string | null
+          metadata: Json
+          objective_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          id?: string
+          initiative_id?: string | null
+          key_result_id?: string | null
+          metadata?: Json
+          objective_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          id?: string
+          initiative_id?: string | null
+          key_result_id?: string | null
+          metadata?: Json
+          objective_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_audit_log_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "okr_initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_audit_log_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_audit_log_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_check_ins: {
         Row: {
           author_id: string | null
@@ -7479,6 +7597,156 @@ export type Database = {
             referencedRelation: "okr_key_results"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "okr_check_ins_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_initiatives: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          key_result_id: string | null
+          linked_entity_id: string | null
+          linked_entity_type: string | null
+          objective_id: string
+          owner_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          key_result_id?: string | null
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          objective_id: string
+          owner_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          key_result_id?: string | null
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          objective_id?: string
+          owner_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_initiatives_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_initiatives_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_key_result_snapshots: {
+        Row: {
+          calculated_progress: number | null
+          calculation_metadata: Json
+          created_at: string
+          formula_version: string | null
+          health: string
+          id: string
+          idempotency_key: string | null
+          items_considered: number | null
+          key_result_id: string
+          measured_at: string
+          measured_value: number | null
+          measurement_quality: string
+          period_end: string | null
+          period_start: string | null
+          raw_progress: number | null
+          scope_id: string | null
+          scope_type: string | null
+          source: string | null
+          triggered_by_id: string | null
+          triggered_by_type: string
+        }
+        Insert: {
+          calculated_progress?: number | null
+          calculation_metadata?: Json
+          created_at?: string
+          formula_version?: string | null
+          health?: string
+          id?: string
+          idempotency_key?: string | null
+          items_considered?: number | null
+          key_result_id: string
+          measured_at?: string
+          measured_value?: number | null
+          measurement_quality?: string
+          period_end?: string | null
+          period_start?: string | null
+          raw_progress?: number | null
+          scope_id?: string | null
+          scope_type?: string | null
+          source?: string | null
+          triggered_by_id?: string | null
+          triggered_by_type?: string
+        }
+        Update: {
+          calculated_progress?: number | null
+          calculation_metadata?: Json
+          created_at?: string
+          formula_version?: string | null
+          health?: string
+          id?: string
+          idempotency_key?: string | null
+          items_considered?: number | null
+          key_result_id?: string
+          measured_at?: string
+          measured_value?: number | null
+          measurement_quality?: string
+          period_end?: string | null
+          period_start?: string | null
+          raw_progress?: number | null
+          scope_id?: string | null
+          scope_type?: string | null
+          source?: string | null
+          triggered_by_id?: string | null
+          triggered_by_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_key_result_snapshots_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
         ]
       }
       okr_key_results: {
@@ -7492,6 +7760,7 @@ export type Database = {
           current_value: number | null
           description: string | null
           direction: string
+          end_date: string | null
           formula_version: string | null
           frequency: string
           id: string
@@ -7504,6 +7773,7 @@ export type Database = {
           owner_id: string | null
           raw_progress: number | null
           source_label: string | null
+          start_date: string | null
           target: number
           target_max: number | null
           target_min: number | null
@@ -7512,6 +7782,7 @@ export type Database = {
           unit: string
           update_type: string
           updated_at: string
+          updated_by: string | null
           weight: number | null
         }
         Insert: {
@@ -7524,13 +7795,20 @@ export type Database = {
           current_value?: number | null
           description?: string | null
           direction?: string
+          end_date?: string | null
           formula_version?: string | null
           frequency?: string
           id?: string
+          last_measured_at?: string | null
+          lifecycle_status?: string
+          measurement_quality?: string
+          metric_code?: string | null
+          metric_config?: Json
           objective_id: string
           owner_id?: string | null
           raw_progress?: number | null
           source_label?: string | null
+          start_date?: string | null
           target?: number
           target_max?: number | null
           target_min?: number | null
@@ -7539,6 +7817,7 @@ export type Database = {
           unit?: string
           update_type?: string
           updated_at?: string
+          updated_by?: string | null
           weight?: number | null
         }
         Update: {
@@ -7551,13 +7830,20 @@ export type Database = {
           current_value?: number | null
           description?: string | null
           direction?: string
+          end_date?: string | null
           formula_version?: string | null
           frequency?: string
           id?: string
+          last_measured_at?: string | null
+          lifecycle_status?: string
+          measurement_quality?: string
+          metric_code?: string | null
+          metric_config?: Json
           objective_id?: string
           owner_id?: string | null
           raw_progress?: number | null
           source_label?: string | null
+          start_date?: string | null
           target?: number
           target_max?: number | null
           target_min?: number | null
@@ -7566,6 +7852,7 @@ export type Database = {
           unit?: string
           update_type?: string
           updated_at?: string
+          updated_by?: string | null
           weight?: number | null
         }
         Relationships: [
@@ -7587,6 +7874,8 @@ export type Database = {
           cycle: string
           description: string | null
           end_date: string | null
+          health_override_at: string | null
+          health_override_by: string | null
           health_override_reason: string | null
           health_reason: string | null
           id: string
@@ -7597,10 +7886,13 @@ export type Database = {
           measurement_status: string
           owner_id: string | null
           progress: number
+          scope_type: string
+          start_date: string | null
           status: string
           team_id: string | null
           title: string
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           calculated_health?: string
@@ -7610,6 +7902,8 @@ export type Database = {
           cycle: string
           description?: string | null
           end_date?: string | null
+          health_override_at?: string | null
+          health_override_by?: string | null
           health_override_reason?: string | null
           health_reason?: string | null
           id?: string
@@ -7620,10 +7914,13 @@ export type Database = {
           measurement_status?: string
           owner_id?: string | null
           progress?: number
+          scope_type?: string
+          start_date?: string | null
           status?: string
           team_id?: string | null
           title: string
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           calculated_health?: string
@@ -7633,6 +7930,8 @@ export type Database = {
           cycle?: string
           description?: string | null
           end_date?: string | null
+          health_override_at?: string | null
+          health_override_by?: string | null
           health_override_reason?: string | null
           health_reason?: string | null
           id?: string
@@ -7643,10 +7942,13 @@ export type Database = {
           measurement_status?: string
           owner_id?: string | null
           progress?: number
+          scope_type?: string
+          start_date?: string | null
           status?: string
           team_id?: string | null
           title?: string
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -7654,6 +7956,56 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_recalculation_queue: {
+        Row: {
+          attempts: number
+          available_at: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          locked_at: string | null
+          objective_id: string
+          processed_at: string | null
+          reason: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          locked_at?: string | null
+          objective_id: string
+          processed_at?: string | null
+          reason: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          locked_at?: string | null
+          objective_id?: string
+          processed_at?: string | null
+          reason?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_recalculation_queue_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
             referencedColumns: ["id"]
           },
         ]
@@ -14984,6 +15336,10 @@ export type Database = {
       }
       set_legacy_operational_admin_fallback: {
         Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      set_okr_health_override: {
+        Args: { p_health: string; p_objective_id: string; p_reason: string }
         Returns: undefined
       }
       set_org_briefing_retention: {

@@ -11,15 +11,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  LayoutDashboard, ListTodo, Layers, Kanban, Calendar, BarChart3,
-  History, Users, Settings, Zap, Wrench, LogOut, User, GitBranch,
-  AlertTriangle, FileText, Upload, Repeat, Activity, ShieldCheck,
-  ChevronRight, ChevronLeft, Building2, ChevronsUpDown, Check,
-  Sun, Moon, ClipboardList, CheckSquare, ArrowLeftRight, Target,
-  Menu, Search, Shield,
-  Sparkles,
+  Layers, Zap, Wrench, LogOut, GitBranch,
+  AlertTriangle, ChevronRight, ChevronLeft, Building2, ChevronsUpDown, Check,
+  Sun, Moon, ClipboardList, Menu, Search, Shield,
 } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
+import { NavigationList } from "@/components/navigation/PrimarySidebar";
+import {
+  salaAgilNavigationConfig,
+  sustentacaoNavigationConfig,
+  rdmNavigationConfig,
+  buildBreadcrumbs,
+} from "@/components/navigation/NavigationConfig";
+import { BreadcrumbsContextual } from "@/components/navigation/BreadcrumbsContextual";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 
@@ -36,88 +40,10 @@ const SB = {
 
 type ActiveModule = "sala_agil" | "sustentacao" | "rdm";
 
-interface NavItem {
-  key: string;
-  label: string;
-  icon: React.ElementType;
-  path: string;
-  group: "sprints" | "cerimonias" | "operacoes" | "org" | "config";
-  roles?: string[];
-}
-
 interface AppShellProps {
   module: ActiveModule;
   children: React.ReactNode;
-  activeKey?: string;
-  onNavigate?: (key: string) => void;
 }
-
-function PlayingCardIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"
-      strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <rect x="4" y="2" width="11" height="15" rx="1.5" />
-      <path d="M7 5.5c0-.8.6-1.5 1.4-1.5.4 0 .8.2 1.1.6.3-.4.7-.6 1.1-.6.8 0 1.4.7 1.4 1.5 0 1.2-1.5 2.3-2.5 3C9.5 7.8 7 6.7 7 5.5z"
-        fill="currentColor" stroke="none" />
-      <rect x="9" y="7" width="11" height="15" rx="1.5" />
-    </svg>
-  );
-}
-
-const GROUP_LABELS: Record<NavItem["group"], string> = {
-  sprints: "Sprints", cerimonias: "Cerimônias", operacoes: "Operações",
-  org: "Relatórios", config: "Configurações",
-};
-
-const NAV_SALA_AGIL: NavItem[] = [
-  { key: "dashboard",      label: "Dashboard",     icon: LayoutDashboard, path: "/sala-agil",                group: "sprints" },
-  { key: "board",          label: "Board Kanban",  icon: Kanban,          path: "/sala-agil/board",          group: "sprints" },
-  { key: "backlog",        label: "Backlog",       icon: ListTodo,        path: "/sala-agil/backlog",        group: "sprints" },
-  { key: "epicos",         label: "Épicos",        icon: Layers,          path: "/sala-agil/epicos",         group: "sprints" },
-  { key: "planning-poker", label: "Planning Poker", icon: PlayingCardIcon, path: "/sala-agil/planning-poker", group: "cerimonias" },
-  { key: "retrospectiva",  label: "Retrospectiva", icon: Repeat,          path: "/sala-agil/retrospectiva",  group: "cerimonias" },
-  { key: "briefing",       label: "Briefing IA",   icon: Sparkles,        path: "/sala-agil/briefing",       group: "cerimonias" },
-  { key: "impedimentos",   label: "Impedimentos",  icon: AlertTriangle,   path: "/sala-agil/impedimentos",   group: "cerimonias" },
-  { key: "calendario",     label: "Calendário",    icon: Calendar,        path: "/sala-agil/calendario",     group: "operacoes" },
-  { key: "equipe",         label: "Equipe",        icon: Users,           path: "/sala-agil/equipe",         group: "operacoes" },
-  { key: "atividades",     label: "Atividades",    icon: Activity,        path: "/sala-agil/atividades",     group: "operacoes" },
-  { key: "metricas",       label: "Métricas",      icon: BarChart3,       path: "/sala-agil/metricas",       group: "org" },
-  { key: "relatorios",     label: "Relatórios",    icon: FileText,        path: "/sala-agil/relatorios",     group: "org" },
-  { key: "historico",      label: "Histórico",     icon: History,         path: "/sala-agil/historico",      group: "org" },
-  { key: "okr",            label: "OKR",           icon: Target,          path: "/okr",                      group: "org" },
-  { key: "times",          label: "Times",         icon: Users,           path: "/sala-agil/times",          group: "config" },
-  { key: "membros",        label: "Membros",       icon: User,            path: "/sala-agil/membros",        group: "config" },
-  { key: "perfis",         label: "Perfis (RBAC)", icon: ShieldCheck,     path: "/sala-agil/perfis",         group: "config" },
-  { key: "fluxo",          label: "Fluxo",         icon: GitBranch,       path: "/sala-agil/fluxo",          group: "config" },
-  { key: "campos",         label: "Campos Custom", icon: Settings,        path: "/sala-agil/campos",         group: "config" },
-  { key: "automacoes",     label: "Automações",    icon: Repeat,          path: "/sala-agil/automacoes",     group: "config" },
-];
-
-// 5d: item "projetos" removido — gestão centralizada no Admin
-const NAV_SUSTENTACAO: NavItem[] = [
-  { key: "dashboard",  label: "Dashboard",        icon: LayoutDashboard, path: "/sustentacao",            group: "sprints" },
-  { key: "board",      label: "Board Kanban",     icon: Kanban,          path: "/sustentacao/board",      group: "sprints" },
-  { key: "demandas",   label: "Demandas",         icon: ListTodo,        path: "/sustentacao/demandas",   group: "sprints" },
-  { key: "importacao", label: "Importação Excel", icon: Upload,          path: "/sustentacao/importacao", group: "operacoes" },
-  { key: "equipe",     label: "Equipe",           icon: Users,           path: "/sustentacao/equipe",     group: "operacoes" },
-  { key: "fluxo",      label: "Fluxo de Trabalho", icon: GitBranch,      path: "/sustentacao/fluxo",      group: "operacoes" },
-  { key: "relatorios", label: "Relatórios",       icon: FileText,        path: "/sustentacao/relatorios", group: "org" },
-  { key: "times",      label: "Times",            icon: Users,           path: "/sustentacao/times",      group: "config" },
-  { key: "membros",    label: "Membros",          icon: User,            path: "/sustentacao/membros",    group: "config" },
-  { key: "perfis",     label: "Perfis (RBAC)",    icon: ShieldCheck,     path: "/sustentacao/perfis",     group: "config" },
-  { key: "campos",     label: "Campos Custom",    icon: Settings,        path: "/sustentacao/campos",     group: "config" },
-  { key: "automacoes", label: "Automações",       icon: Repeat,          path: "/sustentacao/automacoes", group: "config" },
-];
-
-const NAV_RDM: NavItem[] = [
-  { key: "dashboard", label: "Dashboard",    icon: LayoutDashboard, path: "/rdm",           group: "sprints" },
-  { key: "rdms",      label: "RDMs",         icon: ClipboardList,   path: "/rdm/rdms",      group: "sprints" },
-  { key: "checklist", label: "Checklists",   icon: CheckSquare,     path: "/rdm/checklist", group: "sprints" },
-  { key: "gonogo",    label: "Go/No-Go",     icon: ArrowLeftRight,  path: "/rdm/gonogo",    group: "sprints" },
-  { key: "times",     label: "Times",        icon: Users,           path: "/rdm/times",     group: "config" },
-  { key: "membros",   label: "Membros",      icon: User,            path: "/rdm/membros",   group: "config" },
-  { key: "perfis",    label: "Perfis (RBAC)", icon: ShieldCheck,    path: "/rdm/perfis",    group: "config" },
-];
 
 const ACCENT = {
   sala_agil:   { hex: "#6366F1", hexAlpha: (a: number) => `rgba(99,102,241,${a})`, avatarBg: "#4f46e5", label: "Sala Ágil", icon: Zap, textCls: "text-indigo-500", bgCls: "bg-indigo-500/12", boxCls: "bg-indigo-500/15 text-indigo-300", path: "/sala-agil" },
@@ -200,88 +126,24 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
   );
 }
 
-function NavItemButton({ item, isActive, collapsed, onNavigate }: {
-  item: NavItem; isActive: boolean; collapsed: boolean; onNavigate?: (key: string) => void;
-}) {
-  const navigate = useNavigate();
-  const Icon = item.icon;
-  const handleClick = () => onNavigate ? onNavigate(item.key) : navigate(item.path);
-
-  const btn = (
-    <button
-      onClick={handleClick}
-      className={cn(
-        "w-full flex items-center rounded-lg transition-all duration-200 relative group focus-visible:ring-2 focus-visible:ring-indigo-400",
-        collapsed ? "justify-center h-10 w-10 mx-auto" : "gap-2.5 px-3 h-9",
-        isActive && "shadow-md shadow-indigo-900/40",
-      )}
-      style={{
-        color:      isActive ? "#ffffff" : SB.fg,
-        background: isActive ? SB.active : "transparent",
-      }}
-      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = SB.acc; }}
-      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
-    >
-      {isActive && !collapsed && (
-        <span className="absolute right-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-white" />
-      )}
-      <Icon className={cn("shrink-0", collapsed ? "h-4 w-4" : "h-[14px] w-[14px]")}
-        style={{ color: isActive ? "#ffffff" : SB.muted }} />
-      {!collapsed && (
-        <span className="text-[13px] font-medium truncate flex-1 text-left leading-none">{item.label}</span>
-      )}
-      {isActive && collapsed && (
-        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-white" />
-      )}
-    </button>
-  );
-
-  if (collapsed) return (
-    <Tooltip>
-      <TooltipTrigger asChild>{btn}</TooltipTrigger>
-      <TooltipContent side="right" className="text-xs">{item.label}</TooltipContent>
-    </Tooltip>
-  );
-  return btn;
-}
-
-function SidebarNav({ module, activeKey, collapsed, onNavigate }: {
-  module: ActiveModule; activeKey?: string; collapsed: boolean; onNavigate?: (key: string) => void;
+function SidebarNav({ module, collapsed }: {
+  module: ActiveModule; collapsed: boolean;
 }) {
   const location = useLocation();
-  const { hasPermission } = useAuth();
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
-
-  const filteredItems = items.filter((item) => !item.roles || item.roles.some((r) => hasPermission(r as any)));
-  const groupOrder = (["sprints", "cerimonias", "operacoes", "org", "config"] as const)
-    .filter((g) => filteredItems.some((i) => i.group === g));
-  const groups = groupOrder.map((g) => ({ group: g, items: filteredItems.filter((i) => i.group === g) }));
-
-  const isItemActive = (item: NavItem) => {
-    if (activeKey) return item.key === activeKey;
-    const roots = ["/sala-agil", "/sustentacao", "/rdm"];
-    if (item.path === "/okr") return location.pathname === "/okr";
-    if (roots.includes(item.path)) return location.pathname === item.path;
-    return location.pathname.startsWith(item.path);
-  };
+  const config =
+    module === "sala_agil"
+      ? salaAgilNavigationConfig
+      : module === "sustentacao"
+        ? sustentacaoNavigationConfig
+        : rdmNavigationConfig;
 
   return (
-    <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-3 scrollbar-none min-h-0">
-      {groups.map(({ group, items: groupItems }) => (
-        <div key={group}>
-          {!collapsed && (
-            <p className="px-3 pb-1.5 pt-0.5 text-[9px] font-bold tracking-[0.16em] uppercase select-none" style={{ color: SB.muted }}>
-              {GROUP_LABELS[group]}
-            </p>
-          )}
-          {collapsed && group !== "sprints" && <div className="h-px mx-1 my-1" style={{ background: SB.border }} />}
-          <div className={cn("space-y-[2px]", collapsed && "flex flex-col items-center")}>
-            {groupItems.map((item) => (
-              <NavItemButton key={item.key} item={item} isActive={isItemActive(item)} collapsed={collapsed} onNavigate={onNavigate} />
-            ))}
-          </div>
-        </div>
-      ))}
+    <nav className="flex-1 overflow-y-auto px-2 py-1 min-h-0 scrollbar-none">
+      <NavigationList
+        sections={config}
+        activePath={location.pathname}
+        collapsed={collapsed}
+      />
     </nav>
   );
 }
@@ -437,23 +299,16 @@ function DarkModeToggle() {
   );
 }
 
-function Topbar({ module, activeKey, onOpenMobile }: { module: ActiveModule; activeKey?: string; onOpenMobile: () => void }) {
+function Topbar({ module, onOpenMobile }: { module: ActiveModule; onOpenMobile: () => void }) {
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
-  const items = module === "sala_agil" ? NAV_SALA_AGIL : module === "sustentacao" ? NAV_SUSTENTACAO : NAV_RDM;
-
-  const activeItem = activeKey
-    ? items.find((i) => i.key === activeKey)
-    : items.find((i) => {
-        const roots = ["/sala-agil", "/sustentacao", "/rdm"];
-        if (i.path === "/okr") return location.pathname === "/okr";
-        if (roots.includes(i.path)) return location.pathname === i.path;
-        return location.pathname.startsWith(i.path);
-      });
-
-  const pageLabel = activeItem?.label ?? "Dashboard";
-  const Icon = activeItem?.icon;
+  const navigationConfig =
+    module === "sala_agil"
+      ? salaAgilNavigationConfig
+      : module === "sustentacao"
+        ? sustentacaoNavigationConfig
+        : rdmNavigationConfig;
 
   return (
     <header className="sticky top-0 z-20 h-14 shrink-0 flex items-center justify-between gap-3 px-3 sm:px-4 border-b border-border overflow-hidden bg-card/80 backdrop-blur-md">
@@ -465,12 +320,9 @@ function Topbar({ module, activeKey, onOpenMobile }: { module: ActiveModule; act
         >
           <Menu className="h-4 w-4" />
         </button>
-        <span className="font-display text-[13px] text-muted-foreground font-bold hidden sm:block shrink-0">{accent.label}</span>
-        <ChevronRight className="h-3 w-3 text-muted-foreground/50 hidden sm:block shrink-0" />
-        <div className="flex items-center gap-2 min-w-0">
-          {Icon && <Icon className={cn("h-4 w-4 shrink-0", accent.textCls)} />}
-          <span className="font-display text-[13px] font-bold text-foreground truncate">{pageLabel}</span>
-        </div>
+        <BreadcrumbsContextual
+          items={buildBreadcrumbs(location.pathname, navigationConfig)}
+        />
       </div>
       <button className="hidden h-9 min-w-[180px] items-center justify-between rounded-lg bg-muted/60 px-3 text-left text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:flex lg:min-w-[260px]">
         <span className="flex items-center gap-2"><Search className="h-3.5 w-3.5" />Search...</span>
@@ -531,7 +383,7 @@ function SprintBanner() {
   );
 }
 
-export function AppShell({ module, children, activeKey, onNavigate }: AppShellProps) {
+export function AppShell({ module, children }: AppShellProps) {
   const { profile, isAdmin, signOut, isSigningOut } = useAuth();
   const {
     isPlatformAdmin,
@@ -596,7 +448,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
           collapsed ? "lg:w-16 w-60" : sidebarWidth,
         )}
-          style={{ background: SB.bg, borderColor: SB.border, boxShadow: "2px 0 24px rgba(15,23,42,0.28)" }}>
+          style={{ background: SB.bg, borderColor: SB.border }}>
           <div className={cn("flex items-center h-14 shrink-0 px-3", collapsed ? "justify-center" : "justify-between")}
             style={{ borderBottom: `1px solid ${SB.border}` }}>
             {collapsed ? (
@@ -653,7 +505,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
 
           <div className="px-2 mt-1 shrink-0"><TeamSwitcher module={module} collapsed={collapsed} /></div>
           <div className="h-px mx-2 mb-1 shrink-0" style={{ background: SB.border }} />
-          <SidebarNav module={module} activeKey={activeKey} collapsed={collapsed} onNavigate={onNavigate} />
+          <SidebarNav module={module} collapsed={collapsed} />
 
           <div className="shrink-0 px-2 pb-3 pt-1" style={{ borderTop: `1px solid ${SB.border}` }}>
             <DropdownMenu>
@@ -705,7 +557,7 @@ export function AppShell({ module, children, activeKey, onNavigate }: AppShellPr
         </aside>
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Topbar module={module} activeKey={activeKey} onOpenMobile={() => setMobileOpen(true)} />
+          <Topbar module={module} onOpenMobile={() => setMobileOpen(true)} />
           {module === "sala_agil" && <SprintBanner />}
           <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
         </div>

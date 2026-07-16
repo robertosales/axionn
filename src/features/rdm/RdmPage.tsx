@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { AppShell }            from "@/components/layout/AppShell";
 import { useAuth }             from "@/contexts/AuthContext";
 import { TeamSelectionModal }  from "@/shared/components/common/TeamSelectionModal";
@@ -17,7 +18,10 @@ import { Building2 }           from "lucide-react";
 import type { Rdm, RdmUpdate } from "./types/rdm";
 
 export default function RdmPage() {
-  const [active, setActive] = useState("dashboard");
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const active = pathname.split("/")[2] || "dashboard";
+  const setActive = (v: string) => navigate(`/rdm/${v}`);
   const { loading: authLoading, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
   const [showTeamModal, setShowTeamModal] = useState(false);
 
@@ -39,7 +43,7 @@ export default function RdmPage() {
   const needsTeam = !authLoading && !currentTeamId && active !== "times";
 
   return (
-    <AppShell module="rdm" activeKey={active} onNavigate={setActive}>
+    <AppShell module="rdm">
       <TeamSelectionModal
         open={showTeamModal}
         teams={moduleTeams}

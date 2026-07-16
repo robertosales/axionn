@@ -27,6 +27,8 @@ import {
   Calendar,
   Hash,
   TrendingUp,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -56,8 +58,10 @@ interface PlanningSessionHistory {
   finishedAt: string | null;
   createdBy: string;
   participantCount: number;
+  participantIds: string[];
   husVoted: number;
   totalHours: number;
+  divergenceCount: number;
 }
 
 interface HuVoteSummary {
@@ -136,6 +140,21 @@ function classifyVoteToSize(value: string): SizeKey | null {
   return map[value] ?? null;
 }
 
+function formatVoteEstimate(value: string): { label: string; size: SizeKey | null } {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue || normalizedValue === "—") {
+    return { label: "Sem estimativa", size: null };
+  }
+
+  const directSize = SIZE_KEYS.includes(normalizedValue as SizeKey) ? (normalizedValue as SizeKey) : null;
+  const size = directSize ?? classifyVoteToSize(normalizedValue);
+
+  return size
+    ? { label: `${size} ${HOURS_MAP[size]}h`, size }
+    : { label: normalizedValue, size: null };
+}
+
 function getModeVote(voteValues: string[]): string {
   const freq: Record<string, number> = {};
   voteValues.forEach((v) => {
@@ -174,10 +193,10 @@ function calcDivergenceLevel(voteValues: string[], deckMode: string): "none" | "
 
 function MetricCard({ label, value, valueClass }: { label: string; value: string | number; valueClass?: string }) {
   return (
-    <Card>
-      <CardContent className="p-3 text-center">
-        <p className="text-[10px] text-muted-foreground uppercase mb-1">{label}</p>
-        <p className={cn("text-2xl font-bold", valueClass)}>{value}</p>
+    <Card className="border-border/60 shadow-none">
+      <CardContent className="px-3 py-2.5 text-center">
+        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className={cn("text-xl font-semibold tabular-nums tracking-tight", valueClass)}>{value}</p>
       </CardContent>
     </Card>
   );
@@ -292,40 +311,38 @@ function PlanningSessionCard({
   onView: () => void;
 }) {
   return (
-    <Card className="border-success/20 hover:border-success/40 transition-colors">
-      <CardContent className="p-0">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>{formatDate(session.createdAt)}</span>
-            </div>
-            <Separator orientation="vertical" className="h-4" />
-            <span className="text-sm font-semibold">{session.sprintName}</span>
-            <StatusBadge status={session.status} />
-          </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground mr-2">
-            <span className="flex items-center gap-1">
-              <Hash className="h-3 w-3" />
-              {session.husVoted} HUs
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              {session.participantCount}
-            </span>
-            <span className="flex items-center gap-1 font-semibold text-success">
-              <Clock className="h-3 w-3" />
-              {session.totalHours}h
-            </span>
-            <span>{DECK_MODE_LABELS[session.deckMode] ?? session.deckMode}</span>
-            <span>{profiles[session.createdBy] ?? "—"}</span>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={onView}>
-              <Eye className="h-3 w-3" /> Ver
-            </Button>
-          </div>
+    <div className="grid gap-2.5 px-4 py-3.5 transition-colors hover:bg-muted/20 lg:grid-cols-[minmax(13rem,1fr)_7rem_5rem_4rem_5rem_7rem_4rem] lg:items-center lg:gap-3 xl:grid-cols-[minmax(15rem,1fr)_8rem_6rem_5rem_6rem_8rem_4rem] xl:gap-4">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="min-w-0 break-words text-sm font-semibold leading-5 text-foreground">{session.sprintName}</span>
+          <span className="shrink-0"><StatusBadge status={session.status} /></span>
         </div>
-      </CardContent>
-    </Card>
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
+          <span className="rounded bg-muted/70 px-1 font-mono text-[10px]">#{session.id.slice(0, 8)}</span>
+          <span aria-hidden="true">·</span>
+          <Calendar className="h-3 w-3" />
+          {formatDate(session.createdAt)}
+          <span aria-hidden="true">·</span>
+          {profiles[session.createdBy] ?? "Responsável não identificado"}
+        </p>
+      </div>
+      <span className="text-xs font-medium text-muted-foreground">{DECK_MODE_LABELS[session.deckMode] ?? session.deckMode}</span>
+      <span className="text-sm font-medium tabular-nums text-foreground">{session.participantCount}</span>
+      <span className="text-sm font-medium tabular-nums text-foreground">{session.husVoted}</span>
+      <span className="text-sm font-semibold tabular-nums text-success">{session.totalHours}h</span>
+      {session.divergenceCount > 0 ? (
+        <Badge variant="outline" className="w-fit gap-1 border-warning/30 bg-warning/10 text-warning">
+          <AlertTriangle className="h-3 w-3" /> {session.divergenceCount}
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="w-fit gap-1 border-success/30 bg-success/10 text-success">
+          <ThumbsUp className="h-3 w-3" /> Consenso
+        </Badge>
+      )}
+      <Button variant="ghost" size="sm" className="h-8 w-fit gap-1 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={onView}>
+        <Eye className="h-3.5 w-3.5" /> Ver
+      </Button>
+    </div>
   );
 }
 
@@ -342,6 +359,10 @@ export function AgileHistory() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sprintFilter, setSprintFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [planningStatusFilter, setPlanningStatusFilter] = useState("all");
+  const [planningPeriodFilter, setPlanningPeriodFilter] = useState("all");
+  const [planningResponsibleFilter, setPlanningResponsibleFilter] = useState("all");
+  const [planningPage, setPlanningPage] = useState(1);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [sprintScores, setSprintScores] = useState<Record<string, SprintScoreBreakdown>>({});
 
@@ -350,6 +371,9 @@ export function AgileHistory() {
   const [detailHuSummaries, setDetailHuSummaries] = useState<HuVoteSummary[]>([]);
   const [detailCards, setDetailCards] = useState<any[]>([]);
   const [detailActions, setDetailActions] = useState<any[]>([]);
+  const [detailHuSearch, setDetailHuSearch] = useState("");
+  const [detailHuStatus, setDetailHuStatus] = useState<"all" | "consensus" | "divergence">("all");
+  const [detailHuPage, setDetailHuPage] = useState(1);
 
   // ─── Loaders ──────────────────────────────────────────────────────────────
 
@@ -391,7 +415,9 @@ export function AgileHistory() {
 
       const votesArr = (votes ?? []) as Array<{ hu_id: string; user_id: string; vote_value: string }>;
       const uniqueHus = new Set(votesArr.map((v) => v.hu_id));
+      const participantIds = [...new Set(votesArr.map((v) => v.user_id))];
       let sessionTotalHours = 0;
+      let divergenceCount = 0;
 
       if (votesArr.length) {
         const sprintId = s.sprint_id;
@@ -408,6 +434,7 @@ export function AgileHistory() {
         Object.values(byHu).forEach((huVotes) => {
           const validVotes = huVotes.filter((v) => v !== "—");
           if (!validVotes.length) return;
+          if (calcDivergenceLevel(validVotes, s.deck_mode) !== "none") divergenceCount++;
           const modeVote = getModeVote(validVotes);
           const size: SizeKey | null =
             s.deck_mode === "hours"
@@ -434,9 +461,11 @@ export function AgileHistory() {
         createdAt: s.created_at,
         finishedAt: s.finished_at,
         createdBy: s.created_by,
-        participantCount: new Set(votesArr.map((v) => v.user_id)).size,
+        participantCount: participantIds.length,
+        participantIds,
         husVoted: uniqueHus.size,
         totalHours: sessionTotalHours,
+        divergenceCount,
       });
     }
 
@@ -496,12 +525,23 @@ export function AgileHistory() {
   const filteredPlanning = useMemo(() => {
     let list = planningSessions;
     if (sprintFilter !== "all") list = list.filter((s) => s.sprintId === sprintFilter);
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      list = list.filter((s) => s.sprintName.toLowerCase().includes(q));
+    if (planningStatusFilter !== "all") list = list.filter((s) => s.status === planningStatusFilter);
+    if (planningResponsibleFilter !== "all") list = list.filter((s) => s.createdBy === planningResponsibleFilter);
+    if (planningPeriodFilter !== "all") {
+      const days = Number(planningPeriodFilter);
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+      list = list.filter((s) => new Date(s.createdAt).getTime() >= cutoff);
+    }
+    if (searchTerm.trim()) {
+      const q = searchTerm.trim().toLocaleLowerCase("pt-BR");
+      list = list.filter((s) =>
+        s.sprintName.toLocaleLowerCase("pt-BR").includes(q) ||
+        s.id.toLocaleLowerCase("pt-BR").includes(q) ||
+        (profiles[s.createdBy] ?? "").toLocaleLowerCase("pt-BR").includes(q),
+      );
     }
     return list;
-  }, [planningSessions, sprintFilter, searchTerm]);
+  }, [planningSessions, sprintFilter, planningStatusFilter, planningResponsibleFilter, planningPeriodFilter, searchTerm, profiles]);
 
   const filteredRetro = useMemo(() => {
     let list = retroSessions;
@@ -523,11 +563,13 @@ export function AgileHistory() {
     const totalHus = base.reduce((sum, s) => sum + s.husVoted, 0);
     const totalParticipants = base.reduce((sum, s) => sum + s.participantCount, 0);
     const totalHours = base.reduce((sum, s) => sum + s.totalHours, 0);
+    const totalDivergences = base.reduce((sum, s) => sum + s.divergenceCount, 0);
     return {
       sessions: base.length,
-      avgHusPerSession: base.length > 0 ? (totalHus / base.length).toFixed(1) : "0",
-      avgParticipants: base.length > 0 ? (totalParticipants / base.length).toFixed(1) : "0",
+      totalHus,
+      totalParticipants,
       totalHours,
+      totalDivergences,
     };
   }, [filteredPlanning]);
 
@@ -543,16 +585,38 @@ export function AgileHistory() {
     };
   }, [filteredRetro]);
 
-  // ─── Última sessão concluída por sprint ───────────────────────────────────
+  const planningPageSize = 10;
+  const planningTotalPages = Math.max(1, Math.ceil(filteredPlanning.length / planningPageSize));
+  const currentPlanningPage = Math.min(planningPage, planningTotalPages);
+  const visiblePlanningSessions = filteredPlanning.slice(
+    (currentPlanningPage - 1) * planningPageSize,
+    currentPlanningPage * planningPageSize,
+  );
 
-  const lastSessionPerSprint = useMemo(() => {
-    const seen = new Set<string>();
-    return filteredPlanning.filter((s) => {
-      if (seen.has(s.sprintId)) return false;
-      seen.add(s.sprintId);
-      return true;
+  const responsibleOptions = useMemo(
+    () => [...new Set(planningSessions.map((session) => session.createdBy))]
+      .sort((a, b) => (profiles[a] ?? a).localeCompare(profiles[b] ?? b, "pt-BR")),
+    [planningSessions, profiles],
+  );
+
+  const participationRanking = useMemo(() => {
+    const counts = new Map<string, number>();
+    filteredPlanning.forEach((session) => {
+      session.participantIds.forEach((userId) => counts.set(userId, (counts.get(userId) ?? 0) + 1));
     });
-  }, [filteredPlanning]);
+    return [...counts.entries()]
+      .map(([userId, count]) => ({ userId, count, name: profiles[userId] ?? "Participante não identificado" }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "pt-BR"));
+  }, [filteredPlanning, profiles]);
+
+  const hasPlanningFilters = Boolean(
+    searchTerm || sprintFilter !== "all" || planningStatusFilter !== "all" ||
+    planningPeriodFilter !== "all" || planningResponsibleFilter !== "all",
+  );
+
+  useEffect(() => {
+    setPlanningPage(1);
+  }, [searchTerm, sprintFilter, planningStatusFilter, planningPeriodFilter, planningResponsibleFilter]);
 
   // ─── Score da sprint selecionada ──────────────────────────────────────────
 
@@ -644,6 +708,9 @@ export function AgileHistory() {
     setDetailHuSummaries([]);
     setDetailCards([]);
     setDetailActions([]);
+    setDetailHuSearch("");
+    setDetailHuStatus("all");
+    setDetailHuPage(1);
   };
 
   // ─── Loading ──────────────────────────────────────────────────────────────
@@ -659,13 +726,13 @@ export function AgileHistory() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" /> Histórico Ágil
+      <div className="max-w-3xl">
+        <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+          <BarChart3 className="h-5 w-5 text-primary" /> Relatórios operacionais
         </h2>
-        <p className="text-sm text-muted-foreground">Sessões passadas de Planning Poker e Retrospectiva</p>
+        <p className="mt-1 text-sm text-muted-foreground">Sessões, estimativas, participação e resultados da operação ágil.</p>
       </div>
 
       {loadError && (
@@ -674,35 +741,8 @@ export function AgileHistory() {
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar..."
-            className="pl-8 h-8 text-xs"
-          />
-        </div>
-        <Select value={sprintFilter} onValueChange={setSprintFilter}>
-          <SelectTrigger className="h-8 w-[180px] text-xs">
-            <Filter className="h-3 w-3 mr-1" />
-            <SelectValue placeholder="Sprint" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as Sprints</SelectItem>
-            {sprints.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid h-9 w-full max-w-md grid-cols-2">
           <TabsTrigger value="planning" className="gap-1.5 text-xs">
             <Spade className="h-3.5 w-3.5" /> Planning Poker
           </TabsTrigger>
@@ -712,43 +752,167 @@ export function AgileHistory() {
         </TabsList>
 
         {/* ── Tab Planning ───────────────────────────────────────────── */}
-        <TabsContent value="planning" className="space-y-4 mt-4">
-          {/* Métricas — sempre refletem o filtro ativo */}
-          <div className="grid grid-cols-4 gap-3">
-            <MetricCard label="Sessões Concluídas" value={planningMetrics.sessions} />
-            <MetricCard label="Média HUs/Sessão" value={planningMetrics.avgHusPerSession} />
-            <MetricCard label="Média Participantes" value={planningMetrics.avgParticipants} />
+        <TabsContent value="planning" className="mt-4 space-y-5">
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+            <MetricCard label="Sessões" value={planningMetrics.sessions} />
+            <MetricCard label="HUs estimadas" value={planningMetrics.totalHus} />
+            <MetricCard label="Total de horas" value={`${planningMetrics.totalHours}h`} valueClass="text-success" />
             <MetricCard
-              label={sprintFilter === "all" ? "Total de Horas (Todas)" : "Total de Horas (Sprint)"}
-              value={`${planningMetrics.totalHours}h`}
-              valueClass="text-success"
+              label="Divergências"
+              value={planningMetrics.totalDivergences}
+              valueClass={planningMetrics.totalDivergences > 0 ? "text-warning" : "text-success"}
             />
           </div>
+
+          <Card className="border-border/60 bg-muted/[0.08] shadow-none">
+            <CardContent className="space-y-2.5 p-2.5 sm:p-3">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1.6fr)_10rem_9rem_9rem_11rem_auto] xl:items-center">
+                <div className="relative md:col-span-2 xl:col-span-1">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Buscar por nome, ID ou responsável"
+                    aria-label="Buscar sessões de Planning"
+                    className="h-8 border-primary/20 bg-background pl-9 text-xs"
+                  />
+                </div>
+                <Select value={sprintFilter} onValueChange={setSprintFilter}>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Sessão" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as sessões</SelectItem>
+                    {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={planningStatusFilter} onValueChange={setPlanningStatusFilter}>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os status</SelectItem>
+                    <SelectItem value="finished">Concluídas</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={planningPeriodFilter} onValueChange={setPlanningPeriodFilter}>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Período" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todo o período</SelectItem>
+                    <SelectItem value="7">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30">Últimos 30 dias</SelectItem>
+                    <SelectItem value="90">Últimos 90 dias</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={planningResponsibleFilter} onValueChange={setPlanningResponsibleFilter}>
+                  <SelectTrigger className="h-8 bg-background text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os responsáveis</SelectItem>
+                    {responsibleOptions.map((userId) => (
+                      <SelectItem key={userId} value={userId}>{profiles[userId] ?? "Não identificado"}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!hasPlanningFilters}
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSprintFilter("all");
+                    setPlanningStatusFilter("all");
+                    setPlanningPeriodFilter("all");
+                    setPlanningResponsibleFilter("all");
+                  }}
+                  className="h-8 justify-self-start px-2.5 text-xs xl:justify-self-end"
+                >
+                  Limpar
+                </Button>
+              </div>
+
+              {hasPlanningFilters && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-border/50 px-0.5 pt-2.5">
+                  <span className="mr-1 text-[11px] font-medium text-muted-foreground">Filtros aplicados:</span>
+                  {searchTerm && <Badge variant="secondary">Busca: {searchTerm}</Badge>}
+                  {sprintFilter !== "all" && <Badge variant="secondary">Sessão: {sprints.find((s) => s.id === sprintFilter)?.name}</Badge>}
+                  {planningStatusFilter !== "all" && <Badge variant="secondary">Status: Concluída</Badge>}
+                  {planningPeriodFilter !== "all" && <Badge variant="secondary">Período: {planningPeriodFilter} dias</Badge>}
+                  {planningResponsibleFilter !== "all" && (
+                    <Badge variant="secondary">Responsável: {profiles[planningResponsibleFilter] ?? "Não identificado"}</Badge>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* ✅ Card de estimativas: só aparece quando uma sprint específica está selecionada */}
           {sprintFilter !== "all" && activeScore && (
             <SprintScoreCard sprintName={activeSprintName} score={activeScore} />
           )}
 
-          {/* ✅ Lista: somente a última sessão concluída por sprint */}
-          <div className="space-y-2">
-            {lastSessionPerSprint.length > 0 ? (
-              lastSessionPerSprint.map((session) => (
-                <PlanningSessionCard
-                  key={session.id}
-                  session={session}
-                  profiles={profiles}
-                  onView={() => openPlanningDetail(session)}
-                />
-              ))
-            ) : (
-              <div className="text-center text-sm text-muted-foreground py-12">Nenhuma sessão concluída encontrada</div>
-            )}
+          <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm shadow-foreground/[0.025]">
+            <div className="hidden grid-cols-[minmax(13rem,1fr)_7rem_5rem_4rem_5rem_7rem_4rem] gap-3 border-b border-border/70 bg-muted/30 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid xl:grid-cols-[minmax(15rem,1fr)_8rem_6rem_5rem_6rem_8rem_4rem] xl:gap-4">
+              <span>Sessão</span><span>Formato</span><span>Participantes</span><span>HUs</span><span>Horas</span><span>Resultado</span><span>Ação</span>
+            </div>
+            <div className="divide-y divide-border/60">
+              {visiblePlanningSessions.length > 0 ? visiblePlanningSessions.map((session) => (
+                <PlanningSessionCard key={session.id} session={session} profiles={profiles} onView={() => openPlanningDetail(session)} />
+              )) : (
+                <div className="px-4 py-12 text-center">
+                  <p className="text-sm font-medium">Nenhuma sessão encontrada</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Ajuste ou limpe os filtros para visualizar outros registros.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/[0.16] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span><strong className="font-medium text-foreground">{visiblePlanningSessions.length}</strong> visíveis de {filteredPlanning.length} resultados</span>
+                <span className="hidden h-3 w-px bg-border sm:block" aria-hidden="true" />
+                <span>Página <strong className="font-medium text-foreground">{currentPlanningPage}</strong> de {planningTotalPages}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={currentPlanningPage === 1} onClick={() => setPlanningPage(currentPlanningPage - 1)} className="h-8 gap-1 bg-background px-2.5 text-xs">
+                  <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+                </Button>
+                <Button variant="outline" size="sm" disabled={currentPlanningPage === planningTotalPages} onClick={() => setPlanningPage(currentPlanningPage + 1)} className="h-8 gap-1 bg-background px-2.5 text-xs">
+                  Próxima <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
           </div>
+
+          <Card className="border-border/50 bg-muted/[0.06] shadow-none">
+            <CardHeader className="px-4 pb-1.5 pt-3.5">
+              <CardTitle className="flex items-center gap-2 text-xs font-semibold text-muted-foreground"><Users className="h-3.5 w-3.5" /> Participação</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-3.5">
+              {participationRanking.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {participationRanking.map((participant) => (
+                    <Badge key={participant.userId} variant="outline" className="gap-1.5 border-border/60 bg-background/70 py-0.5 text-[11px] font-normal">
+                      <span className="font-medium">{participant.name}</span>
+                      <span className="text-muted-foreground">{participant.count} {participant.count === 1 ? "sessão" : "sessões"}</span>
+                    </Badge>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-muted-foreground">Nenhuma participação encontrada para os filtros aplicados.</p>}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── Tab Retro ──────────────────────────────────────────────── */}
         <TabsContent value="retro" className="space-y-4 mt-4">
+          <Card className="shadow-none">
+            <CardContent className="flex flex-col gap-2 p-3 sm:flex-row sm:p-4">
+              <div className="relative flex-1 sm:max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Buscar retrospectiva" className="h-9 pl-9 text-xs" />
+              </div>
+              <Select value={sprintFilter} onValueChange={setSprintFilter}>
+                <SelectTrigger className="h-9 text-xs sm:w-52"><SelectValue placeholder="Sprint" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as sprints</SelectItem>
+                  {sprints.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
           <div className="grid grid-cols-4 gap-3">
             <MetricCard label="Sessões Concluídas" value={retroMetrics.sessions} />
             <MetricCard label="Média Cards" value={retroMetrics.avgCards} />
@@ -813,22 +977,46 @@ export function AgileHistory() {
           if (!open) closeDetail();
         }}
       >
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="flex items-center gap-2 px-6 pt-5 text-lg">
               {detailType === "planning" ? (
                 <>
-                  <Spade className="h-4 w-4 text-primary" /> Detalhes da Sessão de Planning
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Spade className="h-3.5 w-3.5" />
+                  </span>
+                  Detalhes da Sessão de Planning
                 </>
               ) : (
                 <>
-                  <MessageSquare className="h-4 w-4 text-primary" /> Detalhes da Retrospectiva
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  </span>
+                  Detalhes da Retrospectiva
                 </>
               )}
             </DialogTitle>
+            {detailSession && detailType === "planning" && (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-1">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {(detailSession as PlanningSessionHistory).sprintName}
+                  </p>
+                  <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {formatDate((detailSession as PlanningSessionHistory).createdAt)}
+                    <span aria-hidden="true">·</span>
+                    {DECK_MODE_LABELS[(detailSession as PlanningSessionHistory).deckMode] ?? (detailSession as PlanningSessionHistory).deckMode}
+                    <span aria-hidden="true">·</span>
+                    {profiles[(detailSession as PlanningSessionHistory).createdBy] ?? "—"}
+                  </p>
+                </div>
+                <StatusBadge status={(detailSession as PlanningSessionHistory).status} />
+              </div>
+            )}
           </DialogHeader>
 
-          <ScrollArea className="flex-1 pr-2">
+          <ScrollArea className="min-h-0 flex-1">
             {/* ── Detalhe Planning ─────────────────────────────────── */}
             {detailSession &&
               detailType === "planning" &&
@@ -836,133 +1024,204 @@ export function AgileHistory() {
                 const s = detailSession as PlanningSessionHistory;
                 const totalDetailHours = detailHuSummaries.reduce((sum, hu) => sum + hu.consensusHours, 0);
                 const divergedCount = detailHuSummaries.filter((hu) => hu.hadDivergence).length;
+                const normalizedSearch = detailHuSearch.trim().toLocaleLowerCase("pt-BR");
+                const filteredHus = detailHuSummaries.filter((hu) => {
+                  const matchesSearch = !normalizedSearch ||
+                    hu.huCode.toLocaleLowerCase("pt-BR").includes(normalizedSearch) ||
+                    hu.huTitle.toLocaleLowerCase("pt-BR").includes(normalizedSearch);
+                  const matchesStatus = detailHuStatus === "all" ||
+                    (detailHuStatus === "divergence" ? hu.hadDivergence : !hu.hadDivergence);
+                  return matchesSearch && matchesStatus;
+                });
+                const pageSize = 5;
+                const totalPages = Math.max(1, Math.ceil(filteredHus.length / pageSize));
+                const currentPage = Math.min(detailHuPage, totalPages);
+                const visibleHus = filteredHus.slice((currentPage - 1) * pageSize, currentPage * pageSize);
                 return (
-                  <div className="space-y-5 pt-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div>
-                        <p className="text-base font-bold">{s.sprintName}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(s.createdAt)}
-                          <span className="mx-1">·</span>
-                          {DECK_MODE_LABELS[s.deckMode] ?? s.deckMode}
-                          <span className="mx-1">·</span>
-                          {profiles[s.createdBy] ?? "—"}
-                        </p>
-                      </div>
-                      <StatusBadge status={s.status} />
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-3">
-                      <Card>
-                        <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">HUs Estimadas</p>
-                          <p className="text-2xl font-bold">{s.husVoted}</p>
+                  <div className="space-y-5 p-4 sm:p-6">
+                    <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+                      <Card className="shadow-none">
+                        <CardContent className="px-4 py-3 text-center">
+                          <p className="text-[10px] font-medium text-muted-foreground">HUs Estimadas</p>
+                          <p className="mt-1 text-xl font-semibold tabular-nums">{s.husVoted}</p>
                         </CardContent>
                       </Card>
-                      <Card>
-                        <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">Participantes</p>
-                          <p className="text-2xl font-bold">{s.participantCount}</p>
+                      <Card className="shadow-none">
+                        <CardContent className="px-4 py-3 text-center">
+                          <p className="text-[10px] font-medium text-muted-foreground">Participantes</p>
+                          <p className="mt-1 text-xl font-semibold tabular-nums">{s.participantCount}</p>
                         </CardContent>
                       </Card>
-                      <Card className="border-success/30 bg-success/5">
-                        <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">Total de Horas</p>
-                          <p className="text-2xl font-bold text-success">{totalDetailHours}h</p>
+                      <Card className="border-success/20 bg-success/[0.03] shadow-none">
+                        <CardContent className="px-4 py-3 text-center">
+                          <p className="text-[10px] font-medium text-muted-foreground">Total de Horas</p>
+                          <p className="mt-1 text-xl font-semibold tabular-nums text-success">{totalDetailHours}h</p>
                         </CardContent>
                       </Card>
-                      <Card className={cn(divergedCount > 0 && "border-warning/30 bg-warning/5")}>
-                        <CardContent className="p-3 text-center">
-                          <p className="text-[10px] text-muted-foreground">Com Divergência</p>
-                          <p className={cn("text-2xl font-bold", divergedCount > 0 ? "text-warning" : "text-success")}>
+                      <Card className={cn("shadow-none", divergedCount > 0 && "border-warning/20 bg-warning/[0.03]")}>
+                        <CardContent className="px-4 py-3 text-center">
+                          <p className="text-[10px] font-medium text-muted-foreground">Com Divergência</p>
+                          <p className={cn("mt-1 text-xl font-semibold tabular-nums", divergedCount > 0 ? "text-warning" : "text-success")}>
                             {divergedCount}
                           </p>
                         </CardContent>
                       </Card>
                     </div>
 
-                    <Separator />
+                    <section className="space-y-3" aria-labelledby="planning-hus-title">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                          <h3 id="planning-hus-title" className="flex items-center gap-2 text-sm font-semibold">
+                            <Hash className="h-4 w-4 text-muted-foreground" /> HUs estimadas
+                          </h3>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {filteredHus.length} de {detailHuSummaries.length} registros
+                          </p>
+                        </div>
 
-                    <div>
-                      <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
-                        <Hash className="h-4 w-4" /> HUs Estimadas ({detailHuSummaries.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {detailHuSummaries.map((hu) => (
-                          <Card
-                            key={hu.huId}
-                            className={cn(
-                              "border",
-                              hu.hadDivergence ? "border-warning/30 bg-warning/5" : "border-success/20 bg-success/5",
-                            )}
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <div className="relative sm:w-64">
+                            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              value={detailHuSearch}
+                              onChange={(event) => {
+                                setDetailHuSearch(event.target.value);
+                                setDetailHuPage(1);
+                              }}
+                              placeholder="Buscar por código ou título"
+                              aria-label="Buscar HUs da sessão"
+                              className="h-9 pl-9 text-xs"
+                            />
+                          </div>
+                          <Select
+                            value={detailHuStatus}
+                            onValueChange={(value) => {
+                              setDetailHuStatus(value as "all" | "consensus" | "divergence");
+                              setDetailHuPage(1);
+                            }}
                           >
-                            <CardContent className="p-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <Badge variant="outline" className="font-mono text-[10px]">
-                                      {hu.huCode}
-                                    </Badge>
-                                    {hu.hadDivergence ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[9px] bg-warning/10 text-warning border-warning/30 gap-1"
-                                      >
-                                        <AlertTriangle className="h-2.5 w-2.5" /> Divergência
-                                      </Badge>
-                                    ) : (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[9px] bg-success/10 text-success border-success/30 gap-1"
-                                      >
-                                        <ThumbsUp className="h-2.5 w-2.5" /> Consenso
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="text-xs font-medium truncate">{hu.huTitle}</p>
-                                </div>
-                                {hu.consensusKey && (
-                                  <div className="flex flex-col items-end shrink-0">
-                                    <Badge
-                                      className={cn(
-                                        "text-sm font-bold px-3 py-1",
-                                        SIZE_COLORS[hu.consensusKey as SizeKey]?.badge ?? "bg-muted",
-                                      )}
-                                    >
-                                      {hu.consensusKey}
-                                    </Badge>
-                                    <span className="text-[10px] text-muted-foreground mt-0.5">
-                                      {hu.consensusHours}h
-                                    </span>
-                                  </div>
+                            <SelectTrigger className="h-9 w-full text-xs sm:w-40" aria-label="Filtrar HUs por resultado">
+                              <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Todos os resultados</SelectItem>
+                              <SelectItem value="consensus">Com consenso</SelectItem>
+                              <SelectItem value="divergence">Com divergência</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+                        <div className="hidden grid-cols-[minmax(0,1fr)_7rem_6rem_12rem] gap-4 border-b border-border/70 bg-muted/35 px-4 py-2.5 text-[10px] font-semibold text-muted-foreground md:grid">
+                          <span>História de usuário</span>
+                          <span>Resultado</span>
+                          <span>Estimativa</span>
+                          <span>Votos</span>
+                        </div>
+
+                        <div className="max-h-[28vh] min-h-0 divide-y divide-border/70 overflow-y-scroll overscroll-contain [scrollbar-gutter:stable]">
+                          {visibleHus.map((hu) => (
+                            <div
+                              key={hu.huId}
+                              className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/25 md:grid-cols-[minmax(0,1fr)_7rem_6rem_12rem] md:items-center md:gap-4"
+                            >
+                              <div className="min-w-0">
+                                <Badge variant="outline" className="mb-1.5 font-mono text-[10px]">
+                                  {hu.huCode}
+                                </Badge>
+                                <p className="whitespace-normal break-words text-sm font-medium leading-snug text-foreground">
+                                  {hu.huTitle}
+                                </p>
+                              </div>
+
+                              <div>
+                                {hu.hadDivergence ? (
+                                  <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-warning">
+                                    <AlertTriangle className="h-3 w-3" /> Divergência
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success">
+                                    <ThumbsUp className="h-3 w-3" /> Consenso
+                                  </Badge>
                                 )}
                               </div>
-                              <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-current/10">
-                                {hu.votes.map((v, i) => (
-                                  <div key={i} className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
-                                    <span className="text-[10px] text-muted-foreground">
-                                      {profiles[v.userId] ?? "?"}
-                                    </span>
-                                    <span className="text-[10px] font-bold">{v.value === "—" ? "N/V" : v.value}</span>
-                                    {v.value !== "—" && HOURS_MAP[v.value as SizeKey] && (
-                                      <span className="text-[9px] text-muted-foreground">
-                                        ({HOURS_MAP[v.value as SizeKey]}h)
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
+
+                              <div className="flex items-center gap-2 md:block">
+                                {hu.consensusKey ? (
+                                  <>
+                                    <Badge className={cn("min-w-9 justify-center", SIZE_COLORS[hu.consensusKey as SizeKey]?.badge ?? "bg-muted")}>
+                                      {hu.consensusKey}
+                                    </Badge>
+                                    <p className="mt-1 text-xs text-muted-foreground">{hu.consensusHours}h</p>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                        {detailHuSummaries.length === 0 && (
-                          <p className="text-xs text-muted-foreground text-center py-4">
-                            Nenhum voto registrado nesta sessão
+
+                              <div className="flex min-w-0 flex-wrap gap-1">
+                                {hu.votes.map((vote, index) => {
+                                  const estimate = formatVoteEstimate(vote.value);
+                                  const participantName = profiles[vote.userId];
+
+                                  return (
+                                    <span
+                                      key={index}
+                                      title={participantName ? `Voto de ${participantName}` : "Participante não identificado"}
+                                      className={cn(
+                                        "inline-flex max-w-full items-center rounded-md border px-2 py-1 text-[10px] font-semibold",
+                                        estimate.size
+                                          ? SIZE_COLORS[estimate.size].badge
+                                          : "border-border bg-muted/70 text-muted-foreground",
+                                      )}
+                                    >
+                                      {estimate.label}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+
+                          {visibleHus.length === 0 && (
+                            <div className="px-4 py-10 text-center">
+                              <p className="text-sm font-medium">Nenhuma HU encontrada</p>
+                              <p className="mt-1 text-xs text-muted-foreground">Ajuste os filtros para visualizar outros resultados.</p>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            Página {currentPage} de {totalPages}
                           </p>
-                        )}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={currentPage === 1}
+                              onClick={() => setDetailHuPage(Math.max(1, currentPage - 1))}
+                              className="h-8 gap-1.5 px-2.5 text-xs"
+                            >
+                              <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={currentPage === totalPages}
+                              onClick={() => setDetailHuPage(Math.min(totalPages, currentPage + 1))}
+                              className="h-8 gap-1.5 px-2.5 text-xs"
+                            >
+                              Próxima <ChevronRight className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    </section>
                   </div>
                 );
               })()}
@@ -973,7 +1232,7 @@ export function AgileHistory() {
               (() => {
                 const s = detailSession as RetroSessionHistory;
                 return (
-                  <div className="space-y-5 pt-1">
+                  <div className="space-y-5 p-4 sm:p-6">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
                         <p className="text-base font-bold">{s.sprintName}</p>

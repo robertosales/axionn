@@ -183,7 +183,7 @@ export function DemandasList() {
         <div>
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5" style={{ color: "#0bbcaf" }} />
-            <h1 className="text-lg font-bold">Demandas</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Demandas</h1>
             <span
               className="text-[11px] font-bold px-2 py-0.5 rounded-full"
               style={{ background: "rgba(11,188,175,0.12)", color: "#0bbcaf" }}

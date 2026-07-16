@@ -30,6 +30,7 @@ import { useSalaAgilPermission } from "@/hooks/useSalaAgilPermissions";
 import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import { HUGitActivitySection } from "@/components/gitlab/HUGitActivitySection";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { buildUnifiedUserStoryContent, splitUserStoryContent } from "@/lib/userStoryContent";
 
 interface Props {
   huId: string | null;
@@ -60,8 +61,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   const canReportImpediment = useSalaAgilPermission("report_impediment");
 
   const [title, setTitle]             = useState("");
-  const [description, setDescription] = useState("");
-  const [acceptanceCriteria, setAC]   = useState("");
+  const [content, setContent]         = useState("");
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [priority, setPriority]       = useState<string>("media");
   const [epicId, setEpicId]           = useState("");
@@ -136,9 +136,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     const hu: UserStory | undefined = userStories.find((h: UserStory) => h.id === huId);
     if (!hu) return;
     setTitle(hu.title);
-    const parts = (hu.description || "").split("\n\n---\n**Critérios de Aceite:**\n");
-    setDescription(parts[0] || "");
-    setAC(parts[1] || "");
+    setContent(buildUnifiedUserStoryContent(hu.description, hu.acceptanceCriteria));
     setSelectedSize(hu.sizeReference ?? null);
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
@@ -176,13 +174,12 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
         ? { sizeReference: s.key, estimatedHours: s.hours, storyPoints: s.points }
         : { sizeReference: null, estimatedHours: null, storyPoints: 0 };
       const fp = functionPoints ? parseFloat(functionPoints) : null;
-      const fullDesc = acceptanceCriteria
-        ? `${description.trim()}\n\n---\n**Critérios de Aceite:**\n${acceptanceCriteria.trim()}`
-        : description.trim();
+      const parsedContent = splitUserStoryContent(content);
 
       await updateUserStory(huId, {
         title: title.trim(),
-        description: fullDesc,
+        description: parsedContent.content,
+        acceptanceCriteria: parsedContent.acceptanceCriteria || null,
         ...sizeData,
         priority,
         status: statusField || workflowColumns[0]?.key || "",
@@ -203,8 +200,8 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
       setSubmitting(false);
     }
   }, [
-    validate, huId, selectedSize, functionPoints, acceptanceCriteria,
-    description, title, priority, statusField, workflowColumns,
+    validate, huId, selectedSize, functionPoints, content,
+    title, priority, statusField, workflowColumns,
     sprintId, epicId, customFieldValues, startDate, endDate,
     assigneeId, updateUserStory, onClose,
   ]);
@@ -262,28 +259,17 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
                   {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
                 </div>
 
-                {/* Descrição */}
+                {/* Conteúdo unificado */}
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Descrição</Label>
+                  <Label className="text-sm font-medium">Descrição e critérios de aceite</Label>
                   <Textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Descrição detalhada da funcionalidade..."
-                    className="text-sm resize-none"
-                    rows={4}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder={"## Descrição\n\nDescreva a funcionalidade...\n\n## Critérios de Aceite\n\n- Dado que... quando... então..."}
+                    className="min-h-56 resize-y font-mono text-sm"
+                    rows={10}
                   />
-                </div>
-
-                {/* Critérios de Aceite */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Critérios de Aceite</Label>
-                  <Textarea
-                    value={acceptanceCriteria}
-                    onChange={(e) => setAC(e.target.value)}
-                    placeholder="1. Dado que... quando... então..."
-                    className="text-sm resize-none"
-                    rows={4}
-                  />
+                  <p className="text-xs text-muted-foreground">Use Markdown e o título “## Critérios de Aceite” para alimentar análises e APF.</p>
                 </div>
 
                 {/* Campos personalizados */}

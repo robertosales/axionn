@@ -231,12 +231,24 @@ const Index = () => {
   const active = (VALID_SECTIONS.includes(section as SectionKey) ? section : "dashboard") as SectionKey;
 
   const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
-  const { activeSprint } = useSprint();
+  const { activeSprint, sprints } = useSprint();
   const [showTeamModal, setShowTeamModal] = React.useState(false);
+  const [selectedBacklogSprintId, setSelectedBacklogSprintId] = React.useState<string | null>(null);
 
   const [, startTransition] = useTransition();
 
   const moduleTeams = teams.filter((t) => t.module === "sala_agil");
+  const backlogSprintId = selectedBacklogSprintId ?? activeSprint?.id ?? null;
+
+  React.useEffect(() => {
+    setSelectedBacklogSprintId(null);
+  }, [currentTeamId]);
+
+  React.useEffect(() => {
+    if (selectedBacklogSprintId && !sprints.some((sprint) => sprint.id === selectedBacklogSprintId)) {
+      setSelectedBacklogSprintId(null);
+    }
+  }, [selectedBacklogSprintId, sprints]);
 
   useEffect(() => {
     if (loading || moduleTeams.length === 0) return;
@@ -270,7 +282,7 @@ const Index = () => {
   const teamKey = currentTeamId ?? "no-team";
 
   return (
-    <AppShell module="sala_agil" activeKey={active} onNavigate={handleNavigate}>
+    <AppShell module="sala_agil">
       <TeamSelectionModal
         open={showTeamModal}
         teams={moduleTeams}
@@ -349,8 +361,14 @@ const Index = () => {
               <SectionGuard permission="view_backlog">
                 <LazySection name="Backlog">
                   <div className="space-y-8">
-                    <SprintManager />
-                    <UserStoryManager />
+                    <SprintManager
+                      selectedSprintId={backlogSprintId}
+                      onSelectSprint={setSelectedBacklogSprintId}
+                    />
+                    <UserStoryManager
+                      selectedSprintId={backlogSprintId}
+                      onSelectSprint={setSelectedBacklogSprintId}
+                    />
                   </div>
                 </LazySection>
               </SectionGuard>

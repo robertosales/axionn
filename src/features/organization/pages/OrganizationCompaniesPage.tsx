@@ -229,7 +229,7 @@ export default function OrganizationCompaniesPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Empresas clientes</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Empresas clientes</h1>
           <p className="text-sm text-muted-foreground">
             Cadastros vinculados exclusivamente à organização ativa.
           </p>

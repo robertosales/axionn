@@ -271,11 +271,14 @@ export function UserRolesManager() {
             return;
           }
 
-          const [membersRes, contractRolesRes] = await Promise.all([
+          const [membersRes, contractRolesRes, profileStatusRes] = await Promise.all([
             (supabase as any).rpc("get_organization_members_v2", {
               p_org_id: currentOrganizationId,
             }),
             supabase.from("user_contracts").select("user_id, role"),
+            (supabase as any).rpc("get_organization_account_statuses", {
+              p_org_id: currentOrganizationId,
+            }),
           ]);
 
           if (membersRes.error) {
@@ -289,6 +292,16 @@ export function UserRolesManager() {
                 contractRoleMap[contractRole.user_id] = contractRole.role;
               }
             },
+          );
+
+          if (profileStatusRes.error) {
+            throw profileStatusRes.error;
+          }
+          const profileStatusMap = new Map<string, boolean>(
+            (profileStatusRes.data ?? []).map((profile: any) => [
+              String(profile.user_id),
+              (profile.is_active ?? true) as boolean,
+            ]),
           );
 
           setUsers(
@@ -308,7 +321,8 @@ export function UserRolesManager() {
                 display_name:         String(member.display_name || "—"),
                 email:                String(member.email || ""),
                 module_access:        moduleKeys[0] || "sala_agil",
-                is_active:            Boolean(member.is_active),
+                // Status da conta (RBAC/Auth), não o status da associação à organização.
+                is_active:            profileStatusMap.get(String(member.user_id)) ?? Boolean(member.is_active),
                 must_change_password: false,
                 teams:                [],
                 moduleRoles:          moduleKeys.map((moduleKey) => ({
@@ -509,6 +523,11 @@ export function UserRolesManager() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
+      setUsers((current) =>
+        current.map((row) =>
+          row.user_id === user.user_id ? { ...row, is_active: newActive } : row,
+        ),
+      );
       toast.success(newActive ? `${user.display_name} ativado.` : `${user.display_name} desativado.`);
       setToggleState(TOG0);
       if (sheetUser?.user_id === user.user_id) closeSheet();
@@ -554,6 +573,16 @@ export function UserRolesManager() {
     );
     const ok = results.filter(r => r.status === "fulfilled").length;
     const fail = results.length - ok;
+    const successfulIds = new Set(
+      results.flatMap((result, index) =>
+        result.status === "fulfilled" ? [targets[index].user_id] : [],
+      ),
+    );
+    setUsers((current) =>
+      current.map((row) =>
+        successfulIds.has(row.user_id) ? { ...row, is_active: false } : row,
+      ),
+    );
     if (ok > 0) toast.success(`${ok} usuário(s) desativado(s).`);
     if (fail > 0) toast.error(`${fail} falha(s) ao desativar.`);
     setBulkRunning(false);

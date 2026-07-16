@@ -86,7 +86,7 @@ export function OkrPage() {
   };
 
   return (
-    <AppShell module="sala_agil" activeKey="okr">
+    <AppShell module="sala_agil">
       <div className="p-6 max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -94,7 +94,7 @@ export function OkrPage() {
               <Target className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">OKR</h1>
+              <h1 className="text-xl font-semibold tracking-tight">OKR</h1>
               <p className="text-sm text-muted-foreground">Objetivos e Key Results · {filters.cycle}</p>
             </div>
           </div>

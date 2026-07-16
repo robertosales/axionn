@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Clock, Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +22,23 @@ import { checkAuthRateLimit } from "@/lib/authRateLimiter";
 const PUBLIC_OAUTH_ENABLED =
   import.meta.env.VITE_PUBLIC_OAUTH_ENABLED === "true";
 
+export function getLoginErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("banned") || normalized.includes("disabled")) {
+    return "Este usuário está desativado. Solicite a reativação a um administrador.";
+  }
+
+  if (
+    normalized.includes("invalid login credentials") ||
+    normalized.includes("invalid credentials")
+  ) {
+    return "E-mail ou senha inválidos, ou o usuário está desativado. Se necessário, contate um administrador.";
+  }
+
+  return message || "Não foi possível entrar. Tente novamente.";
+}
+
 const Auth = () => {
   const [searchParams] = useSearchParams();
   const idleTimeout = searchParams.get("reason") === "idle_timeout";
@@ -30,6 +47,13 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (sessionStorage.getItem("axionn:auth-block-reason") === "inactive") {
+      sessionStorage.removeItem("axionn:auth-block-reason");
+      toast.error("Este usuário está desativado. Solicite a reativação a um administrador.");
+    }
+  }, []);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -53,7 +77,7 @@ const Auth = () => {
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) toast.error(error.message);
+    if (error) toast.error(getLoginErrorMessage(error.message));
     else toast.success("Login realizado com sucesso!");
     setLoading(false);
   };

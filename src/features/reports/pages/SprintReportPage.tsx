@@ -22,7 +22,7 @@ export function SprintReportPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <FileText className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-bold">Relatório de Sprint</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Relatório de Sprint</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={selected} onValueChange={setSelected}>

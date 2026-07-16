@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye } from "lucide-react";
+import { User, CheckCircle, Clock, Zap, Bug, FileDown, Eye, CalendarDays, Inbox } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, LineChart, Line, Legend,
@@ -31,13 +31,14 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   sprints:     { id: string; name: string; isActive?: boolean; start_date?: string; end_date?: string }[];
-  developers:  { id: string; name: string; role: string; user_id?: string | null }[];
+  developers:  { id: string; name: string; role: string; user_id?: string | null; email?: string | null }[];
   rawData: {
     sprints:      any[];
     hus:          any[];
     activities:   any[];
     impediments:  any[];
     developers:   any[];
+    developerRecords?: any[];
   };
   teamName:        string;
   currentUserName: string;
@@ -402,9 +403,65 @@ async function buildPDFBlob(
 
 // Recebe TODAS as atividades filtradas por sprint/data, SEM filtro de analista,
 // para garantir que todos os membros apareçam na tabela de Produtividade.
-function buildMemberMetrics(developers: Props["developers"], allActivities: any[]) {
+function normalizeIdentityValue(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+}
+
+function personNameSignature(name: unknown): string {
+  const parts = normalizeIdentityValue(name).match(/[a-z0-9]+/g) ?? [];
+  return parts.length > 1 ? `${parts[0]}:${parts[parts.length - 1]}` : parts[0] ?? "";
+}
+
+function resolveActivityDeveloper(
+  activity: any,
+  developers: Props["developers"],
+  developerRecords: any[],
+) {
+  // Preserve the original FK semantics first. This also guarantees that one
+  // activity cannot be counted for two developer records representing one person.
+  const exactDeveloper = developers.find((developer) => developer.id === activity.assignee_id);
+  if (exactDeveloper) return exactDeveloper;
+
+  const persistedAssignee = developerRecords.find((record: any) => record.id === activity.assignee_id);
+  if (!persistedAssignee) return undefined;
+
+  const byUserId = persistedAssignee.user_id
+    ? developers.find((developer) => developer.user_id === persistedAssignee.user_id)
+    : undefined;
+  if (byUserId) return byUserId;
+
+  const normalizedPersistedEmail = normalizeIdentityValue(persistedAssignee.email);
+  const byEmail = normalizedPersistedEmail
+    ? developers.find((developer) => normalizeIdentityValue(developer.email) === normalizedPersistedEmail)
+    : undefined;
+  if (byEmail) return byEmail;
+
+  const persistedSignature = personNameSignature(persistedAssignee.name);
+  const persistedRole = normalizeIdentityValue(persistedAssignee.role);
+  return developers.find(
+    (developer) =>
+      persistedSignature &&
+      personNameSignature(developer.name) === persistedSignature &&
+      (!developer.role || !persistedRole || normalizeIdentityValue(developer.role) === persistedRole),
+  );
+}
+
+function activityBelongsToDeveloper(
+  activity: any,
+  developer: Props["developers"][number],
+  developers: Props["developers"],
+  developerRecords: any[],
+): boolean {
+  return resolveActivityDeveloper(activity, developers, developerRecords)?.id === developer.id;
+}
+
+function buildMemberMetrics(developers: Props["developers"], allActivities: any[], developerRecords: any[]) {
   return developers.map((dev) => {
-    const acts       = allActivities.filter((a: any) => a.assignee_id === dev.id);
+    const acts       = allActivities.filter((a: any) => activityBelongsToDeveloper(a, dev, developers, developerRecords));
     const closed     = acts.filter((a: any) => a.is_closed);
     const hoursP     = acts.reduce((s: number, a: any) => s + Number(a.hours), 0);
     const hoursC     = closed.reduce((s: number, a: any) => s + Number(a.hours), 0);
@@ -432,6 +489,7 @@ function buildMemberMetrics(developers: Props["developers"], allActivities: any[
 
 export function RelatorioAtividades({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
   const { user, isAdmin } = useAuth();
+  const developerRecords = rawData.developerRecords ?? rawData.developers;
 
   // FIX 1: Resolve o developer do usuário logado a partir de rawData.developers
   // (que inclui user_id), usado apenas para travar o filtro de não-admins.
@@ -503,29 +561,36 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   // Atividades filtradas incluindo o analista — usadas nos KPIs e no Detalhamento.
   const filteredActivities = useMemo(() => {
     let acts = activitiesBySprintAndDate;
-    if (filters.memberId !== "all") acts = acts.filter((a: any) => a.assignee_id === filters.memberId);
+    if (filters.memberId !== "all") {
+      const selectedDeveloper = developers.find((developer) => developer.id === filters.memberId);
+      acts = selectedDeveloper
+        ? acts.filter((activity: any) => activityBelongsToDeveloper(activity, selectedDeveloper, developers, developerRecords))
+        : [];
+    }
     return acts;
-  }, [activitiesBySprintAndDate, filters.memberId]);
+  }, [activitiesBySprintAndDate, filters.memberId, developers, developerRecords]);
 
   // Produtividade usa sempre TODOS os membros (sem filtro de analista)
   const memberMetrics = useMemo(
-    () => buildMemberMetrics(developers, activitiesBySprintAndDate),
-    [activitiesBySprintAndDate, developers],
+    () => buildMemberMetrics(developers, activitiesBySprintAndDate, developerRecords),
+    [activitiesBySprintAndDate, developers, developerRecords],
   );
 
   const totalActs   = filteredActivities.length;
   const totalClosed = filteredActivities.filter((a: any) => a.is_closed).length;
   const totalMinP   = filteredActivities.reduce((s: number, a: any) => s + toMin(a.hours), 0);
   const totalMinC   = filteredActivities.filter((a: any) => a.is_closed).reduce((s: number, a: any) => s + toMin(a.hours), 0);
+  const isIndividualView = filters.memberId !== "all";
+  const teamTotalActs = activitiesBySprintAndDate.length;
   const avgEff      = memberMetrics.length > 0
     ? Math.round(memberMetrics.reduce((s, m) => s + m.eff, 0) / memberMetrics.length)
     : 0;
 
   const kpis = [
-    { label: "Atividades",       value: totalActs,               sub: `${totalClosed} concluídas`,              icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
-    { label: "Horas Concluídas", value: formatMinutes(totalMinC), sub: `de ${formatMinutes(totalMinP)} planejadas`, icon: <Clock className="h-4 w-4" />,       status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "warning" as any },
-    { label: "Eficiência Média", value: `${avgEff}%`,            sub: "meta >= 80%",                             icon: <Zap className="h-4 w-4" />,         status: effStatus(avgEff) },
-    { label: "Analistas Ativos", value: memberMetrics.length,    sub: `de ${developers.length} no time`,         icon: <User className="h-4 w-4" />,         status: "neutral" as any },
+    { label: isIndividualView ? "Atividades do Analista" : "Atividades do Time", value: totalActs, sub: totalActs > 0 ? `${totalClosed} concluídas` : isIndividualView && teamTotalActs > 0 ? `${teamTotalActs} atividades no time` : "Nenhuma no recorte atual", icon: <CheckCircle className="h-4 w-4" />, status: totalClosed > 0 ? "good" : "neutral" as any },
+    { label: isIndividualView ? "Horas do Analista" : "Horas Concluídas", value: formatMinutes(totalMinC), sub: totalMinP > 0 ? `de ${formatMinutes(totalMinP)} planejadas` : isIndividualView && teamTotalActs > 0 ? "Analista sem horas neste recorte" : "Sem horas registradas", icon: <Clock className="h-4 w-4" />, status: (totalMinP > 0 && totalMinC / totalMinP >= 0.7) ? "good" : "neutral" as any },
+    { label: "Eficiência Média do Time", value: `${avgEff}%`, sub: memberMetrics.length > 0 ? "Visão agregada · meta >= 80%" : "Sem base para cálculo", icon: <Zap className="h-4 w-4" />, status: memberMetrics.length > 0 ? effStatus(avgEff) : "neutral" as any },
+    { label: "Analistas Ativos no Time", value: memberMetrics.length, sub: memberMetrics.length > 0 ? `de ${developers.length} no recorte agregado` : "Nenhum no recorte atual", icon: <User className="h-4 w-4" />, status: "neutral" as any },
   ];
 
   const hoursBarData = memberMetrics.map((m) => ({
@@ -545,12 +610,12 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         const entry: any = { sprint: sprint.name };
         developers.forEach((dev) => {
           entry[dev.name.split(" ")[0]] = rawData.activities.filter(
-            (a: any) => huIds.has(a.hu_id) && a.assignee_id === dev.id && a.is_closed,
+            (a: any) => huIds.has(a.hu_id) && activityBelongsToDeveloper(a, dev, developers, developerRecords) && a.is_closed,
           ).length;
         });
         return entry;
       });
-  }, [rawData, developers]);
+  }, [rawData, developers, developerRecords]);
 
   const radarData = memberMetrics.slice(0, 6).map((m) => ({
     analista:          m.name.split(" ")[0],
@@ -562,7 +627,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
   // tableData respeita o filtro de analista — só aparece quando analista selecionado
   const tableData = useMemo(() => {
     return filteredActivities.map((a: any) => {
-      const dev    = developers.find((d) => d.id === a.assignee_id);
+      const dev    = resolveActivityDeveloper(a, developers, developerRecords);
       const hu     = rawData.hus.find((h: any) => h.id === a.hu_id);
       const sprint = hu ? rawData.sprints.find((s: any) => s.id === hu.sprint_id) : null;
       return {
@@ -580,7 +645,7 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         _sprintName: sprint?.name || "",
       };
     });
-  }, [filteredActivities, developers, rawData]);
+  }, [filteredActivities, developers, developerRecords, rawData]);
 
   function handleExportCSV() {
     exportToCSV(
@@ -667,6 +732,39 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     ? "A data inicial não pode ser maior que a data final."
     : undefined;
 
+  const selectedMember = filters.memberId !== "all"
+    ? developers.find((developer) => developer.id === filters.memberId)
+    : null;
+  const selectedSprint = filters.sprintId !== "all"
+    ? sprints.find((sprint) => sprint.id === filters.sprintId)
+    : null;
+  const periodLabel = periodReady
+    ? `${isoToBR(filters.dateFrom)} a ${isoToBR(filters.dateTo)}`
+    : filters.dateFrom
+      ? `A partir de ${isoToBR(filters.dateFrom)}`
+      : filters.dateTo
+        ? `Até ${isoToBR(filters.dateTo)}`
+        : "Todo o período";
+  const hasNoFilteredActivities = filteredActivities.length === 0;
+  const hasNoPeriodActivities = activitiesBySprintAndDate.length === 0;
+  const emptyStateTitle = selectedMember && !hasNoPeriodActivities
+    ? `${selectedMember.name} não possui atividades neste recorte`
+    : "Nenhuma atividade encontrada no período";
+  const emptyStateDescription = selectedMember && !hasNoPeriodActivities
+    ? `Existem ${teamTotalActs} atividades no time, mas nenhuma para este analista no recorte atual.`
+    : "Não há atividades registradas para a sprint e o período selecionados.";
+  const emptyChartContent = (
+    <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+      <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Inbox className="h-4 w-4" />
+      </span>
+      <p className="text-sm font-medium text-foreground">Sem dados agregados para exibir</p>
+      <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+        Não há atividades do time para a sprint e o período selecionados.
+      </p>
+    </div>
+  );
+
   const exportActions = (
     <div className="flex items-center gap-2">
       <Button size="sm" variant="outline" onClick={handleExportCSV} className="gap-1.5 h-8">
@@ -725,7 +823,10 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
       <ReportLayout>
         <ReportPageHeader
           title="Atividades & Produtividade Individual"
-          description={`Time: ${teamName} · ${totalActs} atividades no período`}
+          description={isIndividualView
+            ? `Recorte individual · ${selectedMember?.name ?? "Analista"} · ${totalActs} atividades · ${teamTotalActs} no time`
+            : `Visão agregada do time ${teamName} · ${teamTotalActs} atividades no período`
+          }
           icon={<User className="h-5 w-5" />}
           badge="Ágil"
           onBack={onBack}
@@ -752,66 +853,123 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
           }
         />
 
+        <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-muted/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground ring-1 ring-border">
+              <CalendarDays className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold text-foreground">
+                  {isIndividualView ? "Visualização individual" : "Visualização agregada do time"}
+                </p>
+                <Badge variant="secondary" className="h-5 text-[10px] font-medium">
+                  {isIndividualView ? "Recorte individual" : "Time completo"}
+                </Badge>
+              </div>
+              <p className="mt-0.5 whitespace-normal break-words text-xs text-muted-foreground">
+                {isIndividualView
+                  ? `Você está vendo o recorte individual de ${selectedMember?.name ?? "analista selecionado"}.`
+                  : `Você está vendo o resultado agregado de todos os analistas de ${teamName}.`
+                }
+                {" "}{selectedSprint?.name ?? "Todas as sprints"} · {periodLabel}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            <Badge variant="outline" className="w-fit bg-background text-[10px] font-medium text-muted-foreground">
+              {totalActs} {totalActs === 1 ? "atividade no recorte" : "atividades no recorte"}
+            </Badge>
+            {isIndividualView && (
+              <Badge variant="outline" className="w-fit bg-background text-[10px] font-medium text-muted-foreground">
+                {teamTotalActs} {teamTotalActs === 1 ? "atividade no time" : "atividades no time"}
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {hasNoFilteredActivities && (
+          <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-card px-4 py-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Inbox className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">{emptyStateTitle}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {emptyStateDescription} Revise o analista, a sprint ou o período para ampliar o resultado.
+              </p>
+            </div>
+          </div>
+        )}
+
         <ReportKPISummary items={kpis} cols={4} />
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <ReportChart title="Horas por Analista" subtitle="Concluídas vs. pendentes" height="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hoursBarData} margin={{ top: 12, right: 8, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmtH(v)} />
-                <Tooltip formatter={(v: any) => fmtH(Number(v))} />
-                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="Concluídas" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={48}>
-                  <LabelList dataKey="_labelC" position="top" style={{ fontSize: 10, fontWeight: 600 }} />
-                </Bar>
-                <Bar dataKey="Pendentes" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={48} />
-              </BarChart>
-            </ResponsiveContainer>
+          <ReportChart title="Horas por Analista" subtitle="Visão agregada do time · concluídas vs. pendentes" height="h-72">
+            {hasNoPeriodActivities ? emptyChartContent : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hoursBarData} margin={{ top: 12, right: 8, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmtH(v)} />
+                  <Tooltip formatter={(v: any) => fmtH(Number(v))} />
+                  <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="Concluídas" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                    <LabelList dataKey="_labelC" position="top" style={{ fontSize: 10, fontWeight: 600 }} />
+                  </Bar>
+                  <Bar dataKey="Pendentes" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </ReportChart>
 
-          <ReportChart title="Throughput por Sprint" subtitle="Atividades concluídas por analista" height="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={throughputData} margin={{ top: 12, right: 16, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="sprint" tick={{ fontSize: 10 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                {developers.map((dev, i) => (
-                  <Line
-                    key={dev.id} type="monotone" dataKey={dev.name.split(" ")[0]}
-                    stroke={MEMBER_COLORS[i % MEMBER_COLORS.length]} strokeWidth={2} dot={{ r: 3 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+          <ReportChart title="Throughput por Sprint" subtitle="Histórico agregado do time · atividades concluídas por analista" height="h-72">
+            {hasNoPeriodActivities ? emptyChartContent : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={throughputData} margin={{ top: 12, right: 16, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="sprint" tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  {developers.map((dev, i) => (
+                    <Line
+                      key={dev.id} type="monotone" dataKey={dev.name.split(" ")[0]}
+                      stroke={MEMBER_COLORS[i % MEMBER_COLORS.length]} strokeWidth={2} dot={{ r: 3 }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </ReportChart>
         </div>
 
         {radarData.length > 1 && (
-          <ReportChart title="Comparação de Produtividade" subtitle="Eficiência, conclusões e bugs (%)" height="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
-                <PolarGrid stroke="hsl(var(--border))" />
-                <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
-                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9 }} tickCount={4} />
-                <Radar name="Eficiência"      dataKey="Eficiência"      stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
-                <Radar name="Concluídas"      dataKey="Concluídas"      stroke="#22c55e" fill="#22c55e" fillOpacity={0.15} />
-                <Radar name="Bugs Resolvidos" dataKey="Bugs Resolvidos" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} />
-                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
+          <ReportChart title="Comparação de Produtividade" subtitle="Visão agregada do time · eficiência, conclusões e bugs (%)" height="h-72">
+            {hasNoPeriodActivities ? emptyChartContent : (
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
+                  <PolarGrid stroke="hsl(var(--border))" />
+                  <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
+                  <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9 }} tickCount={4} />
+                  <Radar name="Eficiência"      dataKey="Eficiência"      stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
+                  <Radar name="Concluídas"      dataKey="Concluídas"      stroke="#22c55e" fill="#22c55e" fillOpacity={0.15} />
+                  <Radar name="Bugs Resolvidos" dataKey="Bugs Resolvidos" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} />
+                  <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  <Tooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            )}
           </ReportChart>
         )}
 
         {/* ── Produtividade: sempre mostra todos os analistas ── */}
         <ReportDataTable
           title="Produtividade por Analista"
+          subtitle="Visão agregada do time para a sprint e o período selecionados."
           badge={memberMetrics.length}
           data={memberMetrics}
+          emptyMessage="Nenhum analista possui atividades registradas para a sprint e o período selecionados."
           rowKey={(r) => r.id}
           columns={[
             { key: "name", header: "Analista",
@@ -853,9 +1011,11 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
         {/* ── Detalhamento: só exibe quando um analista específico estiver selecionado ── */}
         {filters.memberId !== "all" && (
           <ReportDataTable
-            title="Detalhamento"
+            title="Detalhamento individual"
+            subtitle={`Atividades associadas a ${selectedMember?.name ?? "analista selecionado"} no recorte atual.`}
             badge={tableData.length}
             data={tableData}
+            emptyMessage={`${selectedMember?.name ?? "O analista selecionado"} não possui atividades registradas neste recorte.`}
             rowKey={(_, i) => i}
             columns={[
               { key: "_code",      header: "Código",

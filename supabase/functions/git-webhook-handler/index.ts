@@ -1,5 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { parseUserStoryContent } from '../_shared/user-story-content.ts';
+import { resolveGitlabBacklogPlacement } from '../_shared/gitlab-backlog-placement.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,7 +44,7 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const provider = req.headers.get('x-git-provider') || 'gitlab';
-    const eventType = req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown';
+    const eventType = normalizeEventType(req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown');
     const signature = req.headers.get('x-gitlab-token') || req.headers.get('x-hub-signature-256');
 
     const rawBody = await req.text();
@@ -101,8 +103,14 @@ serve(async (req: Request) => {
     }
 
     // Verify webhook signature if configured
-    if (integration.webhook_secret && signature) {
-      const isValid = await verifyWebhookSignature(provider, rawBody, signature, integration.webhook_secret);
+    if (integration.webhook_secret_encrypted) {
+      if (!signature) {
+        return new Response(JSON.stringify({ error: 'Missing webhook signature' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const isValid = await verifyWebhookSignature(provider, rawBody, signature, integration.webhook_secret_encrypted);
       if (!isValid) {
         console.warn('[Git Webhook] Invalid signature for integration:', integrationId);
         await logIntegrationEvent(supabase, organizationId, integrationId, 'webhook_received', 'error', {
@@ -148,7 +156,6 @@ serve(async (req: Request) => {
         event_type: eventType,
         event_action: extractEventAction(eventType, payload),
         provider_event_id: providerEventId,
-        provider,
         payload: payload,
         headers: relevantHeaders,
         correlation_id: correlationId,
@@ -178,7 +185,13 @@ serve(async (req: Request) => {
         );
       }
 
-      console.error('[Git Webhook] Failed to store event:', eventError.code, eventError.message);
+      console.error('[Git Webhook] Failed to store event:', {
+        code: eventError.code,
+        message: eventError.message,
+        details: eventError.details,
+        hint: eventError.hint,
+        correlation_id: correlationId,
+      });
       await recordIntegrationHealth(healthContext, {
         status: 'unhealthy',
         errorCode: 'EVENT_PERSISTENCE_FAILED',
@@ -343,6 +356,10 @@ async function processGitEvent(
       case 'note':
       case 'note_events':
         await processNoteEvent(supabase, integration, gitEvent, payload, correlationId);
+        break;
+      case 'issue':
+      case 'work_item':
+        await processIssueEvent(supabase, integration, gitEvent, payload, correlationId);
         break;
       default:
         console.log('[Git Webhook] Unhandled event type:', eventType);
@@ -583,8 +600,135 @@ async function processNoteEvent(
   }
 }
 
+/**
+ * Normaliza o valor do header X-Gitlab-Event (ex: "Merge Request Hook",
+ * "Issue Hook", "Work Item Hook") para a chave usada no switch de processamento.
+ */
+function normalizeEventType(raw: string | null): string {
+  if (!raw) return 'unknown';
+  return raw
+    .toLowerCase()
+    .replace(/ hook$/, '')
+    .replace(/\s+/g, '_')
+    .trim();
+}
+
+/**
+ * Cria/atualiza uma HU (user_story) no backlog de um Time a partir de uma
+ * issue/work item do GitLab. Roteia o time via integration.team_id ou pelo
+ * mapa de labels (issue_labels_team_map). Idempotente via hu_git_links.
+ */
+async function processIssueEvent(
+  supabase: any,
+  integration: any,
+  gitEvent: any,
+  payload: Record<string, unknown>,
+  correlationId: string
+): Promise<void> {
+  if (!integration.sync_issues_as_backlog) {
+    console.log('[Git Webhook] sync_issues_as_backlog desativado, ignorando issue');
+    return;
+  }
+
+  const issue = (payload.object_attributes || payload.issue || payload.work_item || payload) as Record<string, unknown>;
+  const issueId = issue.id;
+  const iid = issue.iid;
+  if (!issueId) {
+    console.log('[Git Webhook] Issue sem id, ignorando');
+    return;
+  }
+
+  const title = (issue.title as string) || 'Sem título';
+  const parsedContent = parseUserStoryContent(issue.description);
+  const state = String(issue.state || 'opened').toLowerCase();
+
+  // Resolve o time de destino: integration.team_id ou via label.
+  let teamId: string | null = integration.team_id ?? null;
+  const labelMap: Record<string, string> = integration.issue_labels_team_map ?? {};
+  const rawLabels = (Array.isArray(payload.labels) ? payload.labels : []) as Array<Record<string, unknown> | string>;
+  for (const l of rawLabels) {
+    const labelTitle = typeof l === 'string' ? l : (l.title as string);
+    if (labelTitle && labelMap[labelTitle]) {
+      teamId = labelMap[labelTitle];
+      break;
+    }
+  }
+  if (!teamId) {
+    console.log('[Git Webhook] Issue', String(issueId), 'sem time de destino (team_id ou label map); ignorando');
+    return;
+  }
+
+  const placement = await resolveGitlabBacklogPlacement(supabase, teamId);
+  const status = state === 'closed' ? placement.doneStatus : placement.backlogStatus;
+
+  // Dedup: procura HU já vinculada a essa issue.
+  const { data: existing } = await supabase
+    .from('hu_git_links')
+    .select('hu_id')
+    .eq('git_entity_type', 'issue')
+    .eq('git_entity_id', String(issueId))
+    .maybeSingle();
+
+  if (existing?.hu_id) {
+    await supabase
+      .from('user_stories')
+      .update({
+        title,
+        description: parsedContent.content,
+        acceptance_criteria: parsedContent.acceptanceCriteria,
+        sprint_id: placement.sprintId,
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.hu_id);
+    return;
+  }
+
+  // Gera code único por time (GL-<iid>, com fallback se colidir).
+  let code = `GL-${iid}`;
+  const { data: codeDup } = await supabase
+    .from('user_stories')
+    .select('id')
+    .eq('team_id', teamId)
+    .eq('code', code)
+    .maybeSingle();
+  if (codeDup) code = `GL-${integration.repository_path}-${iid}`;
+
+  const { data: hu, error: huError } = await supabase
+    .from('user_stories')
+    .insert({
+      team_id: teamId,
+      sprint_id: placement.sprintId,
+      code,
+      title,
+      description: parsedContent.content,
+      acceptance_criteria: parsedContent.acceptanceCriteria,
+      story_points: 0,
+      priority: 'media',
+      status,
+    })
+    .select('id')
+    .single();
+
+  if (huError || !hu) {
+    console.error('[Git Webhook] Falha ao criar HU a partir da issue', String(issueId), huError);
+    return;
+  }
+
+  await supabase.from('hu_git_links').insert({
+    organization_id: integration.organization_id,
+    project_id: integration.project_id ?? null,
+    hu_id: hu.id,
+    git_entity_type: 'issue',
+    git_entity_id: String(issueId),
+    git_entity_data: { iid, title, web_url: issue.url || issue.web_url || null },
+    integration_id: integration.id,
+    linked_at: new Date().toISOString(),
+    correlation_id: correlationId,
+  });
+}
+
 function extractHUIds(text: string): string[] {
-  // Pattern: AXIONN-123, AXI-456, HU-789, #123, etc.
   const patterns = [
     /\b([A-Z]{2,10}-\d+)\b/g,      // AXIONN-123, PROJ-456
     /\b(HU-\d+)\b/gi,              // HU-123

@@ -46,6 +46,16 @@ import {
   validateGitlabIntegrationPayload,
   type GitlabIntegration,
 } from "../services/gitlabIntegrations.service";
+import { useTeamsAdmin } from "@/features/admin/hooks/useTeamsAdmin";
+
+function describeInvokeError(error: any, data: any): string {
+  const ctx = error?.context ?? data;
+  if (ctx && typeof ctx === "object") {
+    const parts = [ctx.error, ctx.detail, ctx.recovery, ctx.gitlab_status && `HTTP ${ctx.gitlab_status}`].filter(Boolean);
+    if (parts.length) return parts.join(" — ");
+  }
+  return error?.message ?? "erro desconhecido";
+}
 
 interface FormState {
   id?: string;
@@ -55,8 +65,12 @@ interface FormState {
   repositoryName: string;
   apiUrl: string;
   accessToken: string;
+  hasStoredAccessToken: boolean;
   webhookSecret: string;
   isActive: boolean;
+  teamId: string;
+  syncIssuesAsBacklog: boolean;
+  labelRules: { label: string; teamId: string }[];
 }
 
 const EMPTY: FormState = {
@@ -66,8 +80,12 @@ const EMPTY: FormState = {
   repositoryName: "",
   apiUrl: "https://gitlab.com/api/v4",
   accessToken: "",
+  hasStoredAccessToken: false,
   webhookSecret: "",
   isActive: true,
+  teamId: "",
+  syncIssuesAsBacklog: true,
+  labelRules: [],
 };
 
 export function AdminGitlabIntegrationsPage() {
@@ -81,6 +99,9 @@ export function AdminGitlabIntegrationsPage() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [tab, setTab] = useState<"config" | "events">("config");
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const { teams } = useTeamsAdmin();
 
   const load = async () => {
     if (!currentOrganizationId) {
@@ -124,9 +145,15 @@ export function AdminGitlabIntegrationsPage() {
       repositoryPath: item.repositoryPath ?? "",
       repositoryName: item.repositoryName ?? "",
       apiUrl: item.apiUrl ?? "",
-      accessToken: item.accessToken ?? "",
-      webhookSecret: item.webhookSecret ?? "",
+      accessToken: "",
+      hasStoredAccessToken: item.hasAccessToken,
+      webhookSecret: "",
       isActive: item.isActive,
+      teamId: item.teamId ?? "",
+      syncIssuesAsBacklog: item.syncIssuesAsBacklog,
+      labelRules: item.issueLabelsTeamMap
+        ? Object.entries(item.issueLabelsTeamMap).map(([label, teamId]) => ({ label, teamId }))
+        : [],
     });
     setOpen(true);
   };
@@ -153,6 +180,21 @@ export function AdminGitlabIntegrationsPage() {
       return;
     }
 
+    if (form.syncIssuesAsBacklog && !form.teamId) {
+      toast.error("Selecione o Time de destino para importar issues como backlog.");
+      return;
+    }
+
+    const issueLabelsTeamMap: Record<string, string> = {};
+    for (const rule of form.labelRules) {
+      if (rule.label.trim() && rule.teamId) {
+        issueLabelsTeamMap[rule.label.trim()] = rule.teamId;
+      } else if (rule.label.trim() || rule.teamId) {
+        toast.error("Cada regra de label precisa de um rótulo e de um time.");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const payload = buildGitlabIntegrationPayload({
@@ -162,28 +204,37 @@ export function AdminGitlabIntegrationsPage() {
         repositoryPath: form.repositoryPath,
         repositoryName: form.repositoryName,
         apiUrl: form.apiUrl,
-        accessToken: form.accessToken,
-        webhookSecret: form.webhookSecret,
+        accessToken: form.id && !form.accessToken.trim() ? undefined : form.accessToken,
+        webhookSecret: form.id && !form.webhookSecret.trim() ? undefined : form.webhookSecret,
         isActive: form.isActive,
+        teamId: form.teamId || null,
+        syncIssuesAsBacklog: form.syncIssuesAsBacklog,
+        issueLabelsTeamMap,
       });
 
+      if (form.id && !form.accessToken.trim()) delete payload.access_token_encrypted;
+      if (form.id && !form.webhookSecret.trim()) delete payload.webhook_secret_encrypted;
+
+      const saved = form.id
+        ? await updateGitlabIntegration(form.id, payload)
+        : await createGitlabIntegration(payload);
+
       if (form.id) {
-        await updateGitlabIntegration(form.id, payload);
         toast.success("Integração GitLab atualizada");
       } else {
-        const created = await createGitlabIntegration(payload);
         toast.success("Integração GitLab criada");
-        if (form.accessToken) {
-          const { error } = await supabase.functions.invoke("gitlab-webhook-register", {
-            body: { integrationId: created.id },
-          });
-          if (error) {
-            toast.error(
-              `Integração salva, mas o auto-registro do webhook falhou: ${error.message ?? "erro desconhecido"}. Use "Re-registrar webhook" após revisar o token.`,
-            );
-          } else {
-            toast.success("Webhook registrado automaticamente no GitLab ✓");
-          }
+      }
+
+      if (form.accessToken || form.hasStoredAccessToken) {
+        const { error, data } = await supabase.functions.invoke("gitlab-webhook-register", {
+          body: { integrationId: saved.id },
+        });
+        if (error) {
+          toast.error(
+            `Integração salva, mas o auto-registro do webhook falhou: ${describeInvokeError(error, data)}. Veja o detalhe no badge de erro da integração.`,
+          );
+        } else {
+          toast.success("Webhook registrado automaticamente no GitLab ✓");
         }
       }
 
@@ -216,16 +267,16 @@ export function AdminGitlabIntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white px-6 py-5 shadow-sm shadow-slate-900/5">
+      <div className="rounded-xl border border-border/70 bg-card px-5 py-5 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-2xl">
-            <div className="flex items-center gap-3 text-slate-900">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+            <div className="flex items-center gap-3 text-foreground">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                 <GitBranch className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold">Integrações GitLab</h1>
-                <p className="mt-1 text-sm text-slate-500">
+                <h1 className="text-xl font-semibold tracking-tight">Integrações GitLab</h1>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                   Gerencie integrações GitLab atreladas à sua organização e configure webhooks para sincronização.
                 </p>
               </div>
@@ -264,7 +315,7 @@ export function AdminGitlabIntegrationsPage() {
         ))}
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5">
+      <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-20 w-full rounded-2xl" />
@@ -275,23 +326,23 @@ export function AdminGitlabIntegrationsPage() {
           <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
             <GitBranch className="h-12 w-12 text-slate-400" />
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Nenhuma integração GitLab cadastrada</h2>
-              <p className="mt-2 text-sm text-slate-500">Cadastre uma integração para começar a receber eventos do GitLab no Axionn.</p>
+              <h2 className="text-lg font-semibold text-foreground">Nenhuma integração GitLab cadastrada</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Cadastre uma integração para começar a receber eventos do GitLab no Axionn.</p>
             </div>
             <Button variant="secondary" onClick={openCreate}>Adicionar integração</Button>
           </div>
         ) : (
           <div className="space-y-3">
             {items.map((item) => (
-              <div key={item.id} className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
+              <div key={item.id} className="rounded-xl border border-border/70 bg-muted/30 px-4 py-4 sm:px-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-600 shadow-sm">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-background text-muted-foreground shadow-sm">
                       <GitBranch className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-base font-semibold text-slate-900">{item.name}</p>
-                      <p className="mt-1 truncate text-sm text-slate-500">
+                      <p className="truncate text-base font-semibold text-foreground">{item.name}</p>
+                      <p className="mt-1 truncate text-sm text-muted-foreground">
                         {item.repositoryPath ?? "—"} • {item.baseUrl}
                       </p>
                     </div>
@@ -302,21 +353,21 @@ export function AdminGitlabIntegrationsPage() {
                       {item.isActive ? "Ativa" : "Inativa"}
                     </Badge>
                     {item.syncStatus === "completed" && item.webhookId ? (
-                      <Badge className="bg-emerald-100 text-emerald-700 border-0 gap-1">
+                      <Badge className="h-6 gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 text-[11px] font-semibold text-emerald-700">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />
                         Webhook ativo
                       </Badge>
                     ) : item.syncStatus === "error" ? (
                       <Badge
-                        className="bg-rose-100 text-rose-700 border-0 gap-1"
+                        className="h-6 gap-1.5 rounded-full border border-rose-400/40 bg-rose-500/10 px-3 text-[11px] font-semibold text-rose-700"
                         title={item.syncError ?? "Erro no registro do webhook"}
                       >
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-500 inline-block" />
                         Webhook com erro
                       </Badge>
                     ) : (
-                      <Badge className="bg-slate-100 text-slate-500 border-0 gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 inline-block" />
+                      <Badge className="h-6 gap-1.5 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 text-[11px] font-semibold text-amber-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block" />
                         Webhook pendente
                       </Badge>
                     )}
@@ -334,17 +385,17 @@ export function AdminGitlabIntegrationsPage() {
         )}
       </div>
 
-      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
-        <p className="font-medium text-slate-900">Nota</p>
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 px-5 py-4 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">Nota</p>
         <p className="mt-1">
-          Tokens e segredos são armazenados de forma cifrada. Configure o webhook no GitLab apontando para a URL informada abaixo.
+          Tokens e segredos são armazenados de forma cifrada. O webhook é registrado automaticamente no GitLab ao salvar a integração.
         </p>
       </div>
         </TabsContent>
 
         <TabsContent value="events" className="space-y-4">
           {items.length > 1 && (
-            <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-card p-4">
               <span className="text-sm font-medium text-slate-700">Integração:</span>
               <Select
                 value={selectedIntegrationId ?? ""}
@@ -366,43 +417,169 @@ export function AdminGitlabIntegrationsPage() {
       </Tabs>
 
       <Dialog open={open} onOpenChange={(next) => !next && setOpen(false)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:max-w-3xl lg:max-w-5xl">
+          <DialogHeader className="shrink-0 border-b border-border/60 px-5 py-4 sm:px-6">
             <DialogTitle>{form.id ? "Editar integração GitLab" : "Nova integração GitLab"}</DialogTitle>
             <DialogDescription>
               Cadastre o repositório GitLab e os dados mínimos para o fluxo de sincronização.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="gl-name">Nome da integração *</Label>
-              <Input id="gl-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: GitLab principal" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gl-base">URL base *</Label>
-              <Input id="gl-base" value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://gitlab.com" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gl-api">API URL</Label>
-              <Input id="gl-api" value={form.apiUrl} onChange={(e) => setForm({ ...form, apiUrl: e.target.value })} placeholder="https://gitlab.com/api/v4" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gl-path">Repositório (caminho) *</Label>
-              <Input id="gl-path" value={form.repositoryPath} onChange={(e) => setForm({ ...form, repositoryPath: e.target.value })} placeholder="grupo/projeto" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gl-repo">Nome do repositório</Label>
-              <Input id="gl-repo" value={form.repositoryName} onChange={(e) => setForm({ ...form, repositoryName: e.target.value })} placeholder="nome-do-repositorio" />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-4 sm:px-6 lg:grid-cols-2 lg:items-start">
+            <section className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-2 lg:col-span-2">
+              <div className="sm:col-span-2">
+                <h3 className="text-sm font-semibold text-slate-900">Identificação</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">Dados usados para localizar e reconhecer o repositório.</p>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="gl-name">Nome da integração *</Label>
+                <Input id="gl-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: GitLab principal" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gl-base">URL base *</Label>
+                <Input id="gl-base" value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://gitlab.com" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gl-api">API URL</Label>
+                <Input id="gl-api" value={form.apiUrl} onChange={(e) => setForm({ ...form, apiUrl: e.target.value })} placeholder="https://gitlab.com/api/v4" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gl-path">Repositório (caminho) *</Label>
+                <Input id="gl-path" value={form.repositoryPath} onChange={(e) => setForm({ ...form, repositoryPath: e.target.value })} placeholder="grupo/projeto" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gl-repo">Nome do repositório</Label>
+                <Input id="gl-repo" value={form.repositoryName} onChange={(e) => setForm({ ...form, repositoryName: e.target.value })} placeholder="nome-do-repositorio" />
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Acesso</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">Credencial usada para conectar o Axionn ao GitLab.</p>
+              </div>
+              <div className="space-y-2">
               <Label htmlFor="gl-token">Token de acesso</Label>
-              <Input id="gl-token" type="password" value={form.accessToken} onChange={(e) => setForm({ ...form, accessToken: e.target.value })} placeholder="glpat-..." />
-              <p className="text-xs text-slate-500">
-                Use um token GitLab com escopo de leitura de repositório e webhooks.
+              <Input id="gl-token" type="password" value={form.accessToken} onChange={(e) => setForm({ ...form, accessToken: e.target.value })} placeholder={form.hasStoredAccessToken ? "Token salvo — deixe vazio para manter" : "glpat-..."} autoComplete="new-password" />
+              <p className="text-xs leading-relaxed text-slate-600">
+                Use um PAT com escopo <strong>api</strong> e acesso de Maintainer/Owner ao projeto. {form.hasStoredAccessToken && "Deixe vazio para manter o token atual."}
               </p>
-            </div>
-            <div className="space-y-2 sm:col-span-2">
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Backlog (issues do GitLab)</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
+                  Issues criadas no GitLab viram Histórias de Usuário no backlog do time selecionado.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="gl-team">Time de destino</Label>
+                <Select value={form.teamId} onValueChange={(v) => setForm({ ...form, teamId: v })}>
+                  <SelectTrigger id="gl-team">
+                    <SelectValue placeholder="Selecione o time que recebe o backlog" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Importar issues como backlog</p>
+                    <p className="text-xs text-slate-500">Cria/atualiza HU a partir das issues do projeto.</p>
+                  </div>
+                  <Switch
+                    checked={form.syncIssuesAsBacklog}
+                    onCheckedChange={(value) => setForm({ ...form, syncIssuesAsBacklog: value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Roteamento por label (opcional)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setForm({ ...form, labelRules: [...form.labelRules, { label: "", teamId: "" }] })}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Adicionar
+                  </Button>
+                </div>
+                {form.labelRules.length === 0 ? (
+                  <p className="text-xs leading-relaxed text-slate-600">
+                    Sem regras, todas as issues vão para o time de destino acima.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.labelRules.map((rule, idx) => (
+                      <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="flex-1 space-y-1.5">
+                          <Label className="text-xs text-slate-500">Rótulo (ex: time::A)</Label>
+                          <Input
+                            value={rule.label}
+                            onChange={(e) => {
+                              const next = [...form.labelRules];
+                              next[idx] = { ...rule, label: e.target.value };
+                              setForm({ ...form, labelRules: next });
+                            }}
+                            placeholder="time::A"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                          <Label className="text-xs text-slate-500">Time</Label>
+                          <Select
+                            value={rule.teamId}
+                            onValueChange={(v) => {
+                              const next = [...form.labelRules];
+                              next[idx] = { ...rule, teamId: v };
+                              setForm({ ...form, labelRules: next });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o time" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {teams.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remover regra"
+                          onClick={() => setForm({ ...form, labelRules: form.labelRules.filter((_, i) => i !== idx) })}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs leading-relaxed text-slate-600">
+                  Issue com rótulo correspondente é roteada para o time indicado; caso contrário, usa o time de destino acima.
+                </p>
+              </div>
+            </section>
+
+            <section className="space-y-4 rounded-xl border border-slate-200 p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Automação</h3>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-600">O webhook é configurado automaticamente ao salvar a integração.</p>
+              </div>
+              <div className="space-y-2">
               <Label>Webhook URL (gerado automaticamente)</Label>
               <div className="flex gap-2">
                 <Input
@@ -410,7 +587,7 @@ export function AdminGitlabIntegrationsPage() {
                   aria-readonly
                   tabIndex={-1}
                   value="https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler"
-                  className="text-xs font-mono bg-slate-50 text-slate-600 cursor-default"
+                  className="cursor-default bg-slate-50 font-mono text-xs text-slate-700"
                 />
                 <Button type="button" variant="outline" size="icon" aria-label="Copiar URL do webhook" onClick={async () => {
                   await navigator.clipboard.writeText("https://rgikyyazotqapaxijwui.supabase.co/functions/v1/git-webhook-handler");
@@ -419,13 +596,15 @@ export function AdminGitlabIntegrationsPage() {
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs leading-relaxed text-slate-600">
                 URL fixa do Axionn. Ao salvar com um token de acesso válido, o webhook é registrado
-                automaticamente no GitLab — não é necessário copiar ou configurar manualmente.
-                O botão "Re-registrar webhook" abaixo serve apenas como fallback caso o auto-registro falhe.
+                automaticamente no GitLab — não é necessário configurar nada manualmente. Se o auto-registro
+                falhar, a integração ainda será salva e o botão "Re-registrar webhook" poderá ser usado como fallback.
               </p>
-            </div>
-            <div className="sm:col-span-2 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3">
+              </div>
+            </section>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 lg:col-span-2">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">Ativa</p>
@@ -436,23 +615,50 @@ export function AdminGitlabIntegrationsPage() {
             </div>
           </div>
 
-          <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            {form.id && form.accessToken && (
+          <DialogFooter className="shrink-0 px-5 py-4 sm:px-6">
+            {form.id && (form.accessToken || form.hasStoredAccessToken) && (
               <Button type="button" variant="outline" className="gap-2 mr-auto" disabled={saving || registering} onClick={async () => {
                 setRegistering(true);
                 try {
-                  const { error } = await supabase.functions.invoke("gitlab-webhook-register", { body: { integrationId: form.id } });
-                  if (error) throw error;
+                  const { error, data } = await supabase.functions.invoke("gitlab-webhook-register", { body: { integrationId: form.id } });
+                  if (error) throw new Error(describeInvokeError(error, data));
                   toast.success("Webhook re-registrado no GitLab com sucesso ✓");
                   await load();
-                } catch {
-                  toast.error("Falha ao re-registrar webhook. Verifique o token de acesso.");
+                } catch (e: any) {
+                  toast.error(`Falha ao re-registrar webhook: ${e?.message ?? "verifique o token de acesso."}`);
                 } finally {
                   setRegistering(false);
                 }
               }}>
                 {registering ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 Re-registrar webhook
+              </Button>
+            )}
+            {form.id && (form.accessToken || form.hasStoredAccessToken) && (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                disabled={saving || syncing}
+                onClick={async () => {
+                  setSyncing(true);
+                  try {
+                    const { error, data } = await supabase.functions.invoke("gitlab-issues-sync", {
+                      body: { integrationId: form.id },
+                    });
+                    if (error) throw new Error(describeInvokeError(error, data));
+                    toast.success(
+                      `Sincronização concluída: ${data?.created ?? 0} criada(s), ${data?.updated ?? 0} atualizada(s) e ${data?.skipped ?? 0} ignorada(s).`,
+                    );
+                  } catch (error: any) {
+                    toast.error(`Falha ao sincronizar issues: ${error?.message ?? "verifique o token de acesso."}`);
+                  } finally {
+                    setSyncing(false);
+                  }
+                }}
+              >
+                {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Sincronizar issues
               </Button>
             )}
             <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>

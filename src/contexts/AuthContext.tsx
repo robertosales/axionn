@@ -443,6 +443,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (profileData?.is_active === false) {
           console.warn("[Auth] Bloqueio: usuário inativo detectado.");
+          sessionStorage.setItem("axionn:auth-block-reason", "inactive");
           forceLocalClear();
           return;
         }

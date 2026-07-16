@@ -51,7 +51,7 @@ export function HUGitActivitySection({ huId, organizationId }: Props) {
     | null;
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
+    <div className="rounded-xl border border-border/70 bg-card shadow-sm">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

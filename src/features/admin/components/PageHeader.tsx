@@ -46,14 +46,14 @@ export function PageHeader({
   children,
 }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
+    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       {/* Subtítulo + badges */}
-      <div className="flex items-center gap-2 flex-wrap min-h-[1.5rem]">
+      <div className="flex min-h-9 flex-wrap items-center gap-2">
         {Icon && (
           <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} aria-hidden="true" />
         )}
         {description && (
-          <span className="text-xs text-muted-foreground">{description}</span>
+          <span className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{description}</span>
         )}
         {badges.map((b, i) => {
           const BIcon = b.icon;
@@ -72,7 +72,7 @@ export function PageHeader({
 
       {/* Ações + slot customizado */}
       {(actions.length > 0 || children) && (
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {children}
           {actions.map((a, i) => {
             const AIcon = a.icon;

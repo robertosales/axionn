@@ -9,6 +9,7 @@ export interface GitlabIntegration {
   repositoryName: string | null;
   apiUrl: string | null;
   accessToken: string | null;
+  hasAccessToken: boolean;
   webhookUrl: string | null;
   webhookSecret: string | null;
   webhookId: string | null;
@@ -16,6 +17,9 @@ export interface GitlabIntegration {
   isActive: boolean;
   syncStatus: string | null;
   syncError: string | null;
+  teamId: string | null;
+  syncIssuesAsBacklog: boolean;
+  issueLabelsTeamMap: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,6 +40,9 @@ export interface GitlabIntegrationPayload {
   is_active: boolean;
   sync_status?: string | null;
   sync_error?: string | null;
+  team_id?: string | null;
+  sync_issues_as_backlog?: boolean;
+  issue_labels_team_map?: Record<string, string>;
 }
 
 export interface GitlabIntegrationValidationResult {
@@ -52,12 +59,21 @@ export function normalizeGitlabIntegration(row: Record<string, unknown>): Gitlab
     repositoryPath: row.repository_path ? String(row.repository_path) : null,
     repositoryName: row.repository_name ? String(row.repository_name) : null,
     apiUrl: row.api_url ? String(row.api_url) : null,
-    accessToken: row.access_token_encrypted ? String(row.access_token_encrypted) : null,
+    // Do not copy credentials back into an editable form. Keep only the
+    // presence flag so updates can preserve the stored PAT.
+    accessToken: null,
+    hasAccessToken: Boolean(row.access_token_encrypted),
     webhookUrl: row.webhook_url ? String(row.webhook_url) : null,
-    webhookSecret: row.webhook_secret_encrypted ? String(row.webhook_secret_encrypted) : null,
+    webhookSecret: null,
     webhookId: row.webhook_id ? String(row.webhook_id) : null,
     events: Array.isArray(row.events) ? (row.events as string[]) : ["push", "merge_request"],
     isActive: Boolean(row.is_active),
+    teamId: row.team_id ? String(row.team_id) : null,
+    syncIssuesAsBacklog: row.sync_issues_as_backlog != null ? Boolean(row.sync_issues_as_backlog) : true,
+    issueLabelsTeamMap:
+      row.issue_labels_team_map && typeof row.issue_labels_team_map === "object"
+        ? (row.issue_labels_team_map as Record<string, string>)
+        : {},
     syncStatus: row.sync_status ? String(row.sync_status) : null,
     syncError: row.sync_error ? String(row.sync_error) : null,
     createdAt: String(row.created_at ?? ""),
@@ -78,6 +94,9 @@ export function buildGitlabIntegrationPayload(input: {
   webhookSecret?: string | null;
   events?: string[];
   isActive?: boolean;
+  teamId?: string | null;
+  syncIssuesAsBacklog?: boolean;
+  issueLabelsTeamMap?: Record<string, string>;
 }): GitlabIntegrationPayload {
   return {
     organization_id: input.organizationId,
@@ -95,6 +114,9 @@ export function buildGitlabIntegrationPayload(input: {
     is_active: input.isActive ?? true,
     sync_status: "pending",
     sync_error: null,
+    team_id: input.teamId ?? null,
+    sync_issues_as_backlog: input.syncIssuesAsBacklog ?? true,
+    issue_labels_team_map: input.issueLabelsTeamMap ?? {},
   };
 }
 

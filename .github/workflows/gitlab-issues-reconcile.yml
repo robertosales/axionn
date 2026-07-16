@@ -1,0 +1,35 @@
+name: GitLab Issues Reconcile
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke gitlab-issues-reconcile Edge Function
+        env:
+          SUPABASE_URL: https://rgikyyazotqapaxijwui.supabase.co
+          GITLAB_RECONCILE_SECRET: ${{ secrets.GITLAB_RECONCILE_SECRET }}
+        run: |
+          set -euo pipefail
+          response=$(mktemp)
+          status=$(curl -sS -o "$response" -w "%{http_code}" \
+            -X POST "$SUPABASE_URL/functions/v1/gitlab-issues-reconcile" \
+            -H "Authorization: Bearer $GITLAB_RECONCILE_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{}')
+          echo "HTTP $status"
+          cat "$response"
+          echo
+          if [ "$status" != "200" ]; then
+            echo "Reconcile call failed with HTTP $status"
+            exit 1
+          fi
+          failed=$(jq -r '.failed // 0' "$response")
+          if [ "$failed" != "0" ]; then
+            echo "Reconcile reported $failed failed integrations"
+            exit 1
+          fi

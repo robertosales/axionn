@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { canonicalizeDevelopers } from "@/lib/developerIdentity";
 
 /**
  * Helpers para garantir que listas de membros/analistas/responsáveis
@@ -26,7 +25,7 @@ export async function fetchActiveMemberIdsForTeams(teamIds: string[]): Promise<S
   return new Set((data ?? []).map((r: any) => r.user_id).filter(Boolean));
 }
 
-export function filterActiveDevelopers<T extends { id: string; user_id?: string | null; created_at?: string | null }>(
+export function filterActiveDevelopers<T extends { id: string; name?: string | null; user_id?: string | null; created_at?: string | null }>(
   devs: T[],
   memberIds: Set<string>,
 ): T[] {
@@ -38,7 +37,9 @@ export function filterActiveDevelopers<T extends { id: string; user_id?: string 
       byUser.set(d.user_id, d);
     }
   }
-  return canonicalizeDevelopers(Array.from(byUser.values()) as any) as unknown as T[];
+  return Array.from(byUser.values()).sort((a, b) =>
+    String(a.name ?? "").localeCompare(String(b.name ?? ""), "pt-BR", { sensitivity: "base" }),
+  );
 }
 
 export function tagExMember(name: string, userId: string | null | undefined, memberIds: Set<string>): string {

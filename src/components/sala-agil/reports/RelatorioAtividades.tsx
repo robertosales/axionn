@@ -518,6 +518,15 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
     }
   }, [isAdmin, ownDeveloperId]);
 
+  useEffect(() => {
+    setFilters((current) => {
+      if (current.memberId === "all" || developers.some((developer) => developer.id === current.memberId)) {
+        return current;
+      }
+      return { ...current, memberId: isAdmin ? "all" : (ownDeveloperId ?? "all") };
+    });
+  }, [developers, isAdmin, ownDeveloperId]);
+
   const [exportingPDF, setExportingPDF] = useState(false);
   const [previewUrl,   setPreviewUrl]   = useState<string | null>(null);
   const [previewBlob,  setPreviewBlob]  = useState<Blob | null>(null);

@@ -5,7 +5,7 @@ import { SalaAgilRelatorios } from "@/components/sala-agil/reports/SalaAgilRelat
 import { AgileHistory } from "@/components/AgileHistory";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart3, Library } from "lucide-react";
-import { canonicalizeDevelopers } from "@/lib/developerIdentity";
+import { fetchActiveMemberIds, filterActiveDevelopers } from "@/lib/teamMemberFilter";
 
 /**
  * Página dedicada de Relatórios — Sala Ágil.
@@ -49,21 +49,22 @@ export function SalaAgilReportsPage() {
       const allDevs: any[] = [];
       const allDeveloperRecords: any[] = [];
       for (const team of teamsToLoad) {
-        const [sR, hR, aR, iR, dR] = await Promise.all([
+        const [sR, hR, aR, iR, dR, memberIds] = await Promise.all([
           supabase.from("sprints").select("*").eq("team_id", team.id),
           supabase.from("user_stories").select("*").eq("team_id", team.id),
           supabase.from("activities").select("*").eq("team_id", team.id),
           supabase.from("impediments").select("*").eq("team_id", team.id),
           supabase.from("developers").select("*").eq("team_id", team.id),
+          fetchActiveMemberIds(team.id),
         ]);
         allDeveloperRecords.push(...(dR.data || []));
         allSprints.push(...(sR.data || []));
         allHUs.push(...(hR.data || []));
         allActs.push(...(aR.data || []));
         allImps.push(...(iR.data || []));
-        // Relatórios precisam preservar os responsáveis históricos referenciados
-        // por activities.assignee_id. Filtrar por team_members quebra essa junção.
-        allDevs.push(...canonicalizeDevelopers((dR.data || []) as any[]));
+        // O seletor recebe apenas membros atuais; developerRecords preserva o
+        // conjunto completo para resolver referências históricas das atividades.
+        allDevs.push(...filterActiveDevelopers((dR.data || []) as any[], memberIds));
       }
       if (cancelled) return;
       setData({

@@ -15,6 +15,18 @@ describe("GitLab issues backlog contract", () => {
     expect(sync).toContain("parseUserStoryContent(issue.description)");
     expect(sync).toContain("description: parsedContent.content");
     expect(sync).toContain("acceptance_criteria: parsedContent.acceptanceCriteria");
+    expect(sync).toContain("const contentUpdate = parsedContent.content");
+    expect(handler).toContain("const contentUpdate = parsedContent.content");
+  });
+
+  it("links GitLab #IID activity through the issue link in the same integration", () => {
+    expect(handler).toContain("resolveHUReference");
+    expect(handler).toContain(".eq('integration_id', integrationId)");
+    expect(handler).toContain(".contains('git_entity_data', { iid })");
+    expect(handler).toContain("integration_id: integrationId");
+    expect(sync).toContain("backfillIssueActivity");
+    expect(sync).toContain('.overlaps("hu_ids", references)');
+    expect(sync).toContain('onConflict: "organization_id,hu_id,git_entity_type,git_entity_id"');
   });
 
   it("places GitLab stories in the active sprint and backlog workflow column", () => {

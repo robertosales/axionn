@@ -1,0 +1,2 @@
+import type{QualityResultStatus}from"../types/quality.types";
+export function deriveRunItemStatus(statuses:QualityResultStatus[]):QualityResultStatus{if(!statuses.length)return"not_run";if(statuses.includes("failed"))return"failed";if(statuses.includes("blocked"))return"blocked";if(statuses.every(s=>s==="passed"))return"passed";if(statuses.every(s=>s==="skipped"))return"skipped";if(statuses.some(s=>s!=="not_run"))return"in_progress";return"not_run";}

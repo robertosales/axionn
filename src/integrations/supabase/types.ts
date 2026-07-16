@@ -13408,6 +13408,14 @@ export type Database = {
         Returns: boolean
       }
       can_operate_organization: { Args: { p_org_id: string }; Returns: boolean }
+      can_manage_quality: {
+        Args: { p_org_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      archive_quality_test_case_v1: {
+        Args: { p_case_id: string; p_correlation_id?: string; p_org_id: string }
+        Returns: undefined
+      }
       can_read_contract_v2: {
         Args: { p_contract_id: string; p_user_id?: string }
         Returns: boolean
@@ -13465,6 +13473,31 @@ export type Database = {
         }
         Returns: undefined
       }
+      create_quality_test_case_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_quality_test_plan_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_quality_test_run_from_plan_v1: {
+        Args: {
+          p_build_reference?: string
+          p_commit_sha?: string
+          p_correlation_id?: string
+          p_environment_name?: string
+          p_name: string
+          p_org_id: string
+          p_plan_id: string
+        }
+        Returns: string
+      }
+      start_quality_test_run_v1: { Args: { p_correlation_id?: string; p_org_id: string; p_run_id: string }; Returns: undefined }
+      update_quality_step_result_v1: { Args: { p_actual_result?: string; p_correlation_id?: string; p_org_id: string; p_status: string; p_step_result_id: string }; Returns: string }
+      add_quality_external_evidence_v1: { Args: { p_description?: string; p_external_url: string; p_org_id: string; p_run_item_id: string; p_step_result_id: string; p_title: string }; Returns: string }
+      complete_quality_test_run_v1: { Args: { p_allow_not_run?: boolean; p_correlation_id?: string; p_org_id: string; p_run_id: string }; Returns: undefined }
+      reopen_quality_test_run_v1: { Args: { p_correlation_id?: string; p_org_id: string; p_reason: string; p_run_id: string }; Returns: undefined }
       compute_learning_metrics: {
         Args: { p_week_start?: string }
         Returns: Json
@@ -14789,6 +14822,36 @@ export type Database = {
           p_user_agent?: string
         }
         Returns: string
+      }
+      link_quality_test_case_v1: {
+        Args: {
+          p_case_id: string
+          p_correlation_id?: string
+          p_entity_id: string
+          p_entity_reference?: string
+          p_entity_type: string
+          p_metadata?: Json
+          p_org_id: string
+        }
+        Returns: string
+      }
+      add_quality_test_plan_item_v1: {
+        Args: { p_case_id: string; p_case_version?: number; p_is_required?: boolean; p_org_id: string; p_plan_id: string }
+        Returns: string
+      }
+      remove_quality_test_plan_item_v1: {
+        Args: { p_case_id: string; p_org_id: string; p_plan_id: string }
+        Returns: undefined
+      }
+      update_quality_test_case_v1: {
+        Args: {
+          p_case_id: string
+          p_change_summary?: string
+          p_correlation_id?: string
+          p_org_id: string
+          p_payload: Json
+        }
+        Returns: number
       }
       log_audit_event: {
         Args: {

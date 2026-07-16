@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { lazy, Suspense, useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,9 @@ import { ImpedimentDialog } from "@/components/ImpedimentManager";
 import { HUGitActivitySection } from "@/components/gitlab/HUGitActivitySection";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { buildUnifiedUserStoryContent, splitUserStoryContent } from "@/lib/userStoryContent";
+import { QUALITY_MANAGEMENT_ENABLED } from "@/lib/featureFlags";
+
+const HUQualitySection = lazy(() => import("@/features/quality/components/HUQualitySection").then((module) => ({ default: module.HUQualitySection })));
 
 interface Props {
   huId: string | null;
@@ -499,6 +502,13 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
             {huId && organizationId && (
               <div className="px-5 py-4 border-t border-slate-100">
                 <HUGitActivitySection huId={huId} organizationId={organizationId} />
+              </div>
+            )}
+            {QUALITY_MANAGEMENT_ENABLED && huId && organizationId && open && (
+              <div className="px-5 py-4 border-t border-slate-100">
+                <Suspense fallback={<p className="text-xs text-muted-foreground">Carregando qualidade…</p>}>
+                  <HUQualitySection huId={huId} organizationId={organizationId} />
+                </Suspense>
               </div>
             )}
           </div>

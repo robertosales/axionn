@@ -1,0 +1,2 @@
+import{describe,expect,it}from"vitest";import{deriveRunItemStatus}from"./qualityRunStatus";
+describe("deriveRunItemStatus",()=>{it("prioriza falha",()=>expect(deriveRunItemStatus(["passed","failed"])).toBe("failed"));it("calcula aprovação",()=>expect(deriveRunItemStatus(["passed","passed"])).toBe("passed"));it("mantém andamento parcial",()=>expect(deriveRunItemStatus(["passed","not_run"])).toBe("in_progress"));});

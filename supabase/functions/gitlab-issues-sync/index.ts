@@ -143,17 +143,23 @@ async function upsertHuFromIssue(
   if (!existing?.hu_id && state === "closed") return "skipped";
 
   if (existing?.hu_id) {
+    const contentUpdate = parsedContent.content
+      ? {
+          description: parsedContent.content,
+          acceptance_criteria: parsedContent.acceptanceCriteria,
+        }
+      : {};
     await supabase
       .from("user_stories")
       .update({
         title,
-        description: parsedContent.content,
-        acceptance_criteria: parsedContent.acceptanceCriteria,
+        ...contentUpdate,
         sprint_id: placement.sprintId,
         status,
         updated_at: new Date().toISOString(),
       })
       .eq("id", existing.hu_id);
+    await backfillIssueActivity(supabase, integration, existing.hu_id, iid, correlationId);
     return "updated";
   }
 
@@ -198,5 +204,59 @@ async function upsertHuFromIssue(
     linked_at: new Date().toISOString(),
     correlation_id: correlationId,
   });
+  await backfillIssueActivity(supabase, integration, hu.id, iid, correlationId);
   return "created";
+}
+
+async function backfillIssueActivity(
+  supabase: any,
+  integration: any,
+  huId: string,
+  iid: unknown,
+  correlationId: string,
+): Promise<void> {
+  if (iid === null || iid === undefined) return;
+  const references = [...new Set([String(iid), `GL-${iid}`])];
+
+  const [{ data: commits }, { data: mergeRequests }] = await Promise.all([
+    supabase
+      .from("git_commits")
+      .select("commit_sha")
+      .eq("integration_id", integration.id)
+      .overlaps("hu_ids", references),
+    supabase
+      .from("git_merge_requests")
+      .select("id")
+      .eq("integration_id", integration.id)
+      .overlaps("hu_ids", references),
+  ]);
+
+  const common = {
+    organization_id: integration.organization_id,
+    integration_id: integration.id,
+    project_id: integration.project_id ?? null,
+    hu_id: huId,
+    linked_at: new Date().toISOString(),
+    correlation_id: correlationId,
+  };
+  const links = [
+    ...(commits ?? []).map((commit: { commit_sha: string }) => ({
+      ...common,
+      git_entity_type: "commit",
+      git_entity_id: commit.commit_sha,
+      git_entity_data: { recovered_from_issue_iid: iid },
+    })),
+    ...(mergeRequests ?? []).map((mr: { id: string }) => ({
+      ...common,
+      git_entity_type: "merge_request",
+      git_entity_id: mr.id,
+      git_entity_data: { recovered_from_issue_iid: iid },
+    })),
+  ];
+
+  if (links.length > 0) {
+    await supabase.from("hu_git_links").upsert(links, {
+      onConflict: "organization_id,hu_id,git_entity_type,git_entity_id",
+    });
+  }
 }

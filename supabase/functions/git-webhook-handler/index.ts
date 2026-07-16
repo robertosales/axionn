@@ -402,7 +402,7 @@ async function processPushEvent(
 
     if (huIds.length > 0) {
       for (const huId of huIds) {
-        await linkHUToCommit(supabase, integration.organization_id, huId, {
+        await linkHUToCommit(supabase, integration.id, integration.organization_id, huId, {
           commit_sha: commitData.id as string,
           commit_message: message,
           branch_name: branchName,
@@ -475,13 +475,13 @@ async function processMergeRequestEvent(
 
   // Link HUs to MR
   for (const huId of huIds) {
-    await linkHUToMR(supabase, integration.organization_id, huId, mrRecord.id, correlationId);
+    await linkHUToMR(supabase, integration.id, integration.organization_id, huId, mrRecord.id, correlationId);
   }
 
   // Auto-update HU status based on MR action
   if (['merged', 'closed'].includes(action) && huIds.length > 0) {
     for (const huId of huIds) {
-      await updateHUStatusFromMR(supabase, integration.organization_id, huId, action, correlationId);
+      await updateHUStatusFromMR(supabase, integration.id, integration.organization_id, huId, action, correlationId);
     }
   }
 }
@@ -670,12 +670,17 @@ async function processIssueEvent(
     .maybeSingle();
 
   if (existing?.hu_id) {
+    const contentUpdate = parsedContent.content
+      ? {
+          description: parsedContent.content,
+          acceptance_criteria: parsedContent.acceptanceCriteria,
+        }
+      : {};
     await supabase
       .from('user_stories')
       .update({
         title,
-        description: parsedContent.content,
-        acceptance_criteria: parsedContent.acceptanceCriteria,
+        ...contentUpdate,
         sprint_id: placement.sprintId,
         status,
         updated_at: new Date().toISOString(),
@@ -747,22 +752,18 @@ function extractHUIds(text: string): string[] {
 
 async function linkHUToCommit(
   supabase: any,
+  integrationId: string,
   organizationId: string,
   huId: string,
   commitData: any,
   correlationId: string
 ): Promise<void> {
-  // Find HU by external ID or code
-  const { data: hu } = await supabase
-    .from('user_stories')
-    .select('id, project_id')
-    .eq('organization_id', organizationId)
-    .or(`code.eq.${huId},external_id.eq.${huId}`)
-    .single();
+  const hu = await resolveHUReference(supabase, integrationId, organizationId, huId);
 
   if (hu) {
     await supabase.from('hu_git_links').upsert({
       organization_id: organizationId,
+      integration_id: integrationId,
       hu_id: hu.id,
       project_id: hu.project_id,
       git_entity_type: 'commit',
@@ -776,21 +777,18 @@ async function linkHUToCommit(
 
 async function linkHUToMR(
   supabase: any,
+  integrationId: string,
   organizationId: string,
   huId: string,
   mrId: string,
   correlationId: string
 ): Promise<void> {
-  const { data: hu } = await supabase
-    .from('user_stories')
-    .select('id, project_id')
-    .eq('organization_id', organizationId)
-    .or(`code.eq.${huId},external_id.eq.${huId}`)
-    .single();
+  const hu = await resolveHUReference(supabase, integrationId, organizationId, huId);
 
   if (hu) {
     await supabase.from('hu_git_links').upsert({
       organization_id: organizationId,
+      integration_id: integrationId,
       hu_id: hu.id,
       project_id: hu.project_id,
       git_entity_type: 'merge_request',
@@ -804,17 +802,13 @@ async function linkHUToMR(
 
 async function updateHUStatusFromMR(
   supabase: any,
+  integrationId: string,
   organizationId: string,
   huId: string,
   action: string,
   correlationId: string
 ): Promise<void> {
-  const { data: hu } = await supabase
-    .from('user_stories')
-    .select('id, status')
-    .eq('organization_id', organizationId)
-    .or(`code.eq.${huId},external_id.eq.${huId}`)
-    .single();
+  const hu = await resolveHUReference(supabase, integrationId, organizationId, huId, 'id, project_id, status');
 
   if (!hu) return;
 
@@ -840,6 +834,47 @@ async function updateHUStatusFromMR(
       action,
     }, correlationId);
   }
+}
+
+async function resolveHUReference(
+  supabase: any,
+  integrationId: string,
+  organizationId: string,
+  reference: string,
+  select = 'id, project_id'
+): Promise<any | null> {
+  // Explicit Axion codes (GL-3, HU-31, etc.) remain the primary contract.
+  if (!/^\d+$/.test(reference)) {
+    const { data } = await supabase
+      .from('user_stories')
+      .select(select)
+      .eq('organization_id', organizationId)
+      .or(`code.eq.${reference},external_id.eq.${reference}`)
+      .maybeSingle();
+    return data ?? null;
+  }
+
+  // GitLab commonly references an issue by IID (#3). Resolve it through the
+  // issue link scoped to this integration so equal IIDs in other repositories
+  // can never attach activity to the wrong HU.
+  const iid = Number(reference);
+  const { data: issueLink } = await supabase
+    .from('hu_git_links')
+    .select('hu_id')
+    .eq('organization_id', organizationId)
+    .eq('integration_id', integrationId)
+    .eq('git_entity_type', 'issue')
+    .contains('git_entity_data', { iid })
+    .maybeSingle();
+
+  if (!issueLink?.hu_id) return null;
+  const { data } = await supabase
+    .from('user_stories')
+    .select(select)
+    .eq('organization_id', organizationId)
+    .eq('id', issueLink.hu_id)
+    .maybeSingle();
+  return data ?? null;
 }
 
 async function logIntegrationEvent(

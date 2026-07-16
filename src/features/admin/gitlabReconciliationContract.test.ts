@@ -6,8 +6,9 @@ const sync = readFileSync("supabase/functions/gitlab-issues-sync/index.ts", "utf
 const config = readFileSync("supabase/config.toml", "utf8");
 
 describe("GitLab automatic reconciliation contract", () => {
-  it("accepts only scheduled service-role invocations", () => {
-    expect(reconcile).toContain("authorization !== `Bearer ${serviceRoleKey}`");
+  it("accepts only invocations authenticated by the dedicated reconcile secret", () => {
+    expect(reconcile).toContain('Deno.env.get("GITLAB_RECONCILE_SECRET")');
+    expect(reconcile).toContain("authorization !== `Bearer ${reconcileSecret}`");
     expect(reconcile).toContain("Unauthorized scheduled invocation");
   });
 
@@ -23,7 +24,9 @@ describe("GitLab automatic reconciliation contract", () => {
     expect(sync).toContain("issues?state=all&per_page=100");
     expect(sync).toContain('response.headers.get("x-next-page")');
     expect(sync).toContain('if (!existing?.hu_id && state === "closed") return "skipped"');
-    expect(config).toContain("[functions.gitlab-issues-sync]\nverify_jwt = true");
-    expect(config).toContain("[functions.gitlab-issues-reconcile]\nverify_jwt = true");
+    expect(config).toMatch(/\[functions\.gitlab-issues-sync\]\r?\nverify_jwt = true/);
+    // The gateway cannot validate the dedicated scheduler secret as a Supabase
+    // JWT; the function performs the exact constant comparison itself.
+    expect(config).toMatch(/\[functions\.gitlab-issues-reconcile\]\r?\nverify_jwt = false/);
   });
 });

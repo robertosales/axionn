@@ -521,6 +521,12 @@ function AppRoutes() {
           />
           <Route path="/sala-agil/planning-poker" element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>} />
           <Route path="/sala-agil/retrospectiva" element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/metricas/relatorios" element={<Navigate to="/sala-agil/relatorios" replace />} />
+          <Route path="/sala-agil/metricas/reports" element={<Navigate to="/sala-agil/relatorios" replace />} />
+          <Route path="/sala-agil/metricas/release" element={<Navigate to="/sala-agil/releases" replace />} />
+          <Route path="/sala-agil/metricas/releases" element={<Navigate to="/sala-agil/releases" replace />} />
+          <Route path="/metricas/relatorios" element={<Navigate to="/sala-agil/relatorios" replace />} />
+          <Route path="/metricas/releases" element={<Navigate to="/sala-agil/releases" replace />} />
           <Route path="/sala-agil/:section" element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>} />
           <Route
             path="/sustentacao"
@@ -539,13 +545,18 @@ function AppRoutes() {
   );
 }
 
+function TeamContextRoutes() {
+  const { teamContextVersion } = useAuth();
+  return <AppRoutes key={teamContextVersion} />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
           <OrganizationProvider>
-            <AppRoutes />
+            <TeamContextRoutes />
           </OrganizationProvider>
         </AuthProvider>
       </BrowserRouter>

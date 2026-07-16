@@ -5,8 +5,6 @@ import {
   Users,
   Bug,
   ShieldAlert,
-  Rocket,
-  FileBarChart2,
   LucideIcon,
 } from "lucide-react";
 
@@ -23,7 +21,6 @@ interface MetricsTabsProps {
   onTabChange: (tab: string) => void;
   counts?: {
     impediments?: number;
-    releases?: number;
   };
   children: React.ReactNode;
 }
@@ -43,18 +40,6 @@ export function MetricsTabs({
       label: "Impedimentos",
       icon: ShieldAlert,
       count: counts.impediments,
-    },
-    {
-      value: "releases",
-      label: "Releases",
-      icon: Rocket,
-      count: counts.releases,
-    },
-    {
-      value: "reports",
-      label: "Relatórios",
-      icon: FileBarChart2,
-      highlight: true,
     },
   ];
 

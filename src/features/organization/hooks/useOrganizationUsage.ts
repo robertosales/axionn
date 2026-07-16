@@ -26,6 +26,12 @@ export interface OrganizationEntitlement {
   source: string;
 }
 
+export interface CommercialUsageDetail {
+  usageCode: string; usedValue: number; limitValue: number | null; remainingValue: number | null;
+  usagePercent: number | null; status: "ok" | "warning" | "reached" | "unlimited"; source: string;
+  periodStart: string; periodEnd: string; calculatedAt: string;
+}
+
 function toNumber(value: unknown) {
   const numeric = Number(value ?? 0);
   return Number.isFinite(numeric) ? numeric : 0;
@@ -71,6 +77,7 @@ export function useOrganizationUsage() {
   const { currentOrganizationId, currentOrganization } = useOrganization();
   const [usage, setUsage] = useState<OrganizationUsageSummary | null>(null);
   const [entitlements, setEntitlements] = useState<OrganizationEntitlement[]>([]);
+  const [usageDetails, setUsageDetails] = useState<CommercialUsageDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +85,7 @@ export function useOrganizationUsage() {
     if (!currentOrganizationId) {
       setUsage(null);
       setEntitlements([]);
+      setUsageDetails([]);
       setError(null);
       setLoading(false);
       return;
@@ -86,13 +94,14 @@ export function useOrganizationUsage() {
     setLoading(true);
     setError(null);
 
-    const [usageResult, entitlementsResult] = await Promise.all([
+    const [usageResult, entitlementsResult, detailsResult] = await Promise.all([
       (supabase as any).rpc("get_organization_usage_summary", {
         p_org_id: currentOrganizationId,
       }),
       (supabase as any).rpc("get_my_organization_entitlements", {
         p_org_id: currentOrganizationId,
       }),
+      (supabase as any).rpc("get_my_commercial_usage_v1", { p_org_id: currentOrganizationId }),
     ]);
 
     if (usageResult.error || entitlementsResult.error) {
@@ -102,6 +111,7 @@ export function useOrganizationUsage() {
       });
       setUsage(null);
       setEntitlements([]);
+      setUsageDetails([]);
       setError("Não foi possível carregar o plano e o uso da organização.");
       setLoading(false);
       return;
@@ -119,6 +129,12 @@ export function useOrganizationUsage() {
         normalizeEntitlement,
       ),
     );
+    setUsageDetails(((detailsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      usageCode: String(row.usage_code), usedValue: toNumber(row.used_value), limitValue: toNullableNumber(row.limit_value),
+      remainingValue: toNullableNumber(row.remaining_value), usagePercent: toNullableNumber(row.usage_percent),
+      status: String(row.status) as CommercialUsageDetail["status"], source: String(row.source ?? ""),
+      periodStart: String(row.period_start), periodEnd: String(row.period_end), calculatedAt: String(row.calculated_at),
+    })));
     setLoading(false);
   }, [currentOrganizationId]);
 
@@ -129,12 +145,12 @@ export function useOrganizationUsage() {
   return useMemo(
     () => ({
       organization: currentOrganization,
-      usage,
+      usage, usageDetails,
       entitlements,
       loading,
       error,
       refresh,
     }),
-    [currentOrganization, entitlements, error, loading, refresh, usage],
+    [currentOrganization, entitlements, error, loading, refresh, usage, usageDetails],
   );
 }

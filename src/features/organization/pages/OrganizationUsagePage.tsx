@@ -122,7 +122,7 @@ function UsageCard({
 export default function OrganizationUsagePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { organization, usage, entitlements, loading, error, refresh } =
+  const { organization, usage, usageDetails, entitlements, loading, error, refresh } =
     useOrganizationUsage();
 
   const sortedEntitlements = useMemo(
@@ -316,6 +316,8 @@ export default function OrganizationUsagePage() {
                 </Table>
               </CardContent>
             </Card>
+
+            {usageDetails.length > 0 && <Card><CardHeader><CardTitle className="text-base">Consumo normalizado</CardTitle></CardHeader><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Recurso</TableHead><TableHead>Período</TableHead><TableHead>Uso</TableHead><TableHead>Restante</TableHead><TableHead>Situação</TableHead></TableRow></TableHeader><TableBody>{usageDetails.map((detail) => <TableRow key={detail.usageCode}><TableCell className="font-medium">{FEATURE_LABELS[detail.usageCode] ?? detail.usageCode}</TableCell><TableCell>{new Date(detail.periodStart).toLocaleDateString("pt-BR")}–{new Date(detail.periodEnd).toLocaleDateString("pt-BR")}</TableCell><TableCell>{detail.usedValue} / {formatLimit(detail.limitValue)}</TableCell><TableCell>{detail.remainingValue == null ? "Ilimitado" : detail.remainingValue}</TableCell><TableCell><Badge variant={detail.status === "reached" ? "destructive" : detail.status === "warning" ? "outline" : "secondary"}>{detail.status === "reached" ? "Limite atingido" : detail.status === "warning" ? "Próximo do limite" : detail.status === "unlimited" ? "Ilimitado" : "Normal"}</Badge></TableCell></TableRow>)}</TableBody></Table></CardContent></Card>}
           </>
         ) : (
           <Alert>

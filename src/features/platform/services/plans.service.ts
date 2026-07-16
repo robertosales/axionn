@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const PLAN_STATUS_OPTIONS = ["active", "inactive", "archived"] as const;
 export const SUBSCRIPTION_STATUS_OPTIONS = [
+  "pending",
   "trialing",
   "active",
   "past_due",
@@ -41,6 +42,8 @@ export interface OrganizationOverride {
   enabled: boolean | null;
   limitValue: number | null;
   reason: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,6 +127,8 @@ function normalizeOverride(row: Record<string, unknown>): OrganizationOverride {
     enabled: row.enabled == null ? null : Boolean(row.enabled),
     limitValue: toNullableNumber(row.limit_value),
     reason: row.reason == null ? null : String(row.reason),
+    startsAt: row.starts_at == null ? null : String(row.starts_at),
+    endsAt: row.ends_at == null ? null : String(row.ends_at),
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
   };
@@ -287,15 +292,21 @@ export async function upsertPlatformOrganizationOverride(payload: {
   enabled: boolean | null;
   limitValue: number | null;
   reason: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
 }) {
   const { error } = await (supabase as any).rpc(
-    "upsert_platform_organization_entitlement_override_v1",
+    "upsert_platform_organization_entitlement_override_v2",
     {
       p_org_id: payload.orgId,
       p_feature_key: payload.featureKey,
       p_enabled: payload.enabled,
       p_limit_value: payload.limitValue,
       p_reason: payload.reason,
+      p_starts_at: payload.startsAt ?? null,
+      p_ends_at: payload.endsAt ?? null,
+      p_source_type: "manual",
+      p_source_id: null,
     },
   );
   if (error) throw error;

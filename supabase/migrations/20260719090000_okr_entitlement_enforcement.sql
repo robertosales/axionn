@@ -13,8 +13,8 @@ begin
   if p_health is not null and p_health not in ('on_track','attention','at_risk','no_data','completed') then raise exception 'Saúde inválida'; end if;
   if p_health is not null and nullif(trim(p_reason), '') is null then raise exception 'Justificativa obrigatória'; end if;
 
-  -- Verificar entitlement okr.edit
-  select teams.org_id into v_org_id from public.teams where teams.id = v_objective.team_id;
+  -- Verificar entitlement okr.edit usando função resolutiva resiliente
+  select public.resolve_team_org_id(v_objective.team_id) into v_org_id;
   if v_org_id is not null then
     select public.has_organization_entitlement(v_org_id, 'okr.edit') into v_allowed;
     if not v_allowed then raise exception 'Entitlement negado: okr.edit não incluído no plano atual'; end if;
@@ -42,7 +42,7 @@ returns trigger language plpgsql security definer set search_path = public as $$
 declare v_org_id uuid; v_feature text; v_allowed boolean;
 begin
   if tg_op = 'INSERT' then v_feature := 'okr.create'; else v_feature := 'okr.edit'; end if;
-  select teams.org_id into v_org_id from public.teams where teams.id = new.team_id;
+  select public.resolve_team_org_id(new.team_id) into v_org_id;
   if v_org_id is not null then
     select public.has_organization_entitlement(v_org_id, v_feature) into v_allowed;
     if not v_allowed then raise exception 'Entitlement negado: % não incluído no plano atual', v_feature; end if;
@@ -62,7 +62,7 @@ declare v_org_id uuid; v_feature text; v_allowed boolean; v_objective public.okr
 begin
   if tg_op = 'INSERT' then v_feature := 'okr.create'; else v_feature := 'okr.edit'; end if;
   select * into v_objective from public.okr_objectives where id = new.objective_id;
-  select teams.org_id into v_org_id from public.teams where teams.id = v_objective.team_id;
+  select public.resolve_team_org_id(v_objective.team_id) into v_org_id;
   if v_org_id is not null then
     select public.has_organization_entitlement(v_org_id, v_feature) into v_allowed;
     if not v_allowed then raise exception 'Entitlement negado: % não incluído no plano atual', v_feature; end if;
@@ -82,7 +82,7 @@ declare v_org_id uuid; v_allowed boolean; v_kr public.okr_key_results%rowtype; v
 begin
   select * into v_kr from public.okr_key_results where id = new.key_result_id;
   select * into v_objective from public.okr_objectives where id = v_kr.objective_id;
-  select teams.org_id into v_org_id from public.teams where teams.id = v_objective.team_id;
+  select public.resolve_team_org_id(v_objective.team_id) into v_org_id;
   if v_org_id is not null then
     select public.has_organization_entitlement(v_org_id, 'okr.check_in') into v_allowed;
     if not v_allowed then raise exception 'Entitlement negado: okr.check_in não incluído no plano atual'; end if;
@@ -101,7 +101,7 @@ returns trigger language plpgsql security definer set search_path = public as $$
 declare v_org_id uuid; v_allowed boolean; v_objective public.okr_objectives%rowtype;
 begin
   select * into v_objective from public.okr_objectives where id = new.objective_id;
-  select teams.org_id into v_org_id from public.teams where teams.id = v_objective.team_id;
+  select public.resolve_team_org_id(v_objective.team_id) into v_org_id;
   if v_org_id is not null then
     select public.has_organization_entitlement(v_org_id, 'okr.initiatives') into v_allowed;
     if not v_allowed then raise exception 'Entitlement negado: okr.initiatives não incluído no plano atual'; end if;

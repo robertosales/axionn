@@ -1,12 +1,40 @@
 export const ENTITLEMENT_KEYS = {
+  // Limites organizacionais
   USERS_MAX: "users.max",
   PROJECTS_MAX: "projects.max",
   CONTRACTS_MAX: "contracts.max",
+  TEAMS_MAX: "teams.max",
+  INTEGRATIONS_MAX: "integrations.max",
+  STORAGE_GB: "storage.gb",
+
+  // APF
   APF_COUNTINGS_MONTHLY: "apf.countings.monthly",
+
+  // IA
   AI_CALLS_MONTHLY: "ai.calls.monthly",
+  AI_TOKENS_MONTHLY: "ai.tokens.monthly",
   APF_AI_GENERATION: "apf.ai_generation",
+  AI_BRIEFING_ENABLED: "ai.briefing.enabled",
+  AI_SPRINT_SUMMARY: "ai.sprint_summary",
+  AI_RISK_ANALYSIS: "ai.risk_analysis",
+  AI_METRIC_EXPLANATION: "ai.metric_explanation",
+  AI_RECOMMENDATIONS: "ai.recommendations",
+  AI_CUSTOM_PROVIDER: "ai.custom_provider",
+  AI_AUDIT_LOGS: "ai.audit_logs",
+
+  // Relatórios
   REPORTS_ADVANCED: "reports.advanced",
-  AUDIT_ACCESS: "audit.access",
+  REPORTS_EXPORT_CSV: "reports.export_csv",
+  REPORTS_EXPORT_PDF: "reports.export_pdf",
+  REPORTS_EVIDENCE: "reports.evidence",
+  REPORTS_SCHEDULE: "reports.schedule",
+  REPORTS_HISTORY_EXTENDED: "reports.history_extended",
+
+  // Métricas
+  METRICS_BASIC: "metrics.basic",
+  METRICS_ADVANCED: "metrics.advanced",
+
+  // OKR
   OKR_VIEW: "okr.view",
   OKR_CREATE: "okr.create",
   OKR_EDIT: "okr.edit",
@@ -17,6 +45,36 @@ export const ENTITLEMENT_KEYS = {
   OKR_HISTORY: "okr.history",
   OKR_EXPORT: "okr.export",
   OKR_AI_RECOMMENDATIONS: "okr.ai_recommendations",
+
+  // Auditoria
+  AUDIT_ACCESS: "audit.access",
+  AUDIT_FULL: "audit.full",
+
+  // Integrações
+  INTEGRATIONS_GITLAB: "integrations.gitlab",
+  INTEGRATIONS_GITHUB: "integrations.github",
+  INTEGRATIONS_JIRA: "integrations.jira",
+  INTEGRATIONS_CUSTOM: "integrations.custom",
+
+  // Segurança
+  SECURITY_SSO: "security.sso",
+  SECURITY_KEYCLOAK: "security.keycloak",
+  SECURITY_SESSION_POLICIES: "security.session_policies",
+  SECURITY_AUTH_LOGS: "security.auth_logs",
+
+  // Governança
+  GOVERNANCE_DATA_RETENTION: "governance.data_retention",
+  GOVERNANCE_COMPLIANCE: "governance.compliance",
+
+  // Operação
+  TEAMS_VIEW: "teams.view",
+  TEAMS_CREATE: "teams.create",
+  MEMBERS_INVITE: "members.invite",
+  ACTIVITIES_VIEW: "activities.view",
+  CALENDAR_VIEW: "calendar.view",
+  SPRINTS_VIEW: "sprints.view",
+  RELEASES_VIEW: "releases.view",
+  IMPEDIMENTS_VIEW: "impediments.view",
 } as const;
 
 export type OrganizationEntitlementKey =

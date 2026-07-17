@@ -16,6 +16,7 @@ import {
   Layers,
   LayoutDashboard,
   ListTodo,
+  Play,
   Repeat,
   Settings,
   ShieldCheck,

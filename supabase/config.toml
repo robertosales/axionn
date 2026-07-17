@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.gitlab-issues-reconcile]
 verify_jwt = false
+
+[functions.okr-recalculation]
+verify_jwt = false

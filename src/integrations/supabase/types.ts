@@ -3858,6 +3858,56 @@ export type Database = {
           },
         ]
       }
+      commercial_enforcement_events: {
+        Row: {
+          actor_id: string | null
+          correlation_id: string | null
+          created_at: string
+          decision: string
+          feature_code: string
+          id: string
+          limit_value: number | null
+          metadata: Json
+          organization_id: string
+          reason: string
+          used_value: number | null
+        }
+        Insert: {
+          actor_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          decision: string
+          feature_code: string
+          id?: string
+          limit_value?: number | null
+          metadata?: Json
+          organization_id: string
+          reason: string
+          used_value?: number | null
+        }
+        Update: {
+          actor_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          decision?: string
+          feature_code?: string
+          id?: string
+          limit_value?: number | null
+          metadata?: Json
+          organization_id?: string
+          reason?: string
+          used_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_enforcement_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           cnpj: string | null
@@ -4112,56 +4162,77 @@ export type Database = {
       }
       contracts: {
         Row: {
+          commercial_amount: number | null
+          commercial_owner_id: string | null
+          commercial_terms: Json
           company_id: string | null
+          contract_number: string | null
           created_at: string | null
           created_by: string | null
           currency: string
           description: string | null
+          discount_percent: number | null
           ends_at: string | null
           id: string
           name: string
           number: string | null
           object: string | null
           org_id: string | null
+          plan_version_id: string | null
           room_mode: string
           starts_at: string | null
           status: string | null
+          subscription_id: string | null
           updated_at: string | null
           value_per_pfus: number | null
         }
         Insert: {
+          commercial_amount?: number | null
+          commercial_owner_id?: string | null
+          commercial_terms?: Json
           company_id?: string | null
+          contract_number?: string | null
           created_at?: string | null
           created_by?: string | null
           currency?: string
           description?: string | null
+          discount_percent?: number | null
           ends_at?: string | null
           id?: string
           name: string
           number?: string | null
           object?: string | null
           org_id?: string | null
+          plan_version_id?: string | null
           room_mode?: string
           starts_at?: string | null
           status?: string | null
+          subscription_id?: string | null
           updated_at?: string | null
           value_per_pfus?: number | null
         }
         Update: {
+          commercial_amount?: number | null
+          commercial_owner_id?: string | null
+          commercial_terms?: Json
           company_id?: string | null
+          contract_number?: string | null
           created_at?: string | null
           created_by?: string | null
           currency?: string
           description?: string | null
+          discount_percent?: number | null
           ends_at?: string | null
           id?: string
           name?: string
           number?: string | null
           object?: string | null
           org_id?: string | null
+          plan_version_id?: string | null
           room_mode?: string
           starts_at?: string | null
           status?: string | null
+          subscription_id?: string | null
           updated_at?: string | null
           value_per_pfus?: number | null
         }
@@ -4178,6 +4249,20 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -8367,39 +8452,61 @@ export type Database = {
           created_at: string
           created_by: string | null
           enabled: boolean | null
+          ends_at: string | null
+          feature_id: string | null
           feature_key: string
           id: string
           limit_value: number | null
           metadata: Json
           org_id: string
           reason: string | null
+          source_id: string | null
+          source_type: string
+          starts_at: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
           enabled?: boolean | null
+          ends_at?: string | null
+          feature_id?: string | null
           feature_key: string
           id?: string
           limit_value?: number | null
           metadata?: Json
           org_id: string
           reason?: string | null
+          source_id?: string | null
+          source_type?: string
+          starts_at?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
           enabled?: boolean | null
+          ends_at?: string | null
+          feature_id?: string | null
           feature_key?: string
           id?: string
           limit_value?: number | null
           metadata?: Json
           org_id?: string
           reason?: string | null
+          source_id?: string | null
+          source_type?: string
+          starts_at?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "organization_entitlement_overrides_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "product_features"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "organization_entitlement_overrides_org_id_fkey"
             columns: ["org_id"]
@@ -8701,8 +8808,64 @@ export type Database = {
           },
         ]
       }
+      organization_subscription_addons: {
+        Row: {
+          addon_id: string
+          created_at: string
+          ends_at: string | null
+          id: string
+          metadata: Json
+          quantity: number
+          starts_at: string
+          status: string
+          subscription_id: string
+          updated_at: string
+        }
+        Insert: {
+          addon_id: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          metadata?: Json
+          quantity?: number
+          starts_at?: string
+          status?: string
+          subscription_id: string
+          updated_at?: string
+        }
+        Update: {
+          addon_id?: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          metadata?: Json
+          quantity?: number
+          starts_at?: string
+          status?: string
+          subscription_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_subscription_addons_addon_id_fkey"
+            columns: ["addon_id"]
+            isOneToOne: false
+            referencedRelation: "saas_addons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_subscription_addons_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_subscriptions: {
         Row: {
+          auto_renew: boolean
+          cancel_at_period_end: boolean
           canceled_at: string | null
           created_at: string
           current_period_end: string | null
@@ -8713,13 +8876,18 @@ export type Database = {
           metadata: Json
           org_id: string
           plan_id: string
+          plan_version_id: string | null
+          renewed_at: string | null
           source: string
           starts_at: string
           status: string
+          suspended_at: string | null
           trial_ends_at: string | null
           updated_at: string
         }
         Insert: {
+          auto_renew?: boolean
+          cancel_at_period_end?: boolean
           canceled_at?: string | null
           created_at?: string
           current_period_end?: string | null
@@ -8730,13 +8898,18 @@ export type Database = {
           metadata?: Json
           org_id: string
           plan_id: string
+          plan_version_id?: string | null
+          renewed_at?: string | null
           source?: string
           starts_at?: string
           status: string
+          suspended_at?: string | null
           trial_ends_at?: string | null
           updated_at?: string
         }
         Update: {
+          auto_renew?: boolean
+          cancel_at_period_end?: boolean
           canceled_at?: string | null
           created_at?: string
           current_period_end?: string | null
@@ -8747,9 +8920,12 @@ export type Database = {
           metadata?: Json
           org_id?: string
           plan_id?: string
+          plan_version_id?: string | null
+          renewed_at?: string | null
           source?: string
           starts_at?: string
           status?: string
+          suspended_at?: string | null
           trial_ends_at?: string | null
           updated_at?: string
         }
@@ -8766,6 +8942,63 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "saas_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_subscriptions_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_usage_records: {
+        Row: {
+          calculated_at: string
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          organization_id: string
+          period_end: string
+          period_start: string
+          source: string
+          usage_code: string
+          used_value: number
+        }
+        Insert: {
+          calculated_at?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          organization_id: string
+          period_end: string
+          period_start: string
+          source: string
+          usage_code: string
+          used_value?: number
+        }
+        Update: {
+          calculated_at?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          organization_id?: string
+          period_end?: string
+          period_start?: string
+          source?: string
+          usage_code?: string
+          used_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_usage_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -9182,6 +9415,95 @@ export type Database = {
         }
         Relationships: []
       }
+      product_features: {
+        Row: {
+          code: string
+          created_at: string
+          dependencies: Json
+          description: string | null
+          feature_type: string
+          id: string
+          metadata: Json
+          module_id: string
+          name: string
+          status: string
+          updated_at: string
+          usage_unit: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          dependencies?: Json
+          description?: string | null
+          feature_type?: string
+          id?: string
+          metadata?: Json
+          module_id: string
+          name: string
+          status?: string
+          updated_at?: string
+          usage_unit?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          dependencies?: Json
+          description?: string | null
+          feature_type?: string
+          id?: string
+          metadata?: Json
+          module_id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+          usage_unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_features_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "product_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_modules: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          display_order: number
+          domain: string
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          domain: string
+          id?: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          domain?: string
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -9462,6 +9784,1060 @@ export type Database = {
           },
           {
             foreignKeyName: "projetos_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_code_counters: {
+        Row: {
+          code_type: string
+          next_value: number
+          organization_id: string
+        }
+        Insert: {
+          code_type: string
+          next_value?: number
+          organization_id: string
+        }
+        Update: {
+          code_type?: string
+          next_value?: number
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_code_counters_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_findings: {
+        Row: {
+          actual_result: string | null
+          assigned_to: string | null
+          code: string
+          contract_id: string | null
+          created_at: string
+          description: string | null
+          expected_result: string | null
+          external_issue_id: string | null
+          external_issue_url: string | null
+          external_provider: string | null
+          id: string
+          organization_id: string
+          project_id: string | null
+          reported_by: string
+          resolved_at: string | null
+          run_item_id: string | null
+          severity: string
+          status: string
+          step_result_id: string | null
+          team_id: string | null
+          test_run_id: string | null
+          title: string
+          updated_at: string
+          user_story_id: string | null
+        }
+        Insert: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          code: string
+          contract_id?: string | null
+          created_at?: string
+          description?: string | null
+          expected_result?: string | null
+          external_issue_id?: string | null
+          external_issue_url?: string | null
+          external_provider?: string | null
+          id?: string
+          organization_id: string
+          project_id?: string | null
+          reported_by?: string
+          resolved_at?: string | null
+          run_item_id?: string | null
+          severity?: string
+          status?: string
+          step_result_id?: string | null
+          team_id?: string | null
+          test_run_id?: string | null
+          title: string
+          updated_at?: string
+          user_story_id?: string | null
+        }
+        Update: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          code?: string
+          contract_id?: string | null
+          created_at?: string
+          description?: string | null
+          expected_result?: string | null
+          external_issue_id?: string | null
+          external_issue_url?: string | null
+          external_provider?: string | null
+          id?: string
+          organization_id?: string
+          project_id?: string | null
+          reported_by?: string
+          resolved_at?: string | null
+          run_item_id?: string | null
+          severity?: string
+          status?: string
+          step_result_id?: string | null
+          team_id?: string | null
+          test_run_id?: string | null
+          title?: string
+          updated_at?: string
+          user_story_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_findings_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_run_item_id_fkey"
+            columns: ["run_item_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_run_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_step_result_id_fkey"
+            columns: ["step_result_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_step_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_test_run_id_fkey"
+            columns: ["test_run_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_user_story_id_fkey"
+            columns: ["user_story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_user_story_id_fkey"
+            columns: ["user_story_id"]
+            isOneToOne: false
+            referencedRelation: "v_hu_git_summary"
+            referencedColumns: ["hu_id"]
+          },
+        ]
+      }
+      quality_test_case_links: {
+        Row: {
+          created_at: string
+          created_by: string
+          entity_id: string
+          entity_reference: string | null
+          entity_type: string
+          id: string
+          link_metadata: Json
+          organization_id: string
+          test_case_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          entity_id: string
+          entity_reference?: string | null
+          entity_type: string
+          id?: string
+          link_metadata?: Json
+          organization_id: string
+          test_case_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          entity_id?: string
+          entity_reference?: string | null
+          entity_type?: string
+          id?: string
+          link_metadata?: Json
+          organization_id?: string
+          test_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_case_links_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_case_links_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_case_versions: {
+        Row: {
+          change_summary: string | null
+          created_at: string
+          created_by: string
+          id: string
+          organization_id: string
+          snapshot: Json
+          test_case_id: string
+          version: number
+        }
+        Insert: {
+          change_summary?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          organization_id: string
+          snapshot: Json
+          test_case_id: string
+          version: number
+        }
+        Update: {
+          change_summary?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          organization_id?: string
+          snapshot?: Json
+          test_case_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_case_versions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_case_versions_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_cases: {
+        Row: {
+          archived_at: string | null
+          code: string
+          contract_id: string | null
+          created_at: string
+          created_by: string
+          current_version: number
+          estimated_minutes: number | null
+          execution_mode: string
+          id: string
+          objective: string | null
+          organization_id: string
+          postconditions: string | null
+          preconditions: string | null
+          priority: string
+          project_id: string | null
+          severity: string
+          source: string
+          status: string
+          tags: string[]
+          team_id: string | null
+          test_data: string | null
+          test_type: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          code: string
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          current_version?: number
+          estimated_minutes?: number | null
+          execution_mode?: string
+          id?: string
+          objective?: string | null
+          organization_id: string
+          postconditions?: string | null
+          preconditions?: string | null
+          priority?: string
+          project_id?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          tags?: string[]
+          team_id?: string | null
+          test_data?: string | null
+          test_type?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          code?: string
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          current_version?: number
+          estimated_minutes?: number | null
+          execution_mode?: string
+          id?: string
+          objective?: string | null
+          organization_id?: string
+          postconditions?: string | null
+          preconditions?: string | null
+          priority?: string
+          project_id?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          tags?: string[]
+          team_id?: string | null
+          test_data?: string | null
+          test_type?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_cases_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_cases_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_cases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_cases_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_evidences: {
+        Row: {
+          created_at: string
+          description: string | null
+          evidence_type: string
+          external_url: string | null
+          file_size_bytes: number | null
+          finding_id: string | null
+          id: string
+          mime_type: string | null
+          organization_id: string
+          run_item_id: string | null
+          step_result_id: string | null
+          storage_bucket: string | null
+          storage_path: string | null
+          title: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          evidence_type: string
+          external_url?: string | null
+          file_size_bytes?: number | null
+          finding_id?: string | null
+          id?: string
+          mime_type?: string | null
+          organization_id: string
+          run_item_id?: string | null
+          step_result_id?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title: string
+          uploaded_by?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          evidence_type?: string
+          external_url?: string | null
+          file_size_bytes?: number | null
+          finding_id?: string | null
+          id?: string
+          mime_type?: string | null
+          organization_id?: string
+          run_item_id?: string | null
+          step_result_id?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_evidences_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "quality_findings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_evidences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_evidences_run_item_id_fkey"
+            columns: ["run_item_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_run_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_evidences_step_result_id_fkey"
+            columns: ["step_result_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_step_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_plan_items: {
+        Row: {
+          created_at: string
+          id: string
+          is_required: boolean
+          organization_id: string
+          sort_order: number
+          test_case_id: string
+          test_case_version: number
+          test_plan_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          organization_id: string
+          sort_order?: number
+          test_case_id: string
+          test_case_version: number
+          test_plan_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          organization_id?: string
+          sort_order?: number
+          test_case_id?: string
+          test_case_version?: number
+          test_plan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_plan_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plan_items_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plan_items_test_plan_id_fkey"
+            columns: ["test_plan_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_plans: {
+        Row: {
+          contract_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          project_id: string | null
+          release_id: string | null
+          sprint_id: string | null
+          status: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          project_id?: string | null
+          release_id?: string | null
+          sprint_id?: string | null
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          project_id?: string | null
+          release_id?: string | null
+          sprint_id?: string | null
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_plans_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_run_items: {
+        Row: {
+          actual_result: string | null
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          executed_by: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          sort_order: number
+          started_at: string | null
+          status: string
+          test_case_id: string | null
+          test_case_snapshot: Json
+          test_case_version: number
+          test_run_id: string
+          updated_at: string
+        }
+        Insert: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          executed_by?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          sort_order?: number
+          started_at?: string | null
+          status?: string
+          test_case_id?: string | null
+          test_case_snapshot: Json
+          test_case_version: number
+          test_run_id: string
+          updated_at?: string
+        }
+        Update: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          executed_by?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          sort_order?: number
+          started_at?: string | null
+          status?: string
+          test_case_id?: string | null
+          test_case_snapshot?: Json
+          test_case_version?: number
+          test_run_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_run_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_run_items_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_run_items_test_run_id_fkey"
+            columns: ["test_run_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_runs: {
+        Row: {
+          build_reference: string | null
+          commit_sha: string | null
+          completed_at: string | null
+          configuration: Json
+          contract_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          environment_name: string | null
+          id: string
+          name: string
+          organization_id: string
+          pipeline_reference: string | null
+          project_id: string | null
+          release_id: string | null
+          started_at: string | null
+          status: string
+          team_id: string | null
+          test_plan_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          build_reference?: string | null
+          commit_sha?: string | null
+          completed_at?: string | null
+          configuration?: Json
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          environment_name?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          pipeline_reference?: string | null
+          project_id?: string | null
+          release_id?: string | null
+          started_at?: string | null
+          status?: string
+          team_id?: string | null
+          test_plan_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          build_reference?: string | null
+          commit_sha?: string | null
+          completed_at?: string | null
+          configuration?: Json
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          environment_name?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          pipeline_reference?: string | null
+          project_id?: string | null
+          release_id?: string | null
+          started_at?: string | null
+          status?: string
+          team_id?: string | null
+          test_plan_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_runs_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_test_plan_id_fkey"
+            columns: ["test_plan_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_step_results: {
+        Row: {
+          actual_result: string | null
+          created_at: string
+          executed_at: string | null
+          executed_by: string | null
+          id: string
+          organization_id: string
+          run_item_id: string
+          status: string
+          step_id: string | null
+          step_order: number
+          step_snapshot: Json
+          updated_at: string
+        }
+        Insert: {
+          actual_result?: string | null
+          created_at?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          id?: string
+          organization_id: string
+          run_item_id: string
+          status?: string
+          step_id?: string | null
+          step_order: number
+          step_snapshot: Json
+          updated_at?: string
+        }
+        Update: {
+          actual_result?: string | null
+          created_at?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          id?: string
+          organization_id?: string
+          run_item_id?: string
+          status?: string
+          step_id?: string | null
+          step_order?: number
+          step_snapshot?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_step_results_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_step_results_run_item_id_fkey"
+            columns: ["run_item_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_run_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_steps: {
+        Row: {
+          action: string
+          created_at: string
+          expected_result: string
+          id: string
+          input_data: string | null
+          organization_id: string
+          reference_url: string | null
+          step_order: number
+          test_case_id: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          expected_result: string
+          id?: string
+          input_data?: string | null
+          organization_id: string
+          reference_url?: string | null
+          step_order: number
+          test_case_id: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          expected_result?: string
+          id?: string
+          input_data?: string | null
+          organization_id?: string
+          reference_url?: string | null
+          step_order?: number
+          test_case_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_steps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_steps_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_suite_items: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          sort_order: number
+          suite_id: string
+          test_case_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          sort_order?: number
+          suite_id: string
+          test_case_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          sort_order?: number
+          suite_id?: string
+          test_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_suite_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suite_items_suite_id_fkey"
+            columns: ["suite_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_suites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suite_items_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_suites: {
+        Row: {
+          contract_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          parent_suite_id: string | null
+          project_id: string | null
+          sort_order: number
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          parent_suite_id?: string | null
+          project_id?: string | null
+          sort_order?: number
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          parent_suite_id?: string | null
+          project_id?: string | null
+          sort_order?: number
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_suites_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suites_parent_suite_id_fkey"
+            columns: ["parent_suite_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_suites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suites_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -11009,6 +12385,90 @@ export type Database = {
           },
         ]
       }
+      saas_addon_features: {
+        Row: {
+          addon_id: string
+          configuration: Json
+          enabled: boolean
+          feature_id: string
+          limit_delta: number | null
+        }
+        Insert: {
+          addon_id: string
+          configuration?: Json
+          enabled?: boolean
+          feature_id: string
+          limit_delta?: number | null
+        }
+        Update: {
+          addon_id?: string
+          configuration?: Json
+          enabled?: boolean
+          feature_id?: string
+          limit_delta?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_addon_features_addon_id_fkey"
+            columns: ["addon_id"]
+            isOneToOne: false
+            referencedRelation: "saas_addons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_addon_features_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "product_features"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_addons: {
+        Row: {
+          billing_interval: string | null
+          code: string
+          configuration: Json
+          created_at: string
+          currency: string | null
+          description: string | null
+          id: string
+          name: string
+          price: number | null
+          status: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          billing_interval?: string | null
+          code: string
+          configuration?: Json
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          price?: number | null
+          status?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billing_interval?: string | null
+          code?: string
+          configuration?: Json
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          price?: number | null
+          status?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       saas_metrics_snapshots: {
         Row: {
           active_tenants: number
@@ -11101,6 +12561,131 @@ export type Database = {
           },
         ]
       }
+      saas_plan_version_features: {
+        Row: {
+          access_level: string
+          configuration: Json
+          created_at: string
+          enabled: boolean
+          enforcement_mode: string
+          feature_id: string
+          id: string
+          limit_value: number | null
+          plan_version_id: string
+          reset_period: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_level?: string
+          configuration?: Json
+          created_at?: string
+          enabled?: boolean
+          enforcement_mode?: string
+          feature_id: string
+          id?: string
+          limit_value?: number | null
+          plan_version_id: string
+          reset_period?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_level?: string
+          configuration?: Json
+          created_at?: string
+          enabled?: boolean
+          enforcement_mode?: string
+          feature_id?: string
+          id?: string
+          limit_value?: number | null
+          plan_version_id?: string
+          reset_period?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_plan_version_features_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "product_features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_plan_version_features_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_plan_versions: {
+        Row: {
+          base_price: number | null
+          billing_interval: string | null
+          change_reason: string | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          id: string
+          metadata: Json
+          per_user_price: number | null
+          plan_id: string
+          status: string
+          trial_allowed: boolean
+          trial_days: number | null
+          updated_at: string
+          valid_from: string | null
+          valid_until: string | null
+          version: number
+        }
+        Insert: {
+          base_price?: number | null
+          billing_interval?: string | null
+          change_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          id?: string
+          metadata?: Json
+          per_user_price?: number | null
+          plan_id: string
+          status?: string
+          trial_allowed?: boolean
+          trial_days?: number | null
+          updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
+          version: number
+        }
+        Update: {
+          base_price?: number | null
+          billing_interval?: string | null
+          change_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          id?: string
+          metadata?: Json
+          per_user_price?: number | null
+          plan_id?: string
+          status?: string
+          trial_allowed?: boolean
+          trial_days?: number | null
+          updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_plan_versions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saas_plans: {
         Row: {
           annual_price: number
@@ -11163,6 +12748,82 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      saas_trials: {
+        Row: {
+          canceled_at: string | null
+          converted_at: string | null
+          created_at: string
+          created_by: string | null
+          ends_at: string
+          features: Json
+          id: string
+          limits: Json
+          organization_id: string
+          plan_version_id: string
+          source: string
+          starts_at: string
+          status: string
+          subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          canceled_at?: string | null
+          converted_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          ends_at: string
+          features?: Json
+          id?: string
+          limits?: Json
+          organization_id: string
+          plan_version_id: string
+          source?: string
+          starts_at: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          canceled_at?: string | null
+          converted_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string
+          features?: Json
+          id?: string
+          limits?: Json
+          organization_id?: string
+          plan_version_id?: string
+          source?: string
+          starts_at?: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_trials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_trials_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_trials_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       slas: {
         Row: {
@@ -13200,6 +14861,31 @@ export type Database = {
         }
         Returns: string
       }
+      add_quality_external_evidence_v1: {
+        Args: {
+          p_description?: string
+          p_external_url: string
+          p_org_id: string
+          p_run_item_id: string
+          p_step_result_id: string
+          p_title: string
+        }
+        Returns: string
+      }
+      add_quality_test_plan_item_v1: {
+        Args: {
+          p_case_id: string
+          p_case_version?: number
+          p_is_required?: boolean
+          p_org_id: string
+          p_plan_id: string
+        }
+        Returns: string
+      }
+      add_quality_test_suite_item_v1: {
+        Args: { p_case_id: string; p_org_id: string; p_suite_id: string }
+        Returns: string
+      }
       anonymize_ai_briefing: {
         Args: { p_briefing_id: string }
         Returns: undefined
@@ -13265,6 +14951,10 @@ export type Database = {
         Args: { p_plan_id: string }
         Returns: undefined
       }
+      archive_quality_test_case_v1: {
+        Args: { p_case_id: string; p_correlation_id?: string; p_org_id: string }
+        Returns: undefined
+      }
       assert_backoffice_staff: {
         Args: { p_allowed_roles?: string[] }
         Returns: {
@@ -13300,6 +14990,15 @@ export type Database = {
         Returns: undefined
       }
       assert_platform_admin_v2: { Args: never; Returns: undefined }
+      assert_quality_scope: {
+        Args: {
+          p_contract_id: string
+          p_org_id: string
+          p_project_id: string
+          p_team_id: string
+        }
+        Returns: undefined
+      }
       build_apf_prompt:
         | { Args: { p_contract_id: string; p_hu_text?: string }; Returns: Json }
         | { Args: { p_session_id: string }; Returns: Json }
@@ -13403,19 +15102,15 @@ export type Database = {
         Args: { p_org_id: string; p_team_id: string }
         Returns: boolean
       }
+      can_manage_quality: {
+        Args: { p_org_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       can_operate_contract_v2: {
         Args: { p_contract_id: string; p_user_id?: string }
         Returns: boolean
       }
       can_operate_organization: { Args: { p_org_id: string }; Returns: boolean }
-      can_manage_quality: {
-        Args: { p_org_id: string; p_user_id?: string }
-        Returns: boolean
-      }
-      archive_quality_test_case_v1: {
-        Args: { p_case_id: string; p_correlation_id?: string; p_org_id: string }
-        Returns: undefined
-      }
       can_read_contract_v2: {
         Args: { p_contract_id: string; p_user_id?: string }
         Returns: boolean
@@ -13423,6 +15118,15 @@ export type Database = {
       can_read_organization: { Args: { p_org_id: string }; Returns: boolean }
       can_view_team: {
         Args: { _team_id: string; _user_id: string }
+        Returns: boolean
+      }
+      check_commercial_usage_v1: {
+        Args: {
+          p_correlation_id?: string
+          p_feature_code: string
+          p_increment?: number
+          p_org_id: string
+        }
         Returns: boolean
       }
       check_license_quota: { Args: { p_team_id: string }; Returns: Json }
@@ -13473,31 +15177,15 @@ export type Database = {
         }
         Returns: undefined
       }
-      create_quality_test_case_v1: {
-        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
-        Returns: string
-      }
-      create_quality_test_plan_v1: {
-        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
-        Returns: string
-      }
-      create_quality_test_run_from_plan_v1: {
+      complete_quality_test_run_v1: {
         Args: {
-          p_build_reference?: string
-          p_commit_sha?: string
+          p_allow_not_run?: boolean
           p_correlation_id?: string
-          p_environment_name?: string
-          p_name: string
           p_org_id: string
-          p_plan_id: string
+          p_run_id: string
         }
-        Returns: string
+        Returns: undefined
       }
-      start_quality_test_run_v1: { Args: { p_correlation_id?: string; p_org_id: string; p_run_id: string }; Returns: undefined }
-      update_quality_step_result_v1: { Args: { p_actual_result?: string; p_correlation_id?: string; p_org_id: string; p_status: string; p_step_result_id: string }; Returns: string }
-      add_quality_external_evidence_v1: { Args: { p_description?: string; p_external_url: string; p_org_id: string; p_run_item_id: string; p_step_result_id: string; p_title: string }; Returns: string }
-      complete_quality_test_run_v1: { Args: { p_allow_not_run?: boolean; p_correlation_id?: string; p_org_id: string; p_run_id: string }; Returns: undefined }
-      reopen_quality_test_run_v1: { Args: { p_correlation_id?: string; p_org_id: string; p_reason: string; p_run_id: string }; Returns: undefined }
       compute_learning_metrics: {
         Args: { p_week_start?: string }
         Returns: Json
@@ -13638,6 +15326,35 @@ export type Database = {
           p_metadata: Json
           p_name: string
           p_status: string
+        }
+        Returns: string
+      }
+      create_quality_test_case_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_quality_test_plan_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_quality_test_run_from_plan_v1: {
+        Args: {
+          p_build_reference?: string
+          p_commit_sha?: string
+          p_correlation_id?: string
+          p_environment_name?: string
+          p_name: string
+          p_org_id: string
+          p_plan_id: string
+        }
+        Returns: string
+      }
+      create_quality_test_suite_v1: {
+        Args: {
+          p_description?: string
+          p_name: string
+          p_org_id: string
+          p_parent_suite_id?: string
         }
         Returns: string
       }
@@ -14341,6 +16058,21 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_my_commercial_usage_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          calculated_at: string
+          limit_value: number
+          period_end: string
+          period_start: string
+          remaining_value: number
+          source: string
+          status: string
+          usage_code: string
+          usage_percent: number
+          used_value: number
+        }[]
+      }
       get_my_contract_id: { Args: { _user_id?: string }; Returns: string }
       get_my_contracts: {
         Args: { _user_id?: string }
@@ -14635,6 +16367,18 @@ export type Database = {
         Returns: boolean
       }
       is_tenancy_enforced: { Args: never; Returns: boolean }
+      link_quality_test_case_v1: {
+        Args: {
+          p_case_id: string
+          p_correlation_id?: string
+          p_entity_id: string
+          p_entity_reference?: string
+          p_entity_type: string
+          p_metadata?: Json
+          p_org_id: string
+        }
+        Returns: string
+      }
       list_backoffice_billing_customers: {
         Args: never
         Returns: {
@@ -14822,36 +16566,6 @@ export type Database = {
           p_user_agent?: string
         }
         Returns: string
-      }
-      link_quality_test_case_v1: {
-        Args: {
-          p_case_id: string
-          p_correlation_id?: string
-          p_entity_id: string
-          p_entity_reference?: string
-          p_entity_type: string
-          p_metadata?: Json
-          p_org_id: string
-        }
-        Returns: string
-      }
-      add_quality_test_plan_item_v1: {
-        Args: { p_case_id: string; p_case_version?: number; p_is_required?: boolean; p_org_id: string; p_plan_id: string }
-        Returns: string
-      }
-      remove_quality_test_plan_item_v1: {
-        Args: { p_case_id: string; p_org_id: string; p_plan_id: string }
-        Returns: undefined
-      }
-      update_quality_test_case_v1: {
-        Args: {
-          p_case_id: string
-          p_change_summary?: string
-          p_correlation_id?: string
-          p_org_id: string
-          p_payload: Json
-        }
-        Returns: number
       }
       log_audit_event: {
         Args: {
@@ -15165,6 +16879,10 @@ export type Database = {
         Returns: Json
       }
       my_org_ids: { Args: never; Returns: string[] }
+      next_quality_code_v1: {
+        Args: { p_code_type: string; p_org_id: string }
+        Returns: string
+      }
       normalize_apf_contractual_function_sigla: {
         Args: { p_sigla: string }
         Returns: string
@@ -15228,13 +16946,31 @@ export type Database = {
         Args: { p_contract_id: string; p_model_name?: string }
         Returns: string
       }
+      quality_case_snapshot: { Args: { p_case_id: string }; Returns: Json }
       recalculate_apf_session_totals: {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      recalculate_quality_run_item_v1: {
+        Args: { p_org_id: string; p_run_item_id: string }
+        Returns: string
+      }
       recalculate_session_totals: {
         Args: { p_session_id: string }
         Returns: undefined
+      }
+      record_organization_usage_v1: {
+        Args: {
+          p_idempotency_key: string
+          p_metadata?: Json
+          p_org_id: string
+          p_period_end: string
+          p_period_start: string
+          p_source: string
+          p_usage_code: string
+          p_used_value: number
+        }
+        Returns: string
       }
       record_risk_feedback: {
         Args: {
@@ -15247,6 +16983,27 @@ export type Database = {
       }
       remove_organization_team_member_v2: {
         Args: { p_org_id: string; p_team_member_id: string }
+        Returns: undefined
+      }
+      remove_quality_test_plan_item_v1: {
+        Args: { p_case_id: string; p_org_id: string; p_plan_id: string }
+        Returns: undefined
+      }
+      remove_quality_test_suite_item_v1: {
+        Args: { p_case_id: string; p_org_id: string; p_suite_id: string }
+        Returns: undefined
+      }
+      reopen_quality_test_run_v1: {
+        Args: {
+          p_correlation_id?: string
+          p_org_id: string
+          p_reason: string
+          p_run_id: string
+        }
+        Returns: undefined
+      }
+      reorder_quality_test_plan_items_v1: {
+        Args: { p_case_ids: string[]; p_org_id: string; p_plan_id: string }
         Returns: undefined
       }
       reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
@@ -15470,6 +17227,10 @@ export type Database = {
           title: string
         }[]
       }
+      start_quality_test_run_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_run_id: string }
+        Returns: undefined
+      }
       status_concluidos: { Args: never; Returns: string[] }
       sync_keycloak_user: {
         Args: {
@@ -15505,6 +17266,21 @@ export type Database = {
       transfer_organization_ownership_v2: {
         Args: { p_new_owner_id: string; p_org_id: string }
         Returns: boolean
+      }
+      transition_platform_subscription_v2: {
+        Args: {
+          p_effective_at: string
+          p_mode?: string
+          p_org_id: string
+          p_plan_version_id: string
+          p_reason: string
+          p_target_status: string
+        }
+        Returns: string
+      }
+      unlink_quality_test_case_v1: {
+        Args: { p_correlation_id?: string; p_link_id: string; p_org_id: string }
+        Returns: undefined
       }
       update_backoffice_billing_status: {
         Args: { p_billing_id: string; p_status: string }
@@ -15619,6 +17395,35 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_quality_step_result_v1: {
+        Args: {
+          p_actual_result?: string
+          p_correlation_id?: string
+          p_org_id: string
+          p_status: string
+          p_step_result_id: string
+        }
+        Returns: string
+      }
+      update_quality_test_case_v1: {
+        Args: {
+          p_case_id: string
+          p_change_summary?: string
+          p_correlation_id?: string
+          p_org_id: string
+          p_payload: Json
+        }
+        Returns: number
+      }
+      update_quality_test_plan_v1: {
+        Args: {
+          p_correlation_id?: string
+          p_org_id: string
+          p_payload: Json
+          p_plan_id: string
+        }
+        Returns: undefined
+      }
       upsert_backoffice_staff_member: {
         Args: {
           p_avatar_url: string
@@ -15642,6 +17447,20 @@ export type Database = {
           p_limit_value: number
           p_org_id: string
           p_reason: string
+        }
+        Returns: string
+      }
+      upsert_platform_organization_entitlement_override_v2: {
+        Args: {
+          p_enabled: boolean
+          p_ends_at: string
+          p_feature_key: string
+          p_limit_value: number
+          p_org_id: string
+          p_reason: string
+          p_source_id?: string
+          p_source_type?: string
+          p_starts_at: string
         }
         Returns: string
       }

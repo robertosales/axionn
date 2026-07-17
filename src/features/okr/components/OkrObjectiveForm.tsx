@@ -68,37 +68,61 @@ export function OkrObjectiveForm({ open, onClose, onSubmit, teams, defaultCycle,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-xl rounded-2xl border bg-background shadow-2xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-background shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b px-5 py-4">
           <div>
             <h3 className="text-base font-semibold">{isEdit ? "Editar objetivo" : "Novo objetivo"}</h3>
             <p className="text-xs text-muted-foreground">Defina o objetivo principal do ciclo.</p>
           </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium">Status do ciclo</label>
-              <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as OkrObjective["lifecycle_status"])} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
-                <option value="draft">Rascunho</option><option value="active">Ativo</option><option value="completed">Concluído</option><option value="cancelled">Cancelado</option><option value="archived">Arquivado</option>
-              </select>
-            </div>
-            <div className="space-y-1.5"><label className="text-xs font-medium">Início</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-medium">Fim</label><input type="date" min={startDate || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" /></div>
-          </div>
-
-          {isEdit && (
-            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-              <div className="space-y-1.5"><label className="text-xs font-medium">Override manual de saúde</label><select value={healthOverride} onChange={(e) => setHealthOverride(e.target.value as OkrHealth | "")} className="h-10 w-full rounded-lg border bg-background px-3 text-sm"><option value="">Usar saúde calculada</option><option value="on_track">No prazo</option><option value="attention">Atenção</option><option value="at_risk">Em risco</option><option value="completed">Concluído</option></select></div>
-              {healthOverride && <div className="space-y-1.5"><label className="text-xs font-medium">Justificativa obrigatória</label><textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} className="min-h-[64px] w-full rounded-lg border bg-background px-3 py-2 text-sm" placeholder="Explique por que a avaliação calculada deve ser substituída" /></div>}
-              <p className="text-[11px] text-muted-foreground">O valor calculado permanece preservado como evidência.</p>
-            </div>
-          )}
           <Button variant="ghost" size="icon" onClick={onClose} disabled={isSubmitting}>
             <X className="h-4 w-4" />
           </Button>
         </div>
 
         <div className="space-y-4 px-5 py-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Status do ciclo</label>
+              <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as OkrObjective["lifecycle_status"])} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+                <option value="draft">Rascunho</option>
+                <option value="active">Ativo</option>
+                <option value="completed">Concluído</option>
+                <option value="cancelled">Cancelado</option>
+                <option value="archived">Arquivado</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Início</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Fim</label>
+              <input type="date" min={startDate || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm" />
+            </div>
+          </div>
+
+          {isEdit && (
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Override manual de saúde</label>
+                <select value={healthOverride} onChange={(e) => setHealthOverride(e.target.value as OkrHealth | "")} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+                  <option value="">Usar saúde calculada</option>
+                  <option value="on_track">No prazo</option>
+                  <option value="attention">Atenção</option>
+                  <option value="at_risk">Em risco</option>
+                  <option value="completed">Concluído</option>
+                </select>
+              </div>
+              {healthOverride && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Justificativa obrigatória</label>
+                  <textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} className="min-h-[64px] w-full rounded-lg border bg-background px-3 py-2 text-sm" placeholder="Explique por que a avaliação calculada deve ser substituída" />
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">O valor calculado permanece preservado como evidência.</p>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Título</label>
             <input

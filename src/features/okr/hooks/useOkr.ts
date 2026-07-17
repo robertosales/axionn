@@ -5,6 +5,12 @@ import type { OkrCheckInInput, OkrObjective, OkrObjectiveInput, OkrFilters, OkrK
 import { calculateKrProgress, calculateObjectiveProgress } from "../domain/okrCalculations";
 import { measureAutomaticKeyResult, recordManualOkrMeasurement } from "../services/okrMeasurement.service";
 import { getOkrMetric } from "../domain/metricCatalog";
+import { useOrganizationEntitlements } from "@/hooks/useOrganizationEntitlements";
+import {
+  ENTITLEMENT_KEYS,
+  hasEnabledEntitlement,
+  type EffectiveOrganizationEntitlement,
+} from "@/saas/entitlements";
 
 function calcObjectiveMeta(krs: OkrKeyResult[]): { progress: number; status: OkrStatus } {
   if (!krs.length) return { progress: 0, status: "off_track" };
@@ -122,6 +128,18 @@ export interface UseOkrReturn {
   setFilters: (f: Partial<OkrFilters>) => void;
   isLoading: boolean;
   isError: boolean;
+  // Entitlements flags for UI
+  canView: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canArchive: boolean;
+  canCheckIn: boolean;
+  canInitiatives: boolean;
+  canAutoMetrics: boolean;
+  canHistory: boolean;
+  canExport: boolean;
+  canAiRecommendations: boolean;
+  // Actions
   addCheckIn: (krId: string, input: OkrCheckInInput) => Promise<void>;
   refreshKeyResult: (krId: string) => Promise<void>;
   addObjective: (obj: OkrObjectiveInput) => Promise<void>;
@@ -147,6 +165,27 @@ export function useOkr(teamId?: string): UseOkrReturn {
   const effectiveTeamId = filters.teamId !== "all" ? filters.teamId : (teamId ?? "all");
   const queryKey = ["okr_objectives", effectiveTeamId, filters.cycle];
 
+  // Entitlements da organização atual
+  const { entitlements: okrEntitlements, loading: entitlementsLoading } = useOrganizationEntitlements();
+
+  // Helpers de verificação de entitlement OKR
+  const canView = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_VIEW), [okrEntitlements]);
+  const canCreate = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_CREATE), [okrEntitlements]);
+  const canEdit = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_EDIT), [okrEntitlements]);
+  const canArchive = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_ARCHIVE), [okrEntitlements]);
+  const canCheckIn = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_CHECK_IN), [okrEntitlements]);
+  const canInitiatives = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_INITIATIVES), [okrEntitlements]);
+  const canAutoMetrics = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_AUTOMATIC_METRICS), [okrEntitlements]);
+  const canHistory = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_HISTORY), [okrEntitlements]);
+  const canExport = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_EXPORT), [okrEntitlements]);
+  const canAiRecommendations = useMemo(() => hasEnabledEntitlement(okrEntitlements, ENTITLEMENT_KEYS.OKR_AI_RECOMMENDATIONS), [okrEntitlements]);
+
+  function assertEntitlement(can: boolean, featureName: string) {
+    if (!can) {
+      throw new Error(`Entitlement negado: ${featureName} não incluído no plano atual.`);
+    }
+  }
+
   const { data: objectives = [], isLoading, isError } = useQuery<OkrObjective[]>({
     queryKey,
     queryFn: () => fetchObjectives(effectiveTeamId, filters.cycle),
@@ -156,6 +195,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
 
   const checkInMutation = useMutation({
     mutationFn: async ({ krId, input }: { krId: string; input: OkrCheckInInput }) => {
+      assertEntitlement(canCheckIn, "okr.check_in");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
       await recordManualOkrMeasurement({ keyResultId: krId, input, authorId: user.id });
@@ -165,6 +205,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
 
   const refreshKeyResultMutation = useMutation({
     mutationFn: async (krId: string) => {
+      assertEntitlement(canAutoMetrics, "okr.automatic_metrics");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
       await measureAutomaticKeyResult(krId, user.id);
@@ -174,6 +215,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
 
   const addObjectiveMutation = useMutation({
     mutationFn: async (obj: OkrObjectiveInput) => {
+      assertEntitlement(canCreate, "okr.create");
       // Validação defensiva: team_id deve ser um UUID válido
       if (!obj.team_id || obj.team_id === "all" || obj.team_id.trim() === "") {
         throw new Error("Selecione um time válido antes de criar o objetivo.");
@@ -207,12 +249,14 @@ export function useOkr(teamId?: string): UseOkrReturn {
       const { data, error } = await supabase.from("okr_objectives").insert(payload).select().single();
       if (error) { console.error("[OKR] Erro no insert:", error); throw error; }
       console.log("[OKR] Objective inserido com sucesso:", data);
+      return data;
     },
     onSuccess: () => { console.log("[OKR] Invalidando queries após insert..."); queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }); },
   });
 
   const addKeyResultMutation = useMutation({
     mutationFn: async (kr: { objective_id: string; title: string; unit: OkrKeyResult["unit"]; baseline: number; target: number; direction: OkrKeyResult["direction"]; update_type: OkrKeyResult["update_type"]; metric_code?: string | null }) => {
+      assertEntitlement(canCreate, "okr.create");
       const metric = kr.metric_code ? getOkrMetric(kr.metric_code) : null;
       const { error } = await supabase.from("okr_key_results").insert({
         objective_id: kr.objective_id, title: kr.title, unit: kr.unit,
@@ -229,6 +273,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
 
   const updateKeyResultMutation = useMutation({
     mutationFn: async ({ id, payload }: { id: string; payload: { title?: string; unit?: OkrKeyResult["unit"]; target?: number } }) => {
+      assertEntitlement(canEdit, "okr.edit");
       const { error } = await supabase.from("okr_key_results").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
     },
@@ -237,6 +282,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
 
   const deleteKeyResultMutation = useMutation({
     mutationFn: async (id: string) => {
+      assertEntitlement(canEdit, "okr.edit");
       const { error: ciErr } = await supabase.from("okr_check_ins").delete().eq("key_result_id", id);
       if (ciErr) throw ciErr;
       const { error } = await supabase.from("okr_key_results").delete().eq("id", id);
@@ -248,6 +294,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
 
   const updateObjectiveMutation = useMutation({
     mutationFn: async ({ id, payload }: { id: string; payload: OkrObjectiveInput }) => {
+      assertEntitlement(canEdit, "okr.edit");
       if (payload.title) {
         const { data: existing } = await supabase.from("okr_objectives").select("id, team_id, cycle").neq("id", id).ilike("title", payload.title.trim()).maybeSingle();
         const { data: current } = await supabase.from("okr_objectives").select("team_id, cycle").eq("id", id).single();
@@ -275,6 +322,7 @@ export function useOkr(teamId?: string): UseOkrReturn {
 
   const deleteObjectiveMutation = useMutation({
     mutationFn: async (id: string) => {
+      assertEntitlement(canArchive, "okr.archive");
       const { data: krs } = await supabase.from("okr_key_results").select("id").eq("objective_id", id);
       const krIds = (krs ?? []).map((kr) => kr.id);
       if (krIds.length > 0) {
@@ -295,7 +343,19 @@ export function useOkr(teamId?: string): UseOkrReturn {
   }
 
   return {
-    objectives, cycles, filters, setFilters, isLoading, isError,
+    objectives, cycles, filters, setFilters, isLoading: isLoading || entitlementsLoading, isError,
+    // Entitlements flags for UI
+    canView,
+    canCreate,
+    canEdit,
+    canArchive,
+    canCheckIn,
+    canInitiatives,
+    canAutoMetrics,
+    canHistory,
+    canExport,
+    canAiRecommendations,
+    // Actions
     addCheckIn: (krId, input) => checkInMutation.mutateAsync({ krId, input }),
     refreshKeyResult: (krId) => refreshKeyResultMutation.mutateAsync(krId),
     addObjective: (obj) => addObjectiveMutation.mutateAsync(obj),

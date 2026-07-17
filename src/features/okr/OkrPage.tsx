@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Target, Plus, RefreshCw } from "lucide-react";
+import { Target, Plus, RefreshCw, Lock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,12 @@ import type { OkrObjective } from "./types";
 export function OkrPage() {
   const { teams } = useAuth();
   const { toast } = useToast();
-  const { objectives, cycles, filters, setFilters, isLoading, addCheckIn, refreshKeyResult, addObjective, addKeyResult, updateKeyResult, deleteKeyResult, updateObjective, deleteObjective } = useOkr();
+  const { objectives, cycles, filters, setFilters, isLoading, isError,
+    // Entitlements flags
+    canView, canCreate, canEdit, canArchive, canCheckIn, canInitiatives,
+    canAutoMetrics, canHistory, canExport, canAiRecommendations,
+    // Actions
+    addCheckIn, refreshKeyResult, addObjective, addKeyResult, updateKeyResult, deleteKeyResult, updateObjective, deleteObjective } = useOkr();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<OkrObjective | null>(null);
   const [healthFilter, setHealthFilter] = useState("all");
@@ -116,6 +121,29 @@ export function OkrPage() {
     }
   };
 
+  if (!canView) {
+    return (
+      <AppShell module="sala_agil">
+        <div className="p-6 max-w-6xl mx-auto space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Target className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">OKR</h1>
+              <p className="text-sm text-muted-foreground">Objetivos e Key Results · {filters.cycle}</p>
+            </div>
+          </div>
+          <div className="rounded-xl border bg-card p-12 text-center">
+            <Lock className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">Acesso negado</p>
+            <p className="text-sm text-muted-foreground mt-1">Seu plano atual não inclui acesso ao módulo OKR.</p>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell module="sala_agil">
       <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -130,8 +158,19 @@ export function OkrPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={handleRefreshAll} disabled={isRefreshingAll}><RefreshCw className={`h-4 w-4 ${isRefreshingAll ? "animate-spin" : ""}`} /> Atualizar medições</Button>
-            <Button size="sm" className="gap-1.5 h-9" onClick={() => setIsCreateOpen(true)}><Plus className="h-4 w-4" /> Novo Objetivo</Button>
+            <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={handleRefreshAll} disabled={isRefreshingAll || !canAutoMetrics}>
+              <RefreshCw className={`h-4 w-4 ${isRefreshingAll ? "animate-spin" : ""}`} /> Atualizar medições
+              {!canAutoMetrics && <Lock className="h-3 w-3 ml-1" />}
+            </Button>
+            {canCreate && (
+              <Button size="sm" className="gap-1.5 h-9" onClick={() => setIsCreateOpen(true)}><Plus className="h-4 w-4" /> Novo Objetivo</Button>
+            )}
+            {!canCreate && (
+              <Button size="sm" variant="outline" className="h-9 gap-1.5" disabled>
+                <Plus className="h-4 w-4" /> Novo Objetivo
+                <Lock className="h-3 w-3 ml-1" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -145,11 +184,20 @@ export function OkrPage() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>
+        ) : isError ? (
+          <div className="rounded-xl border bg-destructive/10 p-6 text-center text-destructive">
+            <p className="font-medium">Erro ao carregar objetivos.</p>
+          </div>
         ) : objectives.length === 0 ? (
           <div className="rounded-xl border bg-card p-12 text-center">
             <Target className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm font-medium text-muted-foreground">Nenhum objetivo encontrado para este ciclo e time.</p>
-            <Button size="sm" variant="outline" className="mt-4 gap-1.5" onClick={() => setIsCreateOpen(true)}><Plus className="h-3.5 w-3.5" /> Criar primeiro objetivo</Button>
+            {canCreate && (
+              <Button size="sm" variant="outline" className="mt-4 gap-1.5" onClick={() => setIsCreateOpen(true)}><Plus className="h-3.5 w-3.5" /> Criar primeiro objetivo</Button>
+            )}
+            {!canCreate && (
+              <p className="text-sm text-muted-foreground mt-4">Seu plano não permite criar objetivos.</p>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -157,16 +205,16 @@ export function OkrPage() {
               <OkrObjectiveCard
                 key={obj.id}
                 objective={obj}
-                onCheckIn={addCheckIn}
-                onRefreshKeyResult={async (krId) => {
+                onCheckIn={canCheckIn ? addCheckIn : undefined}
+                onRefreshKeyResult={canAutoMetrics ? async (krId) => {
                   try { await refreshKeyResult(krId); toast({ title: "Medição atualizada" }); }
                   catch (error: any) { toast({ title: "Erro ao atualizar medição", description: error?.message, variant: "destructive" }); }
-                }}
-                onEdit={setEditingObjective}
-                onDelete={handleDelete}
-                onAddKeyResult={handleAddKeyResult}
-                onUpdateKeyResult={handleUpdateKeyResult}
-                onDeleteKeyResult={handleDeleteKeyResult}
+                } : undefined}
+                onEdit={canEdit ? setEditingObjective : undefined}
+                onDelete={canArchive ? handleDelete : undefined}
+                onAddKeyResult={canCreate ? handleAddKeyResult : undefined}
+                onUpdateKeyResult={canEdit ? handleUpdateKeyResult : undefined}
+                onDeleteKeyResult={canEdit ? handleDeleteKeyResult : undefined}
               />
             ))}
           </div>

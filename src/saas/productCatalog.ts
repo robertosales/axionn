@@ -32,7 +32,15 @@ export const PRODUCT_FEATURES: readonly ProductFeatureDefinition[] = [
   { code: "ai.calls.monthly", moduleCode: "ai", name: "Chamadas de IA mensais", type: "limit", usageUnit: "calls" },
   { code: "ai.briefing.enabled", moduleCode: "ai", name: "Briefing por IA", type: "capability" },
   { code: "okr.view", moduleCode: "okr", name: "Visualizar OKRs", type: "capability" },
+  { code: "okr.create", moduleCode: "okr", name: "Criar objetivos e KRs", type: "capability" },
+  { code: "okr.edit", moduleCode: "okr", name: "Editar objetivos e KRs", type: "capability" },
+  { code: "okr.archive", moduleCode: "okr", name: "Arquivar objetivos", type: "capability" },
+  { code: "okr.check_in", moduleCode: "okr", name: "Check-in de Key Results", type: "capability" },
+  { code: "okr.initiatives", moduleCode: "okr", name: "Iniciativas vinculadas a KRs", type: "capability" },
   { code: "okr.automatic_metrics", moduleCode: "okr", name: "Medições automáticas de OKR", type: "capability" },
+  { code: "okr.history", moduleCode: "okr", name: "Histórico e snapshots de OKR", type: "capability" },
+  { code: "okr.export", moduleCode: "okr", name: "Exportação de OKRs (CSV/PDF)", type: "capability" },
+  { code: "okr.ai_recommendations", moduleCode: "okr", name: "Recomendações de IA para OKRs", type: "capability" },
   { code: "audit.access", moduleCode: "audit", name: "Acesso à auditoria", type: "capability" },
 ] as const;
 

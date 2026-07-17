@@ -8,6 +8,21 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const done = new Set(["done", "concluido", "concluído", "closed", "encerrado", "pronto_para_publicacao"]);
 const clamp = (value: number) => Math.min(100, Math.max(0, value));
 
+async function checkOkrEntitlement(admin: any, orgId: string, featureKey: string): Promise<boolean> {
+  const { data, error } = await admin.rpc("has_organization_entitlement", { p_org_id: orgId, p_feature_key: featureKey });
+  if (error) {
+    console.error(`[OKR] Erro ao verificar entitlement ${featureKey}:`, error);
+    return false;
+  }
+  return data === true;
+}
+
+async function getOrgIdFromTeam(admin: any, teamId: string): Promise<string | null> {
+  const { data, error } = await admin.from("teams").select("org_id").eq("id", teamId).maybeSingle();
+  if (error || !data) return null;
+  return data.org_id;
+}
+
 async function recalculateObjective(admin: any, objectiveId: string) {
   const [{ data: objective }, { data: krs }] = await Promise.all([admin.from("okr_objectives").select("*").eq("id", objectiveId).single(), admin.from("okr_key_results").select("calculated_progress,weight,lifecycle_status").eq("objective_id", objectiveId)]);
   const measured = (krs ?? []).filter((kr: any) => kr.lifecycle_status === "active" && kr.calculated_progress != null);
@@ -80,7 +95,24 @@ Deno.serve(async (req) => {
     }
     else if (isJob) { const { data } = await admin.from("okr_key_results").select("*,okr_objectives!inner(lifecycle_status)").in("update_type", ["automatic", "hybrid"]).eq("okr_objectives.lifecycle_status", "active").limit(500); keyResults = data ?? []; }
     else return json({ error: "keyResultId obrigatório" }, 400);
-    const results = []; for (const kr of keyResults) { try { results.push({ ok: true, ...(await measure(admin, kr, isJob ? "scheduled" : "on_demand", actor)) }); } catch (error) { results.push({ ok: false, keyResultId: kr.id, error: error instanceof Error ? error.message : String(error) }); } }
+    const results = [];
+    for (const kr of keyResults) {
+      try {
+        // Verificar entitlement para métricas automáticas
+        const { data: objective } = await admin.from("okr_objectives").select("team_id").eq("id", kr.objective_id).single();
+        if (objective?.team_id) {
+          const orgId = await getOrgIdFromTeam(admin, objective.team_id);
+          if (orgId) {
+            const hasEntitlement = await checkOkrEntitlement(admin, orgId, "okr.automatic_metrics");
+            if (!hasEntitlement) {
+              results.push({ ok: false, keyResultId: kr.id, error: "Entitlement negado: okr.automatic_metrics não incluído no plano atual" });
+              continue;
+            }
+          }
+        }
+        results.push({ ok: true, ...(await measure(admin, kr, isJob ? "scheduled" : "on_demand", actor)) });
+      } catch (error) { results.push({ ok: false, keyResultId: kr.id, error: error instanceof Error ? error.message : String(error) }); }
+    }
     if (queuedJobIds.length) { const failures = results.filter((item) => !item.ok); await admin.from("okr_recalculation_queue").update(failures.length ? { status: "pending", attempts: 1, available_at: new Date(Date.now() + 300000).toISOString(), last_error: failures.map((item) => item.error).join("; ") } : { status: "completed", processed_at: new Date().toISOString(), last_error: null }).in("id", queuedJobIds); }
     console.log(JSON.stringify({ event: "okr_recalculation_completed", processed: results.length, failures: results.filter((item) => !item.ok).length }));
     return json({ results });

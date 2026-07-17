@@ -7,6 +7,16 @@ export const ENTITLEMENT_KEYS = {
   APF_AI_GENERATION: "apf.ai_generation",
   REPORTS_ADVANCED: "reports.advanced",
   AUDIT_ACCESS: "audit.access",
+  OKR_VIEW: "okr.view",
+  OKR_CREATE: "okr.create",
+  OKR_EDIT: "okr.edit",
+  OKR_ARCHIVE: "okr.archive",
+  OKR_CHECK_IN: "okr.check_in",
+  OKR_INITIATIVES: "okr.initiatives",
+  OKR_AUTOMATIC_METRICS: "okr.automatic_metrics",
+  OKR_HISTORY: "okr.history",
+  OKR_EXPORT: "okr.export",
+  OKR_AI_RECOMMENDATIONS: "okr.ai_recommendations",
 } as const;
 
 export type OrganizationEntitlementKey =

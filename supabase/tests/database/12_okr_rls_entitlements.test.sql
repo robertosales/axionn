@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path=public,extensions;
-select plan(15);
+select plan(18);
 
 -- ============================================================
 -- 1. Estrutura das tabelas

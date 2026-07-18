@@ -1,9 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { calculateKrProgress, calculateObjectiveHealth, calculateObjectiveProgress } from "../domain/okrCalculations";
-import type { OkrDirection } from "../types";
-import { calculateOperationalMetric, cycleDateRange } from "../domain/automaticMetrics";
-import { getOkrMetric } from "../domain/metricCatalog";
-import type { OkrCheckInInput } from "../types";
+import type { OkrDirection, OkrCheckInInput } from "../types";
 
 export async function recordManualOkrMeasurement(args: {
   keyResultId: string;
@@ -111,83 +108,4 @@ export async function measureAutomaticKeyResult(keyResultId: string, triggeredBy
   const result = data?.results?.[0];
   if (!result?.ok) throw new Error(result?.error ?? "Não foi possível recalcular o Key Result.");
   return result;
-  /* istanbul ignore next -- implementação legada mantida temporariamente como referência de migração */
-  {
-  const db = supabase as any;
-  const { data: kr, error: krError } = await db.from("okr_key_results").select("*").eq("id", keyResultId).single();
-  if (krError || !kr) throw krError ?? new Error("Key Result não encontrado");
-  if (kr.update_type === "manual") throw new Error("Este KR utiliza atualização manual.");
-  const metric = getOkrMetric(kr.metric_code);
-  if (!metric) throw new Error("Métrica inativa ou não suportada.");
-  const { data: objective, error: objectiveError } = await db.from("okr_objectives").select("id,team_id,cycle,start_date,end_date").eq("id", kr.objective_id).single();
-  if (objectiveError || !objective?.team_id) throw objectiveError ?? new Error("Objetivo sem time válido");
-  const cycleRange = cycleDateRange(objective.cycle);
-  const periodStart = objective.start_date ?? cycleRange.start;
-  const periodEnd = objective.end_date ?? cycleRange.end;
-
-  const { data: sprints, error: sprintError } = await db.from("sprints")
-    .select("id").eq("team_id", objective.team_id)
-    .lte("start_date", periodEnd).gte("end_date", periodStart);
-  if (sprintError) throw sprintError;
-  const sprintIds = (sprints ?? []).map((sprint: { id: string }) => sprint.id);
-
-  const [storiesResult, impedimentsResult] = await Promise.all([
-    sprintIds.length
-      ? db.from("user_stories").select("id,status,story_points").eq("team_id", objective.team_id).in("sprint_id", sprintIds)
-      : Promise.resolve({ data: [], error: null }),
-    db.from("impediments").select("id,resolved_at").eq("team_id", objective.team_id).lte("reported_at", `${periodEnd}T23:59:59.999Z`),
-  ]);
-  if (storiesResult.error || impedimentsResult.error) throw storiesResult.error ?? impedimentsResult.error;
-  const measurement = calculateOperationalMetric(metric.code, storiesResult.data ?? [], impedimentsResult.data ?? []);
-  const measuredAt = new Date().toISOString();
-  const progress = calculateKrProgress({
-    baseline: kr.baseline_value,
-    current: measurement.value,
-    target: kr.target_value ?? kr.target,
-    targetMin: kr.target_min,
-    targetMax: kr.target_max,
-    direction: (kr.direction ?? metric.direction) as OkrDirection,
-  });
-  const quality = measurement.value == null ? "no_data" : "reliable";
-  const health = progress.progress == null ? "no_data" : progress.progress >= 100 ? "completed" : progress.progress >= 70 ? "on_track" : "at_risk";
-
-  const { error: updateError } = await db.from("okr_key_results").update({
-    current: measurement.value ?? kr.current,
-    current_value: measurement.value,
-    raw_progress: progress.rawProgress,
-    calculated_progress: progress.progress,
-    calculated_health: health,
-    measurement_quality: quality,
-    source_label: metric.name,
-    formula_version: metric.formulaVersion,
-    last_measured_at: measuredAt,
-    updated_at: measuredAt,
-  }).eq("id", kr.id);
-  if (updateError) throw updateError;
-
-  const idempotencyKey = `automatic:${kr.id}:${periodStart}:${periodEnd}:${metric.formulaVersion}:${measurement.value ?? "no-data"}`;
-  const { error: snapshotError } = await db.from("okr_key_result_snapshots").upsert({
-    key_result_id: kr.id,
-    measured_value: measurement.value,
-    raw_progress: progress.rawProgress,
-    calculated_progress: progress.progress,
-    health,
-    measurement_quality: quality,
-    source: metric.code,
-    formula_version: metric.formulaVersion,
-    measured_at: measuredAt,
-    period_start: periodStart,
-    period_end: periodEnd,
-    scope_type: "team",
-    scope_id: objective.team_id,
-    items_considered: measurement.itemsConsidered,
-    calculation_metadata: { ...measurement.metadata, formula: metric.formula, reason: measurement.reason ?? null, sprint_ids: sprintIds },
-    triggered_by_type: "on_demand",
-    triggered_by_id: triggeredById,
-    idempotency_key: idempotencyKey,
-  }, { onConflict: "idempotency_key", ignoreDuplicates: true });
-  if (snapshotError) throw snapshotError;
-  await recalculateObjective(kr.objective_id);
-  return measurement;
-  }
 }

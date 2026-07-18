@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
-import { Target, Plus, RefreshCw, Lock } from "lucide-react";
+import { Target, Plus, RefreshCw, Lock, Download } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useOkr, OkrDuplicateError } from "./hooks/useOkr";
+import { exportOkrsToCSV, exportOkrsToPDF } from "./utils/okrExport";
 import { OkrCycleSelector } from "./components/OkrCycleSelector";
 import { OkrSummaryKpis } from "./components/OkrSummaryKpis";
 import { OkrObjectiveCard } from "./components/OkrObjectiveCard";
@@ -158,6 +160,17 @@ export function OkrPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {canExport && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-9 gap-1.5"><Download className="h-4 w-4" /> Exportar</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportOkrsToCSV(objectives, filters.cycle)}>CSV</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportOkrsToPDF(objectives, filters.cycle)}>PDF</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={handleRefreshAll} disabled={isRefreshingAll || !canAutoMetrics}>
               <RefreshCw className={`h-4 w-4 ${isRefreshingAll ? "animate-spin" : ""}`} /> Atualizar medições
               {!canAutoMetrics && <Lock className="h-3 w-3 ml-1" />}

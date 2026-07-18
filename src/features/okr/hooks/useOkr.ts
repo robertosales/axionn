@@ -153,7 +153,7 @@ export interface UseOkrReturn {
 export function useOkr(teamId?: string): UseOkrReturn {
   const queryClient = useQueryClient();
   const [filters, setFiltersState] = useState<OkrFilters>({
-    cycle: "Q2/2026",
+    cycle: `Q${Math.ceil((new Date().getMonth() + 1) / 3)}/${new Date().getFullYear()}`,
     teamId: teamId ?? "all",
   });
 

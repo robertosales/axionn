@@ -356,7 +356,7 @@ export async function listSaasPlans(): Promise<SaasPlan[]> {
         featureName: f.feature?.name ?? "",
         moduleCode: f.feature?.module_code ?? "",
       })),
-    }),
+    })),
   }));
 }
 
@@ -389,7 +389,7 @@ export async function getSaasPlanWithVersions(planCode: string): Promise<SaasPla
         featureName: f.feature?.name ?? "",
         moduleCode: f.feature?.module_code ?? "",
       })),
-    }),
+    })),
   };
 }
 
@@ -425,23 +425,6 @@ export async function getActivePlanVersion(planCode: string): Promise<SaasPlanVe
 // LEGACY SERVICE FUNCTIONS (for backward compatibility)
 // ============================================================
 
-function toNumber(value: unknown) {
-  const number = Number(value ?? 0);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function toNullableNumber(value: unknown) {
-  if (value === null || value === undefined) return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function normalizeJsonObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
 function normalizeEntitlement(row: Record<string, unknown>): PlatformPlanEntitlement {
   return {
     id: String(row.id),
@@ -454,7 +437,7 @@ function normalizeEntitlement(row: Record<string, unknown>): PlatformPlanEntitle
   };
 }
 
-function normalizePlan(row: Record<string, unknown>): PlatformPlan {
+function normalizePlatformPlan(row: Record<string, unknown>): PlatformPlan {
   const entitlements = Array.isArray(row.entitlements)
     ? row.entitlements
     : [];
@@ -534,7 +517,7 @@ export async function listPlatformPlans(includeArchived = false) {
     { p_include_archived: includeArchived },
   );
   if (error) throw error;
-  return ((data ?? []) as Array<Record<string, unknown>>).map(normalizePlan);
+  return ((data ?? []) as Array<Record<string, unknown>>).map(normalizePlatformPlan);
 }
 
 export async function createPlatformPlan(payload: {
@@ -679,4 +662,4 @@ export async function deletePlatformOrganizationOverride(
   if (error) throw error;
 }
 
-export { normalizePlan, normalizeOverride, normalizeSubscription, normalizeEntitlement };
+export { normalizePlatformPlan, normalizeOverride, normalizeSubscription, normalizeEntitlement };

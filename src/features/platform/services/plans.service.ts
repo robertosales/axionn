@@ -425,23 +425,6 @@ export async function getActivePlanVersion(planCode: string): Promise<SaasPlanVe
 // LEGACY SERVICE FUNCTIONS (for backward compatibility)
 // ============================================================
 
-function toNumber(value: unknown) {
-  const number = Number(value ?? 0);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function toNullableNumber(value: unknown) {
-  if (value === null || value === undefined) return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function normalizeJsonObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
 function normalizeEntitlement(row: Record<string, unknown>): PlatformPlanEntitlement {
   return {
     id: String(row.id),
@@ -454,7 +437,7 @@ function normalizeEntitlement(row: Record<string, unknown>): PlatformPlanEntitle
   };
 }
 
-function normalizePlan(row: Record<string, unknown>): PlatformPlan {
+function normalizePlatformPlan(row: Record<string, unknown>): PlatformPlan {
   const entitlements = Array.isArray(row.entitlements)
     ? row.entitlements
     : [];

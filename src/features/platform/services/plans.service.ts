@@ -517,7 +517,7 @@ export async function listPlatformPlans(includeArchived = false) {
     { p_include_archived: includeArchived },
   );
   if (error) throw error;
-  return ((data ?? []) as Array<Record<string, unknown>>).map(normalizePlan);
+  return ((data ?? []) as Array<Record<string, unknown>>).map(normalizePlatformPlan);
 }
 
 export async function createPlatformPlan(payload: {
@@ -662,4 +662,4 @@ export async function deletePlatformOrganizationOverride(
   if (error) throw error;
 }
 
-export { normalizePlan, normalizeOverride, normalizeSubscription, normalizeEntitlement };
+export { normalizePlatformPlan, normalizeOverride, normalizeSubscription, normalizeEntitlement };

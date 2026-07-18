@@ -356,7 +356,7 @@ export async function listSaasPlans(): Promise<SaasPlan[]> {
         featureName: f.feature?.name ?? "",
         moduleCode: f.feature?.module_code ?? "",
       })),
-    }),
+    })),
   }));
 }
 

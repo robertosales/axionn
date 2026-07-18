@@ -3858,6 +3858,56 @@ export type Database = {
           },
         ]
       }
+      commercial_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after_data: Json | null
+          before_data: Json | null
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          org_id: string
+          reason: string | null
+          source: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          org_id: string
+          reason?: string | null
+          source?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          org_id?: string
+          reason?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_audit_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commercial_enforcement_events: {
         Row: {
           actor_id: string | null
@@ -8447,6 +8497,38 @@ export type Database = {
           },
         ]
       }
+      organization_entitlement_cache: {
+        Row: {
+          computed_at: string
+          entitlements: Json
+          expires_at: string
+          org_id: string
+          version: number
+        }
+        Insert: {
+          computed_at?: string
+          entitlements: Json
+          expires_at: string
+          org_id: string
+          version?: number
+        }
+        Update: {
+          computed_at?: string
+          entitlements?: Json
+          expires_at?: string
+          org_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_entitlement_cache_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_entitlement_overrides: {
         Row: {
           created_at: string
@@ -12469,6 +12551,103 @@ export type Database = {
         }
         Relationships: []
       }
+      saas_contracts: {
+        Row: {
+          addons: Json
+          amount: number | null
+          billing_interval: string | null
+          cancellation: Json | null
+          commercial_owner_id: string | null
+          contract_number: string
+          created_at: string
+          currency: string
+          discount_percent: number | null
+          documents: Json
+          ends_at: string | null
+          id: string
+          limits: Json
+          notes: string | null
+          org_id: string
+          plan_version_id: string | null
+          renewal: Json
+          starts_at: string
+          status: string
+          subscription_id: string | null
+          terms: Json
+          updated_at: string
+        }
+        Insert: {
+          addons?: Json
+          amount?: number | null
+          billing_interval?: string | null
+          cancellation?: Json | null
+          commercial_owner_id?: string | null
+          contract_number: string
+          created_at?: string
+          currency?: string
+          discount_percent?: number | null
+          documents?: Json
+          ends_at?: string | null
+          id?: string
+          limits?: Json
+          notes?: string | null
+          org_id: string
+          plan_version_id?: string | null
+          renewal?: Json
+          starts_at: string
+          status?: string
+          subscription_id?: string | null
+          terms?: Json
+          updated_at?: string
+        }
+        Update: {
+          addons?: Json
+          amount?: number | null
+          billing_interval?: string | null
+          cancellation?: Json | null
+          commercial_owner_id?: string | null
+          contract_number?: string
+          created_at?: string
+          currency?: string
+          discount_percent?: number | null
+          documents?: Json
+          ends_at?: string | null
+          id?: string
+          limits?: Json
+          notes?: string | null
+          org_id?: string
+          plan_version_id?: string | null
+          renewal?: Json
+          starts_at?: string
+          status?: string
+          subscription_id?: string | null
+          terms?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_contracts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_contracts_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_contracts_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saas_metrics_snapshots: {
         Row: {
           active_tenants: number
@@ -15111,11 +15290,29 @@ export type Database = {
         Returns: boolean
       }
       can_operate_organization: { Args: { p_org_id: string }; Returns: boolean }
+      can_quality_permission_v1: {
+        Args: { p_org_id: string; p_permission: string }
+        Returns: boolean
+      }
       can_read_contract_v2: {
         Args: { p_contract_id: string; p_user_id?: string }
         Returns: boolean
       }
       can_read_organization: { Args: { p_org_id: string }; Returns: boolean }
+      can_read_quality: { Args: { p_org_id: string }; Returns: boolean }
+      can_use_feature: {
+        Args: {
+          p_context?: Json
+          p_feature_code: string
+          p_org_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      can_use_feature_rpc: {
+        Args: { p_context?: Json; p_feature_code: string; p_org_id: string }
+        Returns: boolean
+      }
       can_view_team: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
@@ -15386,6 +15583,15 @@ export type Database = {
       delete_platform_plan_entitlement_v1: {
         Args: { p_feature_key: string; p_plan_id: string }
         Returns: undefined
+      }
+      enforce_resource_limit: {
+        Args: {
+          p_correlation_id?: string
+          p_feature_code: string
+          p_increment?: number
+          p_org_id: string
+        }
+        Returns: boolean
       }
       extract_user_story_external_reference: {
         Args: { p_title: string }
@@ -16300,6 +16506,10 @@ export type Database = {
         Args: { p_ai_calls?: number; p_pf_count?: number; p_team_id: string }
         Returns: undefined
       }
+      invalidate_organization_entitlement_cache: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       is_admin: { Args: never; Returns: boolean }
       is_apf_auxiliary_action: { Args: { p_text: string }; Returns: boolean }
       is_backoffice_admin: { Args: { p_user_id?: string }; Returns: boolean }
@@ -16959,6 +17169,19 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      record_organization_usage: {
+        Args: {
+          p_idempotency_key: string
+          p_metadata?: Json
+          p_org_id: string
+          p_period_end: string
+          p_period_start: string
+          p_source: string
+          p_usage_code: string
+          p_used_value: number
+        }
+        Returns: string
+      }
       record_organization_usage_v1: {
         Args: {
           p_idempotency_key: string
@@ -16979,6 +17202,10 @@ export type Database = {
           p_feedback_notes?: string
           p_risk_event_id: string
         }
+        Returns: undefined
+      }
+      refresh_organization_entitlement_cache: {
+        Args: { p_org_id: string }
         Returns: undefined
       }
       remove_organization_team_member_v2: {

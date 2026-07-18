@@ -389,7 +389,7 @@ export async function getSaasPlanWithVersions(planCode: string): Promise<SaasPla
         featureName: f.feature?.name ?? "",
         moduleCode: f.feature?.module_code ?? "",
       })),
-    }),
+    })),
   };
 }
 

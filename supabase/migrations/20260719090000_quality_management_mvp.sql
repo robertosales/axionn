@@ -195,7 +195,7 @@ create or replace function public.create_quality_test_case_v1(p_org_id uuid,p_pa
 language plpgsql security definer set search_path=public,pg_temp as $$
 declare v_id uuid; v_step jsonb; v_order int:=0; v_code text;
 begin
- if not public.can_manage_quality(p_org_id) then raise exception using errcode='42501',message='quality_case_create_denied'; end if;
+ if not public.can_quality_permission_v1(p_org_id,'manage_test_cases') then raise exception using errcode='42501',message='quality_case_create_denied'; end if;
  perform public.assert_quality_scope(p_org_id,(p_payload->>'contract_id')::uuid,(p_payload->>'project_id')::uuid,(p_payload->>'team_id')::uuid);
  if nullif(btrim(p_payload->>'title'),'') is null or jsonb_typeof(p_payload->'steps')<>'array' or jsonb_array_length(p_payload->'steps')=0 then raise exception using errcode='22023',message='quality_case_payload_invalid'; end if;
  v_code:=public.next_quality_code_v1(p_org_id,'test_case');
@@ -214,7 +214,7 @@ create or replace function public.update_quality_test_case_v1(p_org_id uuid,p_ca
 language plpgsql security definer set search_path=public,pg_temp as $$
 declare v_case public.quality_test_cases%rowtype; v_step jsonb; v_order int:=0; v_version int;
 begin
- if not public.can_manage_quality(p_org_id) then raise exception using errcode='42501',message='quality_case_update_denied'; end if;
+ if not public.can_quality_permission_v1(p_org_id,'manage_test_cases') then raise exception using errcode='42501',message='quality_case_update_denied'; end if;
  select * into v_case from public.quality_test_cases where id=p_case_id and organization_id=p_org_id for update;
  if v_case.id is null then raise exception using errcode='42501',message='quality_case_not_found'; end if;
  perform public.assert_quality_scope(p_org_id,coalesce((p_payload->>'contract_id')::uuid,v_case.contract_id),coalesce((p_payload->>'project_id')::uuid,v_case.project_id),coalesce((p_payload->>'team_id')::uuid,v_case.team_id));
@@ -234,7 +234,7 @@ end $$;
 create or replace function public.archive_quality_test_case_v1(p_org_id uuid,p_case_id uuid,p_correlation_id uuid default null) returns void
 language plpgsql security definer set search_path=public,pg_temp as $$
 begin
- if not public.can_manage_quality(p_org_id) then raise exception using errcode='42501',message='quality_case_archive_denied'; end if;
+ if not public.can_quality_permission_v1(p_org_id,'manage_test_cases') then raise exception using errcode='42501',message='quality_case_archive_denied'; end if;
  update public.quality_test_cases set status='archived',archived_at=now(),updated_by=auth.uid(),updated_at=now() where id=p_case_id and organization_id=p_org_id and status<>'archived';
  if not found then raise exception using errcode='42501',message='quality_case_not_found'; end if;
  insert into public.audit_log_events(organization_id,actor_user_id,action,target_type,target_id,source,correlation_id) values(p_org_id,auth.uid(),'quality.test_case.archived','quality_test_case',p_case_id,'web',p_correlation_id);
@@ -244,7 +244,7 @@ create or replace function public.link_quality_test_case_v1(p_org_id uuid,p_case
 language plpgsql security definer set search_path=public,pg_temp as $$
 declare v_id uuid; v_team uuid;
 begin
- if not public.can_manage_quality(p_org_id) then raise exception using errcode='42501',message='quality_link_denied'; end if;
+ if not public.can_quality_permission_v1(p_org_id,'manage_test_cases') then raise exception using errcode='42501',message='quality_link_denied'; end if;
  if not exists(select 1 from public.quality_test_cases where id=p_case_id and organization_id=p_org_id) then raise exception using errcode='42501',message='quality_case_not_found'; end if;
  if p_entity_type in ('user_story','acceptance_criterion') then select team_id into v_team from public.user_stories where id=p_entity_id; if v_team is null or public.resolve_team_org_id(v_team) is distinct from p_org_id then raise exception using errcode='23514',message='quality_link_tenant_mismatch'; end if;
  elsif p_entity_type='release' then select team_id into v_team from public.releases where id=p_entity_id; if v_team is null or public.resolve_team_org_id(v_team) is distinct from p_org_id then raise exception using errcode='23514',message='quality_link_tenant_mismatch'; end if;
@@ -258,7 +258,7 @@ create or replace function public.create_quality_test_run_from_plan_v1(p_org_id 
 language plpgsql security definer set search_path=public,pg_temp as $$
 declare v_plan public.quality_test_plans%rowtype; v_run_id uuid; v_item record; v_run_item_id uuid; v_step jsonb;
 begin
- if not public.can_manage_quality(p_org_id) then raise exception using errcode='42501',message='quality_run_create_denied'; end if;
+ if not public.can_quality_permission_v1(p_org_id,'execute_tests') then raise exception using errcode='42501',message='quality_run_create_denied'; end if;
  select * into v_plan from public.quality_test_plans where id=p_plan_id and organization_id=p_org_id;
  if v_plan.id is null then raise exception using errcode='42501',message='quality_plan_not_found'; end if;
  if nullif(btrim(p_name),'') is null then raise exception using errcode='22023',message='quality_run_name_required'; end if;

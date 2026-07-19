@@ -6,6 +6,124 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { QUALITY_MANAGEMENT_ENABLED } from "@/lib/featureFlags";
-import { Button } from "@/components/ui/button"; import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card"; import { Dialog,DialogContent,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog"; import { Input } from "@/components/ui/input"; import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useQualityPermissions } from "../hooks/useQualityPermissions";
 
-export default function TestSuitesPage(){const {currentOrganizationId,isOrganizationAdmin,isPlatformAdmin,getModuleRole}=useOrganization();const [open,setOpen]=useState(false);const [name,setName]=useState("");const client=useQueryClient();const canManage=isOrganizationAdmin||isPlatformAdmin||getModuleRole("sala_agil")==="admin";const query=useQuery({queryKey:["quality",currentOrganizationId,"suites"],enabled:Boolean(currentOrganizationId)&&QUALITY_MANAGEMENT_ENABLED,queryFn:async()=>{const {data,error}=await supabase.from("quality_test_suites").select("id,name,description,parent_suite_id,quality_test_suite_items(count)").eq("organization_id",currentOrganizationId!).order("sort_order");if(error)throw error;return data??[];}});const create=useMutation({mutationFn:async()=>{const {error}=await supabase.rpc("create_quality_test_suite_v1",{p_org_id:currentOrganizationId!,p_name:name});if(error)throw error;},onSuccess:async()=>{await client.invalidateQueries({queryKey:["quality",currentOrganizationId,"suites"]});setOpen(false);setName("");toast.success("Suíte criada.");}});if(!QUALITY_MANAGEMENT_ENABLED)return <Navigate to="/sala-agil/dashboard" replace/>;return <main className="mx-auto w-full max-w-[1200px] space-y-6 p-4 md:p-8"><header className="flex items-end justify-between border-b pb-6"><div><p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><FolderTree className="h-4 w-4"/>Quality Intelligence</p><h1 className="text-3xl font-bold tracking-tight">Suítes de teste</h1><p className="mt-1 text-sm text-muted-foreground">Organize casos reutilizáveis por fluxo, produto ou objetivo.</p></div>{canManage&&<Button onClick={()=>setOpen(true)}><Plus className="mr-2 h-4 w-4"/>Nova suíte</Button>}</header>{query.isLoading?<p className="py-12 text-center text-muted-foreground">Carregando suítes…</p>:query.data?.length?<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{query.data.map(s=><Card key={s.id}><CardHeader><CardTitle className="flex items-center gap-2 text-base"><FolderTree className="h-4 w-4 text-primary"/>{s.name}</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">{s.description||"Suíte pronta para receber casos."}</p></CardContent></Card>)}</div>:<div className="rounded-xl border border-dashed p-12 text-center"><FolderTree className="mx-auto mb-3 h-10 w-10 text-muted-foreground"/><p className="font-medium">Nenhuma suíte criada</p></div>}<Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>Nova suíte</DialogTitle></DialogHeader><div className="space-y-2"><Label htmlFor="suite-name">Nome</Label><Input id="suite-name" value={name} onChange={e=>setName(e.target.value)} /></div><DialogFooter><Button variant="outline" onClick={()=>setOpen(false)}>Cancelar</Button><Button disabled={!name.trim()||create.isPending} onClick={()=>create.mutate()}>{create.isPending?"Criando…":"Criar suíte"}</Button></DialogFooter></DialogContent></Dialog></main>}
+export default function TestSuitesPage() {
+  const { currentOrganizationId } = useOrganization();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const client = useQueryClient();
+  const { can } = useQualityPermissions();
+
+  const query = useQuery({
+    queryKey: ["quality", currentOrganizationId, "suites"],
+    enabled: Boolean(currentOrganizationId) && QUALITY_MANAGEMENT_ENABLED,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("quality_test_suites")
+        .select(
+          "id,name,description,parent_suite_id,quality_test_suite_items(count)"
+        )
+        .eq("organization_id", currentOrganizationId!)
+        .order("sort_order");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc("create_quality_test_suite_v1", {
+        p_org_id: currentOrganizationId!, p_name: name
+      });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["quality", currentOrganizationId, "suites"] });
+      setOpen(false);
+      setName("");
+      toast.success("Suíte criada.");
+    },
+  });
+
+  if (!QUALITY_MANAGEMENT_ENABLED) return <Navigate to="/sala-agil/dashboard" replace />;
+  if (!currentOrganizationId) return <div className="p-8 text-center text-muted-foreground">Selecione uma organização.</div>;
+
+  return (
+    <main className="mx-auto w-full max-w-[1200px] space-y-6 p-4 md:p-8">
+      <header className="flex items-end justify-between border-b pb-6">
+        <div>
+          <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
+            <FolderTree className="h-4 w-4"/>Quality Intelligence
+          </p>
+          <h1 className="text-3xl font-bold tracking-tight">Suítes de teste</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Organize casos reutilizáveis por fluxo, produto ou objetivo.
+          </p>
+        </div>
+        {can.canManageTestSuites && (
+          <Button onClick={() => setOpen(true)}>
+            <Plus className="mr-2 h-4 w-4"/>Nova suíte
+          </Button>
+        )}
+      </header>
+
+      {query.isLoading ? (
+        <p className="py-12 text-center text-muted-foreground">Carregando suítes…</p>
+      ) : query.data?.length ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {query.data.map(s => (
+            <Card key={s.id}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FolderTree className="h-4 w-4 text-primary"/>
+                  {s.name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  {s.description || "Suíte pronta para receber casos."}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed p-12 text-center">
+          <FolderTree className="mx-auto mb-3 h-10 w-10 text-muted-foreground"/>
+          <p className="font-medium">Nenhuma suíte criada</p>
+        </div>
+      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova suíte</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="suite-name">Nome</Label>
+            <Input
+              id="suite-name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!name.trim() || create.isPending}
+              onClick={() => create.mutate()}
+            >
+              {create.isPending ? "Criando…" : "Criar suíte"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </main>
+  );
+}

@@ -49,6 +49,7 @@ export default function TestRunPage() {
   const org = currentOrganizationId ?? "";
   const q = useTestRun(currentOrganizationId, id);
   const a = useRunActions(org, id ?? "");
+  const { can } = useQualityPermissions();
   const [actual, setActual] = useState<Record<string, string>>({});
   const [evidence, setEvidence] = useState<Record<string, string>>({});
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
@@ -86,13 +87,13 @@ export default function TestRunPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            {["draft", "planned"].includes(run.status) && (
+            {["draft", "planned"].includes(run.status) && can.canExecute && (
               <Button onClick={() => a.start.mutate()}><Play className="mr-2 h-4 w-4" />Iniciar</Button>
             )}
-            {run.status === "in_progress" && (
+            {run.status === "in_progress" && can.canExecute && (
               <Button onClick={() => a.complete.mutate(false)}><CheckCircle2 className="mr-2 h-4 w-4" />Concluir</Button>
             )}
-            {run.status === "completed" && (
+            {run.status === "completed" && can.canManageTestRuns && (
               <Button variant="outline" onClick={() => setReopenDialogOpen(true)}><RotateCcw className="mr-2 h-4 w-4" />Reabrir</Button>
             )}
           </div>

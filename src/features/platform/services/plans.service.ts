@@ -662,4 +662,30 @@ export async function deletePlatformOrganizationOverride(
   if (error) throw error;
 }
 
+// ============================================================
+// SUBSCRIPTION TRANSITION SERVICE
+// ============================================================
+
+export async function transitionPlatformSubscription(
+  orgId: string,
+  planId: string,
+  targetStatus: SubscriptionStatus,
+  reason: string,
+  effectiveAt?: string | null,
+  mode: "immediate" | "scheduled" | "renewal" = "immediate",
+) {
+  const { error } = await (supabase as any).rpc(
+    "transition_platform_subscription_v2",
+    {
+      p_org_id: orgId,
+      p_plan_version_id: planId,
+      p_target_status: targetStatus,
+      p_effective_at: effectiveAt ?? null,
+      p_reason: reason,
+      p_mode: mode,
+    },
+  );
+  if (error) throw error;
+}
+
 export { normalizePlatformPlan, normalizeOverride, normalizeSubscription, normalizeEntitlement };

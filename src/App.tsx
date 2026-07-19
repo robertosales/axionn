@@ -65,6 +65,9 @@ const OrganizationAdminShell = lazy(() =>
     (module) => ({ default: module.OrganizationAdminShell }),
   ),
 );
+const OrganizationSubscriptionPage = lazy(
+  () => import("./features/organization/pages/OrganizationSubscriptionPage"),
+);
 const PlatformAIProvidersPage = lazy(
   () => import("./features/platform/pages/PlatformAIProvidersPage"),
 );
@@ -468,6 +471,7 @@ function AppRoutes() {
           <Route path="/organization/teams" element={<OrganizationConsoleRoute><AdminTimesPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/members" element={<OrganizationConsoleRoute><OrganizationMembersPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/usage" element={<OrganizationConsoleRoute><OrganizationUsagePage /></OrganizationConsoleRoute>} />
+          <Route path="/organization/subscription" element={<OrganizationConsoleRoute><OrganizationSubscriptionPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/settings" element={<OrganizationConsoleRoute><OrganizationSettingsPage /></OrganizationConsoleRoute>} />
 
           <Route

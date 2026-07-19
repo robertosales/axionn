@@ -222,7 +222,7 @@ begin
   ),
   keys as (
     select e.feature_key from context c join public.saas_plan_entitlements e on e.plan_id = c.plan_id
-    union select feature_key from addon_values
+    union select a.feature_key from addon_values a
     union
     select o.feature_key
     from public.organization_entitlement_overrides o

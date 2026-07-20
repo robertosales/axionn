@@ -93,7 +93,7 @@ export default function TestRunPage() {
             {run.status === "in_progress" && can.canExecute && (
               <Button onClick={() => a.complete.mutate(false)}><CheckCircle2 className="mr-2 h-4 w-4" />Concluir</Button>
             )}
-            {run.status === "completed" && can.canManageTestRuns && (
+            {run.status === "completed" && can.manageTestRuns && (
               <Button variant="outline" onClick={() => setReopenDialogOpen(true)}><RotateCcw className="mr-2 h-4 w-4" />Reabrir</Button>
             )}
           </div>

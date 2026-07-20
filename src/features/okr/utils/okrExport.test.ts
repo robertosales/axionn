@@ -32,10 +32,13 @@ const mockObjectives: OkrObjective[] = [
         objective_id: "1",
         created_at: "",
         updated_at: "",
+        check_ins: [],
       },
     ],
     created_at: "",
     updated_at: "",
+    description: "",
+    progress: 72,
   },
   {
     id: "2",

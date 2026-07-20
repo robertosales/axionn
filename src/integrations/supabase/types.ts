@@ -15156,6 +15156,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      assert_feature_access: {
+        Args: { p_feature_code: string; p_increment?: number; p_org_id: string }
+        Returns: undefined
+      }
       assert_organization_entitlement: {
         Args: { p_feature_key: string; p_org_id: string }
         Returns: undefined
@@ -15481,24 +15485,36 @@ export type Database = {
           raw_token: string
         }[]
       }
-      create_organization_project_v2: {
-        Args: {
-          p_code?: string
-          p_contract_id: string
-          p_description?: string
-          p_module_type?: string
-          p_name: string
-          p_org_id: string
-          p_redmine_id?: number
-          p_team_id: string
-        }
-        Returns: string
-      }
+      create_organization_project_v2:
+        | {
+            Args: {
+              p_contract_id: string
+              p_description?: string
+              p_module_type?: string
+              p_name: string
+              p_org_id: string
+              p_team_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_code?: string
+              p_contract_id: string
+              p_description?: string
+              p_module_type?: string
+              p_name: string
+              p_org_id: string
+              p_redmine_id?: number
+              p_team_id: string
+            }
+            Returns: string
+          }
       create_organization_team_v2: {
         Args: {
           p_company_id?: string
           p_contract_id?: string
-          p_module: string
+          p_module?: string
           p_name: string
           p_org_id: string
         }
@@ -16509,6 +16525,15 @@ export type Database = {
       invalidate_organization_entitlement_cache: {
         Args: { p_org_id: string }
         Returns: undefined
+      }
+      invite_organization_member_with_enforcement: {
+        Args: {
+          p_email: string
+          p_module_ids?: string[]
+          p_org_id: string
+          p_role?: string
+        }
+        Returns: string
       }
       is_admin: { Args: never; Returns: boolean }
       is_apf_auxiliary_action: { Args: { p_text: string }; Returns: boolean }

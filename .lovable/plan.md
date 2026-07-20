@@ -1,46 +1,35 @@
-## Pendência 1 — Corrigir teste `operationalConsole.contract.test.ts`
+# OKR — Fechamento de Ciclo (Plano de Execução Fasado)
 
-O App.tsx atual não usa mais `LegacyOperationalRoute` para `/admin/gitlab-integrations`; ele redireciona diretamente:
+Fonte-mestre: `docs/okr-plano-mestre.md` (2430 linhas).
+Execução por PRs 0–10 conforme seção 19 do plano.
+Cada PR = 1 iteração revisável/implantável. Só avanço para o próximo após o usuário validar.
 
-```tsx
-<Route path="/admin/gitlab-integrations"
-  element={<Navigate to="/organization/gitlab-integrations" replace />} />
-<Route path="/organization/gitlab-integrations" element={<AdminGitlabIntegrationsPage />} />
-```
+## Status
+- [ ] PR 0 — Preflight & baseline (feature flag `okr_v2_enabled`, ADR, inventário)
+- [ ] PR 1 — Entitlements canônicos OKR (features, limites por plano, guard)
+- [ ] PR 2 — RBAC, RLS e RPC boundary (permissões, roles, revogação de mutações diretas)
+- [ ] PR 3 — Tabela `okr_cycles` + lifecycle + UI de ciclos + backfill
+- [ ] PR 4 — Objectives + alinhamento (`okr_objective_alignments`)
+- [ ] PR 5 — KRs + motor canônico único (`compute_kr_progress`, `compute_objective_progress`)
+- [ ] PR 6 — Check-in transacional (`record_okr_check_in_v2` + snapshots + auditoria)
+- [ ] PR 7 — Métricas automáticas + fila (`okr_metric_definitions/bindings`, edge fn simplificada)
+- [ ] PR 8 — Iniciativas + dependências + alertas
+- [ ] PR 9 — Reviews (objective + cycle), encerramento, carry-forward
+- [ ] PR 10 — Dashboards, exportação, observabilidade, E2E, hardening
 
-A assertion `expect(app).toContain('platformPath={undefined}')` está obsoleta.
+## Princípios (seção 2 do plano)
+- Autoridade no backend: mutações críticas só via RPC transacional.
+- Preservação de histórico: nada de delete físico após publicação — só archive.
+- Motor único de cálculo (canônico no Postgres).
+- Ciclo como entidade de negócio com lifecycle próprio.
+- Todas as RPCs `SECURITY DEFINER` com `SET search_path = public`, RLS ativo em todas as novas tabelas, `GRANT` explícito.
 
-**Ação (somente no teste, sem tocar produção):**
+## Convenções técnicas
+- Migrations idempotentes, uma por PR (agrupando as sub-migrations da seção 6 do plano quando pertinente).
+- Novos tipos frontend em `src/features/okr/types.ts` — não quebrar `OkrObjective`/`OkrKeyResult` legados.
+- Feature flag `VITE_OKR_V2_ENABLED` controlando UI nova enquanto o legado coexiste.
+- Testes pgTAP em `supabase/tests/database/*_okr_*.test.sql` + vitest em `src/features/okr/**`.
 
-Em `src/features/organization/operationalConsole.contract.test.ts`, no bloco `it("does not redirect the gitlab integrations route to platform plans", ...)`, substituir:
-
-```ts
-expect(app).toContain('path="/admin/gitlab-integrations"');
-expect(app).toContain('platformPath={undefined}');
-```
-
-por asserções que refletem o comportamento atual:
-
-```ts
-expect(app).toContain('path="/admin/gitlab-integrations"');
-expect(app).toContain('to="/organization/gitlab-integrations"');
-expect(app).not.toContain('platformPath="/platform"\n              >\n                <AdminGitlabIntegrationsPage');
-```
-
-(a última garante que a rota gitlab não está mais envolvida por `LegacyOperationalRoute` com redirect para platform).
-
-Resultado esperado: 149/149 testes passando.
-
-## Pendência 2 — Deploy da Edge Function `gitlab-webhook-register`
-
-Importante esclarecer: no Lovable Cloud **não existe `npx supabase login` nem deploy manual via CLI** — as Edge Functions são deployadas automaticamente pela plataforma quando o código muda, e podem ser re-deployadas via a ferramenta interna `supabase--deploy_edge_functions`.
-
-**Ação:**
-
-1. Chamar `supabase--deploy_edge_functions(["gitlab-webhook-register"])` para forçar o redeploy.
-2. Fazer um smoke test via `supabase--curl_edge_functions` em `/gitlab-webhook-register` com um `integrationId` inexistente para confirmar que a função responde 404 (prova de que está ativa e alcançável).
-3. Reportar ao usuário que o smoke test end-to-end (criar integração real com token GitLab válido) só pode ser feito por ele na UI, já que exige credenciais reais do GitLab — e indicar a tabela de troubleshooting já fornecida caso o toast retorne "Registre o webhook manualmente".
-
-## Fora de escopo (confirmado)
-
-Nenhuma alteração em: `git-webhook-handler`, `HUEditDrawer.tsx`, `AdminGitlabIntegrationsPage.tsx`, migrations, ou qualquer componente de produção.
+## Fora de escopo desta série
+- Mudanças em Sala Ágil/Sustentação que não sejam integrações listadas na seção 15.
+- Rewrite do módulo OKR legado — coexiste até PR 10.

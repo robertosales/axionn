@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { transitionPlatformSubscription } from "@/features/platform/services/plans.service";
-import type { PlatformPlan } from "@/features/platform/services/plans.service";
+import type { SaasPlan as PlatformPlan } from "@/features/platform/services/plans.service";
 
 // ============================================================
 // TYPES

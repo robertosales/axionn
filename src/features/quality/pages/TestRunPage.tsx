@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQualityPermissions } from "../hooks/useQualityPermissions";
 import { CheckCircle2, ExternalLink, Play, RotateCcw } from "lucide-react";
 import { Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -93,7 +94,7 @@ export default function TestRunPage() {
             {run.status === "in_progress" && can.canExecute && (
               <Button onClick={() => a.complete.mutate(false)}><CheckCircle2 className="mr-2 h-4 w-4" />Concluir</Button>
             )}
-            {run.status === "completed" && can.canManageTestRuns && (
+            {run.status === "completed" && can.manageTestRuns && (
               <Button variant="outline" onClick={() => setReopenDialogOpen(true)}><RotateCcw className="mr-2 h-4 w-4" />Reabrir</Button>
             )}
           </div>

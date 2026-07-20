@@ -66,7 +66,7 @@ export default function TestSuitesPage() {
             Organize casos reutilizáveis por fluxo, produto ou objetivo.
           </p>
         </div>
-        {can.canManageTestSuites && (
+        {can.manageTestSuites && (
           <Button onClick={() => setOpen(true)}>
             <Plus className="mr-2 h-4 w-4"/>Nova suíte
           </Button>

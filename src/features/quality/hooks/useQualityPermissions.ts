@@ -24,7 +24,6 @@ export function useQualityPermissions() {
     isOrganizationAdmin,
     isPlatformAdmin,
     currentOrganizationId,
-    isMemberOfOrg,
   } = useOrganization();
 
   const isSalaAgilModuleAdmin = getModuleRole("sala_agil") === "admin";

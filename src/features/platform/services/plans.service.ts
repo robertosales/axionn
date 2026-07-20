@@ -348,9 +348,9 @@ export async function listSaasPlans(): Promise<SaasPlan[]> {
   if (error) throw error;
   return (data ?? []).map((row) => ({
     ...normalizePlan(row),
-    versions: (row.versions ?? []).map((v: Record<string, unknown>) => ({
+    versions: ((row.versions ?? []) as Record<string, unknown>[]).map((v) => ({
       ...normalizePlanVersion(v),
-      features: (v.features ?? []).map((f: Record<string, unknown>) => ({
+      features: ((v.features ?? []) as Array<Record<string, unknown> & { feature?: { code?: string; name?: string; module_code?: string } }>).map((f) => ({
         ...normalizePlanVersionFeature(f),
         featureCode: f.feature?.code ?? "",
         featureName: f.feature?.name ?? "",
@@ -381,9 +381,9 @@ export async function getSaasPlanWithVersions(planCode: string): Promise<SaasPla
   const plan = normalizePlan(data);
   return {
     ...plan,
-    versions: (data.versions ?? []).map((v: Record<string, unknown>) => ({
+    versions: ((data.versions ?? []) as Record<string, unknown>[]).map((v) => ({
       ...normalizePlanVersion(v),
-      features: (v.features ?? []).map((f: Record<string, unknown>) => ({
+      features: ((v.features ?? []) as Array<Record<string, unknown> & { feature?: { code?: string; name?: string; module_code?: string } }>).map((f) => ({
         ...normalizePlanVersionFeature(f),
         featureCode: f.feature?.code ?? "",
         featureName: f.feature?.name ?? "",
@@ -412,7 +412,7 @@ export async function getActivePlanVersion(planCode: string): Promise<SaasPlanVe
   if (error) throw error;
   if (!data) return null;
   const version = normalizePlanVersion(data);
-  version.features = (data.features ?? []).map((f: Record<string, unknown>) => ({
+  version.features = ((data.features ?? []) as Array<Record<string, unknown> & { feature?: { code?: string; name?: string; module_code?: string } }>).map((f) => ({
     ...normalizePlanVersionFeature(f),
     featureCode: f.feature?.code ?? "",
     featureName: f.feature?.name ?? "",

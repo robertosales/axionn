@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import type { PlatformPlan } from "@/features/platform/services/plans.service";
+import type { SaasPlan as PlatformPlan } from "@/features/platform/services/plans.service";
 
 // ============================================================
 // TYPES

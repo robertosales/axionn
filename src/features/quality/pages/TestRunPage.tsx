@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQualityPermissions } from "../hooks/useQualityPermissions";
 import { CheckCircle2, ExternalLink, Play, RotateCcw } from "lucide-react";
 import { Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";

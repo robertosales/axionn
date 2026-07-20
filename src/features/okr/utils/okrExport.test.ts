@@ -55,6 +55,8 @@ const mockObjectives: OkrObjective[] = [
     key_results: [],
     created_at: "",
     updated_at: "",
+    description: "",
+    progress: 30,
   },
 ];
 

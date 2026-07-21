@@ -15331,6 +15331,14 @@ export type Database = {
         Returns: boolean
       }
       check_license_quota: { Args: { p_team_id: string }; Returns: Json }
+      check_okr_limit_v1: {
+        Args: {
+          p_current_count: number
+          p_feature_key: string
+          p_org_id: string
+        }
+        Returns: undefined
+      }
       claim_next_apf_job: {
         Args: never
         Returns: {
@@ -16333,6 +16341,15 @@ export type Database = {
           plan: Database["public"]["Enums"]["org_plan"]
           slug: string
           status: Database["public"]["Enums"]["org_status"]
+        }[]
+      }
+      get_okr_entitlement_matrix_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          enabled: boolean
+          feature_key: string
+          limit_value: number
+          source: string
         }[]
       }
       get_org_briefing_retention_config: {
@@ -17345,6 +17362,15 @@ export type Database = {
       resolve_contract_org_id: {
         Args: { p_contract_id: string }
         Returns: string
+      }
+      resolve_okr_entitlement_v1: {
+        Args: { p_feature_key: string; p_org_id: string }
+        Returns: {
+          enabled: boolean
+          feature_key: string
+          limit_value: number
+          source: string
+        }[]
       }
       resolve_project_org_id: {
         Args: { p_project_id: string }

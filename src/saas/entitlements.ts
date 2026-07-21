@@ -45,6 +45,10 @@ export const ENTITLEMENT_KEYS = {
   OKR_HISTORY: "okr.history",
   OKR_EXPORT: "okr.export",
   OKR_AI_RECOMMENDATIONS: "okr.ai_recommendations",
+  OKR_ALIGNMENTS: "okr.alignments",
+  OKR_CYCLE_MANAGEMENT: "okr.cycle_management",
+  OKR_EXECUTIVE_DASHBOARD: "okr.executive_dashboard",
+  OKR_ADVANCED_ALERTS: "okr.advanced_alerts",
 
   // Auditoria
   AUDIT_ACCESS: "audit.access",

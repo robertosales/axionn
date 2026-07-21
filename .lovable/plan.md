@@ -5,7 +5,7 @@ Execução por PRs 0–10 conforme seção 19 do plano.
 Cada PR = 1 iteração revisável/implantável. Só avanço para o próximo após o usuário validar.
 
 ## Status
-- [ ] PR 0 — Preflight & baseline (feature flag `okr_v2_enabled`, ADR, inventário)
+- [x] PR 0 — Preflight & baseline (feature flag `okr_v2_enabled`, ADR, inventário)
 - [ ] PR 1 — Entitlements canônicos OKR (features, limites por plano, guard)
 - [ ] PR 2 — RBAC, RLS e RPC boundary (permissões, roles, revogação de mutações diretas)
 - [ ] PR 3 — Tabela `okr_cycles` + lifecycle + UI de ciclos + backfill

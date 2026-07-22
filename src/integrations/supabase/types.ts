@@ -15021,6 +15021,10 @@ export type Database = {
         Args: { p_team_ids: string[] }
         Returns: undefined
       }
+      _okr_v2_guard: {
+        Args: { _entitlement?: string; _org_id: string; _permission: string }
+        Returns: undefined
+      }
       accept_organization_invitation: {
         Args: { p_token: string }
         Returns: {
@@ -15110,6 +15114,14 @@ export type Database = {
         }[]
       }
       archive_expired_briefings: { Args: never; Returns: number }
+      archive_okr_key_result_v2: {
+        Args: { p_key_result_id: string; p_org_id: string; p_reason?: string }
+        Returns: string
+      }
+      archive_okr_objective_v2: {
+        Args: { p_objective_id: string; p_org_id: string; p_reason?: string }
+        Returns: string
+      }
       archive_organization_company_v2: {
         Args: { p_company_id: string; p_org_id: string }
         Returns: undefined
@@ -15449,6 +15461,10 @@ export type Database = {
       create_default_retention_policies: {
         Args: { p_tenant_id: string }
         Returns: undefined
+      }
+      create_okr_objective_v2: {
+        Args: { p_org_id: string; p_payload: Json }
+        Returns: string
       }
       create_organization_company_v2: {
         Args: {
@@ -16523,6 +16539,10 @@ export type Database = {
           resource: string
         }[]
       }
+      has_okr_permission_v2: {
+        Args: { _org_id: string; _permission: string; _user_id: string }
+        Returns: boolean
+      }
       has_organization_entitlement: {
         Args: { p_feature_key: string; p_org_id: string }
         Returns: boolean
@@ -17211,6 +17231,10 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      record_okr_check_in_v2: {
+        Args: { p_key_result_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
       record_organization_usage: {
         Args: {
           p_idempotency_key: string
@@ -17577,6 +17601,10 @@ export type Database = {
         Args: { p_status: string; p_ticket_id: string }
         Returns: undefined
       }
+      update_okr_objective_v2: {
+        Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
       update_organization_company_v2: {
         Args: {
           p_cnpj?: string
@@ -17717,6 +17745,15 @@ export type Database = {
       upsert_demandas_batch: {
         Args: { p_rows: Json; p_team_id: string }
         Returns: Json
+      }
+      upsert_okr_key_result_v2: {
+        Args: {
+          p_key_result_id?: string
+          p_objective_id: string
+          p_org_id: string
+          p_payload: Json
+        }
+        Returns: string
       }
       upsert_platform_organization_entitlement_override_v1: {
         Args: {

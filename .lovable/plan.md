@@ -7,7 +7,7 @@ Cada PR = 1 iteração revisável/implantável. Só avanço para o próximo apó
 ## Status
 - [x] PR 0 — Preflight & baseline (feature flag `okr_v2_enabled`, ADR, inventário)
 - [x] PR 1 — Entitlements canônicos OKR (features, limites por plano, guard)
-- [ ] PR 2 — RBAC, RLS e RPC boundary (permissões, roles, revogação de mutações diretas)
+- [x] PR 2 — RBAC + esqueleto de RPCs (`has_okr_permission_v2`, guard, 6 RPCs stub)
 - [ ] PR 3 — Tabela `okr_cycles` + lifecycle + UI de ciclos + backfill
 - [ ] PR 4 — Objectives + alinhamento (`okr_objective_alignments`)
 - [ ] PR 5 — KRs + motor canônico único (`compute_kr_progress`, `compute_objective_progress`)

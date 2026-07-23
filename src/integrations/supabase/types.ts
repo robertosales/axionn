@@ -7741,6 +7741,125 @@ export type Database = {
           },
         ]
       }
+      okr_cycles: {
+        Row: {
+          allow_overachievement: boolean
+          archived_at: string | null
+          archived_by: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          check_in_frequency: string
+          check_in_grace_days: number
+          check_in_weekday: number | null
+          closed_at: string | null
+          closed_by: string | null
+          closing_started_at: string | null
+          closing_started_by: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          cycle_type: string
+          ends_at: string
+          id: string
+          name: string
+          organization_id: string
+          published_at: string | null
+          published_by: string | null
+          recommended_krs_max: number | null
+          recommended_krs_min: number | null
+          recommended_objectives_max: number | null
+          recommended_objectives_min: number | null
+          scoring_method: string
+          settings: Json
+          starts_at: string
+          status: string
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          allow_overachievement?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          check_in_frequency?: string
+          check_in_grace_days?: number
+          check_in_weekday?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_started_at?: string | null
+          closing_started_by?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          cycle_type?: string
+          ends_at: string
+          id?: string
+          name: string
+          organization_id: string
+          published_at?: string | null
+          published_by?: string | null
+          recommended_krs_max?: number | null
+          recommended_krs_min?: number | null
+          recommended_objectives_max?: number | null
+          recommended_objectives_min?: number | null
+          scoring_method?: string
+          settings?: Json
+          starts_at: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          allow_overachievement?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          check_in_frequency?: string
+          check_in_grace_days?: number
+          check_in_weekday?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_started_at?: string | null
+          closing_started_by?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          cycle_type?: string
+          ends_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          published_at?: string | null
+          published_by?: string | null
+          recommended_krs_max?: number | null
+          recommended_krs_min?: number | null
+          recommended_objectives_max?: number | null
+          recommended_objectives_min?: number | null
+          scoring_method?: string
+          settings?: Json
+          starts_at?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_cycles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_initiatives: {
         Row: {
           completed_at: string | null
@@ -8007,6 +8126,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           cycle: string
+          cycle_id: string | null
           description: string | null
           end_date: string | null
           health_override_at: string | null
@@ -8019,6 +8139,7 @@ export type Database = {
           lifecycle_status: string
           manual_health_override: string | null
           measurement_status: string
+          organization_id: string | null
           owner_id: string | null
           progress: number
           scope_type: string
@@ -8035,6 +8156,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           cycle: string
+          cycle_id?: string | null
           description?: string | null
           end_date?: string | null
           health_override_at?: string | null
@@ -8047,6 +8169,7 @@ export type Database = {
           lifecycle_status?: string
           manual_health_override?: string | null
           measurement_status?: string
+          organization_id?: string | null
           owner_id?: string | null
           progress?: number
           scope_type?: string
@@ -8063,6 +8186,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           cycle?: string
+          cycle_id?: string | null
           description?: string | null
           end_date?: string | null
           health_override_at?: string | null
@@ -8075,6 +8199,7 @@ export type Database = {
           lifecycle_status?: string
           manual_health_override?: string | null
           measurement_status?: string
+          organization_id?: string | null
           owner_id?: string | null
           progress?: number
           scope_type?: string
@@ -8086,6 +8211,20 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "okr_objectives_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "okr_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objectives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "okr_objectives_team_id_fkey"
             columns: ["team_id"]
@@ -15021,6 +15160,15 @@ export type Database = {
         Args: { p_team_ids: string[] }
         Returns: undefined
       }
+      _okr_cycle_derive_period: {
+        Args: { _code: string }
+        Returns: {
+          cycle_type: string
+          display_name: string
+          ends_at: string
+          starts_at: string
+        }[]
+      }
       _okr_v2_guard: {
         Args: { _entitlement?: string; _org_id: string; _permission: string }
         Returns: undefined
@@ -15114,6 +15262,7 @@ export type Database = {
         }[]
       }
       archive_expired_briefings: { Args: never; Returns: number }
+      archive_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
       archive_okr_key_result_v2: {
         Args: { p_key_result_id: string; p_org_id: string; p_reason?: string }
         Returns: string
@@ -15333,6 +15482,10 @@ export type Database = {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      cancel_okr_cycle_v1: {
+        Args: { p_cycle_id: string; p_reason: string }
+        Returns: undefined
+      }
       check_commercial_usage_v1: {
         Args: {
           p_correlation_id?: string
@@ -15377,6 +15530,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      close_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
       complete_ai_briefing_run: {
         Args: {
           p_duration_ms?: number
@@ -15461,6 +15615,10 @@ export type Database = {
       create_default_retention_policies: {
         Args: { p_tenant_id: string }
         Returns: undefined
+      }
+      create_okr_cycle_v1: {
+        Args: { p_org_id: string; p_payload: Json }
+        Returns: string
       }
       create_okr_objective_v2: {
         Args: { p_org_id: string; p_payload: Json }
@@ -16743,6 +16901,27 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      list_okr_cycles_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          archived_at: string
+          check_in_frequency: string
+          closed_at: string
+          code: string
+          created_at: string
+          cycle_type: string
+          ends_at: string
+          id: string
+          name: string
+          objectives_count: number
+          published_at: string
+          scoring_method: string
+          starts_at: string
+          status: string
+          timezone: string
+          updated_at: string
+        }[]
+      }
       list_platform_ai_providers_v2: {
         Args: { p_only_active?: boolean }
         Returns: {
@@ -17218,6 +17397,7 @@ export type Database = {
         Args: { p_contract_id: string; p_model_name?: string }
         Returns: string
       }
+      publish_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
       quality_case_snapshot: { Args: { p_case_id: string }; Returns: Json }
       recalculate_apf_session_totals: {
         Args: { p_session_id: string }
@@ -17529,6 +17709,10 @@ export type Database = {
           title: string
         }[]
       }
+      start_okr_cycle_closing_v1: {
+        Args: { p_cycle_id: string }
+        Returns: undefined
+      }
       start_quality_test_run_v1: {
         Args: { p_correlation_id?: string; p_org_id: string; p_run_id: string }
         Returns: undefined
@@ -17599,6 +17783,10 @@ export type Database = {
       }
       update_backoffice_support_ticket_status: {
         Args: { p_status: string; p_ticket_id: string }
+        Returns: undefined
+      }
+      update_okr_cycle_v1: {
+        Args: { p_cycle_id: string; p_payload: Json }
         Returns: undefined
       }
       update_okr_objective_v2: {

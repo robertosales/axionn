@@ -136,6 +136,11 @@ const OkrCyclesPage = lazy(() =>
     default: module.OkrCyclesPage,
   })),
 );
+const OkrObjectivesPage = lazy(() =>
+  import("./features/okr/pages/OkrObjectivesPage").then((module) => ({
+    default: module.OkrObjectivesPage,
+  })),
+);
 
 function PageLoader() {
   return (
@@ -531,6 +536,7 @@ function AppRoutes() {
           />
           <Route path="/okr" element={<ProtectedRoute><OkrPage /></ProtectedRoute>} />
           <Route path="/okr/ciclos" element={<ProtectedRoute><OkrCyclesPage /></ProtectedRoute>} />
+          <Route path="/okr/objectives" element={<ProtectedRoute><OkrObjectivesPage /></ProtectedRoute>} />
           <Route
             path="/sala-agil"
             element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}

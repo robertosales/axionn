@@ -8119,10 +8119,81 @@ export type Database = {
           },
         ]
       }
+      okr_objective_alignments: {
+        Row: {
+          alignment_type: string
+          archived_at: string | null
+          archived_by: string | null
+          contribution_weight: number | null
+          created_at: string
+          created_by: string
+          id: string
+          organization_id: string
+          rationale: string | null
+          source_objective_id: string
+          target_objective_id: string
+        }
+        Insert: {
+          alignment_type: string
+          archived_at?: string | null
+          archived_by?: string | null
+          contribution_weight?: number | null
+          created_at?: string
+          created_by: string
+          id?: string
+          organization_id: string
+          rationale?: string | null
+          source_objective_id: string
+          target_objective_id: string
+        }
+        Update: {
+          alignment_type?: string
+          archived_at?: string | null
+          archived_by?: string | null
+          contribution_weight?: number | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          organization_id?: string
+          rationale?: string | null
+          source_objective_id?: string
+          target_objective_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_objective_alignments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objective_alignments_source_objective_id_fkey"
+            columns: ["source_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objective_alignments_target_objective_id_fkey"
+            columns: ["target_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_objectives: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           calculated_health: string
           calculated_progress: number | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          completed_at: string | null
+          completed_by: string | null
           created_at: string
           created_by: string | null
           cycle: string
@@ -8137,22 +8208,41 @@ export type Database = {
           last_calculated_at: string | null
           legacy_progress: number | null
           lifecycle_status: string
+          lock_version: number
           manual_health_override: string | null
           measurement_status: string
+          objective_level: string
           organization_id: string | null
           owner_id: string | null
+          parent_objective_id: string | null
+          paused_at: string | null
           progress: number
+          published_at: string | null
+          published_by: string | null
+          quality_issues: Json
+          quality_score: number | null
+          quality_status: string | null
+          review_started_at: string | null
           scope_type: string
+          sponsor_id: string | null
           start_date: string | null
           status: string
           team_id: string | null
           title: string
           updated_at: string
           updated_by: string | null
+          version: number
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           calculated_health?: string
           calculated_progress?: number | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           created_by?: string | null
           cycle: string
@@ -8167,22 +8257,41 @@ export type Database = {
           last_calculated_at?: string | null
           legacy_progress?: number | null
           lifecycle_status?: string
+          lock_version?: number
           manual_health_override?: string | null
           measurement_status?: string
+          objective_level?: string
           organization_id?: string | null
           owner_id?: string | null
+          parent_objective_id?: string | null
+          paused_at?: string | null
           progress?: number
+          published_at?: string | null
+          published_by?: string | null
+          quality_issues?: Json
+          quality_score?: number | null
+          quality_status?: string | null
+          review_started_at?: string | null
           scope_type?: string
+          sponsor_id?: string | null
           start_date?: string | null
           status?: string
           team_id?: string | null
           title: string
           updated_at?: string
           updated_by?: string | null
+          version?: number
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           calculated_health?: string
           calculated_progress?: number | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           created_by?: string | null
           cycle?: string
@@ -8197,18 +8306,30 @@ export type Database = {
           last_calculated_at?: string | null
           legacy_progress?: number | null
           lifecycle_status?: string
+          lock_version?: number
           manual_health_override?: string | null
           measurement_status?: string
+          objective_level?: string
           organization_id?: string | null
           owner_id?: string | null
+          parent_objective_id?: string | null
+          paused_at?: string | null
           progress?: number
+          published_at?: string | null
+          published_by?: string | null
+          quality_issues?: Json
+          quality_score?: number | null
+          quality_status?: string | null
+          review_started_at?: string | null
           scope_type?: string
+          sponsor_id?: string | null
           start_date?: string | null
           status?: string
           team_id?: string | null
           title?: string
           updated_at?: string
           updated_by?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -8223,6 +8344,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objectives_parent_objective_id_fkey"
+            columns: ["parent_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
             referencedColumns: ["id"]
           },
           {
@@ -15160,6 +15288,10 @@ export type Database = {
         Args: { p_team_ids: string[] }
         Returns: undefined
       }
+      _okr_assert_cycle_open: {
+        Args: { _cycle_id: string; _org_id: string }
+        Returns: undefined
+      }
       _okr_cycle_derive_period: {
         Args: { _code: string }
         Returns: {
@@ -15262,6 +15394,10 @@ export type Database = {
         }[]
       }
       archive_expired_briefings: { Args: never; Returns: number }
+      archive_okr_alignment_v1: {
+        Args: { p_alignment_id: string; p_org_id: string }
+        Returns: string
+      }
       archive_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
       archive_okr_key_result_v2: {
         Args: { p_key_result_id: string; p_org_id: string; p_reason?: string }
@@ -15615,6 +15751,10 @@ export type Database = {
       create_default_retention_policies: {
         Args: { p_tenant_id: string }
         Returns: undefined
+      }
+      create_okr_alignment_v1: {
+        Args: { p_org_id: string; p_payload: Json }
+        Returns: string
       }
       create_okr_cycle_v1: {
         Args: { p_org_id: string; p_payload: Json }
@@ -16901,6 +17041,21 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      list_okr_alignments_v1: {
+        Args: { p_objective_id?: string; p_org_id: string }
+        Returns: {
+          alignment_type: string
+          contribution_weight: number
+          created_at: string
+          created_by: string
+          id: string
+          rationale: string
+          source_objective_id: string
+          source_title: string
+          target_objective_id: string
+          target_title: string
+        }[]
+      }
       list_okr_cycles_v1: {
         Args: { p_org_id: string }
         Returns: {
@@ -16920,6 +17075,41 @@ export type Database = {
           status: string
           timezone: string
           updated_at: string
+        }[]
+      }
+      list_okr_objectives_v2: {
+        Args: {
+          p_cycle_id?: string
+          p_include_archived?: boolean
+          p_org_id: string
+        }
+        Returns: {
+          archived_at: string
+          calculated_health: string
+          calculated_progress: number
+          created_at: string
+          cycle_code: string
+          cycle_id: string
+          description: string
+          end_date: string
+          id: string
+          lifecycle_status: string
+          lock_version: number
+          objective_level: string
+          organization_id: string
+          owner_id: string
+          parent_objective_id: string
+          progress: number
+          published_at: string
+          scope_type: string
+          sponsor_id: string
+          start_date: string
+          status: string
+          team_id: string
+          team_name: string
+          title: string
+          updated_at: string
+          version: number
         }[]
       }
       list_platform_ai_providers_v2: {
@@ -17398,6 +17588,10 @@ export type Database = {
         Returns: string
       }
       publish_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
+      publish_okr_objective_v2: {
+        Args: { p_objective_id: string; p_org_id: string }
+        Returns: string
+      }
       quality_case_snapshot: { Args: { p_case_id: string }; Returns: Json }
       recalculate_apf_session_totals: {
         Args: { p_session_id: string }

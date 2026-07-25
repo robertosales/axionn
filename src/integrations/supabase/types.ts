@@ -8005,6 +8005,10 @@ export type Database = {
       }
       okr_key_results: {
         Row: {
+          allow_overachievement: boolean
+          archive_reason: string | null
+          archived_at: string | null
+          archived_by: string | null
           baseline_value: number | null
           calculated_health: string
           calculated_progress: number | null
@@ -8020,6 +8024,7 @@ export type Database = {
           id: string
           last_measured_at: string | null
           lifecycle_status: string
+          lock_version: number
           measurement_quality: string
           metric_code: string | null
           metric_config: Json
@@ -8040,6 +8045,10 @@ export type Database = {
           weight: number | null
         }
         Insert: {
+          allow_overachievement?: boolean
+          archive_reason?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           baseline_value?: number | null
           calculated_health?: string
           calculated_progress?: number | null
@@ -8055,6 +8064,7 @@ export type Database = {
           id?: string
           last_measured_at?: string | null
           lifecycle_status?: string
+          lock_version?: number
           measurement_quality?: string
           metric_code?: string | null
           metric_config?: Json
@@ -8075,6 +8085,10 @@ export type Database = {
           weight?: number | null
         }
         Update: {
+          allow_overachievement?: boolean
+          archive_reason?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           baseline_value?: number | null
           calculated_health?: string
           calculated_progress?: number | null
@@ -8090,6 +8104,7 @@ export type Database = {
           id?: string
           last_measured_at?: string | null
           lifecycle_status?: string
+          lock_version?: number
           measurement_quality?: string
           metric_code?: string | null
           metric_config?: Json
@@ -15578,6 +15593,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      calculate_okr_kr_progress_v2: {
+        Args: {
+          p_allow_overachievement?: boolean
+          p_baseline: number
+          p_current: number
+          p_direction: string
+          p_target: number
+          p_target_max: number
+          p_target_min: number
+        }
+        Returns: {
+          calculated_progress: number
+          calculation_reason: string
+          calculation_status: string
+          raw_progress: number
+        }[]
+      }
       can_access_ai_briefing: {
         Args: { p_org_id: string; p_team_id: string }
         Returns: boolean
@@ -15758,6 +15790,10 @@ export type Database = {
       }
       create_okr_cycle_v1: {
         Args: { p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_okr_key_result_v2: {
+        Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
         Returns: string
       }
       create_okr_objective_v2: {
@@ -17077,6 +17113,45 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_okr_key_results_v2: {
+        Args: {
+          p_include_archived?: boolean
+          p_objective_id: string
+          p_org_id: string
+        }
+        Returns: {
+          allow_overachievement: boolean
+          archived_at: string
+          baseline_value: number
+          calculated_health: string
+          calculated_progress: number
+          created_at: string
+          current_value: number
+          description: string
+          direction: string
+          end_date: string
+          formula_version: string
+          frequency: string
+          id: string
+          last_measured_at: string
+          lifecycle_status: string
+          lock_version: number
+          measurement_quality: string
+          metric_code: string
+          objective_id: string
+          owner_id: string
+          raw_progress: number
+          start_date: string
+          target_max: number
+          target_min: number
+          target_value: number
+          title: string
+          unit: string
+          update_type: string
+          updated_at: string
+          weight: number
+        }[]
+      }
       list_okr_objectives_v2: {
         Args: {
           p_cycle_id?: string
@@ -17597,6 +17672,10 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      recalculate_okr_objective_v2: {
+        Args: { p_objective_id: string }
+        Returns: undefined
+      }
       recalculate_quality_run_item_v1: {
         Args: { p_org_id: string; p_run_item_id: string }
         Returns: string
@@ -17769,6 +17848,14 @@ export type Database = {
           limit_value: number
           source: string
         }[]
+      }
+      resolve_okr_objective_health_v2: {
+        Args: {
+          p_expected_progress: number
+          p_lifecycle_status: string
+          p_progress: number
+        }
+        Returns: string
       }
       resolve_project_org_id: {
         Args: { p_project_id: string }
@@ -17982,6 +18069,10 @@ export type Database = {
       update_okr_cycle_v1: {
         Args: { p_cycle_id: string; p_payload: Json }
         Returns: undefined
+      }
+      update_okr_key_result_v2: {
+        Args: { p_key_result_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
       }
       update_okr_objective_v2: {
         Args: { p_objective_id: string; p_org_id: string; p_payload: Json }

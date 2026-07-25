@@ -123,6 +123,7 @@ Estado em 2026-07-25:
 
 A parte local da Fase A está concluída. A Fase B foi concluída em 2026-07-25 com
 preflight, ativação e monitoramento aprovados; o enforcement permaneceu ativo após
-a Operação 10. A Fase C avançou no gate comercial e no guard de rota fail-closed,
-mas ainda requer filtragem da navegação, testes de integração e rollout cumulativo
-do domínio Quality.
+a Operação 10. A Fase C avançou no gate comercial, guard de rota fail-closed,
+navegação orientada por acesso efetivo e validação cumulativa somente leitura.
+Ainda requer executar o gate cumulativo no Lovable Cloud, validar o canário por
+papel e concluir os testes de integração do fluxo casos → planos → execução.

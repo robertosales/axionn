@@ -27,7 +27,6 @@ import {
   Users,
   Upload,
 } from "lucide-react";
-import { QUALITY_MANAGEMENT_ENABLED } from "@/lib/featureFlags";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavigationItem {
@@ -139,7 +138,7 @@ export function buildBreadcrumbs(pathname: string, config: NavigationSection[]):
 }
 
 export const salaAgilNavigationConfig: NavigationSection[] = [
-  ...(QUALITY_MANAGEMENT_ENABLED ? [{
+  {
     id: "sala-agil-quality",
     label: "Qualidade",
     items: [
@@ -148,7 +147,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
       { id: "quality-plans", label: "Planos", icon: ClipboardList, route: "/sala-agil/qualidade/planos" },
       { id: "quality-runs", label: "Execuções", icon: Play, route: "/sala-agil/qualidade/execucoes" },
     ],
-  }] : []),
+  },
   {
     id: "sala-agil-sprints",
     label: "Sprints",
@@ -201,6 +200,16 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
     ],
   },
 ];
+
+export function filterSalaAgilNavigation(
+  canViewQuality: boolean,
+): NavigationSection[] {
+  if (canViewQuality) return salaAgilNavigationConfig;
+
+  return salaAgilNavigationConfig.filter(
+    (section) => section.id !== "sala-agil-quality",
+  );
+}
 
 export const sustentacaoNavigationConfig: NavigationSection[] = [
   {

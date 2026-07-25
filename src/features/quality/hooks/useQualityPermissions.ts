@@ -20,7 +20,10 @@ export type QualityPermission = (typeof QUALITY_PERMISSIONS)[number];
 const qualityEntitlementKey = (orgId: string | null) => 
   ["quality", "entitlement", orgId] as const;
 
-function useQualityEntitlement(organizationId: string | null) {
+function useQualityEntitlement(
+  organizationId: string | null,
+  enabled: boolean,
+) {
   return useQuery({
     queryKey: qualityEntitlementKey(organizationId),
     queryFn: async () => {
@@ -32,13 +35,15 @@ function useQualityEntitlement(organizationId: string | null) {
       if (error) throw error;
       return data as boolean;
     },
-    enabled: Boolean(organizationId),
+    enabled: enabled && Boolean(organizationId),
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 }
 
-export function useQualityPermissions() {
+export function useQualityPermissions(
+  options: { entitlementEnabled?: boolean } = {},
+) {
   const { hasPermission } = useAuth();
   const {
     enabled: organizationTenancyEnabled,
@@ -49,13 +54,17 @@ export function useQualityPermissions() {
     currentOrganizationId,
   } = useOrganization();
 
-  const qualityEntitlement = useQualityEntitlement(currentOrganizationId);
+  const qualityEnabled = import.meta.env.VITE_QUALITY_MANAGEMENT_ENABLED === "true";
+  const entitlementEnabled =
+    qualityEnabled && (options.entitlementEnabled ?? true);
+  const qualityEntitlement = useQualityEntitlement(
+    currentOrganizationId,
+    entitlementEnabled,
+  );
   const hasQualityEntitlement = qualityEntitlement.data ?? false;
 
   const isSalaAgilModuleAdmin = getModuleRole("sala_agil") === "admin";
   const hasSalaAgilAccess = hasModuleAccess("sala_agil");
-
-  const qualityEnabled = import.meta.env.VITE_QUALITY_MANAGEMENT_ENABLED === "true";
 
   const userPermissions = useMemo<Set<string>>(() => {
     const perms = new Set<string>();

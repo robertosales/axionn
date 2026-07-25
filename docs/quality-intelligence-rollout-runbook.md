@@ -1,4 +1,10 @@
-# Quality Intelligence — rollout e rollback do PR 1
+# Quality Intelligence — rollout, validação cumulativa e rollback
+
+## Escopo atual
+
+O domínio não está mais restrito ao PR 1. O estado cumulativo inclui fundação,
+casos e suítes, planos, execução manual, permissões, invariantes de integridade,
+catálogo comercial granular e hardening do entitlement tenant-scoped.
 
 ## Preflight no Lovable
 
@@ -10,10 +16,29 @@
 
 ## Aplicação
 
-1. Executar `20260719090000_quality_management_mvp.sql` pelo fluxo autorizado.
-2. Confirmar o `commit` da transação.
-3. Executar consultas de pós-validação de tabelas, RLS, policies, grants e funções.
-4. Rodar os testes pgTAP em banco isolado, nunca em produção.
+1. Conferir fisicamente os objetos antes de aplicar qualquer migration ausente no
+   histórico remoto.
+2. Aplicar somente migrations comprovadamente ausentes, na ordem cronológica e pelo
+   fluxo autorizado do Lovable.
+3. Confirmar o `commit` de cada transação.
+4. Executar
+   `supabase/operations/20260725_01_quality_intelligence_cumulative_validation.sql`.
+5. Exigir `quality_intelligence_cumulative_validation_ok = true`.
+6. Rodar os testes pgTAP em banco isolado, nunca em produção.
+7. Só então habilitar `VITE_QUALITY_MANAGEMENT_ENABLED` no canário.
+
+Não reaplicar migrations apenas porque não aparecem em
+`supabase_migrations.schema_migrations`.
+
+## Critérios do gate cumulativo
+
+- 14 tabelas Quality disponíveis e com RLS;
+- 19 RPCs públicas esperadas;
+- permissões Quality materializadas;
+- `quality.cases.view` ativa e vinculada a pelo menos uma versão de plano;
+- RPC de entitlement como `security definer` com `search_path` seguro;
+- `anon` sem acesso ao gate comercial;
+- escrita direta de casos bloqueada para `authenticated`.
 
 ## Rollback operacional
 

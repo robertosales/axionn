@@ -87,11 +87,21 @@ O pacote de rollout contém:
 
 ## Estado da ativação
 
-O repositório registra que a ativação formal foi autorizada e que a Operação 9 foi preparada com rollback explícito. O resultado de execução da Operação 10 ainda não está registrado neste documento.
+Em 2026-07-25, após um rollback operacional bem-sucedido e novo preflight, a
+reativação formal foi autorizada e executada. As evidências registradas foram:
 
-Até existir evidência do SQL Editor com `post_enforcement_monitoring_ok = true`, o monitoramento pós-ativação deve ser tratado como pendente.
+- Operação 8: `enforcement_activation_preflight_ok_enforcement_off = true`;
+- Operação 8: `readiness_affected_rows = 0`;
+- Operação 9: `tenancy_enforcement_activation_ok = true`;
+- Operação 9: `tenancy_enforcement_enabled = true`;
+- Operação 9: `tenancy_setting_enabled = true`;
+- Operação 10: `post_enforcement_monitoring_ok = true`;
+- Operação 10: `readiness_affected_rows = 0`;
+- Operação 10: `tenancy_enforcement_enabled = true`;
+- Operação 10: `tenancy_setting_enabled = true`.
 
-Durante essa janela, o arquivo abaixo deve permanecer pronto para execução imediata:
+O rollout de enforcement está concluído e entrou em janela de monitoramento. O
+arquivo abaixo deve permanecer pronto para execução imediata durante essa janela:
 
 `supabase/operations/20260703_09_disable_tenancy_enforcement_rollback.sql`
 
@@ -103,13 +113,9 @@ Para o escopo atual do rollout, não falta uma nova operação SQL estrutural. O
 
 ### Execução e comprovação operacional
 
-Falta registrar, conforme o estado real do Lovable Cloud:
-
-- o resultado da Operação 6, caso ainda não tenha sido armazenado;
-- o resultado da Operação 7;
-- o resultado da Operação 8;
-- o resultado da Operação 9 ou do rollback, conforme o estado atual;
-- o resultado da Operação 10: `post_enforcement_monitoring_ok = true`.
+As Operações 8, 9 e 10 estão comprovadas. As evidências históricas das Operações
+6 e 7 ainda podem ser anexadas ao registro operacional, sem reexecução apenas para
+preencher documentação.
 
 Não repetir operações já comprovadamente executadas apenas para preencher documentação.
 
@@ -119,8 +125,7 @@ O alinhamento do histórico remoto continua deliberadamente adiado. Ele só pode
 
 ## Próxima decisão operacional
 
-Antes de qualquer novo SQL, confirmar o estado real de `public.is_tenancy_enforced()` no resultado mais recente já disponível. A partir desse estado:
-
-- se estiver `false`, não executar a Operação 10 e não ativar sem nova autorização formal;
-- se estiver `true`, executar o monitoramento pós-ativação e manter o rollback pronto;
-- em qualquer falha crítica de acesso, isolamento ou operação, executar imediatamente o rollback.
+Manter monitoramento de acesso, isolamento e operações durante a janela acordada.
+Não reexecutar as Operações 8–10 enquanto o estado permanecer saudável. Em qualquer
+falha crítica de acesso, isolamento ou operação, executar imediatamente o rollback
+e registrar a evidência do incidente.

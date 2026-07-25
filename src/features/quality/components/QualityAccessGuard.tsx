@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
-import { ShieldX, RefreshCw } from "lucide-react";
-import { useQualityPermissions } from "@/features/quality/hooks/useQualityPermissions";
+import { Loader2, RefreshCw, ShieldX } from "lucide-react";
+import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { QUALITY_MANAGEMENT_ENABLED } from "@/lib/featureFlags";
+import { useQualityPermissions } from "../hooks/useQualityPermissions";
 
 interface QualityAccessGuardProps {
   children: ReactNode;
@@ -14,13 +16,39 @@ export function QualityAccessGuard({
   requireWrite = false,
   fallback,
 }: QualityAccessGuardProps) {
-  const { can } = useQualityPermissions();
+  const {
+    can,
+    hasQualityEntitlement,
+    entitlementLoading,
+    entitlementError,
+  } = useQualityPermissions();
 
-  if (can.viewQuality && (!requireWrite || can.canWrite)) {
-    return <>{children}</>;
+  if (!QUALITY_MANAGEMENT_ENABLED) {
+    return <Navigate to="/sala-agil/dashboard" replace />;
   }
 
-  if (fallback) return <>{fallback}</>;
+  if (entitlementLoading) {
+    return (
+      <div
+        className="flex min-h-[40vh] items-center justify-center"
+        role="status"
+        aria-label="Validando acesso ao Quality Intelligence"
+      >
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const authorized =
+    hasQualityEntitlement &&
+    can.viewQuality &&
+    (!requireWrite || can.canWrite);
+
+  if (!entitlementError && authorized) {
+    return children;
+  }
+
+  if (fallback) return fallback;
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-6">
@@ -31,21 +59,22 @@ export function QualityAccessGuard({
 
         <h1 className="text-lg font-semibold">Acesso não autorizado</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Você não tem permissão para acessar o módulo de Qualidade.
-          {!requireWrite && " Entre em contato com o administrador da organização."}
-          {requireWrite &&
-            " Este recurso requer permissão de escrita no módulo de Qualidade."}
+          {entitlementError
+            ? "Não foi possível validar o acesso ao módulo de Qualidade."
+            : "Sua organização ou seu perfil não possui acesso a este recurso."}
         </p>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-5"
-          onClick={() => window.location.reload()}
-        >
-          <RefreshCw className="mr-2 h-3.5 w-3.5" />
-          Tentar novamente
-        </Button>
+        {entitlementError && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-5"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Tentar novamente
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ import { BackofficeGuard } from "@/backoffice/guards/BackofficeGuard";
 import { BackofficeLayout } from "@/backoffice/components/BackofficeLayout";
 import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
 import { AppShell } from "@/components/layout/AppShell";
+import { QualityAccessGuard } from "@/features/quality/components/QualityAccessGuard";
 
 import Auth from "./pages/Auth.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
@@ -543,12 +544,12 @@ function AppRoutes() {
           />
           <Route path="/sala-agil/planning-poker" element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>} />
           <Route path="/sala-agil/retrospectiva" element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade" element={<Navigate to="/sala-agil/qualidade/casos" replace />} />
-          <Route path="/sala-agil/qualidade/casos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><AppShell module="sala_agil"><QualityTestCasesPage /></AppShell></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/suites" element={<ProtectedRoute><ModuleGuard module="sala_agil"><AppShell module="sala_agil"><QualityTestSuitesPage /></AppShell></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/planos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><AppShell module="sala_agil"><QualityTestPlansPage /></AppShell></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/execucoes" element={<ProtectedRoute><ModuleGuard module="sala_agil"><AppShell module="sala_agil"><QualityTestRunsPage /></AppShell></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/execucoes/:id" element={<ProtectedRoute><ModuleGuard module="sala_agil"><AppShell module="sala_agil"><QualityTestRunPage /></AppShell></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><Navigate to="/sala-agil/qualidade/casos" replace /></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/casos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestCasesPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/suites" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestSuitesPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/planos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestPlansPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/execucoes" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestRunsPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/execucoes/:id" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestRunPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
           <Route path="/sala-agil/metricas/relatorios" element={<Navigate to="/sala-agil/relatorios" replace />} />
           <Route path="/sala-agil/metricas/reports" element={<Navigate to="/sala-agil/relatorios" replace />} />
           <Route path="/sala-agil/metricas/release" element={<Navigate to="/sala-agil/releases" replace />} />

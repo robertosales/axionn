@@ -121,7 +121,8 @@ Estado em 2026-07-25:
   e autorização tenant-scoped;
 - lint SQL e pgTAP ainda dependem de uma instância PostgreSQL/Supabase local.
 
-A parte local da Fase A está concluída. A Fase B continua dependente da evidência
-remota de `public.is_tenancy_enforced()` e das Operações 6–10. A Fase C avançou no
-gate comercial, mas ainda requer guards de rota, testes de integração e rollout
-cumulativo do domínio Quality.
+A parte local da Fase A está concluída. A Fase B foi concluída em 2026-07-25 com
+preflight, ativação e monitoramento aprovados; o enforcement permaneceu ativo após
+a Operação 10. A Fase C avançou no gate comercial e no guard de rota fail-closed,
+mas ainda requer filtragem da navegação, testes de integração e rollout cumulativo
+do domínio Quality.

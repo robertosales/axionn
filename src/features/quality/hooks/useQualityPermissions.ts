@@ -39,7 +39,7 @@ function useQualityEntitlement(organizationId: string | null) {
 }
 
 export function useQualityPermissions() {
-  const { hasPermission, roles } = useAuth();
+  const { hasPermission } = useAuth();
   const {
     enabled: organizationTenancyEnabled,
     hasModuleAccess,
@@ -49,7 +49,8 @@ export function useQualityPermissions() {
     currentOrganizationId,
   } = useOrganization();
 
-  const { data: hasQualityEntitlement = false } = useQualityEntitlement(currentOrganizationId);
+  const qualityEntitlement = useQualityEntitlement(currentOrganizationId);
+  const hasQualityEntitlement = qualityEntitlement.data ?? false;
 
   const isSalaAgilModuleAdmin = getModuleRole("sala_agil") === "admin";
   const hasSalaAgilAccess = hasModuleAccess("sala_agil");
@@ -130,7 +131,14 @@ export function useQualityPermissions() {
     [userPermissions],
   );
 
-  return { can, userPermissions, isSalaAgilModuleAdmin, hasQualityEntitlement };
+  return {
+    can,
+    userPermissions,
+    isSalaAgilModuleAdmin,
+    hasQualityEntitlement,
+    entitlementLoading: qualityEntitlement.isLoading,
+    entitlementError: qualityEntitlement.isError,
+  };
 }
 
 function getSystematicRolePermissions(moduleRole: string): string[] {

@@ -32,6 +32,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useOkrCycles } from "../hooks/useOkrCycles";
 import { useOkrAlignments, useOkrObjectivesV2 } from "../hooks/useOkrObjectivesV2";
+import { OkrKeyResultsDialog } from "../components/OkrKeyResultsDialog";
 import {
   OKR_ALIGNMENT_TYPE_LABEL,
   OKR_OBJECTIVE_LEVEL_LABEL,
@@ -75,6 +76,7 @@ export function OkrObjectivesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<OkrObjectiveV2Input>(EMPTY_FORM);
   const [alignmentTarget, setAlignmentTarget] = useState<OkrObjectiveV2 | null>(null);
+  const [krTarget, setKrTarget] = useState<OkrObjectiveV2 | null>(null);
 
   const openCycles = useMemo(
     () => cycles.cycles.filter((c) => c.status === "planning" || c.status === "active"),
@@ -193,6 +195,9 @@ export function OkrObjectivesPage() {
                       <Button size="sm" variant="outline" onClick={() => setAlignmentTarget(obj)}>
                         Alinhamentos
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => setKrTarget(obj)}>
+                        Key Results
+                      </Button>
                       {obj.lifecycle_status !== "archived" && (
                         <Button size="sm" variant="ghost" onClick={() => handleArchive(obj)}>
                           Arquivar
@@ -289,6 +294,9 @@ export function OkrObjectivesPage() {
         allObjectives={objectives.objectives}
         onClose={() => setAlignmentTarget(null)}
       />
+
+      {/* Key Results dialog */}
+      <OkrKeyResultsDialog objective={krTarget} onClose={() => setKrTarget(null)} />
     </div>
   );
 }

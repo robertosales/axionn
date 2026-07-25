@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const QUALITY_PERMISSIONS = [
   "view_quality",
@@ -15,6 +17,27 @@ const QUALITY_PERMISSIONS = [
 
 export type QualityPermission = (typeof QUALITY_PERMISSIONS)[number];
 
+const qualityEntitlementKey = (orgId: string | null) => 
+  ["quality", "entitlement", orgId] as const;
+
+function useQualityEntitlement(organizationId: string | null) {
+  return useQuery({
+    queryKey: qualityEntitlementKey(organizationId),
+    queryFn: async () => {
+      if (!organizationId) return false;
+      const { data, error } = await supabase.rpc(
+        "check_organization_has_quality_module",
+        { p_org_id: organizationId }
+      );
+      if (error) throw error;
+      return data as boolean;
+    },
+    enabled: Boolean(organizationId),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
 export function useQualityPermissions() {
   const { hasPermission, roles } = useAuth();
   const {
@@ -26,58 +49,50 @@ export function useQualityPermissions() {
     currentOrganizationId,
   } = useOrganization();
 
+  const { data: hasQualityEntitlement = false } = useQualityEntitlement(currentOrganizationId);
+
   const isSalaAgilModuleAdmin = getModuleRole("sala_agil") === "admin";
   const hasSalaAgilAccess = hasModuleAccess("sala_agil");
 
-  // Feature flag availability (equiv. a feature flag technique)
   const qualityEnabled = import.meta.env.VITE_QUALITY_MANAGEMENT_ENABLED === "true";
 
   const userPermissions = useMemo<Set<string>>(() => {
     const perms = new Set<string>();
 
-    // Feature flag gate - Applied at system level (P1.1 fix)
     if (!qualityEnabled) {
       return perms;
     }
 
-    // Commercial entitlement gate - Applied at tenant level
-    if (!checkOrganizationHasQualityModule(currentOrganizationId)) {
+    if (!hasQualityEntitlement) {
       return perms;
     }
 
-    // Platform admin: todas as permissões
     if (isPlatformAdmin) {
       QUALITY_PERMISSIONS.forEach((p) => perms.add(p));
       return perms;
     }
 
-    // Organization admin: todas as permissões
     if (isOrganizationAdmin) {
       QUALITY_PERMISSIONS.forEach((p) => perms.add(p));
       return perms;
     }
 
-    // Módulo admin: todas as permissões
     if (hasSalaAgilAccess && isSalaAgilModuleAdmin) {
       QUALITY_PERMISSIONS.forEach((p) => perms.add(p));
       return perms;
     }
 
-    // Systematize RBAC instead of hardcoding (P1.2 fix)
     if (organizationTenancyEnabled && hasSalaAgilAccess) {
       const moduleRole = getModuleRole("sala_agil");
-      if (moduleRole && checkOrganizationHasQualityModule(currentOrganizationId)) {
-        // Base permissions for any role in the module
+      if (moduleRole) {
         perms.add("view_quality");
         perms.add("view_test_cases");
 
-        // Systematic permission assignment based on role
         const rolePermissions = getSystematicRolePermissions(moduleRole);
         rolePermissions.forEach((p) => perms.add(p));
       }
     }
 
-    // Query system for specific permissions (AUTHORITY - NOT hardcoded from frontend)
     QUALITY_PERMISSIONS.forEach((p) => {
       if (hasPermission(p)) perms.add(p);
     });
@@ -92,7 +107,7 @@ export function useQualityPermissions() {
     organizationTenancyEnabled,
     getModuleRole,
     qualityEnabled,
-    currentOrganizationId,
+    hasQualityEntitlement,
   ]);
 
   const can = useMemo(
@@ -115,22 +130,7 @@ export function useQualityPermissions() {
     [userPermissions],
   );
 
-  return { can, userPermissions, isSalaAgilModuleAdmin };
-}
-
-function checkOrganizationHasQualityModule(orgId: string | null): boolean {
-  // Business rule: Only licensed organizations can access Quality
-  if (!orgId) return false;
-  
-  // Import from the commercial entitlement system
-  // If the commercial catalog system exists, use it
-  try {
-    // This will be implemented based on the existing entitlements system
-    // Import and use the proper entitlement checking
-    return true; // MVP: accept all orgs for now
-  } catch {
-    return true; // Default to allow in MVP
-  }
+  return { can, userPermissions, isSalaAgilModuleAdmin, hasQualityEntitlement };
 }
 
 function getSystematicRolePermissions(moduleRole: string): string[] {
@@ -138,7 +138,6 @@ function getSystematicRolePermissions(moduleRole: string): string[] {
 
   switch (moduleRole) {
     case 'qa_analyst':
-      // TOTAL access to Quality system
       return [
         ...basePermissions,
         'manage_test_cases',
@@ -152,13 +151,12 @@ function getSystematicRolePermissions(moduleRole: string): string[] {
       
     case 'product_owner':
     case 'scrum_master':
-      // Gerência - controle operacional e execução NO MVP
       return [
         ...basePermissions,
         'view_test_cases',
         'manage_test_plans',
         'manage_test_runs',
-        'execute_tests', // NOVO: MVP permite para product_owner/scrum_master (corrigido de especificação anterior incorreta)
+        'execute_tests',
         'manage_quality_findings',
         'export_quality_audit'
       ];
@@ -166,7 +164,6 @@ function getSystematicRolePermissions(moduleRole: string): string[] {
     case 'developer':
     case 'analyst': 
     case 'architect':
-      // Desenvolvimento - apenas execução de testes
       return [
         ...basePermissions,
         'view_test_cases',
@@ -174,7 +171,6 @@ function getSystematicRolePermissions(moduleRole: string): string[] {
       ];
       
     case 'admin':
-      // Tem funcionamento completo similar ao QA
       return [
         ...basePermissions,
         'manage_test_cases',
@@ -188,11 +184,9 @@ function getSystematicRolePermissions(moduleRole: string): string[] {
       ];
       
     case 'viewer':
-      // Visualização apenas (leitura)
       return basePermissions;
       
     default:
-      // Papel não mapeado - apenas view básico
       return basePermissions;
   }
 }

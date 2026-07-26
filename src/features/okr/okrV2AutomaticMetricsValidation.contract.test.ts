@@ -9,6 +9,8 @@ const operation = readFileSync(
 describe("OKR V2 automatic metrics validation operation", () => {
   it("validates catalog, queue concurrency, grants and retry policy", () => {
     expect(operation).toContain("metric_tables_with_rls");
+    expect(operation).toContain("procedure.proconfig");
+    expect(operation).toContain("'search_path=public' = any(runtime_settings)");
     expect(operation).toContain("queue_claim_uses_skip_locked");
     expect(operation).toContain("queue_retry_policy_present");
     expect(operation).toContain("anon_cannot_apply_measurements");

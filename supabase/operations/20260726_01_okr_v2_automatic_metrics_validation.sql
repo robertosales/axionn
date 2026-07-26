@@ -19,8 +19,12 @@ function_definitions as (
   select
     expected.signature,
     to_regprocedure(expected.signature) as procedure_oid,
-    coalesce(pg_get_functiondef(to_regprocedure(expected.signature)), '') as definition
+    coalesce(pg_get_functiondef(to_regprocedure(expected.signature)), '') as definition,
+    coalesce(procedure.prosecdef, false) as is_security_definer,
+    coalesce(procedure.proconfig, array[]::text[]) as runtime_settings
   from expected_functions expected
+  left join pg_proc procedure
+    on procedure.oid = to_regprocedure(expected.signature)
 ),
 checks as (
   select
@@ -43,11 +47,11 @@ checks as (
       where procedure_oid is not null
     ) as metric_rpcs_available,
     (
-      select bool_and(definition ~* 'security definer')
+      select bool_and(is_security_definer)
       from function_definitions
     ) as metric_rpcs_security_definer,
     (
-      select bool_and(definition ~* 'set search_path = public')
+      select bool_and('search_path=public' = any(runtime_settings))
       from function_definitions
     ) as metric_rpcs_safe_search_path,
     (

@@ -89,3 +89,6 @@ Ver `.lovable/plan.md` e seção 19 do plano mestre.
   `20260725170000_okr_v2_cycle_closure_concurrency_hardening.sql`. Chamadas
   concorrentes deixam de validar estado obsoleto; o perdedor recebe SQLSTATE
   `40001` e não gera auditoria duplicada.
+- O hardening de concorrência foi aplicado no ambiente remoto em 2026-07-25.
+  Sua definição instalada deve ser comprovada pela operação somente leitura
+  `20260725_03_okr_v2_cycle_closure_concurrency_validation.sql`.

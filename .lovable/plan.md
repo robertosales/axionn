@@ -11,8 +11,8 @@ Cada PR = 1 iteração revisável/implantável. Só avanço para o próximo apó
 - [x] PR 3 — Tabela `okr_cycles` + lifecycle + UI de ciclos + backfill
 - [x] PR 4 — Objectives + alinhamento (`okr_objective_alignments`)
 - [x] PR 5 — KRs + motor canônico único (`calculate_okr_kr_progress_v2`, `recalculate_okr_objective_v2`, `resolve_okr_objective_health_v2`) + RPCs `create/update/archive/list_okr_key_result(s)_v2`
-- [ ] PR 6 — Check-in transacional (`record_okr_check_in_v2` + snapshots + auditoria)
-- [ ] PR 7 — Métricas automáticas + fila (`okr_metric_definitions/bindings`, edge fn simplificada)
+- [x] PR 6 — Check-in transacional (`record_okr_check_in_v2` + snapshots + auditoria)
+- [ ] PR 7 — Métricas automáticas + fila (`okr_metric_definitions/bindings`, edge fn simplificada) — implementação local concluída; aplicação e validação remotas pendentes
 - [ ] PR 8 — Iniciativas + dependências + alertas
 - [ ] PR 9 — Reviews (objective + cycle), encerramento, carry-forward
 - [ ] PR 10 — Dashboards, exportação, observabilidade, E2E, hardening

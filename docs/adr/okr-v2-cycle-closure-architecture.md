@@ -103,3 +103,12 @@ Ver `.lovable/plan.md` e seção 19 do plano mestre.
   check-ins. As ações de remoção foram redirecionadas para
   `archive_okr_objective_v2` e `archive_okr_key_result_v2`, preservando
   histórico e auditoria.
+- O PR 7 foi implementado localmente pela migration
+  `20260726100000_okr_v2_automatic_metrics_queue.sql`: catálogo versionado,
+  bindings tenant-scoped, claim com `FOR UPDATE SKIP LOCKED`, leases, retry
+  progressivo, dead-letter e aplicação idempotente via
+  `apply_okr_measurement_v2`. A Edge Function passou a coletar e orquestrar
+  RPCs, sem atualizar diretamente KRs ou a fila.
+- A conclusão remota do PR 7 depende da aplicação da migration, deploy da Edge
+  Function e aprovação de
+  `20260726_01_okr_v2_automatic_metrics_validation.sql`.

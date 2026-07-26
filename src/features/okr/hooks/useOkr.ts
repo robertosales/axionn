@@ -11,6 +11,7 @@ import {
   hasEnabledEntitlement,
   type EffectiveOrganizationEntitlement,
 } from "@/saas/entitlements";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 function calcObjectiveMeta(krs: OkrKeyResult[]): { progress: number; status: OkrStatus } {
   if (!krs.length) return { progress: 0, status: "off_track" };
@@ -152,6 +153,7 @@ export interface UseOkrReturn {
 
 export function useOkr(teamId?: string): UseOkrReturn {
   const queryClient = useQueryClient();
+  const { currentOrganizationId } = useOrganization();
   const [filters, setFiltersState] = useState<OkrFilters>({
     cycle: `Q${Math.ceil((new Date().getMonth() + 1) / 3)}/${new Date().getFullYear()}`,
     teamId: teamId ?? "all",
@@ -196,9 +198,12 @@ export function useOkr(teamId?: string): UseOkrReturn {
   const checkInMutation = useMutation({
     mutationFn: async ({ krId, input }: { krId: string; input: OkrCheckInInput }) => {
       assertEntitlement(canCheckIn, "okr.check_in");
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuário não autenticado");
-      await recordManualOkrMeasurement({ keyResultId: krId, input, authorId: user.id });
+      if (!currentOrganizationId) throw new Error("Organização não selecionada.");
+      await recordManualOkrMeasurement({
+        organizationId: currentOrganizationId,
+        keyResultId: krId,
+        input,
+      });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });

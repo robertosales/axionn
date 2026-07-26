@@ -92,3 +92,7 @@ Ver `.lovable/plan.md` e seção 19 do plano mestre.
 - O hardening de concorrência foi aplicado no ambiente remoto em 2026-07-25.
   Sua definição instalada deve ser comprovada pela operação somente leitura
   `20260725_03_okr_v2_cycle_closure_concurrency_validation.sql`.
+- O check-in manual deixa de executar múltiplas escritas no cliente. A
+  migration `20260725180000_okr_v2_atomic_check_in.sql` implementa
+  `record_okr_check_in_v2` como boundary atômica para check-in, KR, snapshot,
+  recálculo do Objective e auditoria.

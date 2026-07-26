@@ -84,3 +84,8 @@ Ver `.lovable/plan.md` e seção 19 do plano mestre.
   operação somente leitura
   `20260725_02_okr_v2_objective_rpc_grants_validation.sql` é o gate de
   comprovação antes do smoke funcional por papel e tenant.
+- O fechamento de ciclo é serializado por lock de linha e por transição
+  condicional na migration
+  `20260725170000_okr_v2_cycle_closure_concurrency_hardening.sql`. Chamadas
+  concorrentes deixam de validar estado obsoleto; o perdedor recebe SQLSTATE
+  `40001` e não gera auditoria duplicada.

@@ -21,7 +21,9 @@ import {
   Target,
   Activity,
   UserPlus,
+  ArrowUpRight,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getInitials, formatPersonName } from "@/lib/personName";
@@ -62,6 +64,7 @@ interface KpiCardProps {
   statusBadge?: React.ReactNode;
   trend?: "up" | "down" | "neutral";
   trendLabel?: string;
+  to?: string;
 }
 
 function KpiCard({
@@ -75,20 +78,33 @@ function KpiCard({
   statusBadge,
   trend,
   trendLabel,
+  to,
 }: KpiCardProps) {
-  return (
-    <div
-      className={cn(
-            "bg-card rounded-xl border border-border shadow-sm overflow-hidden",
-        "hover:-translate-y-0.5 hover:shadow-md transition-all duration-200",
-        ACCENT_TOP[accent],
-      )}
-    >
+  const navigate = useNavigate();
+  const cardClassName = cn(
+    "bg-card w-full rounded-xl border border-border shadow-sm overflow-hidden text-left",
+    "transition-all duration-200",
+    to && [
+      "group cursor-pointer hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+      "active:translate-y-0 active:shadow-sm",
+    ],
+    ACCENT_TOP[accent],
+  );
+  const content = (
       <div className="px-5 pt-4 pb-4 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <p className="font-display text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{label}</p>
-          <div className={cn("shrink-0 rounded-lg p-2", ICON_CLASS[accent])}>
-            <Icon className="h-4 w-4" />
+          <div className="flex items-center gap-1.5">
+            {to && (
+              <ArrowUpRight
+                aria-hidden="true"
+                className="h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
+              />
+            )}
+            <div className={cn("shrink-0 rounded-lg p-2", ICON_CLASS[accent])}>
+              <Icon className="h-4 w-4" />
+            </div>
           </div>
         </div>
         <p className="font-display text-2xl font-extrabold tabular-nums leading-none text-foreground">{value}</p>
@@ -108,8 +124,23 @@ function KpiCard({
         )}
         {progress !== undefined && <Progress value={progress} className={cn("h-1.5 mt-1", progressColor)} />}
       </div>
-    </div>
   );
+
+  if (to) {
+    return (
+      <button
+        type="button"
+        className={cardClassName}
+        onClick={() => navigate(to)}
+        aria-label={`Abrir ${label}`}
+        title={`Abrir ${label}`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={cardClassName}>{content}</div>;
 }
 
 function SprintProgressBar({
@@ -257,6 +288,7 @@ export function AgilView() {
           progressColor="[&>div]:bg-green-500"
           trendLabel={`${completionPct}% conclufdo`}
           trend="up"
+          to="/sala-agil/board"
         />
         <KpiCard
           label="Em Andamento"
@@ -264,6 +296,7 @@ export function AgilView() {
           sub={`${openActs.length} atividades abertas`}
           icon={Activity}
           accent="blue"
+          to="/sala-agil/board"
         />
         <KpiCard
           label="Bugs Abertos"
@@ -272,6 +305,7 @@ export function AgilView() {
           icon={Bug}
           accent="red"
           statusBadge={bugHUs.length === 0 ? <GreenBadge text="limpo" /> : undefined}
+          to="/sala-agil/board"
         />
         <KpiCard
           label="Impedimentos"
@@ -280,6 +314,7 @@ export function AgilView() {
           icon={AlertTriangle}
           accent="amber"
           statusBadge={blockedHUs.length === 0 ? <GreenBadge text="livre" /> : undefined}
+          to="/sala-agil/impedimentos"
         />
       </div>
 

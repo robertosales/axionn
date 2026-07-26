@@ -3,12 +3,22 @@
 // Contém o conteúdo visual completo do dashboard original.
 // SEM import cíclico — não importa DashboardHome.
 
+import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { HUEditDrawer } from "@/components/HUEditDrawer";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import type { Developer } from "@/types/sprint";
 import {
   Zap,
   BookOpen,
@@ -221,6 +231,8 @@ function GreenBadge({ text }: { text: string }) {
 export function AgilView() {
   const { userStories, activities, developers, activeSprint, sprints, workflowColumns } = useSprint();
   const { profile } = useAuth();
+  const [selectedHuId, setSelectedHuId] = useState<string | null>(null);
+  const [selectedDeveloper, setSelectedDeveloper] = useState<Developer | null>(null);
 
   const sprintHUs = activeSprint ? userStories.filter((h) => h.sprintId === activeSprint.id) : userStories;
   const doneColKey = resolveDoneKey(workflowColumns);
@@ -238,6 +250,13 @@ export function AgilView() {
   const openActs = activities.filter((a) => !a.isClosed);
   const totalHours = activities.reduce((s, a) => s + (a.hours || 0), 0);
   const recentHUs = openHUs.slice(0, 5);
+  const selectedDeveloperActivities = selectedDeveloper
+    ? activities.filter((activity) => activity.assigneeId === selectedDeveloper.id)
+    : [];
+  const selectedDeveloperStories = selectedDeveloper
+    ? sprintHUs.filter((hu) => hu.assigneeId === selectedDeveloper.id)
+    : [];
+  const selectedDeveloperHours = selectedDeveloperActivities.reduce((sum, activity) => sum + (activity.hours || 0), 0);
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -337,28 +356,39 @@ export function AgilView() {
               {recentHUs.map((hu) => {
                 const col = workflowColumns.find((c) => c.key === hu.status);
                 return (
-                  <li key={hu.id} className="flex items-center gap-3 px-5 py-2.5 hover:bg-muted/40 transition-colors">
-                    <span className={cn("shrink-0 h-2 w-2 rounded-full", PRIORITY_COLOR[hu.priority] || "bg-muted")} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate text-foreground">{hu.title}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {hu.code}
-                        {hu.storyPoints ? ` · ${hu.storyPoints}pts` : " · 0pts"}
-                      </p>
-                    </div>
-                    {col && (
-                      <Badge
-                        variant="outline"
-                        className="text-[11px] px-2 py-0.5 shrink-0 whitespace-nowrap font-normal hidden sm:inline-flex"
-                        style={{
-                          borderColor: (col as any).hex || "#94a3b8",
-                          color: (col as any).hex || "#94a3b8",
-                          backgroundColor: `${(col as any).hex || "#94a3b8"}14`,
-                        }}
-                      >
-                        {col.label}
-                      </Badge>
-                    )}
+                  <li key={hu.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedHuId(hu.id)}
+                      className="group flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                      aria-label={`Abrir detalhes da ${hu.code}`}
+                    >
+                      <span className={cn("shrink-0 h-2 w-2 rounded-full", PRIORITY_COLOR[hu.priority] || "bg-muted")} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate text-foreground">{hu.title}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {hu.code}
+                          {hu.storyPoints ? ` · ${hu.storyPoints}pts` : " · 0pts"}
+                        </p>
+                      </div>
+                      {col && (
+                        <Badge
+                          variant="outline"
+                          className="text-[11px] px-2 py-0.5 shrink-0 whitespace-nowrap font-normal hidden sm:inline-flex"
+                          style={{
+                            borderColor: (col as any).hex || "#94a3b8",
+                            color: (col as any).hex || "#94a3b8",
+                            backgroundColor: `${(col as any).hex || "#94a3b8"}14`,
+                          }}
+                        >
+                          {col.label}
+                        </Badge>
+                      )}
+                      <ArrowUpRight
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
+                      />
+                    </button>
                   </li>
                 );
               })}
@@ -392,19 +422,30 @@ export function AgilView() {
               {developers.slice(0, 6).map((dev) => {
                 const myActs = activities.filter((a) => a.assigneeId === dev.id && !a.isClosed).length;
                 return (
-                  <li key={dev.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <div className="shrink-0 h-8 w-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold">
-                      {getInitials(dev.name)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate text-foreground">{formatPersonName(dev.name)}</p>
-                      <p className="text-xs text-muted-foreground truncate">{dev.role}</p>
-                    </div>
-                    {myActs > 0 && (
-                      <Badge variant="secondary" className="text-xs tabular-nums shrink-0">
-                        {myActs}
-                      </Badge>
-                    )}
+                  <li key={dev.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeveloper(dev)}
+                      className="group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                      aria-label={`Abrir informações de ${formatPersonName(dev.name)}`}
+                    >
+                      <div className="shrink-0 h-8 w-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold">
+                        {getInitials(dev.name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate text-foreground">{formatPersonName(dev.name)}</p>
+                        <p className="text-xs text-muted-foreground truncate">{dev.role}</p>
+                      </div>
+                      {myActs > 0 && (
+                        <Badge variant="secondary" className="text-xs tabular-nums shrink-0">
+                          {myActs}
+                        </Badge>
+                      )}
+                      <ArrowUpRight
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
+                      />
+                    </button>
                   </li>
                 );
               })}
@@ -415,15 +456,16 @@ export function AgilView() {
 
       {/* KPIs inferiores */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Total Sprints" value={sprints.length} sub="histórico" icon={Zap} accent="violet" />
+        <KpiCard label="Total Sprints" value={sprints.length} sub="histórico" icon={Zap} accent="violet" to="/sala-agil/historico" />
         <KpiCard
           label="Horas Registradas"
           value={`${totalHours.toFixed(0)}h`}
           sub={`${activities.length} atividades`}
           icon={Clock}
           accent="cyan"
+          to="/sala-agil/atividades"
         />
-        <KpiCard label="Devs na Equipe" value={developers.length} sub="membros ativos" icon={Users} accent="indigo" />
+        <KpiCard label="Devs na Equipe" value={developers.length} sub="membros ativos" icon={Users} accent="indigo" to="/sala-agil/equipe" />
         <KpiCard
           label="Velocity"
           value={`${donePoints}pts`}
@@ -432,8 +474,65 @@ export function AgilView() {
           accent="emerald"
           progress={completionPct}
           progressColor="[&>div]:bg-emerald-500"
+          to="/sala-agil/metricas"
         />
       </div>
+
+      <HUEditDrawer huId={selectedHuId} open={selectedHuId !== null} onClose={() => setSelectedHuId(null)} />
+
+      <Dialog open={selectedDeveloper !== null} onOpenChange={(open) => !open && setSelectedDeveloper(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center gap-3 pr-8">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
+                {selectedDeveloper ? getInitials(selectedDeveloper.name) : ""}
+              </div>
+              <div className="min-w-0 text-left">
+                <DialogTitle className="truncate">
+                  {selectedDeveloper ? formatPersonName(selectedDeveloper.name) : ""}
+                </DialogTitle>
+                <DialogDescription className="truncate">
+                  {selectedDeveloper?.role || "Membro da equipe"}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">HUs</p>
+              <p className="mt-1 text-xl font-extrabold tabular-nums">{selectedDeveloperStories.length}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Atividades</p>
+              <p className="mt-1 text-xl font-extrabold tabular-nums">{selectedDeveloperActivities.length}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Horas</p>
+              <p className="mt-1 text-xl font-extrabold tabular-nums">{selectedDeveloperHours.toFixed(0)}h</p>
+            </div>
+          </div>
+          <div className="space-y-2 rounded-lg border p-3 text-sm">
+            {selectedDeveloper?.email && (
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">E-mail</span>
+                <span className="truncate font-medium">{selectedDeveloper.email}</span>
+              </div>
+            )}
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Atividades abertas</span>
+              <span className="font-medium tabular-nums">
+                {selectedDeveloperActivities.filter((activity) => !activity.isClosed).length}
+              </span>
+            </div>
+            {selectedDeveloper?.capacity != null && (
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Capacidade</span>
+                <span className="font-medium tabular-nums">{selectedDeveloper.capacity}h</span>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

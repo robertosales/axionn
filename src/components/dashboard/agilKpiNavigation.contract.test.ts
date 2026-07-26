@@ -19,6 +19,22 @@ describe("Sala Ágil KPI card navigation", () => {
     expect(source).toContain('to="/sala-agil/impedimentos"');
   });
 
+  it("opens each secondary KPI destination", () => {
+    expect(source).toContain('to="/sala-agil/historico"');
+    expect(source).toContain('to="/sala-agil/atividades"');
+    expect(source).toContain('to="/sala-agil/equipe"');
+    expect(source).toContain('to="/sala-agil/metricas"');
+  });
+
+  it("opens contextual details for HUs and team members", () => {
+    expect(source).toContain("onClick={() => setSelectedHuId(hu.id)}");
+    expect(source).toContain("aria-label={`Abrir detalhes da ${hu.code}`}");
+    expect(source).toContain("<HUEditDrawer");
+    expect(source).toContain("onClick={() => setSelectedDeveloper(dev)}");
+    expect(source).toContain("aria-label={`Abrir informações de ${formatPersonName(dev.name)}`}");
+    expect(source).toContain("<Dialog open={selectedDeveloper !== null}");
+  });
+
   it("provides visible pointer, keyboard and hover affordances", () => {
     expect(source).toContain("cursor-pointer");
     expect(source).toContain("focus-visible:ring-2");

@@ -96,3 +96,6 @@ Ver `.lovable/plan.md` e seção 19 do plano mestre.
   migration `20260725180000_okr_v2_atomic_check_in.sql` implementa
   `record_okr_check_in_v2` como boundary atômica para check-in, KR, snapshot,
   recálculo do Objective e auditoria.
+- A boundary atômica foi aplicada no ambiente remoto em 2026-07-25. A
+  operação `20260725_04_okr_v2_atomic_check_in_validation.sql` comprova a
+  definição instalada antes do canário funcional com um KR controlado.

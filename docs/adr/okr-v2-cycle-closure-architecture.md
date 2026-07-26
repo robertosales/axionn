@@ -80,3 +80,7 @@ Ver `.lovable/plan.md` e seção 19 do plano mestre.
 - A migration aditiva
   `20260725160000_okr_v2_objective_rpc_grants_hardening.sql` corrige o grant
   implícito de `PUBLIC` nas RPCs `create/update/archive_okr_objective_v2`.
+- A migration de grants foi aplicada no ambiente remoto em 2026-07-25. A
+  operação somente leitura
+  `20260725_02_okr_v2_objective_rpc_grants_validation.sql` é o gate de
+  comprovação antes do smoke funcional por papel e tenant.

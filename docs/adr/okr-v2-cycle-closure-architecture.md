@@ -99,3 +99,7 @@ Ver `.lovable/plan.md` e seção 19 do plano mestre.
 - A boundary atômica foi aplicada no ambiente remoto em 2026-07-25. A
   operação `20260725_04_okr_v2_atomic_check_in_validation.sql` comprova a
   definição instalada antes do canário funcional com um KR controlado.
+- O fluxo legado não executa mais deleção física de Objectives, KRs ou seus
+  check-ins. As ações de remoção foram redirecionadas para
+  `archive_okr_objective_v2` e `archive_okr_key_result_v2`, preservando
+  histórico e auditoria.

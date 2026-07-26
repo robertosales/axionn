@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MessageSquare, Pencil, Trash2, X, Check, RefreshCw, History } from "lucide-react";
+import { MessageSquare, Pencil, Archive, X, Check, RefreshCw, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { OkrKeyResult } from "../types";
@@ -129,13 +129,13 @@ export function OkrKeyResultRow({ kr, onCheckIn, onRefresh, onHistory, onUpdate,
             </Button>
           )}
           {onDelete && !confirmDel && (
-            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => setConfirmDel(true)} title="Excluir Key Result">
-              <Trash2 className="h-3 w-3" />
+            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => setConfirmDel(true)} title="Arquivar Key Result">
+              <Archive className="h-3 w-3" />
             </Button>
           )}
           {confirmDel && (
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-destructive font-medium">Excluir?</span>
+              <span className="text-[10px] text-destructive font-medium">Arquivar?</span>
               <Button variant="destructive" size="sm" className="h-6 text-[10px] px-2" onClick={handleDelete} disabled={isDeleting}>
                 {isDeleting ? "..." : "Sim"}
               </Button>

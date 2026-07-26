@@ -39,6 +39,7 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
     .from("okr_objectives")
     .select("*")
     .eq("cycle", cycle)
+    .neq("lifecycle_status", "archived")
     .order("created_at", { ascending: true });
 
   if (teamId && teamId !== "all") {
@@ -55,6 +56,7 @@ async function fetchObjectives(teamId: string, cycle: string): Promise<OkrObject
     .from("okr_key_results")
     .select("*")
     .in("objective_id", objectiveIds)
+    .neq("lifecycle_status", "archived")
     .order("created_at", { ascending: true });
   if (krErr) throw krErr;
 
@@ -287,12 +289,15 @@ export function useOkr(teamId?: string): UseOkrReturn {
 
   const deleteKeyResultMutation = useMutation({
     mutationFn: async (id: string) => {
-      assertEntitlement(canEdit, "okr.edit");
-      const { error: ciErr } = await supabase.from("okr_check_ins").delete().eq("key_result_id", id);
-      if (ciErr) throw ciErr;
-      const { error } = await supabase.from("okr_key_results").delete().eq("id", id);
+      assertEntitlement(canArchive, "okr.archive");
+      if (!currentOrganizationId) throw new Error("Organização não selecionada.");
+      const { error } = await supabase.rpc("archive_okr_key_result_v2", {
+        p_org_id: currentOrganizationId,
+        p_key_result_id: id,
+        p_reason: "Arquivado pelo fluxo legado",
+      });
       if (error) throw error;
-      console.log("[OKR] KR excluído:", id);
+      console.log("[OKR] KR arquivado:", id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });
@@ -328,17 +333,14 @@ export function useOkr(teamId?: string): UseOkrReturn {
   const deleteObjectiveMutation = useMutation({
     mutationFn: async (id: string) => {
       assertEntitlement(canArchive, "okr.archive");
-      const { data: krs } = await supabase.from("okr_key_results").select("id").eq("objective_id", id);
-      const krIds = (krs ?? []).map((kr) => kr.id);
-      if (krIds.length > 0) {
-        const { error: ciErr } = await supabase.from("okr_check_ins").delete().in("key_result_id", krIds);
-        if (ciErr) throw ciErr;
-        const { error: krErr } = await supabase.from("okr_key_results").delete().eq("objective_id", id);
-        if (krErr) throw krErr;
-      }
-      const { error } = await supabase.from("okr_objectives").delete().eq("id", id);
+      if (!currentOrganizationId) throw new Error("Organização não selecionada.");
+      const { error } = await supabase.rpc("archive_okr_objective_v2", {
+        p_org_id: currentOrganizationId,
+        p_objective_id: id,
+        p_reason: "Arquivado pelo fluxo legado",
+      });
       if (error) throw error;
-      console.log("[OKR] Objective excluído:", id);
+      console.log("[OKR] Objective arquivado:", id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["okr_objectives"] }),
   });

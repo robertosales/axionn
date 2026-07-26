@@ -30,12 +30,14 @@ describe("OKR V2 access and coexistence contract", () => {
     );
   });
 
-  it("keeps V2 mutations on RPCs while explicitly isolating legacy debt", () => {
+  it("keeps V2 mutations on RPCs while explicitly isolating remaining legacy debt", () => {
     expect(v2Sources).not.toMatch(
       /\.from\("okr_[^"]+"\)\.(?:insert|update|upsert|delete)\(/,
     );
     expect(v2Sources).toContain('.rpc(name, args)');
     expect(legacyHook).toContain('.from("okr_objectives").insert(');
-    expect(legacyHook).toContain('.from("okr_objectives").delete()');
+    expect(legacyHook).not.toMatch(
+      /\.from\("okr_(?:objectives|key_results|check_ins)"\)\.delete\(\)/,
+    );
   });
 });

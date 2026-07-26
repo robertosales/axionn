@@ -74,9 +74,9 @@ export function OkrPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteObjective(id);
-      toast({ title: "Objetivo excluído com sucesso!", variant: "default" });
+      toast({ title: "Objetivo arquivado com sucesso!", variant: "default" });
     } catch (err: any) {
-      toast({ title: "Erro ao excluir objetivo", description: err?.message ?? "Tente novamente.", variant: "destructive" });
+      toast({ title: "Erro ao arquivar objetivo", description: err?.message ?? "Tente novamente.", variant: "destructive" });
     }
   };
 
@@ -101,9 +101,9 @@ export function OkrPage() {
   const handleDeleteKeyResult = async (id: string) => {
     try {
       await deleteKeyResult(id);
-      toast({ title: "Key Result excluído!", variant: "default" });
+      toast({ title: "Key Result arquivado!", variant: "default" });
     } catch (err: any) {
-      toast({ title: "Erro ao excluir Key Result", description: err?.message ?? "Tente novamente.", variant: "destructive" });
+      toast({ title: "Erro ao arquivar Key Result", description: err?.message ?? "Tente novamente.", variant: "destructive" });
     }
   };
 

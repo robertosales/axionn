@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Target, TrendingUp, AlertTriangle, CheckCircle, ChevronDown, Pencil, Trash2, Plus, X } from "lucide-react";
+import { Target, TrendingUp, AlertTriangle, CheckCircle, ChevronDown, Pencil, Archive, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -100,14 +100,14 @@ export function OkrObjectiveCard({ objective: obj, onCheckIn, onRefreshKeyResult
               )}
               {onDelete && !confirmDelete && (
                 <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setConfirmDelete(true)}>
-                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                  <Archive className="h-3.5 w-3.5" /> Arquivar
                 </Button>
               )}
               {confirmDelete && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-destructive font-medium">Confirmar?</span>
                   <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={handleDelete} disabled={isDeleting}>
-                    {isDeleting ? <span className="flex items-center gap-1"><span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Excluindo...</span> : "Sim, excluir"}
+                    {isDeleting ? <span className="flex items-center gap-1"><span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />Arquivando...</span> : "Sim, arquivar"}
                   </Button>
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setConfirmDelete(false)} disabled={isDeleting}>Cancelar</Button>
                 </div>

@@ -30,6 +30,7 @@ import { BackofficeLayout } from "@/backoffice/components/BackofficeLayout";
 import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
 import { AppShell } from "@/components/layout/AppShell";
 import { QualityAccessGuard } from "@/features/quality/components/QualityAccessGuard";
+import { OkrV2AccessGuard } from "@/features/okr/components/OkrV2AccessGuard";
 
 import Auth from "./pages/Auth.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
@@ -536,8 +537,8 @@ function AppRoutes() {
             }
           />
           <Route path="/okr" element={<ProtectedRoute><OkrPage /></ProtectedRoute>} />
-          <Route path="/okr/ciclos" element={<ProtectedRoute><OkrCyclesPage /></ProtectedRoute>} />
-          <Route path="/okr/objectives" element={<ProtectedRoute><OkrObjectivesPage /></ProtectedRoute>} />
+          <Route path="/okr/ciclos" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.cycle_management"><OkrCyclesPage /></OkrV2AccessGuard></ProtectedRoute>} />
+          <Route path="/okr/objectives" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.view"><OkrObjectivesPage /></OkrV2AccessGuard></ProtectedRoute>} />
           <Route
             path="/sala-agil"
             element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}

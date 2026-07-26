@@ -69,3 +69,14 @@ Ver `.lovable/plan.md` e seção 19 do plano mestre.
 - Migração de dados existentes por backfill idempotente (PR 3 e PR 4).
 - Duplicidade temporária de fórmulas até que o motor canônico (PR 5) esteja
   em produção e o legado seja removido no PR 10.
+
+## Estado de estabilização — 2026-07-25
+
+- As rotas V2 exigem `VITE_OKR_V2_ENABLED` e entitlement explícito.
+- Falha, indisponibilidade ou carregamento do resolvedor não libera a UI V2.
+- Hooks de ciclos, Objectives e KRs V2 mantêm mutações exclusivamente em RPCs.
+- O fluxo legado ainda contém mutações e exclusões diretas; permanece dívida
+  controlada e não deve ser reutilizado por código V2.
+- A migration aditiva
+  `20260725160000_okr_v2_objective_rpc_grants_hardening.sql` corrige o grant
+  implícito de `PUBLIC` nas RPCs `create/update/archive_okr_objective_v2`.

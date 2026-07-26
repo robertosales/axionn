@@ -8134,6 +8134,185 @@ export type Database = {
           },
         ]
       }
+      okr_metric_bindings: {
+        Row: {
+          configuration: Json
+          created_at: string
+          frequency: string
+          id: string
+          key_result_id: string
+          last_error: string | null
+          last_error_at: string | null
+          last_success_at: string | null
+          metric_version_id: string
+          organization_id: string
+          scope_id: string | null
+          scope_type: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          configuration?: Json
+          created_at?: string
+          frequency?: string
+          id?: string
+          key_result_id: string
+          last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          metric_version_id: string
+          organization_id: string
+          scope_id?: string | null
+          scope_type: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          configuration?: Json
+          created_at?: string
+          frequency?: string
+          id?: string
+          key_result_id?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          metric_version_id?: string
+          organization_id?: string
+          scope_id?: string | null
+          scope_type?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_metric_bindings_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: true
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_metric_bindings_metric_version_id_fkey"
+            columns: ["metric_version_id"]
+            isOneToOne: false
+            referencedRelation: "okr_metric_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_metric_bindings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_metric_definitions: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          direction: string
+          id: string
+          name: string
+          organization_id: string | null
+          scope_types: string[]
+          source_module: string
+          status: string
+          unit: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction: string
+          id?: string
+          name: string
+          organization_id?: string | null
+          scope_types?: string[]
+          source_module: string
+          status?: string
+          unit: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction?: string
+          id?: string
+          name?: string
+          organization_id?: string | null
+          scope_types?: string[]
+          source_module?: string
+          status?: string
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_metric_definitions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_metric_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deprecated_at: string | null
+          effective_from: string
+          formula_definition: Json
+          formula_type: string
+          id: string
+          input_contract: Json
+          metric_definition_id: string
+          output_contract: Json
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deprecated_at?: string | null
+          effective_from?: string
+          formula_definition?: Json
+          formula_type: string
+          id?: string
+          input_contract?: Json
+          metric_definition_id: string
+          output_contract?: Json
+          version: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deprecated_at?: string | null
+          effective_from?: string
+          formula_definition?: Json
+          formula_type?: string
+          id?: string
+          input_contract?: Json
+          metric_definition_id?: string
+          output_contract?: Json
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_metric_versions_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "okr_metric_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_objective_alignments: {
         Row: {
           alignment_type: string
@@ -8381,48 +8560,102 @@ export type Database = {
         Row: {
           attempts: number
           available_at: string
+          cancelled_at: string | null
+          completed_at: string | null
+          correlation_id: string
           created_at: string
+          dead_lettered_at: string | null
           id: string
           idempotency_key: string
+          key_result_id: string | null
           last_error: string | null
+          lease_expires_at: string | null
           locked_at: string | null
+          max_attempts: number
+          metric_binding_id: string | null
           objective_id: string
+          organization_id: string | null
           processed_at: string | null
           reason: string
+          result: Json | null
           status: string
+          worker_id: string | null
         }
         Insert: {
           attempts?: number
           available_at?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
+          correlation_id?: string
           created_at?: string
+          dead_lettered_at?: string | null
           id?: string
           idempotency_key: string
+          key_result_id?: string | null
           last_error?: string | null
+          lease_expires_at?: string | null
           locked_at?: string | null
+          max_attempts?: number
+          metric_binding_id?: string | null
           objective_id: string
+          organization_id?: string | null
           processed_at?: string | null
           reason: string
+          result?: Json | null
           status?: string
+          worker_id?: string | null
         }
         Update: {
           attempts?: number
           available_at?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
+          correlation_id?: string
           created_at?: string
+          dead_lettered_at?: string | null
           id?: string
           idempotency_key?: string
+          key_result_id?: string | null
           last_error?: string | null
+          lease_expires_at?: string | null
           locked_at?: string | null
+          max_attempts?: number
+          metric_binding_id?: string | null
           objective_id?: string
+          organization_id?: string | null
           processed_at?: string | null
           reason?: string
+          result?: Json | null
           status?: string
+          worker_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "okr_recalculation_queue_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_recalculation_queue_metric_binding_id_fkey"
+            columns: ["metric_binding_id"]
+            isOneToOne: false
+            referencedRelation: "okr_metric_bindings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "okr_recalculation_queue_objective_id_fkey"
             columns: ["objective_id"]
             isOneToOne: false
             referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_recalculation_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -15408,6 +15641,19 @@ export type Database = {
           target_type: string
         }[]
       }
+      apply_okr_measurement_v2: {
+        Args: {
+          p_idempotency_key: string
+          p_key_result_id: string
+          p_metadata?: Json
+          p_metric_version_id: string
+          p_org_id: string
+          p_period_end: string
+          p_period_start: string
+          p_value: number
+        }
+        Returns: string
+      }
       archive_expired_briefings: { Args: never; Returns: number }
       archive_okr_alignment_v1: {
         Args: { p_alignment_id: string; p_org_id: string }
@@ -15646,6 +15892,10 @@ export type Database = {
         Args: { p_context?: Json; p_feature_code: string; p_org_id: string }
         Returns: boolean
       }
+      can_view_okr_metric_catalog_v2: {
+        Args: { p_org_id: string }
+        Returns: boolean
+      }
       can_view_team: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
@@ -15672,6 +15922,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      check_organization_has_quality_module: {
+        Args: { p_org_id: string }
+        Returns: boolean
+      }
       claim_next_apf_job: {
         Args: never
         Returns: {
@@ -15694,6 +15948,43 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "apf_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_okr_recalculation_jobs_v1: {
+        Args: {
+          p_lease_seconds?: number
+          p_limit?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          available_at: string
+          cancelled_at: string | null
+          completed_at: string | null
+          correlation_id: string
+          created_at: string
+          dead_lettered_at: string | null
+          id: string
+          idempotency_key: string
+          key_result_id: string | null
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          metric_binding_id: string | null
+          objective_id: string
+          organization_id: string | null
+          processed_at: string | null
+          reason: string
+          result: Json | null
+          status: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_recalculation_queue"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -15967,6 +16258,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      enqueue_due_okr_metric_bindings_v1: { Args: never; Returns: number }
       extract_user_story_external_reference: {
         Args: { p_title: string }
         Returns: string
@@ -16001,6 +16293,16 @@ export type Database = {
           p_status: string
         }
         Returns: undefined
+      }
+      finish_okr_recalculation_job_v1: {
+        Args: {
+          p_error?: string
+          p_job_id: string
+          p_result?: Json
+          p_succeeded: boolean
+          p_worker_id: string
+        }
+        Returns: string
       }
       fn_audit_log_insert: {
         Args: {
@@ -17753,6 +18055,10 @@ export type Database = {
         Returns: undefined
       }
       reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
+      request_okr_measurement_v2: {
+        Args: { p_key_result_id: string }
+        Returns: string
+      }
       resend_organization_invitation: {
         Args: {
           p_actor_id: string

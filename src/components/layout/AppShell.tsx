@@ -128,7 +128,7 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
   );
 }
 
-function SidebarNav({ collapsed }: {
+function SidebarNav({ collapsed, navigationConfig }: {
   collapsed: boolean;
   navigationConfig: NavigationSection[];
 }) {

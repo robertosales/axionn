@@ -28,6 +28,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { BackofficeGuard } from "@/backoffice/guards/BackofficeGuard";
 import { BackofficeLayout } from "@/backoffice/components/BackofficeLayout";
 import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
+import { AppShell } from "@/components/layout/AppShell";
+import { QualityAccessGuard } from "@/features/quality/components/QualityAccessGuard";
+import { OkrV2AccessGuard } from "@/features/okr/components/OkrV2AccessGuard";
 
 import Auth from "./pages/Auth.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
@@ -35,6 +38,11 @@ import NotFound from "./pages/NotFound.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
+const QualityTestCasesPage = lazy(() => import("./features/quality/pages/TestCasesPage"));
+const QualityTestSuitesPage = lazy(() => import("./features/quality/pages/TestSuitesPage"));
+const QualityTestPlansPage = lazy(() => import("./features/quality/pages/TestPlansPage"));
+const QualityTestRunsPage = lazy(() => import("./features/quality/pages/TestRunsPage"));
+const QualityTestRunPage = lazy(() => import("./features/quality/pages/TestRunPage"));
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange.tsx"));
 const AcceptOrganizationInvitation = lazy(
   () => import("./pages/AcceptOrganizationInvitation.tsx"),
@@ -58,6 +66,9 @@ const OrganizationAdminShell = lazy(() =>
   import("./features/organization/components/OrganizationAdminShell").then(
     (module) => ({ default: module.OrganizationAdminShell }),
   ),
+);
+const OrganizationSubscriptionPage = lazy(
+  () => import("./features/organization/pages/OrganizationSubscriptionPage"),
 );
 const PlatformAIProvidersPage = lazy(
   () => import("./features/platform/pages/PlatformAIProvidersPage"),
@@ -120,6 +131,16 @@ const MeuContratoDashboard = lazy(() =>
 const OkrPage = lazy(() =>
   import("./features/okr/OkrPage").then((module) => ({
     default: module.OkrPage,
+  })),
+);
+const OkrCyclesPage = lazy(() =>
+  import("./features/okr/pages/OkrCyclesPage").then((module) => ({
+    default: module.OkrCyclesPage,
+  })),
+);
+const OkrObjectivesPage = lazy(() =>
+  import("./features/okr/pages/OkrObjectivesPage").then((module) => ({
+    default: module.OkrObjectivesPage,
   })),
 );
 
@@ -462,6 +483,7 @@ function AppRoutes() {
           <Route path="/organization/teams" element={<OrganizationConsoleRoute><AdminTimesPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/members" element={<OrganizationConsoleRoute><OrganizationMembersPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/usage" element={<OrganizationConsoleRoute><OrganizationUsagePage /></OrganizationConsoleRoute>} />
+          <Route path="/organization/subscription" element={<OrganizationConsoleRoute><OrganizationSubscriptionPage /></OrganizationConsoleRoute>} />
           <Route path="/organization/settings" element={<OrganizationConsoleRoute><OrganizationSettingsPage /></OrganizationConsoleRoute>} />
 
           <Route
@@ -515,12 +537,26 @@ function AppRoutes() {
             }
           />
           <Route path="/okr" element={<ProtectedRoute><OkrPage /></ProtectedRoute>} />
+          <Route path="/okr/ciclos" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.cycle_management"><OkrCyclesPage /></OkrV2AccessGuard></ProtectedRoute>} />
+          <Route path="/okr/objectives" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.view"><OkrObjectivesPage /></OkrV2AccessGuard></ProtectedRoute>} />
           <Route
             path="/sala-agil"
             element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}
           />
           <Route path="/sala-agil/planning-poker" element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>} />
           <Route path="/sala-agil/retrospectiva" element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><Navigate to="/sala-agil/qualidade/casos" replace /></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/casos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestCasesPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/suites" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestSuitesPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/planos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestPlansPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/execucoes" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestRunsPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/execucoes/:id" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestRunPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/metricas/relatorios" element={<Navigate to="/sala-agil/relatorios" replace />} />
+          <Route path="/sala-agil/metricas/reports" element={<Navigate to="/sala-agil/relatorios" replace />} />
+          <Route path="/sala-agil/metricas/release" element={<Navigate to="/sala-agil/releases" replace />} />
+          <Route path="/sala-agil/metricas/releases" element={<Navigate to="/sala-agil/releases" replace />} />
+          <Route path="/metricas/relatorios" element={<Navigate to="/sala-agil/relatorios" replace />} />
+          <Route path="/metricas/releases" element={<Navigate to="/sala-agil/releases" replace />} />
           <Route path="/sala-agil/:section" element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>} />
           <Route
             path="/sustentacao"
@@ -539,13 +575,18 @@ function AppRoutes() {
   );
 }
 
+function TeamContextRoutes() {
+  const { teamContextVersion } = useAuth();
+  return <AppRoutes key={teamContextVersion} />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
           <OrganizationProvider>
-            <AppRoutes />
+            <TeamContextRoutes />
           </OrganizationProvider>
         </AuthProvider>
       </BrowserRouter>

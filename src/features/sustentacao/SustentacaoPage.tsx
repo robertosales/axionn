@@ -94,7 +94,7 @@ export default function SustentacaoPage() {
         )}
 
         {!authLoading && !needsTeam && (
-          <SustentacaoSection active={active} />
+          <SustentacaoSection key={moduleTeamId ?? "no-team"} active={active} />
         )}
       </div>
     </AppShell>

@@ -18,14 +18,16 @@ import {
 import { NotificationBell } from "@/components/NotificationBell";
 import { NavigationList } from "@/components/navigation/PrimarySidebar";
 import {
-  salaAgilNavigationConfig,
+  filterSalaAgilNavigation,
   sustentacaoNavigationConfig,
   rdmNavigationConfig,
   buildBreadcrumbs,
 } from "@/components/navigation/NavigationConfig";
+import type { NavigationSection } from "@/components/navigation/NavigationConfig";
 import { BreadcrumbsContextual } from "@/components/navigation/BreadcrumbsContextual";
+import { useQualityPermissions } from "@/features/quality/hooks/useQualityPermissions";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const SB = {
   bg:       "#0F172A",
@@ -126,21 +128,16 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
   );
 }
 
-function SidebarNav({ module, collapsed }: {
-  module: ActiveModule; collapsed: boolean;
+function SidebarNav({ collapsed, navigationConfig }: {
+  collapsed: boolean;
+  navigationConfig: NavigationSection[];
 }) {
   const location = useLocation();
-  const config =
-    module === "sala_agil"
-      ? salaAgilNavigationConfig
-      : module === "sustentacao"
-        ? sustentacaoNavigationConfig
-        : rdmNavigationConfig;
 
   return (
     <nav className="flex-1 overflow-y-auto px-2 py-1 min-h-0 scrollbar-none">
       <NavigationList
-        sections={config}
+        sections={navigationConfig}
         activePath={location.pathname}
         collapsed={collapsed}
       />
@@ -299,16 +296,18 @@ function DarkModeToggle() {
   );
 }
 
-function Topbar({ module, onOpenMobile }: { module: ActiveModule; onOpenMobile: () => void }) {
+function Topbar({
+  module,
+  onOpenMobile,
+  navigationConfig,
+}: {
+  module: ActiveModule;
+  onOpenMobile: () => void;
+  navigationConfig: NavigationSection[];
+}) {
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
-  const navigationConfig =
-    module === "sala_agil"
-      ? salaAgilNavigationConfig
-      : module === "sustentacao"
-        ? sustentacaoNavigationConfig
-        : rdmNavigationConfig;
 
   return (
     <header className="sticky top-0 z-20 h-14 shrink-0 flex items-center justify-between gap-3 px-3 sm:px-4 border-b border-border overflow-hidden bg-card/80 backdrop-blur-md">
@@ -392,6 +391,18 @@ export function AppShell({ module, children }: AppShellProps) {
     getModuleRole,
   } = useOrganization();
   const location = useLocation();
+  const { can: qualityPermissions } = useQualityPermissions({
+    entitlementEnabled: module === "sala_agil",
+  });
+  const navigationConfig = useMemo(
+    () =>
+      module === "sala_agil"
+        ? filterSalaAgilNavigation(qualityPermissions.viewQuality)
+        : module === "sustentacao"
+          ? sustentacaoNavigationConfig
+          : rdmNavigationConfig,
+    [module, qualityPermissions.viewQuality],
+  );
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
@@ -505,7 +516,10 @@ export function AppShell({ module, children }: AppShellProps) {
 
           <div className="px-2 mt-1 shrink-0"><TeamSwitcher module={module} collapsed={collapsed} /></div>
           <div className="h-px mx-2 mb-1 shrink-0" style={{ background: SB.border }} />
-          <SidebarNav module={module} collapsed={collapsed} />
+          <SidebarNav
+            collapsed={collapsed}
+            navigationConfig={navigationConfig}
+          />
 
           <div className="shrink-0 px-2 pb-3 pt-1" style={{ borderTop: `1px solid ${SB.border}` }}>
             <DropdownMenu>
@@ -557,7 +571,11 @@ export function AppShell({ module, children }: AppShellProps) {
         </aside>
 
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Topbar module={module} onOpenMobile={() => setMobileOpen(true)} />
+          <Topbar
+            module={module}
+            onOpenMobile={() => setMobileOpen(true)}
+            navigationConfig={navigationConfig}
+          />
           {module === "sala_agil" && <SprintBanner />}
           <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>
         </div>

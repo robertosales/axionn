@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const migrationPath =
   "supabase/migrations/20260711090000_identity_provider_security_hardening.sql";
-const migration = readFileSync(migrationPath, "utf8");
+const migration = readFileSync(migrationPath, "utf8").replace(/\r\n/g, "\n");
 
 describe("identity provider security contract", () => {
   it("removes authenticated access to legacy sensitive RPCs", () => {

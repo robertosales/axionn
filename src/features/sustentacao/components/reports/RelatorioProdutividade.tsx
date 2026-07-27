@@ -442,20 +442,31 @@ export function RelatorioProdutividade({ onBack }: Props) {
   }, [hoursFiltradas, fasesMap]);
 
   const analistasList = useMemo(() => {
-    const idSet = new Set<string>();
-    demandasFiltradas.forEach(d => {
-      responsaveisPorDemanda.get(d.id)?.forEach(uid => idSet.add(uid));
-      horasPorDemandaUser.get(d.id)?.forEach((_, uid) => idSet.add(uid));
-    });
-    return [...idSet]
-      .map(uid => ({ user_id: uid, display_name: nomeMap.get(uid) || `Usuário ${uid.slice(0, 8)}` }))
-      .sort((a, b) => a.display_name.localeCompare(b.display_name));
-  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, nomeMap]);
+    const byUser = new Map<string, { user_id: string; display_name: string }>();
+    teamProfiles.forEach(profile => byUser.set(profile.user_id, {
+      user_id: profile.user_id,
+      display_name: profile.display_name || profile.email || profile.user_id.slice(0, 8),
+    }));
+    return [...byUser.values()].sort((a, b) => a.display_name.localeCompare(b.display_name, "pt-BR"));
+  }, [teamProfiles]);
+
+  const activeAnalystIds = useMemo(
+    () => new Set(analistasList.map(option => option.user_id)),
+    [analistasList],
+  );
+
+  useEffect(() => {
+    if (analista !== "all" && !activeAnalystIds.has(analista)) {
+      setAnalista(isAdmin ? "all" : (user?.id && activeAnalystIds.has(user.id) ? user.id : "all"));
+    }
+  }, [activeAnalystIds, analista, isAdmin, user?.id]);
 
   const grupos = useMemo(() => {
     const todosIds = new Set<string>();
     demandasFiltradas.forEach(d => {
-      horasPorDemandaUser.get(d.id)?.forEach((_, uid) => todosIds.add(uid));
+      horasPorDemandaUser.get(d.id)?.forEach((_, uid) => {
+        if (activeAnalystIds.has(uid)) todosIds.add(uid);
+      });
     });
       const ids = analista !== "all" ? [analista] : [...todosIds];
     return ids.map(userId => {
@@ -485,7 +496,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
       const cargo        = cargoMap.get(userId) ?? "";
       return { userId, nome: nomeMap.get(userId) || `Usuário ${userId.slice(0,8)}`, cargo, atividades, totalHoras, resolvidos, emAberto, taxaResolucao: atividades.length > 0 ? (resolvidos / atividades.length) * 100 : 0 };
     }).filter(g => g.atividades.length > 0).sort((a, b) => b.resolvidos - a.resolvidos);
-  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, horasDetalhadasMap, transitions, nomeMap, cargoMap, analista]);
+  }, [demandasFiltradas, responsaveisPorDemanda, horasPorDemandaUser, horasDetalhadasMap, transitions, nomeMap, cargoMap, analista, activeAnalystIds]);
 
   const kpis = useMemo(() => ({
     totalAtividades: grupos.reduce((s, g) => s + g.atividades.length, 0),

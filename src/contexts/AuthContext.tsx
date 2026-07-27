@@ -20,6 +20,7 @@ import {
   deduplicateTeams,
   type AuthTeam,
 } from "@/contexts/authTeams";
+import { beginTeamContextChange } from "@/lib/teamContextChange";
 
 interface Profile {
   id: string;
@@ -51,6 +52,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   currentTeamId: string | null;
   currentTeam: AuthTeam | null;
+  teamContextVersion: number;
   setCurrentTeamId: (id: string | null) => void;
   teams: AuthTeam[];
   refreshTeams: (
@@ -93,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [currentTeamId, setCurrentTeamIdState] = useState<string | null>(null);
+  const [teamContextVersion, setTeamContextVersion] = useState(0);
   const [teams, setTeams] = useState<AuthTeam[]>([]);
   const [moduleRoles, setModuleRoles] = useState<UserModuleRole[]>([]);
   const [legacyFallbackEnabled, setLegacyFallbackEnabled] = useState(true);
@@ -120,8 +123,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setCurrentTeamId = useCallback((id: string | null) => {
+    const previousId = currentTeamIdRef.current;
+    if (previousId === id) return;
+    if (previousId) beginTeamContextChange(previousId, id);
     currentTeamIdRef.current = id;
     setCurrentTeamIdState(id);
+    setTeamContextVersion((version) => version + 1);
     if (id) localStorage.setItem("selectedTeamId", id);
     else localStorage.removeItem("selectedTeamId");
   }, []);
@@ -592,6 +599,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSigningOut,
         signOut,
         currentTeamId,
+        teamContextVersion,
         currentTeam:
           teams.find((team) => team.id === currentTeamId) ?? null,
         setCurrentTeamId,

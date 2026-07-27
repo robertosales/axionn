@@ -72,6 +72,8 @@ interface OverrideForm {
   enabled: "inherit" | "true" | "false";
   limitValue: string;
   reason: string;
+  startsAt: string;
+  endsAt: string;
 }
 
 function formatLimit(value: number | null) {
@@ -134,6 +136,8 @@ function toOverrideForm(
         ? ""
         : String(override.limitValue),
     reason: override?.reason ?? "",
+    startsAt: toDateInput(override?.startsAt ?? null),
+    endsAt: toDateInput(override?.endsAt ?? null),
   };
 }
 
@@ -221,6 +225,8 @@ export default function PlatformSubscriptionsPage({
   const saveOverride = async () => {
     if (!overrideForm) return;
     if (!overrideForm.featureKey.trim()) return toast.error("Recurso e obrigatorio");
+    if (!overrideForm.reason.trim()) return toast.error("Justificativa e obrigatoria");
+    if (overrideForm.startsAt && overrideForm.endsAt && overrideForm.endsAt <= overrideForm.startsAt) return toast.error("Fim da vigencia deve ser posterior ao inicio");
 
     setSaving(true);
     try {
@@ -233,6 +239,8 @@ export default function PlatformSubscriptionsPage({
             : overrideForm.enabled === "true",
         limitValue: parseLimit(overrideForm.limitValue),
         reason: overrideForm.reason.trim() || null,
+        startsAt: overrideForm.startsAt || null,
+        endsAt: overrideForm.endsAt || null,
       });
       toast.success("Override atualizado");
       setOverrideForm(null);
@@ -617,6 +625,10 @@ export default function PlatformSubscriptionsPage({
                       )
                     }
                   />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2"><Label>Início da vigência</Label><Input type="date" value={overrideForm.startsAt} onChange={(event) => setOverrideForm((current) => current ? { ...current, startsAt: event.target.value } : current)} /></div>
+                  <div className="space-y-2"><Label>Fim da vigência</Label><Input type="date" min={overrideForm.startsAt || undefined} value={overrideForm.endsAt} onChange={(event) => setOverrideForm((current) => current ? { ...current, endsAt: event.target.value } : current)} /></div>
                 </div>
                 <div className="space-y-2">
                   <Label>Motivo</Label>

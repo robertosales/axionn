@@ -7,6 +7,7 @@ import {
   Calendar,
   CheckSquare,
   ClipboardList,
+  ClipboardCheck,
   FileText,
   GitBranch,
   History,
@@ -15,6 +16,7 @@ import {
   Layers,
   LayoutDashboard,
   ListTodo,
+  Play,
   Repeat,
   Settings,
   ShieldCheck,
@@ -137,6 +139,16 @@ export function buildBreadcrumbs(pathname: string, config: NavigationSection[]):
 
 export const salaAgilNavigationConfig: NavigationSection[] = [
   {
+    id: "sala-agil-quality",
+    label: "Qualidade",
+    items: [
+      { id: "quality-cases", label: "Casos de Teste", icon: ClipboardCheck, route: "/sala-agil/qualidade/casos" },
+      { id: "quality-suites", label: "Suítes", icon: Layers, route: "/sala-agil/qualidade/suites" },
+      { id: "quality-plans", label: "Planos", icon: ClipboardList, route: "/sala-agil/qualidade/planos" },
+      { id: "quality-runs", label: "Execuções", icon: Play, route: "/sala-agil/qualidade/execucoes" },
+    ],
+  },
+  {
     id: "sala-agil-sprints",
     label: "Sprints",
     items: [
@@ -188,6 +200,16 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
     ],
   },
 ];
+
+export function filterSalaAgilNavigation(
+  canViewQuality: boolean,
+): NavigationSection[] {
+  if (canViewQuality) return salaAgilNavigationConfig;
+
+  return salaAgilNavigationConfig.filter(
+    (section) => section.id !== "sala-agil-quality",
+  );
+}
 
 export const sustentacaoNavigationConfig: NavigationSection[] = [
   {

@@ -213,24 +213,33 @@ function parseEvidence(value: unknown): Evidence {
   const item = asRecord(value);
   if (!item) throw new HttpError(422, "AI_OUTPUT_INVALID_EVIDENCE", "Evidencia invalida: objeto esperado");
 
-  const sourceStart =
-    item.sourceStart === undefined ? undefined : Number(item.sourceStart);
-  const sourceEnd =
-    item.sourceEnd === undefined ? undefined : Number(item.sourceEnd);
+  let sourceStart =
+    item.sourceStart === undefined || item.sourceStart === null
+      ? undefined
+      : Number(item.sourceStart);
+  let sourceEnd =
+    item.sourceEnd === undefined || item.sourceEnd === null
+      ? undefined
+      : Number(item.sourceEnd);
 
-  if (
+  // Auto-heal: descarta intervalos invalidos em vez de rejeitar o briefing todo.
+  // O healEvidenceQuote() recalcula os indices corretos a partir do texto original.
+  const rangeInvalid =
     (sourceStart === undefined) !== (sourceEnd === undefined) ||
     (sourceStart !== undefined &&
-      (!Number.isInteger(sourceStart) ||
+      (!Number.isFinite(sourceStart) ||
+        !Number.isFinite(sourceEnd) ||
+        !Number.isInteger(sourceStart) ||
         !Number.isInteger(sourceEnd) ||
         sourceStart < 0 ||
-        sourceEnd! <= sourceStart))
-  ) {
-    throw new HttpError(
-      422,
-      "AI_OUTPUT_INVALID_EVIDENCE_RANGE",
-      "Intervalo de evidencia invalido: sourceStart e sourceEnd devem ser inteiros positivos, com sourceEnd > sourceStart",
+        (sourceEnd as number) <= sourceStart));
+  if (rangeInvalid) {
+    console.warn(
+      "[process-ai-briefing] intervalo de evidencia invalido descartado:",
+      JSON.stringify({ sourceStart: item.sourceStart, sourceEnd: item.sourceEnd }),
     );
+    sourceStart = undefined;
+    sourceEnd = undefined;
   }
 
   return {

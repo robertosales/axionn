@@ -3858,6 +3858,106 @@ export type Database = {
           },
         ]
       }
+      commercial_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after_data: Json | null
+          before_data: Json | null
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          org_id: string
+          reason: string | null
+          source: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          org_id: string
+          reason?: string | null
+          source?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          org_id?: string
+          reason?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_audit_logs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commercial_enforcement_events: {
+        Row: {
+          actor_id: string | null
+          correlation_id: string | null
+          created_at: string
+          decision: string
+          feature_code: string
+          id: string
+          limit_value: number | null
+          metadata: Json
+          organization_id: string
+          reason: string
+          used_value: number | null
+        }
+        Insert: {
+          actor_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          decision: string
+          feature_code: string
+          id?: string
+          limit_value?: number | null
+          metadata?: Json
+          organization_id: string
+          reason: string
+          used_value?: number | null
+        }
+        Update: {
+          actor_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          decision?: string
+          feature_code?: string
+          id?: string
+          limit_value?: number | null
+          metadata?: Json
+          organization_id?: string
+          reason?: string
+          used_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_enforcement_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           cnpj: string | null
@@ -4112,56 +4212,77 @@ export type Database = {
       }
       contracts: {
         Row: {
+          commercial_amount: number | null
+          commercial_owner_id: string | null
+          commercial_terms: Json
           company_id: string | null
+          contract_number: string | null
           created_at: string | null
           created_by: string | null
           currency: string
           description: string | null
+          discount_percent: number | null
           ends_at: string | null
           id: string
           name: string
           number: string | null
           object: string | null
           org_id: string | null
+          plan_version_id: string | null
           room_mode: string
           starts_at: string | null
           status: string | null
+          subscription_id: string | null
           updated_at: string | null
           value_per_pfus: number | null
         }
         Insert: {
+          commercial_amount?: number | null
+          commercial_owner_id?: string | null
+          commercial_terms?: Json
           company_id?: string | null
+          contract_number?: string | null
           created_at?: string | null
           created_by?: string | null
           currency?: string
           description?: string | null
+          discount_percent?: number | null
           ends_at?: string | null
           id?: string
           name: string
           number?: string | null
           object?: string | null
           org_id?: string | null
+          plan_version_id?: string | null
           room_mode?: string
           starts_at?: string | null
           status?: string | null
+          subscription_id?: string | null
           updated_at?: string | null
           value_per_pfus?: number | null
         }
         Update: {
+          commercial_amount?: number | null
+          commercial_owner_id?: string | null
+          commercial_terms?: Json
           company_id?: string | null
+          contract_number?: string | null
           created_at?: string | null
           created_by?: string | null
           currency?: string
           description?: string | null
+          discount_percent?: number | null
           ends_at?: string | null
           id?: string
           name?: string
           number?: string | null
           object?: string | null
           org_id?: string | null
+          plan_version_id?: string | null
           room_mode?: string
           starts_at?: string | null
           status?: string | null
+          subscription_id?: string | null
           updated_at?: string | null
           value_per_pfus?: number | null
         }
@@ -4178,6 +4299,20 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -7422,29 +7557,171 @@ export type Database = {
           },
         ]
       }
+      okr_alerts: {
+        Row: {
+          alert_type: string
+          deduplication_key: string
+          detected_at: string
+          id: string
+          key_result_id: string | null
+          message: string
+          metadata: Json
+          objective_id: string
+          resolved_at: string | null
+          severity: string
+          status: string
+        }
+        Insert: {
+          alert_type: string
+          deduplication_key: string
+          detected_at?: string
+          id?: string
+          key_result_id?: string | null
+          message: string
+          metadata?: Json
+          objective_id: string
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+        }
+        Update: {
+          alert_type?: string
+          deduplication_key?: string
+          detected_at?: string
+          id?: string
+          key_result_id?: string | null
+          message?: string
+          metadata?: Json
+          objective_id?: string
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_alerts_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_alerts_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after_data: Json | null
+          before_data: Json | null
+          created_at: string
+          id: string
+          initiative_id: string | null
+          key_result_id: string | null
+          metadata: Json
+          objective_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          id?: string
+          initiative_id?: string | null
+          key_result_id?: string | null
+          metadata?: Json
+          objective_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string
+          id?: string
+          initiative_id?: string | null
+          key_result_id?: string | null
+          metadata?: Json
+          objective_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_audit_log_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "okr_initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_audit_log_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_audit_log_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_check_ins: {
         Row: {
           author_id: string | null
+          confidence: number | null
           created_at: string
+          evidence: Json
           id: string
           key_result_id: string
+          next_steps: string | null
           note: string | null
+          objective_id: string | null
+          previous_value: number | null
+          risks: string | null
+          summary: string | null
+          updated_at: string
           value: number
         }
         Insert: {
           author_id?: string | null
+          confidence?: number | null
           created_at?: string
+          evidence?: Json
           id?: string
           key_result_id: string
+          next_steps?: string | null
           note?: string | null
+          objective_id?: string | null
+          previous_value?: number | null
+          risks?: string | null
+          summary?: string | null
+          updated_at?: string
           value: number
         }
         Update: {
           author_id?: string | null
+          confidence?: number | null
           created_at?: string
+          evidence?: Json
           id?: string
           key_result_id?: string
+          next_steps?: string | null
           note?: string | null
+          objective_id?: string | null
+          previous_value?: number | null
+          risks?: string | null
+          summary?: string | null
+          updated_at?: string
           value?: number
         }
         Relationships: [
@@ -7455,38 +7732,397 @@ export type Database = {
             referencedRelation: "okr_key_results"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "okr_check_ins_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_cycles: {
+        Row: {
+          allow_overachievement: boolean
+          archived_at: string | null
+          archived_by: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          check_in_frequency: string
+          check_in_grace_days: number
+          check_in_weekday: number | null
+          closed_at: string | null
+          closed_by: string | null
+          closing_started_at: string | null
+          closing_started_by: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          cycle_type: string
+          ends_at: string
+          id: string
+          name: string
+          organization_id: string
+          published_at: string | null
+          published_by: string | null
+          recommended_krs_max: number | null
+          recommended_krs_min: number | null
+          recommended_objectives_max: number | null
+          recommended_objectives_min: number | null
+          scoring_method: string
+          settings: Json
+          starts_at: string
+          status: string
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          allow_overachievement?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          check_in_frequency?: string
+          check_in_grace_days?: number
+          check_in_weekday?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_started_at?: string | null
+          closing_started_by?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          cycle_type?: string
+          ends_at: string
+          id?: string
+          name: string
+          organization_id: string
+          published_at?: string | null
+          published_by?: string | null
+          recommended_krs_max?: number | null
+          recommended_krs_min?: number | null
+          recommended_objectives_max?: number | null
+          recommended_objectives_min?: number | null
+          scoring_method?: string
+          settings?: Json
+          starts_at: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          allow_overachievement?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          check_in_frequency?: string
+          check_in_grace_days?: number
+          check_in_weekday?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_started_at?: string | null
+          closing_started_by?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          cycle_type?: string
+          ends_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          published_at?: string | null
+          published_by?: string | null
+          recommended_krs_max?: number | null
+          recommended_krs_min?: number | null
+          recommended_objectives_max?: number | null
+          recommended_objectives_min?: number | null
+          scoring_method?: string
+          settings?: Json
+          starts_at?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_cycles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_initiatives: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          key_result_id: string | null
+          linked_entity_id: string | null
+          linked_entity_type: string | null
+          objective_id: string
+          owner_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          key_result_id?: string | null
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          objective_id: string
+          owner_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          key_result_id?: string | null
+          linked_entity_id?: string | null
+          linked_entity_type?: string | null
+          objective_id?: string
+          owner_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_initiatives_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_initiatives_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_key_result_snapshots: {
+        Row: {
+          calculated_progress: number | null
+          calculation_metadata: Json
+          created_at: string
+          formula_version: string | null
+          health: string
+          id: string
+          idempotency_key: string | null
+          items_considered: number | null
+          key_result_id: string
+          measured_at: string
+          measured_value: number | null
+          measurement_quality: string
+          period_end: string | null
+          period_start: string | null
+          raw_progress: number | null
+          scope_id: string | null
+          scope_type: string | null
+          source: string | null
+          triggered_by_id: string | null
+          triggered_by_type: string
+        }
+        Insert: {
+          calculated_progress?: number | null
+          calculation_metadata?: Json
+          created_at?: string
+          formula_version?: string | null
+          health?: string
+          id?: string
+          idempotency_key?: string | null
+          items_considered?: number | null
+          key_result_id: string
+          measured_at?: string
+          measured_value?: number | null
+          measurement_quality?: string
+          period_end?: string | null
+          period_start?: string | null
+          raw_progress?: number | null
+          scope_id?: string | null
+          scope_type?: string | null
+          source?: string | null
+          triggered_by_id?: string | null
+          triggered_by_type?: string
+        }
+        Update: {
+          calculated_progress?: number | null
+          calculation_metadata?: Json
+          created_at?: string
+          formula_version?: string | null
+          health?: string
+          id?: string
+          idempotency_key?: string | null
+          items_considered?: number | null
+          key_result_id?: string
+          measured_at?: string
+          measured_value?: number | null
+          measurement_quality?: string
+          period_end?: string | null
+          period_start?: string | null
+          raw_progress?: number | null
+          scope_id?: string | null
+          scope_type?: string | null
+          source?: string | null
+          triggered_by_id?: string | null
+          triggered_by_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_key_result_snapshots_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
         ]
       }
       okr_key_results: {
         Row: {
+          allow_overachievement: boolean
+          archive_reason: string | null
+          archived_at: string | null
+          archived_by: string | null
+          baseline_value: number | null
+          calculated_health: string
+          calculated_progress: number | null
           created_at: string
+          created_by: string | null
           current: number
+          current_value: number | null
+          description: string | null
+          direction: string
+          end_date: string | null
+          formula_version: string | null
+          frequency: string
           id: string
+          last_measured_at: string | null
+          lifecycle_status: string
+          lock_version: number
+          measurement_quality: string
+          metric_code: string | null
+          metric_config: Json
           objective_id: string
+          owner_id: string | null
+          raw_progress: number | null
+          source_label: string | null
+          start_date: string | null
           target: number
+          target_max: number | null
+          target_min: number | null
+          target_value: number | null
           title: string
           unit: string
+          update_type: string
           updated_at: string
+          updated_by: string | null
+          weight: number | null
         }
         Insert: {
+          allow_overachievement?: boolean
+          archive_reason?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
+          baseline_value?: number | null
+          calculated_health?: string
+          calculated_progress?: number | null
           created_at?: string
+          created_by?: string | null
           current?: number
+          current_value?: number | null
+          description?: string | null
+          direction?: string
+          end_date?: string | null
+          formula_version?: string | null
+          frequency?: string
           id?: string
+          last_measured_at?: string | null
+          lifecycle_status?: string
+          lock_version?: number
+          measurement_quality?: string
+          metric_code?: string | null
+          metric_config?: Json
           objective_id: string
+          owner_id?: string | null
+          raw_progress?: number | null
+          source_label?: string | null
+          start_date?: string | null
           target?: number
+          target_max?: number | null
+          target_min?: number | null
+          target_value?: number | null
           title: string
           unit?: string
+          update_type?: string
           updated_at?: string
+          updated_by?: string | null
+          weight?: number | null
         }
         Update: {
+          allow_overachievement?: boolean
+          archive_reason?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
+          baseline_value?: number | null
+          calculated_health?: string
+          calculated_progress?: number | null
           created_at?: string
+          created_by?: string | null
           current?: number
+          current_value?: number | null
+          description?: string | null
+          direction?: string
+          end_date?: string | null
+          formula_version?: string | null
+          frequency?: string
           id?: string
+          last_measured_at?: string | null
+          lifecycle_status?: string
+          lock_version?: number
+          measurement_quality?: string
+          metric_code?: string | null
+          metric_config?: Json
           objective_id?: string
+          owner_id?: string | null
+          raw_progress?: number | null
+          source_label?: string | null
+          start_date?: string | null
           target?: number
+          target_max?: number | null
+          target_min?: number | null
+          target_value?: number | null
           title?: string
           unit?: string
+          update_type?: string
           updated_at?: string
+          updated_by?: string | null
+          weight?: number | null
         }
         Relationships: [
           {
@@ -7498,49 +8134,528 @@ export type Database = {
           },
         ]
       }
-      okr_objectives: {
+      okr_metric_bindings: {
+        Row: {
+          configuration: Json
+          created_at: string
+          frequency: string
+          id: string
+          key_result_id: string
+          last_error: string | null
+          last_error_at: string | null
+          last_success_at: string | null
+          metric_version_id: string
+          organization_id: string
+          scope_id: string | null
+          scope_type: string
+          status: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          configuration?: Json
+          created_at?: string
+          frequency?: string
+          id?: string
+          key_result_id: string
+          last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          metric_version_id: string
+          organization_id: string
+          scope_id?: string | null
+          scope_type: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          configuration?: Json
+          created_at?: string
+          frequency?: string
+          id?: string
+          key_result_id?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          metric_version_id?: string
+          organization_id?: string
+          scope_id?: string | null
+          scope_type?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_metric_bindings_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: true
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_metric_bindings_metric_version_id_fkey"
+            columns: ["metric_version_id"]
+            isOneToOne: false
+            referencedRelation: "okr_metric_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_metric_bindings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_metric_definitions: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          direction: string
+          id: string
+          name: string
+          organization_id: string | null
+          scope_types: string[]
+          source_module: string
+          status: string
+          unit: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction: string
+          id?: string
+          name: string
+          organization_id?: string | null
+          scope_types?: string[]
+          source_module: string
+          status?: string
+          unit: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction?: string
+          id?: string
+          name?: string
+          organization_id?: string | null
+          scope_types?: string[]
+          source_module?: string
+          status?: string
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_metric_definitions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_metric_versions: {
         Row: {
           created_at: string
-          cycle: string
-          description: string | null
+          created_by: string | null
+          deprecated_at: string | null
+          effective_from: string
+          formula_definition: Json
+          formula_type: string
           id: string
+          input_contract: Json
+          metric_definition_id: string
+          output_contract: Json
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deprecated_at?: string | null
+          effective_from?: string
+          formula_definition?: Json
+          formula_type: string
+          id?: string
+          input_contract?: Json
+          metric_definition_id: string
+          output_contract?: Json
+          version: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deprecated_at?: string | null
+          effective_from?: string
+          formula_definition?: Json
+          formula_type?: string
+          id?: string
+          input_contract?: Json
+          metric_definition_id?: string
+          output_contract?: Json
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_metric_versions_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "okr_metric_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_objective_alignments: {
+        Row: {
+          alignment_type: string
+          archived_at: string | null
+          archived_by: string | null
+          contribution_weight: number | null
+          created_at: string
+          created_by: string
+          id: string
+          organization_id: string
+          rationale: string | null
+          source_objective_id: string
+          target_objective_id: string
+        }
+        Insert: {
+          alignment_type: string
+          archived_at?: string | null
+          archived_by?: string | null
+          contribution_weight?: number | null
+          created_at?: string
+          created_by: string
+          id?: string
+          organization_id: string
+          rationale?: string | null
+          source_objective_id: string
+          target_objective_id: string
+        }
+        Update: {
+          alignment_type?: string
+          archived_at?: string | null
+          archived_by?: string | null
+          contribution_weight?: number | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          organization_id?: string
+          rationale?: string | null
+          source_objective_id?: string
+          target_objective_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_objective_alignments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objective_alignments_source_objective_id_fkey"
+            columns: ["source_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objective_alignments_target_objective_id_fkey"
+            columns: ["target_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_objectives: {
+        Row: {
+          archived_at: string | null
+          archived_by: string | null
+          calculated_health: string
+          calculated_progress: number | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string | null
+          cycle: string
+          cycle_id: string | null
+          description: string | null
+          end_date: string | null
+          health_override_at: string | null
+          health_override_by: string | null
+          health_override_reason: string | null
+          health_reason: string | null
+          id: string
+          last_calculated_at: string | null
+          legacy_progress: number | null
+          lifecycle_status: string
+          lock_version: number
+          manual_health_override: string | null
+          measurement_status: string
+          objective_level: string
+          organization_id: string | null
           owner_id: string | null
+          parent_objective_id: string | null
+          paused_at: string | null
           progress: number
+          published_at: string | null
+          published_by: string | null
+          quality_issues: Json
+          quality_score: number | null
+          quality_status: string | null
+          review_started_at: string | null
+          scope_type: string
+          sponsor_id: string | null
+          start_date: string | null
           status: string
           team_id: string | null
           title: string
           updated_at: string
+          updated_by: string | null
+          version: number
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
+          calculated_health?: string
+          calculated_progress?: number | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
+          created_by?: string | null
           cycle: string
+          cycle_id?: string | null
           description?: string | null
+          end_date?: string | null
+          health_override_at?: string | null
+          health_override_by?: string | null
+          health_override_reason?: string | null
+          health_reason?: string | null
           id?: string
+          last_calculated_at?: string | null
+          legacy_progress?: number | null
+          lifecycle_status?: string
+          lock_version?: number
+          manual_health_override?: string | null
+          measurement_status?: string
+          objective_level?: string
+          organization_id?: string | null
           owner_id?: string | null
+          parent_objective_id?: string | null
+          paused_at?: string | null
           progress?: number
+          published_at?: string | null
+          published_by?: string | null
+          quality_issues?: Json
+          quality_score?: number | null
+          quality_status?: string | null
+          review_started_at?: string | null
+          scope_type?: string
+          sponsor_id?: string | null
+          start_date?: string | null
           status?: string
           team_id?: string | null
           title: string
           updated_at?: string
+          updated_by?: string | null
+          version?: number
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
+          calculated_health?: string
+          calculated_progress?: number | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
+          created_by?: string | null
           cycle?: string
+          cycle_id?: string | null
           description?: string | null
+          end_date?: string | null
+          health_override_at?: string | null
+          health_override_by?: string | null
+          health_override_reason?: string | null
+          health_reason?: string | null
           id?: string
+          last_calculated_at?: string | null
+          legacy_progress?: number | null
+          lifecycle_status?: string
+          lock_version?: number
+          manual_health_override?: string | null
+          measurement_status?: string
+          objective_level?: string
+          organization_id?: string | null
           owner_id?: string | null
+          parent_objective_id?: string | null
+          paused_at?: string | null
           progress?: number
+          published_at?: string | null
+          published_by?: string | null
+          quality_issues?: Json
+          quality_score?: number | null
+          quality_status?: string | null
+          review_started_at?: string | null
+          scope_type?: string
+          sponsor_id?: string | null
+          start_date?: string | null
           status?: string
           team_id?: string | null
           title?: string
           updated_at?: string
+          updated_by?: string | null
+          version?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "okr_objectives_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "okr_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objectives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objectives_parent_objective_id_fkey"
+            columns: ["parent_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "okr_objectives_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_recalculation_queue: {
+        Row: {
+          attempts: number
+          available_at: string
+          cancelled_at: string | null
+          completed_at: string | null
+          correlation_id: string
+          created_at: string
+          dead_lettered_at: string | null
+          id: string
+          idempotency_key: string
+          key_result_id: string | null
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          metric_binding_id: string | null
+          objective_id: string
+          organization_id: string | null
+          processed_at: string | null
+          reason: string
+          result: Json | null
+          status: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          available_at?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
+          correlation_id?: string
+          created_at?: string
+          dead_lettered_at?: string | null
+          id?: string
+          idempotency_key: string
+          key_result_id?: string | null
+          last_error?: string | null
+          lease_expires_at?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          metric_binding_id?: string | null
+          objective_id: string
+          organization_id?: string | null
+          processed_at?: string | null
+          reason: string
+          result?: Json | null
+          status?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          available_at?: string
+          cancelled_at?: string | null
+          completed_at?: string | null
+          correlation_id?: string
+          created_at?: string
+          dead_lettered_at?: string | null
+          id?: string
+          idempotency_key?: string
+          key_result_id?: string | null
+          last_error?: string | null
+          lease_expires_at?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          metric_binding_id?: string | null
+          objective_id?: string
+          organization_id?: string | null
+          processed_at?: string | null
+          reason?: string
+          result?: Json | null
+          status?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_recalculation_queue_key_result_id_fkey"
+            columns: ["key_result_id"]
+            isOneToOne: false
+            referencedRelation: "okr_key_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_recalculation_queue_metric_binding_id_fkey"
+            columns: ["metric_binding_id"]
+            isOneToOne: false
+            referencedRelation: "okr_metric_bindings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_recalculation_queue_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_recalculation_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -7897,44 +9012,98 @@ export type Database = {
           },
         ]
       }
+      organization_entitlement_cache: {
+        Row: {
+          computed_at: string
+          entitlements: Json
+          expires_at: string
+          org_id: string
+          version: number
+        }
+        Insert: {
+          computed_at?: string
+          entitlements: Json
+          expires_at: string
+          org_id: string
+          version?: number
+        }
+        Update: {
+          computed_at?: string
+          entitlements?: Json
+          expires_at?: string
+          org_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_entitlement_cache_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_entitlement_overrides: {
         Row: {
           created_at: string
           created_by: string | null
           enabled: boolean | null
+          ends_at: string | null
+          feature_id: string | null
           feature_key: string
           id: string
           limit_value: number | null
           metadata: Json
           org_id: string
           reason: string | null
+          source_id: string | null
+          source_type: string
+          starts_at: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
           enabled?: boolean | null
+          ends_at?: string | null
+          feature_id?: string | null
           feature_key: string
           id?: string
           limit_value?: number | null
           metadata?: Json
           org_id: string
           reason?: string | null
+          source_id?: string | null
+          source_type?: string
+          starts_at?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
           enabled?: boolean | null
+          ends_at?: string | null
+          feature_id?: string | null
           feature_key?: string
           id?: string
           limit_value?: number | null
           metadata?: Json
           org_id?: string
           reason?: string | null
+          source_id?: string | null
+          source_type?: string
+          starts_at?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "organization_entitlement_overrides_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "product_features"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "organization_entitlement_overrides_org_id_fkey"
             columns: ["org_id"]
@@ -8236,8 +9405,64 @@ export type Database = {
           },
         ]
       }
+      organization_subscription_addons: {
+        Row: {
+          addon_id: string
+          created_at: string
+          ends_at: string | null
+          id: string
+          metadata: Json
+          quantity: number
+          starts_at: string
+          status: string
+          subscription_id: string
+          updated_at: string
+        }
+        Insert: {
+          addon_id: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          metadata?: Json
+          quantity?: number
+          starts_at?: string
+          status?: string
+          subscription_id: string
+          updated_at?: string
+        }
+        Update: {
+          addon_id?: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          metadata?: Json
+          quantity?: number
+          starts_at?: string
+          status?: string
+          subscription_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_subscription_addons_addon_id_fkey"
+            columns: ["addon_id"]
+            isOneToOne: false
+            referencedRelation: "saas_addons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_subscription_addons_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_subscriptions: {
         Row: {
+          auto_renew: boolean
+          cancel_at_period_end: boolean
           canceled_at: string | null
           created_at: string
           current_period_end: string | null
@@ -8248,13 +9473,18 @@ export type Database = {
           metadata: Json
           org_id: string
           plan_id: string
+          plan_version_id: string | null
+          renewed_at: string | null
           source: string
           starts_at: string
           status: string
+          suspended_at: string | null
           trial_ends_at: string | null
           updated_at: string
         }
         Insert: {
+          auto_renew?: boolean
+          cancel_at_period_end?: boolean
           canceled_at?: string | null
           created_at?: string
           current_period_end?: string | null
@@ -8265,13 +9495,18 @@ export type Database = {
           metadata?: Json
           org_id: string
           plan_id: string
+          plan_version_id?: string | null
+          renewed_at?: string | null
           source?: string
           starts_at?: string
           status: string
+          suspended_at?: string | null
           trial_ends_at?: string | null
           updated_at?: string
         }
         Update: {
+          auto_renew?: boolean
+          cancel_at_period_end?: boolean
           canceled_at?: string | null
           created_at?: string
           current_period_end?: string | null
@@ -8282,9 +9517,12 @@ export type Database = {
           metadata?: Json
           org_id?: string
           plan_id?: string
+          plan_version_id?: string | null
+          renewed_at?: string | null
           source?: string
           starts_at?: string
           status?: string
+          suspended_at?: string | null
           trial_ends_at?: string | null
           updated_at?: string
         }
@@ -8301,6 +9539,63 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "saas_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_subscriptions_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_usage_records: {
+        Row: {
+          calculated_at: string
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          organization_id: string
+          period_end: string
+          period_start: string
+          source: string
+          usage_code: string
+          used_value: number
+        }
+        Insert: {
+          calculated_at?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          organization_id: string
+          period_end: string
+          period_start: string
+          source: string
+          usage_code: string
+          used_value?: number
+        }
+        Update: {
+          calculated_at?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          organization_id?: string
+          period_end?: string
+          period_start?: string
+          source?: string
+          usage_code?: string
+          used_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_usage_records_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -8717,6 +10012,95 @@ export type Database = {
         }
         Relationships: []
       }
+      product_features: {
+        Row: {
+          code: string
+          created_at: string
+          dependencies: Json
+          description: string | null
+          feature_type: string
+          id: string
+          metadata: Json
+          module_id: string
+          name: string
+          status: string
+          updated_at: string
+          usage_unit: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          dependencies?: Json
+          description?: string | null
+          feature_type?: string
+          id?: string
+          metadata?: Json
+          module_id: string
+          name: string
+          status?: string
+          updated_at?: string
+          usage_unit?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          dependencies?: Json
+          description?: string | null
+          feature_type?: string
+          id?: string
+          metadata?: Json
+          module_id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+          usage_unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_features_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "product_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_modules: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          display_order: number
+          domain: string
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          domain: string
+          id?: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          domain?: string
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -8997,6 +10381,1060 @@ export type Database = {
           },
           {
             foreignKeyName: "projetos_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_code_counters: {
+        Row: {
+          code_type: string
+          next_value: number
+          organization_id: string
+        }
+        Insert: {
+          code_type: string
+          next_value?: number
+          organization_id: string
+        }
+        Update: {
+          code_type?: string
+          next_value?: number
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_code_counters_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_findings: {
+        Row: {
+          actual_result: string | null
+          assigned_to: string | null
+          code: string
+          contract_id: string | null
+          created_at: string
+          description: string | null
+          expected_result: string | null
+          external_issue_id: string | null
+          external_issue_url: string | null
+          external_provider: string | null
+          id: string
+          organization_id: string
+          project_id: string | null
+          reported_by: string
+          resolved_at: string | null
+          run_item_id: string | null
+          severity: string
+          status: string
+          step_result_id: string | null
+          team_id: string | null
+          test_run_id: string | null
+          title: string
+          updated_at: string
+          user_story_id: string | null
+        }
+        Insert: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          code: string
+          contract_id?: string | null
+          created_at?: string
+          description?: string | null
+          expected_result?: string | null
+          external_issue_id?: string | null
+          external_issue_url?: string | null
+          external_provider?: string | null
+          id?: string
+          organization_id: string
+          project_id?: string | null
+          reported_by?: string
+          resolved_at?: string | null
+          run_item_id?: string | null
+          severity?: string
+          status?: string
+          step_result_id?: string | null
+          team_id?: string | null
+          test_run_id?: string | null
+          title: string
+          updated_at?: string
+          user_story_id?: string | null
+        }
+        Update: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          code?: string
+          contract_id?: string | null
+          created_at?: string
+          description?: string | null
+          expected_result?: string | null
+          external_issue_id?: string | null
+          external_issue_url?: string | null
+          external_provider?: string | null
+          id?: string
+          organization_id?: string
+          project_id?: string | null
+          reported_by?: string
+          resolved_at?: string | null
+          run_item_id?: string | null
+          severity?: string
+          status?: string
+          step_result_id?: string | null
+          team_id?: string | null
+          test_run_id?: string | null
+          title?: string
+          updated_at?: string
+          user_story_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_findings_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_run_item_id_fkey"
+            columns: ["run_item_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_run_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_step_result_id_fkey"
+            columns: ["step_result_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_step_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_test_run_id_fkey"
+            columns: ["test_run_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_user_story_id_fkey"
+            columns: ["user_story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_findings_user_story_id_fkey"
+            columns: ["user_story_id"]
+            isOneToOne: false
+            referencedRelation: "v_hu_git_summary"
+            referencedColumns: ["hu_id"]
+          },
+        ]
+      }
+      quality_test_case_links: {
+        Row: {
+          created_at: string
+          created_by: string
+          entity_id: string
+          entity_reference: string | null
+          entity_type: string
+          id: string
+          link_metadata: Json
+          organization_id: string
+          test_case_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          entity_id: string
+          entity_reference?: string | null
+          entity_type: string
+          id?: string
+          link_metadata?: Json
+          organization_id: string
+          test_case_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          entity_id?: string
+          entity_reference?: string | null
+          entity_type?: string
+          id?: string
+          link_metadata?: Json
+          organization_id?: string
+          test_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_case_links_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_case_links_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_case_versions: {
+        Row: {
+          change_summary: string | null
+          created_at: string
+          created_by: string
+          id: string
+          organization_id: string
+          snapshot: Json
+          test_case_id: string
+          version: number
+        }
+        Insert: {
+          change_summary?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          organization_id: string
+          snapshot: Json
+          test_case_id: string
+          version: number
+        }
+        Update: {
+          change_summary?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          organization_id?: string
+          snapshot?: Json
+          test_case_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_case_versions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_case_versions_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_cases: {
+        Row: {
+          archived_at: string | null
+          code: string
+          contract_id: string | null
+          created_at: string
+          created_by: string
+          current_version: number
+          estimated_minutes: number | null
+          execution_mode: string
+          id: string
+          objective: string | null
+          organization_id: string
+          postconditions: string | null
+          preconditions: string | null
+          priority: string
+          project_id: string | null
+          severity: string
+          source: string
+          status: string
+          tags: string[]
+          team_id: string | null
+          test_data: string | null
+          test_type: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          code: string
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          current_version?: number
+          estimated_minutes?: number | null
+          execution_mode?: string
+          id?: string
+          objective?: string | null
+          organization_id: string
+          postconditions?: string | null
+          preconditions?: string | null
+          priority?: string
+          project_id?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          tags?: string[]
+          team_id?: string | null
+          test_data?: string | null
+          test_type?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          code?: string
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          current_version?: number
+          estimated_minutes?: number | null
+          execution_mode?: string
+          id?: string
+          objective?: string | null
+          organization_id?: string
+          postconditions?: string | null
+          preconditions?: string | null
+          priority?: string
+          project_id?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          tags?: string[]
+          team_id?: string | null
+          test_data?: string | null
+          test_type?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_cases_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_cases_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_cases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_cases_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_evidences: {
+        Row: {
+          created_at: string
+          description: string | null
+          evidence_type: string
+          external_url: string | null
+          file_size_bytes: number | null
+          finding_id: string | null
+          id: string
+          mime_type: string | null
+          organization_id: string
+          run_item_id: string | null
+          step_result_id: string | null
+          storage_bucket: string | null
+          storage_path: string | null
+          title: string
+          uploaded_by: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          evidence_type: string
+          external_url?: string | null
+          file_size_bytes?: number | null
+          finding_id?: string | null
+          id?: string
+          mime_type?: string | null
+          organization_id: string
+          run_item_id?: string | null
+          step_result_id?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title: string
+          uploaded_by?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          evidence_type?: string
+          external_url?: string | null
+          file_size_bytes?: number | null
+          finding_id?: string | null
+          id?: string
+          mime_type?: string | null
+          organization_id?: string
+          run_item_id?: string | null
+          step_result_id?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_evidences_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "quality_findings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_evidences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_evidences_run_item_id_fkey"
+            columns: ["run_item_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_run_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_evidences_step_result_id_fkey"
+            columns: ["step_result_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_step_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_plan_items: {
+        Row: {
+          created_at: string
+          id: string
+          is_required: boolean
+          organization_id: string
+          sort_order: number
+          test_case_id: string
+          test_case_version: number
+          test_plan_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          organization_id: string
+          sort_order?: number
+          test_case_id: string
+          test_case_version: number
+          test_plan_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          organization_id?: string
+          sort_order?: number
+          test_case_id?: string
+          test_case_version?: number
+          test_plan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_plan_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plan_items_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plan_items_test_plan_id_fkey"
+            columns: ["test_plan_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_plans: {
+        Row: {
+          contract_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          project_id: string | null
+          release_id: string | null
+          sprint_id: string | null
+          status: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          project_id?: string | null
+          release_id?: string | null
+          sprint_id?: string | null
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          project_id?: string | null
+          release_id?: string | null
+          sprint_id?: string | null
+          status?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_plans_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
+            foreignKeyName: "quality_test_plans_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_run_items: {
+        Row: {
+          actual_result: string | null
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          executed_by: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          sort_order: number
+          started_at: string | null
+          status: string
+          test_case_id: string | null
+          test_case_snapshot: Json
+          test_case_version: number
+          test_run_id: string
+          updated_at: string
+        }
+        Insert: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          executed_by?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          sort_order?: number
+          started_at?: string | null
+          status?: string
+          test_case_id?: string | null
+          test_case_snapshot: Json
+          test_case_version: number
+          test_run_id: string
+          updated_at?: string
+        }
+        Update: {
+          actual_result?: string | null
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          executed_by?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          sort_order?: number
+          started_at?: string | null
+          status?: string
+          test_case_id?: string | null
+          test_case_snapshot?: Json
+          test_case_version?: number
+          test_run_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_run_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_run_items_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_run_items_test_run_id_fkey"
+            columns: ["test_run_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_runs: {
+        Row: {
+          build_reference: string | null
+          commit_sha: string | null
+          completed_at: string | null
+          configuration: Json
+          contract_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          environment_name: string | null
+          id: string
+          name: string
+          organization_id: string
+          pipeline_reference: string | null
+          project_id: string | null
+          release_id: string | null
+          started_at: string | null
+          status: string
+          team_id: string | null
+          test_plan_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          build_reference?: string | null
+          commit_sha?: string | null
+          completed_at?: string | null
+          configuration?: Json
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          environment_name?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          pipeline_reference?: string | null
+          project_id?: string | null
+          release_id?: string | null
+          started_at?: string | null
+          status?: string
+          team_id?: string | null
+          test_plan_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          build_reference?: string | null
+          commit_sha?: string | null
+          completed_at?: string | null
+          configuration?: Json
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          environment_name?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          pipeline_reference?: string | null
+          project_id?: string | null
+          release_id?: string | null
+          started_at?: string | null
+          status?: string
+          team_id?: string | null
+          test_plan_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_runs_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_runs_test_plan_id_fkey"
+            columns: ["test_plan_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_step_results: {
+        Row: {
+          actual_result: string | null
+          created_at: string
+          executed_at: string | null
+          executed_by: string | null
+          id: string
+          organization_id: string
+          run_item_id: string
+          status: string
+          step_id: string | null
+          step_order: number
+          step_snapshot: Json
+          updated_at: string
+        }
+        Insert: {
+          actual_result?: string | null
+          created_at?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          id?: string
+          organization_id: string
+          run_item_id: string
+          status?: string
+          step_id?: string | null
+          step_order: number
+          step_snapshot: Json
+          updated_at?: string
+        }
+        Update: {
+          actual_result?: string | null
+          created_at?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          id?: string
+          organization_id?: string
+          run_item_id?: string
+          status?: string
+          step_id?: string | null
+          step_order?: number
+          step_snapshot?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_step_results_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_step_results_run_item_id_fkey"
+            columns: ["run_item_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_run_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_steps: {
+        Row: {
+          action: string
+          created_at: string
+          expected_result: string
+          id: string
+          input_data: string | null
+          organization_id: string
+          reference_url: string | null
+          step_order: number
+          test_case_id: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          expected_result: string
+          id?: string
+          input_data?: string | null
+          organization_id: string
+          reference_url?: string | null
+          step_order: number
+          test_case_id: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          expected_result?: string
+          id?: string
+          input_data?: string | null
+          organization_id?: string
+          reference_url?: string | null
+          step_order?: number
+          test_case_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_steps_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_steps_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_suite_items: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          sort_order: number
+          suite_id: string
+          test_case_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          sort_order?: number
+          suite_id: string
+          test_case_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          sort_order?: number
+          suite_id?: string
+          test_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_suite_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suite_items_suite_id_fkey"
+            columns: ["suite_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_suites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suite_items_test_case_id_fkey"
+            columns: ["test_case_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quality_test_suites: {
+        Row: {
+          contract_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          parent_suite_id: string | null
+          project_id: string | null
+          sort_order: number
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          parent_suite_id?: string | null
+          project_id?: string | null
+          sort_order?: number
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          parent_suite_id?: string | null
+          project_id?: string | null
+          sort_order?: number
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quality_test_suites_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suites_parent_suite_id_fkey"
+            columns: ["parent_suite_id"]
+            isOneToOne: false
+            referencedRelation: "quality_test_suites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quality_test_suites_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -10544,6 +12982,187 @@ export type Database = {
           },
         ]
       }
+      saas_addon_features: {
+        Row: {
+          addon_id: string
+          configuration: Json
+          enabled: boolean
+          feature_id: string
+          limit_delta: number | null
+        }
+        Insert: {
+          addon_id: string
+          configuration?: Json
+          enabled?: boolean
+          feature_id: string
+          limit_delta?: number | null
+        }
+        Update: {
+          addon_id?: string
+          configuration?: Json
+          enabled?: boolean
+          feature_id?: string
+          limit_delta?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_addon_features_addon_id_fkey"
+            columns: ["addon_id"]
+            isOneToOne: false
+            referencedRelation: "saas_addons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_addon_features_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "product_features"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_addons: {
+        Row: {
+          billing_interval: string | null
+          code: string
+          configuration: Json
+          created_at: string
+          currency: string | null
+          description: string | null
+          id: string
+          name: string
+          price: number | null
+          status: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          billing_interval?: string | null
+          code: string
+          configuration?: Json
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          price?: number | null
+          status?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billing_interval?: string | null
+          code?: string
+          configuration?: Json
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          price?: number | null
+          status?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      saas_contracts: {
+        Row: {
+          addons: Json
+          amount: number | null
+          billing_interval: string | null
+          cancellation: Json | null
+          commercial_owner_id: string | null
+          contract_number: string
+          created_at: string
+          currency: string
+          discount_percent: number | null
+          documents: Json
+          ends_at: string | null
+          id: string
+          limits: Json
+          notes: string | null
+          org_id: string
+          plan_version_id: string | null
+          renewal: Json
+          starts_at: string
+          status: string
+          subscription_id: string | null
+          terms: Json
+          updated_at: string
+        }
+        Insert: {
+          addons?: Json
+          amount?: number | null
+          billing_interval?: string | null
+          cancellation?: Json | null
+          commercial_owner_id?: string | null
+          contract_number: string
+          created_at?: string
+          currency?: string
+          discount_percent?: number | null
+          documents?: Json
+          ends_at?: string | null
+          id?: string
+          limits?: Json
+          notes?: string | null
+          org_id: string
+          plan_version_id?: string | null
+          renewal?: Json
+          starts_at: string
+          status?: string
+          subscription_id?: string | null
+          terms?: Json
+          updated_at?: string
+        }
+        Update: {
+          addons?: Json
+          amount?: number | null
+          billing_interval?: string | null
+          cancellation?: Json | null
+          commercial_owner_id?: string | null
+          contract_number?: string
+          created_at?: string
+          currency?: string
+          discount_percent?: number | null
+          documents?: Json
+          ends_at?: string | null
+          id?: string
+          limits?: Json
+          notes?: string | null
+          org_id?: string
+          plan_version_id?: string | null
+          renewal?: Json
+          starts_at?: string
+          status?: string
+          subscription_id?: string | null
+          terms?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_contracts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_contracts_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_contracts_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saas_metrics_snapshots: {
         Row: {
           active_tenants: number
@@ -10636,6 +13255,131 @@ export type Database = {
           },
         ]
       }
+      saas_plan_version_features: {
+        Row: {
+          access_level: string
+          configuration: Json
+          created_at: string
+          enabled: boolean
+          enforcement_mode: string
+          feature_id: string
+          id: string
+          limit_value: number | null
+          plan_version_id: string
+          reset_period: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_level?: string
+          configuration?: Json
+          created_at?: string
+          enabled?: boolean
+          enforcement_mode?: string
+          feature_id: string
+          id?: string
+          limit_value?: number | null
+          plan_version_id: string
+          reset_period?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_level?: string
+          configuration?: Json
+          created_at?: string
+          enabled?: boolean
+          enforcement_mode?: string
+          feature_id?: string
+          id?: string
+          limit_value?: number | null
+          plan_version_id?: string
+          reset_period?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_plan_version_features_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "product_features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_plan_version_features_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saas_plan_versions: {
+        Row: {
+          base_price: number | null
+          billing_interval: string | null
+          change_reason: string | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          id: string
+          metadata: Json
+          per_user_price: number | null
+          plan_id: string
+          status: string
+          trial_allowed: boolean
+          trial_days: number | null
+          updated_at: string
+          valid_from: string | null
+          valid_until: string | null
+          version: number
+        }
+        Insert: {
+          base_price?: number | null
+          billing_interval?: string | null
+          change_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          id?: string
+          metadata?: Json
+          per_user_price?: number | null
+          plan_id: string
+          status?: string
+          trial_allowed?: boolean
+          trial_days?: number | null
+          updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
+          version: number
+        }
+        Update: {
+          base_price?: number | null
+          billing_interval?: string | null
+          change_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          id?: string
+          metadata?: Json
+          per_user_price?: number | null
+          plan_id?: string
+          status?: string
+          trial_allowed?: boolean
+          trial_days?: number | null
+          updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_plan_versions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saas_plans: {
         Row: {
           annual_price: number
@@ -10698,6 +13442,82 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      saas_trials: {
+        Row: {
+          canceled_at: string | null
+          converted_at: string | null
+          created_at: string
+          created_by: string | null
+          ends_at: string
+          features: Json
+          id: string
+          limits: Json
+          organization_id: string
+          plan_version_id: string
+          source: string
+          starts_at: string
+          status: string
+          subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          canceled_at?: string | null
+          converted_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          ends_at: string
+          features?: Json
+          id?: string
+          limits?: Json
+          organization_id: string
+          plan_version_id: string
+          source?: string
+          starts_at: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          canceled_at?: string | null
+          converted_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string
+          features?: Json
+          id?: string
+          limits?: Json
+          organization_id?: string
+          plan_version_id?: string
+          source?: string
+          starts_at?: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_trials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_trials_plan_version_id_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "saas_plan_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saas_trials_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "organization_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       slas: {
         Row: {
@@ -12716,6 +15536,23 @@ export type Database = {
         Args: { p_team_ids: string[] }
         Returns: undefined
       }
+      _okr_assert_cycle_open: {
+        Args: { _cycle_id: string; _org_id: string }
+        Returns: undefined
+      }
+      _okr_cycle_derive_period: {
+        Args: { _code: string }
+        Returns: {
+          cycle_type: string
+          display_name: string
+          ends_at: string
+          starts_at: string
+        }[]
+      }
+      _okr_v2_guard: {
+        Args: { _entitlement?: string; _org_id: string; _permission: string }
+        Returns: undefined
+      }
       accept_organization_invitation: {
         Args: { p_token: string }
         Returns: {
@@ -12733,6 +15570,31 @@ export type Database = {
           p_team_id: string
           p_user_id: string
         }
+        Returns: string
+      }
+      add_quality_external_evidence_v1: {
+        Args: {
+          p_description?: string
+          p_external_url: string
+          p_org_id: string
+          p_run_item_id: string
+          p_step_result_id: string
+          p_title: string
+        }
+        Returns: string
+      }
+      add_quality_test_plan_item_v1: {
+        Args: {
+          p_case_id: string
+          p_case_version?: number
+          p_is_required?: boolean
+          p_org_id: string
+          p_plan_id: string
+        }
+        Returns: string
+      }
+      add_quality_test_suite_item_v1: {
+        Args: { p_case_id: string; p_org_id: string; p_suite_id: string }
         Returns: string
       }
       anonymize_ai_briefing: {
@@ -12779,7 +15641,33 @@ export type Database = {
           target_type: string
         }[]
       }
+      apply_okr_measurement_v2: {
+        Args: {
+          p_idempotency_key: string
+          p_key_result_id: string
+          p_metadata?: Json
+          p_metric_version_id: string
+          p_org_id: string
+          p_period_end: string
+          p_period_start: string
+          p_value: number
+        }
+        Returns: string
+      }
       archive_expired_briefings: { Args: never; Returns: number }
+      archive_okr_alignment_v1: {
+        Args: { p_alignment_id: string; p_org_id: string }
+        Returns: string
+      }
+      archive_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
+      archive_okr_key_result_v2: {
+        Args: { p_key_result_id: string; p_org_id: string; p_reason?: string }
+        Returns: string
+      }
+      archive_okr_objective_v2: {
+        Args: { p_objective_id: string; p_org_id: string; p_reason?: string }
+        Returns: string
+      }
       archive_organization_company_v2: {
         Args: { p_company_id: string; p_org_id: string }
         Returns: undefined
@@ -12798,6 +15686,10 @@ export type Database = {
       }
       archive_platform_saas_plan_v1: {
         Args: { p_plan_id: string }
+        Returns: undefined
+      }
+      archive_quality_test_case_v1: {
+        Args: { p_case_id: string; p_correlation_id?: string; p_org_id: string }
         Returns: undefined
       }
       assert_backoffice_staff: {
@@ -12822,6 +15714,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      assert_feature_access: {
+        Args: { p_feature_code: string; p_increment?: number; p_org_id: string }
+        Returns: undefined
+      }
       assert_organization_entitlement: {
         Args: { p_feature_key: string; p_org_id: string }
         Returns: undefined
@@ -12835,6 +15731,15 @@ export type Database = {
         Returns: undefined
       }
       assert_platform_admin_v2: { Args: never; Returns: undefined }
+      assert_quality_scope: {
+        Args: {
+          p_contract_id: string
+          p_org_id: string
+          p_project_id: string
+          p_team_id: string
+        }
+        Returns: undefined
+      }
       build_apf_prompt:
         | { Args: { p_contract_id: string; p_hu_text?: string }; Returns: Json }
         | { Args: { p_session_id: string }; Returns: Json }
@@ -12934,8 +15839,29 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      calculate_okr_kr_progress_v2: {
+        Args: {
+          p_allow_overachievement?: boolean
+          p_baseline: number
+          p_current: number
+          p_direction: string
+          p_target: number
+          p_target_max: number
+          p_target_min: number
+        }
+        Returns: {
+          calculated_progress: number
+          calculation_reason: string
+          calculation_status: string
+          raw_progress: number
+        }[]
+      }
       can_access_ai_briefing: {
         Args: { p_org_id: string; p_team_id: string }
+        Returns: boolean
+      }
+      can_manage_quality: {
+        Args: { p_org_id: string; p_user_id?: string }
         Returns: boolean
       }
       can_operate_contract_v2: {
@@ -12943,16 +15869,63 @@ export type Database = {
         Returns: boolean
       }
       can_operate_organization: { Args: { p_org_id: string }; Returns: boolean }
+      can_quality_permission_v1: {
+        Args: { p_org_id: string; p_permission: string }
+        Returns: boolean
+      }
       can_read_contract_v2: {
         Args: { p_contract_id: string; p_user_id?: string }
         Returns: boolean
       }
       can_read_organization: { Args: { p_org_id: string }; Returns: boolean }
+      can_read_quality: { Args: { p_org_id: string }; Returns: boolean }
+      can_use_feature: {
+        Args: {
+          p_context?: Json
+          p_feature_code: string
+          p_org_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      can_use_feature_rpc: {
+        Args: { p_context?: Json; p_feature_code: string; p_org_id: string }
+        Returns: boolean
+      }
+      can_view_okr_metric_catalog_v2: {
+        Args: { p_org_id: string }
+        Returns: boolean
+      }
       can_view_team: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      cancel_okr_cycle_v1: {
+        Args: { p_cycle_id: string; p_reason: string }
+        Returns: undefined
+      }
+      check_commercial_usage_v1: {
+        Args: {
+          p_correlation_id?: string
+          p_feature_code: string
+          p_increment?: number
+          p_org_id: string
+        }
+        Returns: boolean
+      }
       check_license_quota: { Args: { p_team_id: string }; Returns: Json }
+      check_okr_limit_v1: {
+        Args: {
+          p_current_count: number
+          p_feature_key: string
+          p_org_id: string
+        }
+        Returns: undefined
+      }
+      check_organization_has_quality_module: {
+        Args: { p_org_id: string }
+        Returns: boolean
+      }
       claim_next_apf_job: {
         Args: never
         Returns: {
@@ -12979,6 +15952,44 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_okr_recalculation_jobs_v1: {
+        Args: {
+          p_lease_seconds?: number
+          p_limit?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          available_at: string
+          cancelled_at: string | null
+          completed_at: string | null
+          correlation_id: string
+          created_at: string
+          dead_lettered_at: string | null
+          id: string
+          idempotency_key: string
+          key_result_id: string | null
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          metric_binding_id: string | null
+          objective_id: string
+          organization_id: string | null
+          processed_at: string | null
+          reason: string
+          result: Json | null
+          status: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_recalculation_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      close_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
       complete_ai_briefing_run: {
         Args: {
           p_duration_ms?: number
@@ -12997,6 +16008,15 @@ export type Database = {
           p_correlation_id: string
           p_error_message?: string
           p_status?: string
+        }
+        Returns: undefined
+      }
+      complete_quality_test_run_v1: {
+        Args: {
+          p_allow_not_run?: boolean
+          p_correlation_id?: string
+          p_org_id: string
+          p_run_id: string
         }
         Returns: undefined
       }
@@ -13055,6 +16075,22 @@ export type Database = {
         Args: { p_tenant_id: string }
         Returns: undefined
       }
+      create_okr_alignment_v1: {
+        Args: { p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_okr_cycle_v1: {
+        Args: { p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_okr_key_result_v2: {
+        Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_okr_objective_v2: {
+        Args: { p_org_id: string; p_payload: Json }
+        Returns: string
+      }
       create_organization_company_v2: {
         Args: {
           p_cnpj?: string
@@ -13098,24 +16134,36 @@ export type Database = {
           raw_token: string
         }[]
       }
-      create_organization_project_v2: {
-        Args: {
-          p_code?: string
-          p_contract_id: string
-          p_description?: string
-          p_module_type?: string
-          p_name: string
-          p_org_id: string
-          p_redmine_id?: number
-          p_team_id: string
-        }
-        Returns: string
-      }
+      create_organization_project_v2:
+        | {
+            Args: {
+              p_contract_id: string
+              p_description?: string
+              p_module_type?: string
+              p_name: string
+              p_org_id: string
+              p_team_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_code?: string
+              p_contract_id: string
+              p_description?: string
+              p_module_type?: string
+              p_name: string
+              p_org_id: string
+              p_redmine_id?: number
+              p_team_id: string
+            }
+            Returns: string
+          }
       create_organization_team_v2: {
         Args: {
           p_company_id?: string
           p_contract_id?: string
-          p_module: string
+          p_module?: string
           p_name: string
           p_org_id: string
         }
@@ -13140,6 +16188,35 @@ export type Database = {
           p_metadata: Json
           p_name: string
           p_status: string
+        }
+        Returns: string
+      }
+      create_quality_test_case_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_quality_test_plan_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_quality_test_run_from_plan_v1: {
+        Args: {
+          p_build_reference?: string
+          p_commit_sha?: string
+          p_correlation_id?: string
+          p_environment_name?: string
+          p_name: string
+          p_org_id: string
+          p_plan_id: string
+        }
+        Returns: string
+      }
+      create_quality_test_suite_v1: {
+        Args: {
+          p_description?: string
+          p_name: string
+          p_org_id: string
+          p_parent_suite_id?: string
         }
         Returns: string
       }
@@ -13172,6 +16249,16 @@ export type Database = {
         Args: { p_feature_key: string; p_plan_id: string }
         Returns: undefined
       }
+      enforce_resource_limit: {
+        Args: {
+          p_correlation_id?: string
+          p_feature_code: string
+          p_increment?: number
+          p_org_id: string
+        }
+        Returns: boolean
+      }
+      enqueue_due_okr_metric_bindings_v1: { Args: never; Returns: number }
       extract_user_story_external_reference: {
         Args: { p_title: string }
         Returns: string
@@ -13206,6 +16293,16 @@ export type Database = {
           p_status: string
         }
         Returns: undefined
+      }
+      finish_okr_recalculation_job_v1: {
+        Args: {
+          p_error?: string
+          p_job_id: string
+          p_result?: Json
+          p_succeeded: boolean
+          p_worker_id: string
+        }
+        Returns: string
       }
       fn_audit_log_insert: {
         Args: {
@@ -13843,6 +16940,21 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_my_commercial_usage_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          calculated_at: string
+          limit_value: number
+          period_end: string
+          period_start: string
+          remaining_value: number
+          source: string
+          status: string
+          usage_code: string
+          usage_percent: number
+          used_value: number
+        }[]
+      }
       get_my_contract_id: { Args: { _user_id?: string }; Returns: string }
       get_my_contracts: {
         Args: { _user_id?: string }
@@ -13881,6 +16993,15 @@ export type Database = {
           plan: Database["public"]["Enums"]["org_plan"]
           slug: string
           status: Database["public"]["Enums"]["org_status"]
+        }[]
+      }
+      get_okr_entitlement_matrix_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          enabled: boolean
+          feature_key: string
+          limit_value: number
+          source: string
         }[]
       }
       get_org_briefing_retention_config: {
@@ -14054,6 +17175,10 @@ export type Database = {
           resource: string
         }[]
       }
+      has_okr_permission_v2: {
+        Args: { _org_id: string; _permission: string; _user_id: string }
+        Returns: boolean
+      }
       has_organization_entitlement: {
         Args: { p_feature_key: string; p_org_id: string }
         Returns: boolean
@@ -14069,6 +17194,19 @@ export type Database = {
       increment_license_usage: {
         Args: { p_ai_calls?: number; p_pf_count?: number; p_team_id: string }
         Returns: undefined
+      }
+      invalidate_organization_entitlement_cache: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
+      invite_organization_member_with_enforcement: {
+        Args: {
+          p_email: string
+          p_module_ids?: string[]
+          p_org_id: string
+          p_role?: string
+        }
+        Returns: string
       }
       is_admin: { Args: never; Returns: boolean }
       is_apf_auxiliary_action: { Args: { p_text: string }; Returns: boolean }
@@ -14137,6 +17275,18 @@ export type Database = {
         Returns: boolean
       }
       is_tenancy_enforced: { Args: never; Returns: boolean }
+      link_quality_test_case_v1: {
+        Args: {
+          p_case_id: string
+          p_correlation_id?: string
+          p_entity_id: string
+          p_entity_reference?: string
+          p_entity_type: string
+          p_metadata?: Json
+          p_org_id: string
+        }
+        Returns: string
+      }
       list_backoffice_billing_customers: {
         Args: never
         Returns: {
@@ -14228,6 +17378,116 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      list_okr_alignments_v1: {
+        Args: { p_objective_id?: string; p_org_id: string }
+        Returns: {
+          alignment_type: string
+          contribution_weight: number
+          created_at: string
+          created_by: string
+          id: string
+          rationale: string
+          source_objective_id: string
+          source_title: string
+          target_objective_id: string
+          target_title: string
+        }[]
+      }
+      list_okr_cycles_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          archived_at: string
+          check_in_frequency: string
+          closed_at: string
+          code: string
+          created_at: string
+          cycle_type: string
+          ends_at: string
+          id: string
+          name: string
+          objectives_count: number
+          published_at: string
+          scoring_method: string
+          starts_at: string
+          status: string
+          timezone: string
+          updated_at: string
+        }[]
+      }
+      list_okr_key_results_v2: {
+        Args: {
+          p_include_archived?: boolean
+          p_objective_id: string
+          p_org_id: string
+        }
+        Returns: {
+          allow_overachievement: boolean
+          archived_at: string
+          baseline_value: number
+          calculated_health: string
+          calculated_progress: number
+          created_at: string
+          current_value: number
+          description: string
+          direction: string
+          end_date: string
+          formula_version: string
+          frequency: string
+          id: string
+          last_measured_at: string
+          lifecycle_status: string
+          lock_version: number
+          measurement_quality: string
+          metric_code: string
+          objective_id: string
+          owner_id: string
+          raw_progress: number
+          start_date: string
+          target_max: number
+          target_min: number
+          target_value: number
+          title: string
+          unit: string
+          update_type: string
+          updated_at: string
+          weight: number
+        }[]
+      }
+      list_okr_objectives_v2: {
+        Args: {
+          p_cycle_id?: string
+          p_include_archived?: boolean
+          p_org_id: string
+        }
+        Returns: {
+          archived_at: string
+          calculated_health: string
+          calculated_progress: number
+          created_at: string
+          cycle_code: string
+          cycle_id: string
+          description: string
+          end_date: string
+          id: string
+          lifecycle_status: string
+          lock_version: number
+          objective_level: string
+          organization_id: string
+          owner_id: string
+          parent_objective_id: string
+          progress: number
+          published_at: string
+          scope_type: string
+          sponsor_id: string
+          start_date: string
+          status: string
+          team_id: string
+          team_name: string
+          title: string
+          updated_at: string
+          version: number
+        }[]
       }
       list_platform_ai_providers_v2: {
         Args: { p_only_active?: boolean }
@@ -14637,6 +17897,10 @@ export type Database = {
         Returns: Json
       }
       my_org_ids: { Args: never; Returns: string[] }
+      next_quality_code_v1: {
+        Args: { p_code_type: string; p_org_id: string }
+        Returns: string
+      }
       normalize_apf_contractual_function_sigla: {
         Args: { p_sigla: string }
         Returns: string
@@ -14700,13 +17964,57 @@ export type Database = {
         Args: { p_contract_id: string; p_model_name?: string }
         Returns: string
       }
+      publish_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
+      publish_okr_objective_v2: {
+        Args: { p_objective_id: string; p_org_id: string }
+        Returns: string
+      }
+      quality_case_snapshot: { Args: { p_case_id: string }; Returns: Json }
       recalculate_apf_session_totals: {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      recalculate_okr_objective_v2: {
+        Args: { p_objective_id: string }
+        Returns: undefined
+      }
+      recalculate_quality_run_item_v1: {
+        Args: { p_org_id: string; p_run_item_id: string }
+        Returns: string
+      }
       recalculate_session_totals: {
         Args: { p_session_id: string }
         Returns: undefined
+      }
+      record_okr_check_in_v2: {
+        Args: { p_key_result_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      record_organization_usage: {
+        Args: {
+          p_idempotency_key: string
+          p_metadata?: Json
+          p_org_id: string
+          p_period_end: string
+          p_period_start: string
+          p_source: string
+          p_usage_code: string
+          p_used_value: number
+        }
+        Returns: string
+      }
+      record_organization_usage_v1: {
+        Args: {
+          p_idempotency_key: string
+          p_metadata?: Json
+          p_org_id: string
+          p_period_end: string
+          p_period_start: string
+          p_source: string
+          p_usage_code: string
+          p_used_value: number
+        }
+        Returns: string
       }
       record_risk_feedback: {
         Args: {
@@ -14717,11 +18025,40 @@ export type Database = {
         }
         Returns: undefined
       }
+      refresh_organization_entitlement_cache: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       remove_organization_team_member_v2: {
         Args: { p_org_id: string; p_team_member_id: string }
         Returns: undefined
       }
+      remove_quality_test_plan_item_v1: {
+        Args: { p_case_id: string; p_org_id: string; p_plan_id: string }
+        Returns: undefined
+      }
+      remove_quality_test_suite_item_v1: {
+        Args: { p_case_id: string; p_org_id: string; p_suite_id: string }
+        Returns: undefined
+      }
+      reopen_quality_test_run_v1: {
+        Args: {
+          p_correlation_id?: string
+          p_org_id: string
+          p_reason: string
+          p_run_id: string
+        }
+        Returns: undefined
+      }
+      reorder_quality_test_plan_items_v1: {
+        Args: { p_case_ids: string[]; p_org_id: string; p_plan_id: string }
+        Returns: undefined
+      }
       reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
+      request_okr_measurement_v2: {
+        Args: { p_key_result_id: string }
+        Returns: string
+      }
       resend_organization_invitation: {
         Args: {
           p_actor_id: string
@@ -14809,6 +18146,23 @@ export type Database = {
         Args: { p_contract_id: string }
         Returns: string
       }
+      resolve_okr_entitlement_v1: {
+        Args: { p_feature_key: string; p_org_id: string }
+        Returns: {
+          enabled: boolean
+          feature_key: string
+          limit_value: number
+          source: string
+        }[]
+      }
+      resolve_okr_objective_health_v2: {
+        Args: {
+          p_expected_progress: number
+          p_lifecycle_status: string
+          p_progress: number
+        }
+        Returns: string
+      }
       resolve_project_org_id: {
         Args: { p_project_id: string }
         Returns: string
@@ -14871,6 +18225,10 @@ export type Database = {
       }
       set_legacy_operational_admin_fallback: {
         Args: { p_enabled: boolean }
+        Returns: undefined
+      }
+      set_okr_health_override: {
+        Args: { p_health: string; p_objective_id: string; p_reason: string }
         Returns: undefined
       }
       set_org_briefing_retention: {
@@ -14938,6 +18296,14 @@ export type Database = {
           title: string
         }[]
       }
+      start_okr_cycle_closing_v1: {
+        Args: { p_cycle_id: string }
+        Returns: undefined
+      }
+      start_quality_test_run_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_run_id: string }
+        Returns: undefined
+      }
       status_concluidos: { Args: never; Returns: string[] }
       sync_keycloak_user: {
         Args: {
@@ -14974,6 +18340,21 @@ export type Database = {
         Args: { p_new_owner_id: string; p_org_id: string }
         Returns: boolean
       }
+      transition_platform_subscription_v2: {
+        Args: {
+          p_effective_at: string
+          p_mode?: string
+          p_org_id: string
+          p_plan_version_id: string
+          p_reason: string
+          p_target_status: string
+        }
+        Returns: string
+      }
+      unlink_quality_test_case_v1: {
+        Args: { p_correlation_id?: string; p_link_id: string; p_org_id: string }
+        Returns: undefined
+      }
       update_backoffice_billing_status: {
         Args: { p_billing_id: string; p_status: string }
         Returns: undefined
@@ -14990,6 +18371,18 @@ export type Database = {
       update_backoffice_support_ticket_status: {
         Args: { p_status: string; p_ticket_id: string }
         Returns: undefined
+      }
+      update_okr_cycle_v1: {
+        Args: { p_cycle_id: string; p_payload: Json }
+        Returns: undefined
+      }
+      update_okr_key_result_v2: {
+        Args: { p_key_result_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      update_okr_objective_v2: {
+        Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
       }
       update_organization_company_v2: {
         Args: {
@@ -15087,6 +18480,35 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_quality_step_result_v1: {
+        Args: {
+          p_actual_result?: string
+          p_correlation_id?: string
+          p_org_id: string
+          p_status: string
+          p_step_result_id: string
+        }
+        Returns: string
+      }
+      update_quality_test_case_v1: {
+        Args: {
+          p_case_id: string
+          p_change_summary?: string
+          p_correlation_id?: string
+          p_org_id: string
+          p_payload: Json
+        }
+        Returns: number
+      }
+      update_quality_test_plan_v1: {
+        Args: {
+          p_correlation_id?: string
+          p_org_id: string
+          p_payload: Json
+          p_plan_id: string
+        }
+        Returns: undefined
+      }
       upsert_backoffice_staff_member: {
         Args: {
           p_avatar_url: string
@@ -15103,6 +18525,15 @@ export type Database = {
         Args: { p_rows: Json; p_team_id: string }
         Returns: Json
       }
+      upsert_okr_key_result_v2: {
+        Args: {
+          p_key_result_id?: string
+          p_objective_id: string
+          p_org_id: string
+          p_payload: Json
+        }
+        Returns: string
+      }
       upsert_platform_organization_entitlement_override_v1: {
         Args: {
           p_enabled: boolean
@@ -15110,6 +18541,20 @@ export type Database = {
           p_limit_value: number
           p_org_id: string
           p_reason: string
+        }
+        Returns: string
+      }
+      upsert_platform_organization_entitlement_override_v2: {
+        Args: {
+          p_enabled: boolean
+          p_ends_at: string
+          p_feature_key: string
+          p_limit_value: number
+          p_org_id: string
+          p_reason: string
+          p_source_id?: string
+          p_source_type?: string
+          p_starts_at: string
         }
         Returns: string
       }

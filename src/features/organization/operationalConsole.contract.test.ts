@@ -134,11 +134,12 @@ describe("platform plan management contract", () => {
     expect(migration).not.toContain("entity_type");
   });
 
-  it("keeps the frontend on RPC access instead of direct table writes", () => {
+  it("keeps platform mutations on RPCs while allowing catalog reads", () => {
     expect(planService).toContain("list_platform_saas_plans_v1");
     expect(planService).toContain("set_platform_organization_subscription_v1");
-    expect(planService).not.toContain('.from("saas_plans")');
-    expect(planService).not.toContain('.from("organization_subscriptions")');
+    expect(planService).not.toMatch(
+      /\.from\("(?:saas_plans|organization_subscriptions)"\)[\s\S]{0,200}\.(?:insert|update|upsert|delete)\(/,
+    );
   });
 });
 
@@ -175,11 +176,21 @@ describe("platform AI security contract", () => {
     expect(edgeTest).not.toContain("rawError");
   });
 
-  it("keeps JWT verification enabled for all AI functions", () => {
-    expect(config).toContain("[functions.apf-generate]");
-    expect(config).toContain("[functions.platform-ai-provider-test]");
-    expect(config).toContain("[functions.process-ai-briefing]");
-    expect(config).toContain("[functions.gitlab-webhook-register]");
-    expect(config.match(/verify_jwt = true/g)).toHaveLength(4);
+  it("keeps JWT verification enabled for every protected function", () => {
+    const protectedFunctions = [
+      "apf-generate",
+      "platform-ai-provider-test",
+      "process-ai-briefing",
+      "gitlab-webhook-register",
+      "gitlab-issues-sync",
+    ];
+
+    protectedFunctions.forEach((functionName) => {
+      expect(config).toMatch(
+        new RegExp(
+          `\\[functions\\.${functionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\]\\s+verify_jwt = true`,
+        ),
+      );
+    });
   });
 });

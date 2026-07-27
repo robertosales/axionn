@@ -201,12 +201,15 @@ export function RelatorioSLA({ onBack }: Props) {
   const sla = useMemo(() => calcSLA(filtered, transitions), [filtered, transitions]);
 
   const analistas = useMemo(() => {
-    const pIds = new Set(profiles.map(p => p.user_id));
-    const ids = new Set<string>();
-    demandas.forEach(d => [d.responsavel_dev, d.responsavel_requisitos, d.responsavel_teste, d.responsavel_arquiteto]
-      .filter((x): x is string => !!x && pIds.has(x)).forEach(x => ids.add(x)));
-    return buildAnalistasDedup([...ids], profiles);
-  }, [demandas, profiles]);
+    return buildAnalistasDedup(profiles.map(p => p.user_id), profiles);
+  }, [profiles]);
+
+  useEffect(() => {
+    if (analista !== "all" && !analistas.some(option => option.user_id === analista)) {
+      const ownId = profile?.user_id;
+      setAnalista(!isAdmin && ownId && analistas.some(option => option.user_id === ownId) ? ownId : "all");
+    }
+  }, [analista, analistas, isAdmin, profile?.user_id]);
 
   const barData = useMemo(() => {
     const dentro  = sla.results.filter(r => r.statusSLA === "dentro").length;

@@ -1,0 +1,35 @@
+name: OKR Recalculation Queue
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  drain-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke okr-recalculation Edge Function (mode=queue)
+        env:
+          SUPABASE_URL: https://rgikyyazotqapaxijwui.supabase.co
+          OKR_JOB_SECRET: ${{ secrets.OKR_JOB_SECRET }}
+        run: |
+          set -euo pipefail
+          response=$(mktemp)
+          status=$(curl -sS -o "$response" -w "%{http_code}" \
+            -X POST "$SUPABASE_URL/functions/v1/okr-recalculation" \
+            -H "x-okr-job-secret: $OKR_JOB_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{"mode":"queue"}')
+          echo "HTTP $status"
+          cat "$response"
+          echo
+          if [ "$status" != "200" ]; then
+            echo "OKR recalculation call failed with HTTP $status"
+            exit 1
+          fi
+          failures=$(jq -r '[.results[]? | select(.ok == false)] | length' "$response")
+          if [ "$failures" != "0" ]; then
+            echo "OKR recalculation reported $failures failed key results"
+            exit 1
+          fi

@@ -10,13 +10,13 @@ import { DashboardFilters, DashboardFilterState, INITIAL_FILTERS } from "@/compo
 import { IndividualPerformance } from "@/components/dashboard/IndividualPerformance";
 import { TeamPerformance } from "@/components/dashboard/TeamPerformance";
 import { QualityPanel } from "@/components/dashboard/QualityPanel";
-import { ReleasesPanel } from "@/components/dashboard/ReleasesPanel";
-import { SalaAgilRelatorios } from "@/components/sala-agil/reports/SalaAgilRelatorios";
 import { SprintHeader } from "@/components/dashboard/SprintHeader";
 import { KpiGroup } from "@/components/dashboard/KpiCards";
 import { MetricsTabs } from "@/components/dashboard/MetricsTabs";
 import { ImpedimentHistoryPanel } from "@/components/dashboard/ImpedimentHistoryPanel";
 import { formatMinutes } from "@/lib/duration";
+import { legacyMetricsDestination, normalizeMetricsTab } from "@/lib/metricsNavigation";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 // ─── Persistência de filtros via sessionStorage ───────────────────────────────
 
@@ -65,7 +65,9 @@ interface RawData {
 // ─── MetricsDashboard ─────────────────────────────────────────────────────────
 
 export function MetricsDashboard() {
-  const { isAdmin, teams, currentTeamId, user } = useAuth();
+  const { isAdmin, teams, currentTeamId } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // ✅ useMemo com dep precisa: só recalcula quando `teams` muda
   const agileTeams = useMemo(() => teams.filter((t: any) => t.module === "sala_agil"), [teams]);
@@ -84,6 +86,25 @@ export function MetricsDashboard() {
   const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // ✅ AbortController: evita race condition ao trocar de time/filtro rapidamente
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    const legacyDestination = legacyMetricsDestination(requestedTab);
+    if (legacyDestination) {
+      navigate(legacyDestination, { replace: true });
+      return;
+    }
+    if (requestedTab) {
+      const normalizedRequestedTab = normalizeMetricsTab(requestedTab);
+      setActiveTab(normalizedRequestedTab);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("tab");
+      navigate({ search: nextParams.toString() }, { replace: true });
+      return;
+    }
+    const normalized = normalizeMetricsTab(activeTab);
+    if (normalized !== activeTab) setActiveTab(normalized);
+  }, [activeTab, navigate, searchParams, setActiveTab]);
 
   useEffect(() => {
     if (currentTeamId && filters.teamId === "all")
@@ -385,8 +406,6 @@ export function MetricsDashboard() {
     );
 
   const memberNames     = filtered.developers.map((d: any) => d.name.split(" ")[0]);
-  const effectiveTeamId = filters.teamId === "all" ? currentTeamId || "" : filters.teamId;
-  const currentTeamName = agileTeams.find((t: any) => t.id === filters.teamId)?.name ?? "NexOps";
 
   const getTrend = (current: number, previous: number, invertColor = false) => {
     if (current > previous) return { direction: "up" as const,   isGood: !invertColor };
@@ -451,18 +470,6 @@ export function MetricsDashboard() {
         </TabsContent>
         <TabsContent value="impediments">
           <ImpedimentHistoryPanel data={teamOverview.impedimentHistory} />
-        </TabsContent>
-        <TabsContent value="releases">
-          <ReleasesPanel teamId={effectiveTeamId} sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name }))} />
-        </TabsContent>
-        <TabsContent value="reports" className="mt-0 p-0">
-          <SalaAgilRelatorios
-            sprints={rawData.sprints.map((s: any) => ({ id: s.id, name: s.name, isActive: s.is_active }))}
-            developers={rawData.developers.map((d: any) => ({ id: d.id, name: d.name, role: d.role || "developer" }))}
-            rawData={{ sprints: rawData.sprints, hus: rawData.hus, activities: rawData.activities, impediments: rawData.impediments, developers: rawData.developers }}
-            teamName={currentTeamName}
-            currentUserName={(user as any)?.user_metadata?.name ?? (user as any)?.email ?? "Usuário"}
-          />
         </TabsContent>
       </MetricsTabs>
     </div>

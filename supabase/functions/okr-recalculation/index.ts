@@ -123,7 +123,23 @@ async function processJob(
 ) {
   try {
     if (!job.organization_id || !job.key_result_id || !job.metric_binding_id) {
-      throw new Error("OKR_QUEUE_JOB_WITHOUT_V2_BINDING");
+      // Legacy job (pre PR 7): no v2 metric binding to collect. Close it as a
+      // no-op instead of failing, so it never reaches dead-letter and never
+      // breaks the scheduled drain.
+      const skipped = {
+        keyResultId: job.key_result_id,
+        skipped: true,
+        reason: "OKR_QUEUE_LEGACY_JOB_WITHOUT_V2_BINDING",
+      };
+      const { error: skipError } = await admin.rpc("finish_okr_recalculation_job_v1", {
+        p_job_id: job.id,
+        p_worker_id: workerId,
+        p_succeeded: true,
+        p_result: skipped,
+        p_error: null,
+      });
+      if (skipError) throw skipError;
+      return { ok: true, ...skipped };
     }
 
     const { data: bindingData, error: bindingError } = await admin

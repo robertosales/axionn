@@ -7559,45 +7559,92 @@ export type Database = {
       }
       okr_alerts: {
         Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
           alert_type: string
+          correlation_id: string
+          cycle_id: string | null
           deduplication_key: string
           detected_at: string
+          first_detected_at: string
           id: string
+          initiative_id: string | null
           key_result_id: string | null
+          last_detected_at: string
           message: string
           metadata: Json
           objective_id: string
+          occurrence_count: number
+          organization_id: string | null
+          resolution_note: string | null
           resolved_at: string | null
+          rule_code: string | null
           severity: string
           status: string
         }
         Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           alert_type: string
+          correlation_id?: string
+          cycle_id?: string | null
           deduplication_key: string
           detected_at?: string
+          first_detected_at?: string
           id?: string
+          initiative_id?: string | null
           key_result_id?: string | null
+          last_detected_at?: string
           message: string
           metadata?: Json
           objective_id: string
+          occurrence_count?: number
+          organization_id?: string | null
+          resolution_note?: string | null
           resolved_at?: string | null
+          rule_code?: string | null
           severity?: string
           status?: string
         }
         Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           alert_type?: string
+          correlation_id?: string
+          cycle_id?: string | null
           deduplication_key?: string
           detected_at?: string
+          first_detected_at?: string
           id?: string
+          initiative_id?: string | null
           key_result_id?: string | null
+          last_detected_at?: string
           message?: string
           metadata?: Json
           objective_id?: string
+          occurrence_count?: number
+          organization_id?: string | null
+          resolution_note?: string | null
           resolved_at?: string | null
+          rule_code?: string | null
           severity?: string
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "okr_alerts_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "okr_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_alerts_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "okr_initiatives"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "okr_alerts_key_result_id_fkey"
             columns: ["key_result_id"]
@@ -7610,6 +7657,13 @@ export type Database = {
             columns: ["objective_id"]
             isOneToOne: false
             referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_alerts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -7860,54 +7914,139 @@ export type Database = {
           },
         ]
       }
+      okr_initiative_dependencies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dependency_type: string
+          depends_on_initiative_id: string
+          id: string
+          initiative_id: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dependency_type?: string
+          depends_on_initiative_id: string
+          id?: string
+          initiative_id: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dependency_type?: string
+          depends_on_initiative_id?: string
+          id?: string
+          initiative_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_initiative_dependencies_depends_on_initiative_id_fkey"
+            columns: ["depends_on_initiative_id"]
+            isOneToOne: false
+            referencedRelation: "okr_initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_initiative_dependencies_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "okr_initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_initiative_dependencies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_initiatives: {
         Row: {
+          archived_at: string | null
+          blocked_reason: string | null
+          cancelled_reason: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
+          dependency_metadata: Json
           description: string | null
           due_date: string | null
           id: string
           key_result_id: string | null
           linked_entity_id: string | null
+          linked_entity_module: string | null
           linked_entity_type: string | null
           objective_id: string
+          organization_id: string | null
           owner_id: string | null
+          priority: string
+          progress: number
+          start_date: string | null
           status: string
           title: string
           updated_at: string
+          updated_by: string | null
+          version: number
         }
         Insert: {
+          archived_at?: string | null
+          blocked_reason?: string | null
+          cancelled_reason?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          dependency_metadata?: Json
           description?: string | null
           due_date?: string | null
           id?: string
           key_result_id?: string | null
           linked_entity_id?: string | null
+          linked_entity_module?: string | null
           linked_entity_type?: string | null
           objective_id: string
+          organization_id?: string | null
           owner_id?: string | null
+          priority?: string
+          progress?: number
+          start_date?: string | null
           status?: string
           title: string
           updated_at?: string
+          updated_by?: string | null
+          version?: number
         }
         Update: {
+          archived_at?: string | null
+          blocked_reason?: string | null
+          cancelled_reason?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          dependency_metadata?: Json
           description?: string | null
           due_date?: string | null
           id?: string
           key_result_id?: string | null
           linked_entity_id?: string | null
+          linked_entity_module?: string | null
           linked_entity_type?: string | null
           objective_id?: string
+          organization_id?: string | null
           owner_id?: string | null
+          priority?: string
+          progress?: number
+          start_date?: string | null
           status?: string
           title?: string
           updated_at?: string
+          updated_by?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -7922,6 +8061,13 @@ export type Database = {
             columns: ["objective_id"]
             isOneToOne: false
             referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_initiatives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -15549,6 +15695,20 @@ export type Database = {
           starts_at: string
         }[]
       }
+      _okr_upsert_alert_v1: {
+        Args: {
+          p_cycle_id?: string
+          p_initiative_id?: string
+          p_key_result_id?: string
+          p_message: string
+          p_metadata?: Json
+          p_objective_id?: string
+          p_org_id: string
+          p_rule_code: string
+          p_severity: string
+        }
+        Returns: string
+      }
       _okr_v2_guard: {
         Args: { _entitlement?: string; _org_id: string; _permission: string }
         Returns: undefined
@@ -15562,6 +15722,19 @@ export type Database = {
           organization_name: string
           result_status: string
         }[]
+      }
+      acknowledge_okr_alert_v1: {
+        Args: { p_alert_id: string; p_note?: string; p_org_id: string }
+        Returns: undefined
+      }
+      add_okr_initiative_dependency_v1: {
+        Args: {
+          p_dependency_type?: string
+          p_depends_on_initiative_id: string
+          p_initiative_id: string
+          p_org_id: string
+        }
+        Returns: string
       }
       add_organization_team_member_v2: {
         Args: {
@@ -15660,6 +15833,10 @@ export type Database = {
         Returns: string
       }
       archive_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
+      archive_okr_initiative_v1: {
+        Args: { p_initiative_id: string; p_org_id: string; p_reason?: string }
+        Returns: undefined
+      }
       archive_okr_key_result_v2: {
         Args: { p_key_result_id: string; p_org_id: string; p_reason?: string }
         Returns: string
@@ -16081,6 +16258,10 @@ export type Database = {
       }
       create_okr_cycle_v1: {
         Args: { p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_okr_initiative_v1: {
+        Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
         Returns: string
       }
       create_okr_key_result_v2: {
@@ -17379,6 +17560,39 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      list_okr_alerts_v1: {
+        Args: { p_org_id: string; p_status?: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          alert_type: string
+          correlation_id: string
+          cycle_id: string | null
+          deduplication_key: string
+          detected_at: string
+          first_detected_at: string
+          id: string
+          initiative_id: string | null
+          key_result_id: string | null
+          last_detected_at: string
+          message: string
+          metadata: Json
+          objective_id: string
+          occurrence_count: number
+          organization_id: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          rule_code: string | null
+          severity: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_alerts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       list_okr_alignments_v1: {
         Args: { p_objective_id?: string; p_org_id: string }
         Returns: {
@@ -17414,6 +17628,46 @@ export type Database = {
           timezone: string
           updated_at: string
         }[]
+      }
+      list_okr_initiatives_v1: {
+        Args: {
+          p_include_archived?: boolean
+          p_objective_id?: string
+          p_org_id: string
+        }
+        Returns: {
+          archived_at: string | null
+          blocked_reason: string | null
+          cancelled_reason: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dependency_metadata: Json
+          description: string | null
+          due_date: string | null
+          id: string
+          key_result_id: string | null
+          linked_entity_id: string | null
+          linked_entity_module: string | null
+          linked_entity_type: string | null
+          objective_id: string
+          organization_id: string | null
+          owner_id: string | null
+          priority: string
+          progress: number
+          start_date: string | null
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_initiatives"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       list_okr_key_results_v2: {
         Args: {
@@ -18029,6 +18283,10 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      remove_okr_initiative_dependency_v1: {
+        Args: { p_dependency_id: string; p_org_id: string }
+        Returns: undefined
+      }
       remove_organization_team_member_v2: {
         Args: { p_org_id: string; p_team_member_id: string }
         Returns: undefined
@@ -18146,6 +18404,10 @@ export type Database = {
         Args: { p_contract_id: string }
         Returns: string
       }
+      resolve_okr_alert_v1: {
+        Args: { p_alert_id: string; p_note?: string; p_org_id: string }
+        Returns: undefined
+      }
       resolve_okr_entitlement_v1: {
         Args: { p_feature_key: string; p_org_id: string }
         Returns: {
@@ -18180,6 +18442,7 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: boolean
       }
+      run_okr_alert_engine_v1: { Args: { p_org_id: string }; Returns: number }
       save_contractual_counting_items: {
         Args: {
           p_ai_model?: string
@@ -18374,6 +18637,10 @@ export type Database = {
       }
       update_okr_cycle_v1: {
         Args: { p_cycle_id: string; p_payload: Json }
+        Returns: undefined
+      }
+      update_okr_initiative_v1: {
+        Args: { p_initiative_id: string; p_org_id: string; p_payload: Json }
         Returns: undefined
       }
       update_okr_key_result_v2: {

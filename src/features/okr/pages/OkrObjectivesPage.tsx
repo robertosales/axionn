@@ -33,6 +33,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useOkrCycles } from "../hooks/useOkrCycles";
 import { useOkrAlignments, useOkrObjectivesV2 } from "../hooks/useOkrObjectivesV2";
 import { OkrKeyResultsDialog } from "../components/OkrKeyResultsDialog";
+import { OkrInitiativesDialog } from "../components/OkrInitiativesDialog";
+import { OkrAlertsPanel } from "../components/OkrAlertsPanel";
 import {
   OKR_ALIGNMENT_TYPE_LABEL,
   OKR_OBJECTIVE_LEVEL_LABEL,
@@ -77,6 +79,7 @@ export function OkrObjectivesPage() {
   const [form, setForm] = useState<OkrObjectiveV2Input>(EMPTY_FORM);
   const [alignmentTarget, setAlignmentTarget] = useState<OkrObjectiveV2 | null>(null);
   const [krTarget, setKrTarget] = useState<OkrObjectiveV2 | null>(null);
+  const [initiativeTarget, setInitiativeTarget] = useState<OkrObjectiveV2 | null>(null);
 
   const openCycles = useMemo(
     () => cycles.cycles.filter((c) => c.status === "planning" || c.status === "active"),
@@ -198,6 +201,9 @@ export function OkrObjectivesPage() {
                       <Button size="sm" variant="outline" onClick={() => setKrTarget(obj)}>
                         Key Results
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => setInitiativeTarget(obj)}>
+                        Iniciativas
+                      </Button>
                       {obj.lifecycle_status !== "archived" && (
                         <Button size="sm" variant="ghost" onClick={() => handleArchive(obj)}>
                           Arquivar
@@ -211,6 +217,14 @@ export function OkrObjectivesPage() {
           )}
         </CardContent>
       </Card>
+
+      <OkrAlertsPanel />
+
+      <OkrInitiativesDialog
+        objectiveId={initiativeTarget?.id ?? null}
+        objectiveTitle={initiativeTarget?.title}
+        onClose={() => setInitiativeTarget(null)}
+      />
 
       {/* Create dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>

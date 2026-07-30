@@ -31,10 +31,22 @@ describe("OKR V2 access and coexistence contract", () => {
 
   it("protects each V2 route with the appropriate capability", () => {
     expect(routes).toContain(
-      '<OkrV2AccessGuard feature="okr.cycle_management"><OkrCyclesPage />',
+      '<OkrV2AccessGuard feature="okr.cycle_management"><AppShell module="sala_agil"><OkrCyclesPage />',
     );
     expect(routes).toContain(
-      '<OkrV2AccessGuard feature="okr.view"><OkrObjectivesPage />',
+      '<OkrV2AccessGuard feature="okr.view"><AppShell module="sala_agil"><OkrObjectivesPage />',
+    );
+  });
+
+  it("keeps every OKR V2 page inside the Sala Ágil application shell", () => {
+    expect(routes).toContain(
+      '<AppShell module="sala_agil"><OkrDashboardPage /></AppShell>',
+    );
+    expect(routes).toContain(
+      '<AppShell module="sala_agil"><OkrCyclesPage /></AppShell>',
+    );
+    expect(routes).toContain(
+      '<AppShell module="sala_agil"><OkrObjectivesPage /></AppShell>',
     );
   });
 

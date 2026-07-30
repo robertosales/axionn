@@ -542,9 +542,9 @@ function AppRoutes() {
             }
           />
           <Route path="/okr" element={<ProtectedRoute><OkrPage /></ProtectedRoute>} />
-          <Route path="/okr/dashboard" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.view"><OkrDashboardPage /></OkrV2AccessGuard></ProtectedRoute>} />
-          <Route path="/okr/ciclos" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.cycle_management"><OkrCyclesPage /></OkrV2AccessGuard></ProtectedRoute>} />
-          <Route path="/okr/objectives" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.view"><OkrObjectivesPage /></OkrV2AccessGuard></ProtectedRoute>} />
+          <Route path="/okr/dashboard" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.view"><AppShell module="sala_agil"><OkrDashboardPage /></AppShell></OkrV2AccessGuard></ProtectedRoute>} />
+          <Route path="/okr/ciclos" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.cycle_management"><AppShell module="sala_agil"><OkrCyclesPage /></AppShell></OkrV2AccessGuard></ProtectedRoute>} />
+          <Route path="/okr/objectives" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.view"><AppShell module="sala_agil"><OkrObjectivesPage /></AppShell></OkrV2AccessGuard></ProtectedRoute>} />
           <Route
             path="/sala-agil"
             element={<ProtectedRoute><ModuleGuard module="sala_agil"><Navigate to="/sala-agil/dashboard" replace /></ModuleGuard></ProtectedRoute>}

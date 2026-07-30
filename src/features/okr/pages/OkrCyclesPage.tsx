@@ -84,7 +84,7 @@ export function OkrCyclesPage() {
 
   if (!cycles.organizationId) {
     return (
-      <div className="mx-auto max-w-5xl p-6">
+      <div className="mx-auto max-w-5xl p-4 sm:p-6">
         <Card>
           <CardHeader>
             <CardTitle>Ciclos de OKR</CardTitle>
@@ -98,7 +98,7 @@ export function OkrCyclesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Ciclos de OKR</h1>

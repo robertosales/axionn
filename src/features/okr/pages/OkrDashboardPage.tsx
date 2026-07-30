@@ -27,7 +27,6 @@ import {
   YAxis,
 } from "recharts";
 import { toast } from "sonner";
-import { AppShell } from "@/components/layout/AppShell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -361,8 +360,7 @@ export function OkrDashboardPage() {
   };
 
   return (
-    <AppShell module="sala_agil">
-      <div id="okr-dashboard-content" className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
+    <div id="okr-dashboard-content" className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -690,8 +688,7 @@ export function OkrDashboardPage() {
             </>
           )}
         </Tabs>
-      </div>
-    </AppShell>
+    </div>
   );
 }
 

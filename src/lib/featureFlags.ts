@@ -6,8 +6,8 @@ export const QUALITY_MANAGEMENT_ENABLED =
 
 /**
  * OKR v2 — arquitetura de fechamento de ciclo (docs/okr-plano-mestre.md).
- * Enquanto `false`, a UI legada de OKR permanece ativa e nenhuma tela nova é exposta.
- * As RPCs `_v2` podem ser criadas mesmo com a flag desligada — a flag só governa a UI.
+ * Após o rollout validado, a UI V2 fica ativa quando a variável não está definida.
+ * Definir explicitamente `VITE_OKR_V2_ENABLED=false` mantém o rollback operacional.
  */
 export const OKR_V2_ENABLED =
-  import.meta.env.VITE_OKR_V2_ENABLED === "true";
+  import.meta.env.VITE_OKR_V2_ENABLED !== "false";

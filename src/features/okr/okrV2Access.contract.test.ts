@@ -6,6 +6,7 @@ const guard = readFileSync(
   "utf8",
 );
 const routes = readFileSync("src/App.tsx", "utf8");
+const featureFlags = readFileSync("src/lib/featureFlags.ts", "utf8");
 const legacyHook = readFileSync("src/features/okr/hooks/useOkr.ts", "utf8");
 const v2Sources = [
   "src/features/okr/hooks/useOkrCycles.ts",
@@ -14,6 +15,13 @@ const v2Sources = [
 ].map((path) => readFileSync(path, "utf8")).join("\n");
 
 describe("OKR V2 access and coexistence contract", () => {
+  it("keeps the validated rollout active by default with an explicit rollback switch", () => {
+    expect(featureFlags).toContain(
+      'import.meta.env.VITE_OKR_V2_ENABLED !== "false"',
+    );
+    expect(featureFlags).toContain("VITE_OKR_V2_ENABLED=false");
+  });
+
   it("fails closed on flag, entitlement loading and resolver failure", () => {
     expect(guard).toContain("OKR_V2_ENABLED");
     expect(guard).toContain("resolution.loading");

@@ -19,6 +19,10 @@ mensal antes de registrar o evento.
 5. Publicar o frontend com `VITE_OKR_V2_ENABLED=true` no canário autorizado.
 6. Validar a matriz abaixo antes de ampliar o rollout.
 
+Após a validação cumulativa do banco, a aplicação considera o OKR V2 ativo
+quando a variável não está definida. O valor explícito `false` permanece como
+chave de rollback e exige nova publicação do frontend.
+
 ## Matriz de canário
 
 | Perfil | Operacional | Executivo | CSV | PDF |

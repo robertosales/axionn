@@ -32,6 +32,10 @@ describe("OKR V2 dashboard runtime hardening", () => {
     expect(runtimeValidation).toContain("set_config('request.jwt.claim.sub'");
     expect(runtimeValidation).toContain("get_okr_dashboard_v1(");
     expect(runtimeValidation).toContain(
+      "order by member.org_id, member.user_id",
+    );
+    expect(runtimeValidation).not.toContain("member.joined_at");
+    expect(runtimeValidation).toContain(
       "okr_v2_dashboard_runtime_validation_ok",
     );
     expect(runtimeValidation).not.toContain("select payload");

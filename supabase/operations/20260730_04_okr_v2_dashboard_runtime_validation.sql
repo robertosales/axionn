@@ -17,7 +17,7 @@ where member.is_active
     'okr.view',
     member.org_id
   )
-order by member.joined_at
+order by member.org_id, member.user_id
 limit 1;
 
 do $validation$

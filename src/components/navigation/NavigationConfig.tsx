@@ -27,6 +27,7 @@ import {
   Users,
   Upload,
 } from "lucide-react";
+import { OKR_V2_ENABLED } from "@/lib/featureFlags";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavigationItem {
@@ -184,7 +185,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
       { id: "metricas", label: "Métricas", icon: BarChart3, route: "/sala-agil/metricas" },
       { id: "relatorios", label: "Relatórios", icon: FileText, route: "/sala-agil/relatorios" },
       { id: "historico", label: "Histórico", icon: History, route: "/sala-agil/historico" },
-      { id: "okr", label: "OKR", icon: Target, route: "/okr" },
+      { id: "okr", label: "OKR", icon: Target, route: OKR_V2_ENABLED ? "/okr/dashboard" : "/okr" },
     ],
   },
   {

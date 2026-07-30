@@ -143,6 +143,11 @@ const OkrObjectivesPage = lazy(() =>
     default: module.OkrObjectivesPage,
   })),
 );
+const OkrDashboardPage = lazy(() =>
+  import("./features/okr/pages/OkrDashboardPage").then((module) => ({
+    default: module.OkrDashboardPage,
+  })),
+);
 
 function PageLoader() {
   return (
@@ -537,6 +542,7 @@ function AppRoutes() {
             }
           />
           <Route path="/okr" element={<ProtectedRoute><OkrPage /></ProtectedRoute>} />
+          <Route path="/okr/dashboard" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.view"><OkrDashboardPage /></OkrV2AccessGuard></ProtectedRoute>} />
           <Route path="/okr/ciclos" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.cycle_management"><OkrCyclesPage /></OkrV2AccessGuard></ProtectedRoute>} />
           <Route path="/okr/objectives" element={<ProtectedRoute><OkrV2AccessGuard feature="okr.view"><OkrObjectivesPage /></OkrV2AccessGuard></ProtectedRoute>} />
           <Route

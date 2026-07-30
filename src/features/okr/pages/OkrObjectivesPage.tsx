@@ -35,6 +35,8 @@ import { useOkrAlignments, useOkrObjectivesV2 } from "../hooks/useOkrObjectivesV
 import { OkrKeyResultsDialog } from "../components/OkrKeyResultsDialog";
 import { OkrInitiativesDialog } from "../components/OkrInitiativesDialog";
 import { OkrAlertsPanel } from "../components/OkrAlertsPanel";
+import { OkrObjectiveReviewDialog } from "../components/OkrObjectiveReviewDialog";
+import { OkrCycleReviewPanel } from "../components/OkrCycleReviewPanel";
 import {
   OKR_ALIGNMENT_TYPE_LABEL,
   OKR_OBJECTIVE_LEVEL_LABEL,
@@ -80,6 +82,7 @@ export function OkrObjectivesPage() {
   const [alignmentTarget, setAlignmentTarget] = useState<OkrObjectiveV2 | null>(null);
   const [krTarget, setKrTarget] = useState<OkrObjectiveV2 | null>(null);
   const [initiativeTarget, setInitiativeTarget] = useState<OkrObjectiveV2 | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<OkrObjectiveV2 | null>(null);
 
   const openCycles = useMemo(
     () => cycles.cycles.filter((c) => c.status === "planning" || c.status === "active"),
@@ -204,6 +207,9 @@ export function OkrObjectivesPage() {
                       <Button size="sm" variant="outline" onClick={() => setInitiativeTarget(obj)}>
                         Iniciativas
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => setReviewTarget(obj)}>
+                        Review
+                      </Button>
                       {obj.lifecycle_status !== "archived" && (
                         <Button size="sm" variant="ghost" onClick={() => handleArchive(obj)}>
                           Arquivar
@@ -218,7 +224,11 @@ export function OkrObjectivesPage() {
         </CardContent>
       </Card>
 
+      <OkrCycleReviewPanel cycleId={selectedCycleId} />
+
       <OkrAlertsPanel />
+
+      <OkrObjectiveReviewDialog objective={reviewTarget} onClose={() => setReviewTarget(null)} />
 
       <OkrInitiativesDialog
         objectiveId={initiativeTarget?.id ?? null}

@@ -36,6 +36,7 @@ import {
   type OkrCycleInput,
   type OkrCycleStatus,
 } from "../types/cycle";
+import { OkrSectionNav } from "../components/OkrSectionNav";
 
 const STATUS_BADGE: Record<OkrCycleStatus, string> = {
   planning: "bg-slate-200 text-slate-800",
@@ -84,7 +85,8 @@ export function OkrCyclesPage() {
 
   if (!cycles.organizationId) {
     return (
-      <div className="mx-auto max-w-5xl p-4 sm:p-6">
+      <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+        <OkrSectionNav />
         <Card>
           <CardHeader>
             <CardTitle>Ciclos de OKR</CardTitle>
@@ -99,15 +101,19 @@ export function OkrCyclesPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-      <header className="flex items-start justify-between gap-4">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Ciclos de OKR</h1>
           <p className="text-sm text-muted-foreground">
             Gerencie a vida do ciclo: planejamento → ativo → fechamento → fechado → arquivado.
           </p>
         </div>
-        <Button onClick={() => setOpen(true)}>+ Novo ciclo</Button>
+        <Button className="h-11 sm:shrink-0" onClick={() => setOpen(true)}>
+          + Novo ciclo
+        </Button>
       </header>
+
+      <OkrSectionNav />
 
       <Card>
         <CardContent className="p-0">

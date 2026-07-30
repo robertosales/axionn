@@ -69,6 +69,7 @@ import type {
   OkrDashboardMode,
 } from "../types/dashboard";
 import { exportOkrV2 } from "../utils/okrExportV2";
+import { OkrSectionNav } from "../components/OkrSectionNav";
 
 const TEAM_CHART_CONFIG = {
   progress: { label: "Progresso", color: "hsl(var(--primary))" },
@@ -378,16 +379,8 @@ export function OkrDashboardPage() {
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button className="h-11" variant="outline" onClick={() => navigate("/okr/ciclos")}>
-              <Layers3 className="mr-2 h-4 w-4" aria-hidden="true" />
-              Ciclos
-            </Button>
-            <Button className="h-11" variant="outline" onClick={() => navigate("/okr/objectives")}>
-              <Target className="mr-2 h-4 w-4" aria-hidden="true" />
-              Objetivos
-            </Button>
-            {canExport && (
+          {canExport && (
+            <div className="flex flex-wrap gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button className="h-11" disabled={Boolean(exporting) || !primary}>
@@ -412,9 +405,11 @@ export function OkrDashboardPage() {
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+
+        <OkrSectionNav />
 
         <Card>
           <CardContent className="grid gap-4 p-4 md:grid-cols-2">

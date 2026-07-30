@@ -37,6 +37,7 @@ import { OkrInitiativesDialog } from "../components/OkrInitiativesDialog";
 import { OkrAlertsPanel } from "../components/OkrAlertsPanel";
 import { OkrObjectiveReviewDialog } from "../components/OkrObjectiveReviewDialog";
 import { OkrCycleReviewPanel } from "../components/OkrCycleReviewPanel";
+import { OkrSectionNav } from "../components/OkrSectionNav";
 import {
   OKR_ALIGNMENT_TYPE_LABEL,
   OKR_OBJECTIVE_LEVEL_LABEL,
@@ -96,7 +97,7 @@ export function OkrObjectivesPage() {
     }
     try {
       await objectives.create.mutateAsync(form);
-      toast.success("Objective criado.");
+      toast.success("Objetivo criado.");
       setFormOpen(false);
       setForm(EMPTY_FORM);
     } catch (err) {
@@ -107,7 +108,7 @@ export function OkrObjectivesPage() {
   const handlePublish = async (obj: OkrObjectiveV2) => {
     try {
       await objectives.publish.mutateAsync(obj.id);
-      toast.success("Objective publicado.");
+      toast.success("Objetivo publicado.");
     } catch (err) {
       toast.error(errorMessage(err));
     }
@@ -117,7 +118,7 @@ export function OkrObjectivesPage() {
     const reason = window.prompt("Motivo do arquivamento (opcional):") ?? undefined;
     try {
       await objectives.archive.mutateAsync({ id: obj.id, reason });
-      toast.success("Objective arquivado.");
+      toast.success("Objetivo arquivado.");
     } catch (err) {
       toast.error(errorMessage(err));
     }
@@ -125,16 +126,16 @@ export function OkrObjectivesPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Objectives (OKR v2)</h1>
+          <h1 className="text-2xl font-semibold">Objetivos de OKR</h1>
           <p className="text-sm text-muted-foreground">
             Gestão de objetivos e alinhamentos por ciclo. Todas as mutações passam por RPC transacional.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3 xl:w-auto xl:justify-end">
           <Select value={selectedCycleId ?? "all"} onValueChange={(v) => setSelectedCycleId(v === "all" ? null : v)}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="h-11 w-full sm:w-[220px]">
               <SelectValue placeholder="Todos os ciclos" />
             </SelectTrigger>
             <SelectContent>
@@ -146,28 +147,30 @@ export function OkrObjectivesPage() {
               ))}
             </SelectContent>
           </Select>
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-2 text-sm">
             <Checkbox
               checked={includeArchived}
               onCheckedChange={(v) => setIncludeArchived(v === true)}
             />
             Incluir arquivados
           </label>
-          <Button onClick={() => setFormOpen(true)} disabled={openCycles.length === 0}>
-            + Novo objective
+          <Button className="h-11" onClick={() => setFormOpen(true)} disabled={openCycles.length === 0}>
+            + Novo objetivo
           </Button>
         </div>
       </div>
 
+      <OkrSectionNav />
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Lista de objectives</CardTitle>
+          <CardTitle className="text-base">Lista de objetivos</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {objectives.isLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Carregando…</p>
           ) : objectives.objectives.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">Nenhum objective encontrado.</p>
+            <p className="p-6 text-sm text-muted-foreground">Nenhum objetivo encontrado.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -240,9 +243,9 @@ export function OkrObjectivesPage() {
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Novo objective</DialogTitle>
+            <DialogTitle>Novo objetivo</DialogTitle>
             <DialogDescription>
-              O objective começa em rascunho. Publique quando estiver pronto.
+              O objetivo começa em rascunho. Publique quando estiver pronto.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -346,7 +349,7 @@ function AlignmentDialog({
 
   const handleCreate = async () => {
     if (!targetId) {
-      toast.error("Selecione o objective alvo.");
+      toast.error("Selecione o objetivo alvo.");
       return;
     }
     try {
@@ -381,14 +384,14 @@ function AlignmentDialog({
         <DialogHeader>
           <DialogTitle>Alinhamentos — {objective.title}</DialogTitle>
           <DialogDescription>
-            Relacione este objective a outros da mesma organização.
+            Relacione este objetivo a outros da mesma organização.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Objective alvo</Label>
+              <Label>Objetivo alvo</Label>
               <Select value={targetId} onValueChange={setTargetId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />

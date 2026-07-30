@@ -7,6 +7,15 @@ const guard = readFileSync(
 );
 const routes = readFileSync("src/App.tsx", "utf8");
 const featureFlags = readFileSync("src/lib/featureFlags.ts", "utf8");
+const sectionNav = readFileSync(
+  "src/features/okr/components/OkrSectionNav.tsx",
+  "utf8",
+);
+const sectionPages = [
+  "src/features/okr/pages/OkrDashboardPage.tsx",
+  "src/features/okr/pages/OkrCyclesPage.tsx",
+  "src/features/okr/pages/OkrObjectivesPage.tsx",
+].map((path) => readFileSync(path, "utf8"));
 const legacyHook = readFileSync("src/features/okr/hooks/useOkr.ts", "utf8");
 const v2Sources = [
   "src/features/okr/hooks/useOkrCycles.ts",
@@ -48,6 +57,16 @@ describe("OKR V2 access and coexistence contract", () => {
     expect(routes).toContain(
       '<AppShell module="sala_agil"><OkrObjectivesPage /></AppShell>',
     );
+  });
+
+  it("offers persistent contextual navigation from every OKR V2 page", () => {
+    expect(sectionNav).toContain('to: "/okr/dashboard"');
+    expect(sectionNav).toContain('to: "/okr/ciclos"');
+    expect(sectionNav).toContain('to: "/okr/objectives"');
+    expect(sectionNav).toContain('aria-label="Navegação do OKR"');
+    for (const page of sectionPages) {
+      expect(page).toContain("<OkrSectionNav />");
+    }
   });
 
   it("keeps V2 mutations on RPCs while explicitly isolating remaining legacy debt", () => {

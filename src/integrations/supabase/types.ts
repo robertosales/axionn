@@ -7729,6 +7729,60 @@ export type Database = {
           },
         ]
       }
+      okr_carry_forward_links: {
+        Row: {
+          carry_forward_type: string
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          reason: string
+          source_cycle_id: string | null
+          source_objective_id: string
+          target_cycle_id: string | null
+          target_objective_id: string
+        }
+        Insert: {
+          carry_forward_type: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          reason: string
+          source_cycle_id?: string | null
+          source_objective_id: string
+          target_cycle_id?: string | null
+          target_objective_id: string
+        }
+        Update: {
+          carry_forward_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          reason?: string
+          source_cycle_id?: string | null
+          source_objective_id?: string
+          target_cycle_id?: string | null
+          target_objective_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_carry_forward_links_source_objective_id_fkey"
+            columns: ["source_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_carry_forward_links_target_objective_id_fkey"
+            columns: ["target_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_check_ins: {
         Row: {
           author_id: string | null
@@ -7791,6 +7845,77 @@ export type Database = {
             columns: ["objective_id"]
             isOneToOne: false
             referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_cycle_reviews: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          check_in_compliance: number | null
+          created_at: string
+          cross_team_dependencies: string | null
+          cycle_id: string
+          final_score: number | null
+          id: string
+          lessons_learned: string | null
+          main_achievements: string | null
+          main_failures: string | null
+          objectives_cancelled: number
+          objectives_carried_forward: number
+          objectives_completed: number
+          objectives_total: number
+          organization_id: string
+          strategic_recommendations: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          check_in_compliance?: number | null
+          created_at?: string
+          cross_team_dependencies?: string | null
+          cycle_id: string
+          final_score?: number | null
+          id?: string
+          lessons_learned?: string | null
+          main_achievements?: string | null
+          main_failures?: string | null
+          objectives_cancelled?: number
+          objectives_carried_forward?: number
+          objectives_completed?: number
+          objectives_total?: number
+          organization_id: string
+          strategic_recommendations?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          check_in_compliance?: number | null
+          created_at?: string
+          cross_team_dependencies?: string | null
+          cycle_id?: string
+          final_score?: number | null
+          id?: string
+          lessons_learned?: string | null
+          main_achievements?: string | null
+          main_failures?: string | null
+          objectives_cancelled?: number
+          objectives_carried_forward?: number
+          objectives_completed?: number
+          objectives_total?: number
+          organization_id?: string
+          strategic_recommendations?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_cycle_reviews_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: true
+            referencedRelation: "okr_cycles"
             referencedColumns: ["id"]
           },
         ]
@@ -8518,6 +8643,96 @@ export type Database = {
             foreignKeyName: "okr_objective_alignments_target_objective_id_fkey"
             columns: ["target_objective_id"]
             isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_objective_reviews: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          carry_forward_decision: string | null
+          carry_forward_reason: string | null
+          created_at: string
+          cycle_id: string | null
+          final_health: string | null
+          final_score: number | null
+          id: string
+          impact_rating: string | null
+          lessons_learned: string | null
+          objective_id: string
+          organization_id: string
+          outcome_summary: string | null
+          recommendation: string | null
+          rejection_reason: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+          what_did_not_work: string | null
+          what_worked: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          carry_forward_decision?: string | null
+          carry_forward_reason?: string | null
+          created_at?: string
+          cycle_id?: string | null
+          final_health?: string | null
+          final_score?: number | null
+          id?: string
+          impact_rating?: string | null
+          lessons_learned?: string | null
+          objective_id: string
+          organization_id: string
+          outcome_summary?: string | null
+          recommendation?: string | null
+          rejection_reason?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          what_did_not_work?: string | null
+          what_worked?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          carry_forward_decision?: string | null
+          carry_forward_reason?: string | null
+          created_at?: string
+          cycle_id?: string | null
+          final_health?: string | null
+          final_score?: number | null
+          id?: string
+          impact_rating?: string | null
+          lessons_learned?: string | null
+          objective_id?: string
+          organization_id?: string
+          outcome_summary?: string | null
+          recommendation?: string | null
+          rejection_reason?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          what_did_not_work?: string | null
+          what_worked?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_objective_reviews_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "okr_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objective_reviews_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: true
             referencedRelation: "okr_objectives"
             referencedColumns: ["id"]
           },
@@ -15827,6 +16042,19 @@ export type Database = {
         }
         Returns: string
       }
+      approve_okr_cycle_review_v1: {
+        Args: { p_close_cycle?: boolean; p_cycle_id: string }
+        Returns: undefined
+      }
+      approve_okr_objective_review_v1: {
+        Args: {
+          p_approve?: boolean
+          p_org_id: string
+          p_reason?: string
+          p_review_id: string
+        }
+        Returns: undefined
+      }
       archive_expired_briefings: { Args: never; Returns: number }
       archive_okr_alignment_v1: {
         Args: { p_alignment_id: string; p_org_id: string }
@@ -16080,6 +16308,17 @@ export type Database = {
       cancel_okr_cycle_v1: {
         Args: { p_cycle_id: string; p_reason: string }
         Returns: undefined
+      }
+      carry_forward_okr_objective_v1: {
+        Args: {
+          p_carry_forward_type: string
+          p_key_result_ids?: string[]
+          p_objective_id: string
+          p_org_id: string
+          p_reason: string
+          p_target_cycle_id: string
+        }
+        Returns: string
       }
       check_commercial_usage_v1: {
         Args: {
@@ -17708,6 +17947,39 @@ export type Database = {
           weight: number
         }[]
       }
+      list_okr_objective_reviews_v1: {
+        Args: { p_cycle_id?: string; p_org_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          carry_forward_decision: string | null
+          carry_forward_reason: string | null
+          created_at: string
+          cycle_id: string | null
+          final_health: string | null
+          final_score: number | null
+          id: string
+          impact_rating: string | null
+          lessons_learned: string | null
+          objective_id: string
+          organization_id: string
+          outcome_summary: string | null
+          recommendation: string | null
+          rejection_reason: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+          what_did_not_work: string | null
+          what_worked: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_objective_reviews"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       list_okr_objectives_v2: {
         Args: {
           p_cycle_id?: string
@@ -18568,6 +18840,10 @@ export type Database = {
         Returns: undefined
       }
       status_concluidos: { Args: never; Returns: string[] }
+      submit_okr_objective_review_v1: {
+        Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
       sync_keycloak_user: {
         Args: {
           p_axionn_user_id?: string
@@ -18791,6 +19067,10 @@ export type Database = {
       upsert_demandas_batch: {
         Args: { p_rows: Json; p_team_id: string }
         Returns: Json
+      }
+      upsert_okr_cycle_review_v1: {
+        Args: { p_cycle_id: string; p_payload?: Json }
+        Returns: string
       }
       upsert_okr_key_result_v2: {
         Args: {

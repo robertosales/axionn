@@ -50,14 +50,23 @@ describe("OKR V2 access and coexistence contract", () => {
     );
   });
 
-  it("keeps V2 mutations on RPCs while explicitly isolating remaining legacy debt", () => {
+  it("keeps V2 mutations on RPCs and makes the legacy hook read-only", () => {
     expect(v2Sources).not.toMatch(
       /\.from\("okr_[^"]+"\)\.(?:insert|update|upsert|delete)\(/,
     );
     expect(v2Sources).toContain('.rpc(name, args)');
-    expect(legacyHook).toContain('.from("okr_objectives").insert(');
-    expect(legacyHook).not.toMatch(
-      /\.from\("okr_(?:objectives|key_results|check_ins)"\)\.delete\(\)/,
+    expect(legacyHook).not.toMatch(/\.(?:insert|update|upsert|delete)\(/);
+    expect(legacyHook).toContain("rejectLegacyMutation");
+    expect(legacyHook).toContain("const canCreate = false");
+    expect(legacyHook).toContain("const canEdit = false");
+    expect(legacyHook).toContain("const canArchive = false");
+    expect(legacyHook).toContain("const canCheckIn = false");
+  });
+
+  it("keeps legacy writes reachable only through the explicit rollback switch", () => {
+    expect(routes).toContain(
+      'OKR_V2_ENABLED\n                  ? <Navigate to="/okr/dashboard" replace />',
     );
+    expect(routes).toContain(": <OkrPage />");
   });
 });

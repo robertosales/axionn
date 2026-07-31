@@ -262,7 +262,7 @@ export function UserRolesManager() {
           // O fallback controla a autoridade de escrita, não o escopo de
           // leitura. Admins da organização sempre listam pelo RPC tenant-scoped.
           setOrganizationAuthorityLocked(
-            !fallbackError && fallbackEnabled !== true,
+            fallbackError !== null || fallbackEnabled !== true,
           );
           setIsCurrentUserAdmin(isOrganizationAdmin);
 
@@ -271,14 +271,11 @@ export function UserRolesManager() {
             return;
           }
 
-          const [membersRes, contractRolesRes, profileStatusRes] = await Promise.all([
+          const [membersRes, contractRolesRes] = await Promise.all([
             (supabase as any).rpc("get_organization_members_v2", {
               p_org_id: currentOrganizationId,
             }),
             supabase.from("user_contracts").select("user_id, role"),
-            (supabase as any).rpc("get_organization_account_statuses", {
-              p_org_id: currentOrganizationId,
-            }),
           ]);
 
           if (membersRes.error) {
@@ -292,16 +289,6 @@ export function UserRolesManager() {
                 contractRoleMap[contractRole.user_id] = contractRole.role;
               }
             },
-          );
-
-          if (profileStatusRes.error) {
-            throw profileStatusRes.error;
-          }
-          const profileStatusMap = new Map<string, boolean>(
-            (profileStatusRes.data ?? []).map((profile: any) => [
-              String(profile.user_id),
-              (profile.is_active ?? true) as boolean,
-            ]),
           );
 
           setUsers(
@@ -321,8 +308,8 @@ export function UserRolesManager() {
                 display_name:         String(member.display_name || "—"),
                 email:                String(member.email || ""),
                 module_access:        moduleKeys[0] || "sala_agil",
-                // Status da conta (RBAC/Auth), não o status da associação à organização.
-                is_active:            profileStatusMap.get(String(member.user_id)) ?? Boolean(member.is_active),
+                // Nesta visão tenant-scoped, status representa a associação à organização.
+                is_active:            Boolean(member.is_active),
                 must_change_password: false,
                 teams:                [],
                 moduleRoles:          moduleKeys.map((moduleKey) => ({
@@ -457,13 +444,32 @@ export function UserRolesManager() {
     if (!trimmed) { toast.error("O nome não pode estar vazio"); return; }
     const enabled = MODULES.filter(m => pendingModules[m.key]?.enabled);
     if (enabled.length === 0) { toast.error("Selecione pelo menos um módulo"); return; }
-    if (organizationAuthorityLocked) {
-      toast.error("Use a administracao de membros da organizacao para alterar acessos.");
-      return;
-    }
-
     setSaving(true);
     try {
+      if (organizationAuthorityLocked) {
+        if (!currentOrganizationId) {
+          throw new Error("Organização não selecionada.");
+        }
+        const { error } = await (supabase as any).rpc(
+          "manage_organization_member_v1",
+          {
+            p_org_id: currentOrganizationId,
+            p_user_id: user.user_id,
+            p_display_name: trimmed,
+            // Papel organizacional é gerenciado na tela de membros; editar
+            // módulos aqui nunca deve promover privilégios.
+            p_role: null,
+            p_is_active: null,
+            p_module_keys: enabled.map((module) => module.key),
+          },
+        );
+        if (error) throw error;
+        toast.success("Perfil atualizado!");
+        closeSheet();
+        await fetchUsers();
+        return;
+      }
+
       // Salva module_roles
       const { error: delErr } = await supabase.from("user_module_roles").delete().eq("user_id", user.user_id);
       if (delErr) throw delErr;
@@ -518,11 +524,33 @@ export function UserRolesManager() {
     setToggleState(p => ({ ...p, saving: true }));
     const newActive = !user.is_active;
     try {
-      const { data, error } = await supabase.functions.invoke("admin-user-management", {
-        body: { action: "toggle_active", user_id: user.user_id, is_active: newActive },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (organizationAuthorityLocked) {
+        if (!currentOrganizationId) {
+          throw new Error("Organização não selecionada.");
+        }
+        const { error } = await (supabase as any).rpc(
+          "manage_organization_member_v1",
+          {
+            p_org_id: currentOrganizationId,
+            p_user_id: user.user_id,
+            p_display_name: null,
+            p_role: null,
+            p_is_active: newActive,
+            p_module_keys: null,
+          },
+        );
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.functions.invoke("admin-user-management", {
+          body: {
+            action: "toggle_active",
+            user_id: user.user_id,
+            is_active: newActive,
+          },
+        });
+        if (error) throw error;
+        if ((data as any)?.error) throw new Error((data as any).error);
+      }
       setUsers((current) =>
         current.map((row) =>
           row.user_id === user.user_id ? { ...row, is_active: newActive } : row,
@@ -561,15 +589,39 @@ export function UserRolesManager() {
     if (targets.length === 0) { setBulkOpen(false); return; }
     setBulkRunning(true);
     const results = await Promise.allSettled(
-      targets.map(u =>
-        supabase.functions.invoke("admin-user-management", {
-          body: { action: "toggle_active", user_id: u.user_id, is_active: false },
-        }).then(res => {
-          if (res.error) throw res.error;
-          if ((res.data as any)?.error) throw new Error((res.data as any).error);
-          return res;
-        })
-      )
+      targets.map(async (user) => {
+        if (organizationAuthorityLocked) {
+          if (!currentOrganizationId) {
+            throw new Error("Organização não selecionada.");
+          }
+          const result = await (supabase as any).rpc(
+            "manage_organization_member_v1",
+            {
+              p_org_id: currentOrganizationId,
+              p_user_id: user.user_id,
+              p_display_name: null,
+              p_role: null,
+              p_is_active: false,
+              p_module_keys: null,
+            },
+          );
+          if (result.error) throw result.error;
+          return result;
+        }
+
+        const result = await supabase.functions.invoke("admin-user-management", {
+          body: {
+            action: "toggle_active",
+            user_id: user.user_id,
+            is_active: false,
+          },
+        });
+        if (result.error) throw result.error;
+        if ((result.data as any)?.error) {
+          throw new Error((result.data as any).error);
+        }
+        return result;
+      }),
     );
     const ok = results.filter(r => r.status === "fulfilled").length;
     const fail = results.length - ok;

@@ -70,15 +70,25 @@ export function useUsersAdmin(contractId?: string | null) {
         Boolean(currentOrganizationId);
 
       if (useOrganizationAuthority && currentOrganizationId) {
-        const [membersRes, contractRolesRes] = await Promise.all([
+        const [membersRes, moduleRolesRes, contractRolesRes] = await Promise.all([
           (supabase as any).rpc("get_organization_members_v2", {
             p_org_id: currentOrganizationId,
           }),
+          (supabase as any).rpc(
+            "get_organization_member_module_roles_v1",
+            { p_org_id: currentOrganizationId },
+          ),
           supabase.from("user_contracts").select("user_id, role"),
         ]);
 
         if (membersRes.error) {
           setError(`Erro ao buscar membros: ${membersRes.error.message}`);
+          return;
+        }
+        if (moduleRolesRes.error) {
+          setError(
+            `Erro ao buscar perfis por módulo: ${moduleRolesRes.error.message}`,
+          );
           return;
         }
 
@@ -88,6 +98,23 @@ export function useUsersAdmin(contractId?: string | null) {
             if (contractRole.user_id) {
               contractRoleMap[contractRole.user_id] = contractRole.role;
             }
+          },
+        );
+
+        const tenantModuleRoles: Record<string, UserModuleRole[]> = {};
+        (moduleRolesRes.data || []).forEach(
+          (moduleRole: any) => {
+            if (!moduleRole.user_id || !moduleRole.module_key) return;
+            if (!tenantModuleRoles[moduleRole.user_id]) {
+              tenantModuleRoles[moduleRole.user_id] = [];
+            }
+            tenantModuleRoles[moduleRole.user_id].push({
+              module: String(moduleRole.module_key),
+              role_name:
+                moduleRole.role_name === "qa"
+                  ? "qa_analyst"
+                  : String(moduleRole.role_name || "member"),
+            });
           },
         );
 
@@ -103,6 +130,8 @@ export function useUsersAdmin(contractId?: string | null) {
                 member.membership_role === "admin"
                   ? "admin"
                   : "member";
+              const persistedModuleRoles =
+                tenantModuleRoles[String(member.user_id)] || [];
 
               return {
                 id: String(member.user_id),
@@ -113,10 +142,13 @@ export function useUsersAdmin(contractId?: string | null) {
                 team_id: null,
                 team_name: undefined,
                 teams: [],
-                module_roles: moduleKeys.map((moduleKey) => ({
-                  module: moduleKey,
-                  role_name: roleName,
-                })),
+                module_roles:
+                  persistedModuleRoles.length > 0
+                    ? persistedModuleRoles
+                    : moduleKeys.map((moduleKey) => ({
+                        module: moduleKey,
+                        role_name: roleName,
+                      })),
                 contract_role: contractRoleMap[member.user_id] ?? null,
                 is_admin:
                   member.membership_role === "owner" ||
@@ -258,13 +290,20 @@ export function useUsersAdmin(contractId?: string | null) {
     if (await isOrganizationAuthorityCutover()) {
       if (!currentOrganizationId) throw new Error("Organizacao nao selecionada.");
       const { error: updateError } = await (supabase as any).rpc(
-        "update_organization_member_v2",
+        "manage_organization_member_profile_v2",
         {
           p_org_id: currentOrganizationId,
           p_user_id: userId,
+          p_display_name: null,
           p_role: null,
           p_is_active: null,
-          p_module_keys: moduleRoles.map((moduleRole) => moduleRole.module),
+          p_module_roles: moduleRoles.map((moduleRole) => ({
+            module_key: moduleRole.module,
+            role_name:
+              moduleRole.role_name === "qa"
+                ? "qa_analyst"
+                : moduleRole.role_name,
+          })),
         },
       );
       if (updateError) throw updateError;

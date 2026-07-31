@@ -89,6 +89,10 @@ export const PROFILES_BY_MODULE: Record<ModuleKey, { value: string; label: strin
 
 export interface ModuleAccess { module: ModuleKey; role: string; }
 
+export function normalizeModuleRoleName(role: string): string {
+  return role === "qa" ? "qa_analyst" : role;
+}
+
 export interface UserRow {
   user_id:              string;
   display_name:         string;
@@ -174,7 +178,12 @@ export function UserProfileSheet({
                 {effectiveRoles.map(({ module, role }) => {
                   const mod = MODULES.find(m => m.key === module);
                   if (!mod) return null;
-                  const roleLabel = PROFILES_BY_MODULE[module]?.find(p => p.value === role)?.label ?? role;
+                  const normalizedRole = normalizeModuleRoleName(role);
+                  const roleLabel =
+                    PROFILES_BY_MODULE[module]?.find(
+                      (profile) =>
+                        normalizeModuleRoleName(profile.value) === normalizedRole,
+                    )?.label ?? normalizedRole;
                   return (
                     <Badge key={module} className={cn("text-[9px] gap-1 px-1.5 py-0", mod.badgeClass)}>
                       {mod.icon}{mod.label}: {roleLabel}
@@ -273,6 +282,7 @@ export function UserProfileSheet({
                           <Switch
                             checked={pm?.enabled ?? false}
                             onCheckedChange={() => onToggleModule(mod.key)}
+                            aria-label={`Acesso ao módulo ${mod.label}`}
                             className="scale-90"
                           />
                         </div>
@@ -283,7 +293,10 @@ export function UserProfileSheet({
                               value={pm.role}
                               onValueChange={role => onRoleChange(mod.key, role)}
                             >
-                              <SelectTrigger className="h-7 mt-1 text-xs">
+                              <SelectTrigger
+                                className="h-7 mt-1 text-xs"
+                                aria-label={`Perfil em ${mod.label}`}
+                              >
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -400,7 +413,12 @@ export function ModuleTags({
       {effective.map(({ module, role }) => {
         const mod = MODULES.find(m => m.key === module);
         if (!mod) return null;
-        const roleLabel = PROFILES_BY_MODULE[module as ModuleKey]?.find(p => p.value === role)?.label ?? role;
+        const normalizedRole = normalizeModuleRoleName(role);
+        const roleLabel =
+          PROFILES_BY_MODULE[module as ModuleKey]?.find(
+            (profile) =>
+              normalizeModuleRoleName(profile.value) === normalizedRole,
+          )?.label ?? normalizedRole;
         return (
           <Badge key={module} className={cn("text-[9px] gap-1 px-1.5 py-0", mod.badgeClass)}>
             {mod.icon}{mod.label}: {roleLabel}

@@ -465,9 +465,16 @@ function EditMemberDialog({
                 <div className="space-y-3">
                   <SectionDivider>Módulos permitidos</SectionDivider>
                   {!isOwner && (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p
+                      className={cn(
+                        "text-[11px]",
+                        moduleKeys.length === 0
+                          ? "font-medium text-destructive"
+                          : "text-muted-foreground",
+                      )}
+                    >
                       {moduleKeys.length === 0
-                        ? "Nenhum módulo selecionado."
+                        ? "Selecione pelo menos um módulo."
                         : `${moduleKeys.length} de ${MODULES.length} módulo${moduleKeys.length !== 1 ? "s" : ""} selecionado${moduleKeys.length !== 1 ? "s" : ""}.`}
                     </p>
                   )}
@@ -710,7 +717,7 @@ function EditMemberDialog({
               </Button>
               <Button
                 className="h-11 gap-2 px-5 text-sm font-medium"
-                disabled={busy || isOwner}
+                disabled={busy || isOwner || moduleKeys.length === 0}
                 onClick={() =>
                   onSave({
                     role, isActive, moduleKeys,

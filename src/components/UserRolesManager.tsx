@@ -63,6 +63,7 @@ import {
   legacyToModuleRoles,
   MODULES,
   PROFILES_BY_MODULE,
+  normalizeModuleRoleName,
   type ModuleKey,
   type ModuleAccess,
   type UserRow,
@@ -271,15 +272,22 @@ export function UserRolesManager() {
             return;
           }
 
-          const [membersRes, contractRolesRes] = await Promise.all([
+          const [membersRes, moduleRolesRes, contractRolesRes] = await Promise.all([
             (supabase as any).rpc("get_organization_members_v2", {
               p_org_id: currentOrganizationId,
             }),
+            (supabase as any).rpc(
+              "get_organization_member_module_roles_v1",
+              { p_org_id: currentOrganizationId },
+            ),
             supabase.from("user_contracts").select("user_id, role"),
           ]);
 
           if (membersRes.error) {
             throw membersRes.error;
+          }
+          if (moduleRolesRes.error) {
+            throw moduleRolesRes.error;
           }
 
           const contractRoleMap: Record<string, "admin_contrato" | "member"> = {};
@@ -288,6 +296,29 @@ export function UserRolesManager() {
               if (contractRole.user_id) {
                 contractRoleMap[contractRole.user_id] = contractRole.role;
               }
+            },
+          );
+
+          const tenantModuleRoles: Record<string, ModuleAccess[]> = {};
+          (moduleRolesRes.data || []).forEach(
+            (moduleRole: any) => {
+              if (
+                !moduleRole.user_id ||
+                !["sala_agil", "sustentacao", "rdm"].includes(
+                  moduleRole.module_key,
+                )
+              ) {
+                return;
+              }
+              if (!tenantModuleRoles[moduleRole.user_id]) {
+                tenantModuleRoles[moduleRole.user_id] = [];
+              }
+              tenantModuleRoles[moduleRole.user_id].push({
+                module: moduleRole.module_key as ModuleKey,
+                role: normalizeModuleRoleName(
+                  String(moduleRole.role_name || "member"),
+                ),
+              });
             },
           );
 
@@ -302,20 +333,29 @@ export function UserRolesManager() {
                 member.membership_role === "admin"
                   ? "admin"
                   : "member";
+              const persistedModuleRoles =
+                tenantModuleRoles[String(member.user_id)] || [];
+              const resolvedModuleRoles =
+                persistedModuleRoles.length > 0
+                  ? persistedModuleRoles
+                  : moduleKeys.map((moduleKey) => ({
+                      module: moduleKey,
+                      role: roleName,
+                    }));
 
               return {
                 user_id:              String(member.user_id),
                 display_name:         String(member.display_name || "—"),
                 email:                String(member.email || ""),
-                module_access:        moduleKeys[0] || "sala_agil",
+                module_access:
+                  resolvedModuleRoles[0]?.module ||
+                  moduleKeys[0] ||
+                  "sala_agil",
                 // Nesta visão tenant-scoped, status representa a associação à organização.
                 is_active:            Boolean(member.is_active),
                 must_change_password: false,
                 teams:                [],
-                moduleRoles:          moduleKeys.map((moduleKey) => ({
-                  module: moduleKey,
-                  role: roleName,
-                })),
+                moduleRoles:          resolvedModuleRoles,
                 contract_role:        contractRoleMap[member.user_id] ?? null,
               };
             }),
@@ -414,7 +454,14 @@ export function UserRolesManager() {
     const init = {} as PendingModules;
     MODULES.forEach(({ key }) => {
       const found = effective.find(mr => mr.module === key);
-      init[key] = { enabled: !!found, role: found?.role || PROFILES_BY_MODULE[key][0].value };
+      init[key] = {
+        enabled: !!found,
+        role: found
+          ? found.role === "qa_analyst"
+            ? "qa"
+            : found.role
+          : PROFILES_BY_MODULE[key][0].value,
+      };
     });
     setPendingName(user.display_name === "—" ? "" : user.display_name);
     setPendingModules(init);
@@ -451,7 +498,7 @@ export function UserRolesManager() {
           throw new Error("Organização não selecionada.");
         }
         const { error } = await (supabase as any).rpc(
-          "manage_organization_member_v1",
+          "manage_organization_member_profile_v2",
           {
             p_org_id: currentOrganizationId,
             p_user_id: user.user_id,
@@ -460,7 +507,12 @@ export function UserRolesManager() {
             // módulos aqui nunca deve promover privilégios.
             p_role: null,
             p_is_active: null,
-            p_module_keys: enabled.map((module) => module.key),
+            p_module_roles: enabled.map((module) => ({
+              module_key: module.key,
+              role_name: normalizeModuleRoleName(
+                pendingModules[module.key].role,
+              ),
+            })),
           },
         );
         if (error) throw error;

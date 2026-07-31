@@ -57,8 +57,12 @@ describe("organization member RBAC management", () => {
   it("routes tenant edits and status changes through the scoped RPC", () => {
     expect(
       manager.match(/"manage_organization_member_v1"/g),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
+    expect(
+      manager.match(/"manage_organization_member_profile_v2"/g),
+    ).toHaveLength(1);
     expect(manager).toContain("p_display_name: trimmed");
+    expect(manager).toContain("p_module_roles:");
     expect(manager).toContain("p_is_active: newActive");
     expect(manager).toContain("p_is_active: false");
   });

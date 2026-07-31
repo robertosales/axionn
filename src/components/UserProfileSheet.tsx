@@ -87,7 +87,14 @@ export const PROFILES_BY_MODULE: Record<ModuleKey, { value: string; label: strin
   ],
 };
 
-export interface ModuleAccess { module: ModuleKey; role: string; }
+export interface ProfileOption { value: string; label: string; }
+export type ProfileOptionsByModule = Record<ModuleKey, ProfileOption[]>;
+
+export interface ModuleAccess {
+  module: ModuleKey;
+  role: string;
+  roleLabel?: string;
+}
 
 export function normalizeModuleRoleName(role: string): string {
   return role === "qa" ? "qa_analyst" : role;
@@ -117,6 +124,7 @@ interface Props {
   pendingContractRole: boolean;          // toggle local do admin_contrato
   isCurrentUserAdmin:  boolean;          // quem edita é admin_master?
   saving:              boolean;
+  profileOptionsByModule?: ProfileOptionsByModule;
   onClose:             () => void;
   onSave:              () => void;
   onNameChange:        (v: string) => void;
@@ -131,7 +139,7 @@ interface Props {
 export function UserProfileSheet({
   user, open,
   pendingName, pendingModules, pendingContractRole, isCurrentUserAdmin,
-  saving,
+  saving, profileOptionsByModule = PROFILES_BY_MODULE,
   onClose, onSave, onNameChange,
   onToggleModule, onRoleChange, onContractRoleChange,
   onEmail, onReset, onToggleActive,
@@ -180,7 +188,7 @@ export function UserProfileSheet({
                   if (!mod) return null;
                   const normalizedRole = normalizeModuleRoleName(role);
                   const roleLabel =
-                    PROFILES_BY_MODULE[module]?.find(
+                    profileOptionsByModule[module]?.find(
                       (profile) =>
                         normalizeModuleRoleName(profile.value) === normalizedRole,
                     )?.label ?? normalizedRole;
@@ -300,7 +308,7 @@ export function UserProfileSheet({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {PROFILES_BY_MODULE[mod.key].map(p => (
+                                {profileOptionsByModule[mod.key].map(p => (
                                   <SelectItem key={p.value} value={p.value} className="text-xs">
                                     {p.label}
                                   </SelectItem>
@@ -396,9 +404,11 @@ export function legacyToModuleRoles(module_access: string): ModuleAccess[] {
 export function ModuleTags({
   moduleRoles,
   module_access,
+  profileOptionsByModule = PROFILES_BY_MODULE,
 }: {
   moduleRoles: ModuleAccess[];
   module_access: string;
+  profileOptionsByModule?: ProfileOptionsByModule;
 }) {
   const effective = moduleRoles.length > 0 ? moduleRoles : legacyToModuleRoles(module_access);
   if (effective.length === 0) {
@@ -410,12 +420,12 @@ export function ModuleTags({
   }
   return (
     <span className="flex flex-wrap items-center gap-1">
-      {effective.map(({ module, role }) => {
+      {effective.map(({ module, role, roleLabel: persistedRoleLabel }) => {
         const mod = MODULES.find(m => m.key === module);
         if (!mod) return null;
         const normalizedRole = normalizeModuleRoleName(role);
-        const roleLabel =
-          PROFILES_BY_MODULE[module as ModuleKey]?.find(
+        const roleLabel = persistedRoleLabel ??
+          profileOptionsByModule[module as ModuleKey]?.find(
             (profile) =>
               normalizeModuleRoleName(profile.value) === normalizedRole,
           )?.label ?? normalizedRole;

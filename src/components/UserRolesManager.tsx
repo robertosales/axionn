@@ -66,6 +66,7 @@ import {
   normalizeModuleRoleName,
   type ModuleKey,
   type ModuleAccess,
+  type ProfileOptionsByModule,
   type UserRow,
   type PendingModules,
 } from "./UserProfileSheet";
@@ -225,6 +226,8 @@ export function UserRolesManager() {
   const { currentOrganizationId, isOrganizationAdmin } = useOrganization();
   const [users,         setUsers]         = useState<UserRow[]>([]);
   const [loading,       setLoading]       = useState(false);
+  const [profileOptionsByModule, setProfileOptionsByModule] =
+    useState<ProfileOptionsByModule>(PROFILES_BY_MODULE);
   const [organizationAuthorityLocked, setOrganizationAuthorityLocked] =
     useState(false);
   const [searchFilter,  setSearchFilter]  = useState("");
@@ -272,7 +275,7 @@ export function UserRolesManager() {
             return;
           }
 
-          const [membersRes, moduleRolesRes, contractRolesRes] = await Promise.all([
+          const [membersRes, moduleRolesRes, contractRolesRes, rbacProfilesRes] = await Promise.all([
             (supabase as any).rpc("get_organization_members_v2", {
               p_org_id: currentOrganizationId,
             }),
@@ -281,6 +284,9 @@ export function UserRolesManager() {
               { p_org_id: currentOrganizationId },
             ),
             supabase.from("user_contracts").select("user_id, role"),
+            (supabase as any).rpc("list_rbac_profiles_v1", {
+              p_org_id: currentOrganizationId,
+            }),
           ]);
 
           if (membersRes.error) {
@@ -289,6 +295,31 @@ export function UserRolesManager() {
           if (moduleRolesRes.error) {
             throw moduleRolesRes.error;
           }
+
+          const dynamicProfileOptions: ProfileOptionsByModule = {
+            sala_agil: [],
+            sustentacao: [],
+            rdm: [],
+          };
+          const profileLabels = new Map<string, string>();
+          if (!rbacProfilesRes.error) {
+            (rbacProfilesRes.data || []).forEach((profile: any) => {
+              const value = String(profile.profile_key || "");
+              const label = String(profile.display_name || value);
+              if (!value) return;
+              profileLabels.set(value, label);
+              ((profile.module_keys || []) as string[]).forEach((moduleKey) => {
+                if (!["sala_agil", "sustentacao", "rdm"].includes(moduleKey)) return;
+                dynamicProfileOptions[moduleKey as ModuleKey].push({ value, label });
+              });
+            });
+          }
+          (Object.keys(dynamicProfileOptions) as ModuleKey[]).forEach((moduleKey) => {
+            if (dynamicProfileOptions[moduleKey].length === 0) {
+              dynamicProfileOptions[moduleKey] = PROFILES_BY_MODULE[moduleKey];
+            }
+          });
+          setProfileOptionsByModule(dynamicProfileOptions);
 
           const contractRoleMap: Record<string, "admin_contrato" | "member"> = {};
           (contractRolesRes.error ? [] : contractRolesRes.data || []).forEach(
@@ -318,6 +349,7 @@ export function UserRolesManager() {
                 role: normalizeModuleRoleName(
                   String(moduleRole.role_name || "member"),
                 ),
+                roleLabel: profileLabels.get(String(moduleRole.role_name || "member")),
               });
             },
           );
@@ -460,7 +492,7 @@ export function UserRolesManager() {
           ? found.role === "qa_analyst"
             ? "qa"
             : found.role
-          : PROFILES_BY_MODULE[key][0].value,
+          : profileOptionsByModule[key][0]?.value ?? PROFILES_BY_MODULE[key][0].value,
       };
     });
     setPendingName(user.display_name === "—" ? "" : user.display_name);
@@ -920,7 +952,11 @@ export function UserRolesManager() {
 
                   {/* Módulo */}
                   <TableCell className="py-2.5">
-                    <ModuleTags moduleRoles={user.moduleRoles} module_access={user.module_access} />
+                    <ModuleTags
+                      moduleRoles={user.moduleRoles}
+                      module_access={user.module_access}
+                      profileOptionsByModule={profileOptionsByModule}
+                    />
                   </TableCell>
 
                   {/* Times */}
@@ -1008,6 +1044,7 @@ export function UserRolesManager() {
         pendingContractRole={pendingContractRole}
         isCurrentUserAdmin={isCurrentUserAdmin}
         saving={saving}
+        profileOptionsByModule={profileOptionsByModule}
         onClose={closeSheet}
         onSave={saveUser}
         onNameChange={setPendingName}

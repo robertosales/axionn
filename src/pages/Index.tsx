@@ -18,9 +18,7 @@ import { ImpedimentList } from "@/components/ImpedimentManager";
 
 // ─── Componentes pesados — lazy loaded  ───────────────────────────────────────
 const AgileHistory = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
-const UserRolesManager = lazy(() =>
-  import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })),
-);
+const RbacWorkspace = lazy(() => import("@/features/rbac/RbacWorkspace"));
 const PlanningPoker = lazy(() => import("@/components/PlanningPoker").then((m) => ({ default: m.PlanningPoker })));
 const UserStoryManager = lazy(() =>
   import("@/components/UserStoryManager").then((m) => ({ default: m.UserStoryManager })),
@@ -449,7 +447,7 @@ const Index = () => {
             {active === "perfis" && (
               <SectionGuard permission="manage_roles">
                 <LazySection name="Perfis">
-                  <UserRolesManager />
+                  <RbacWorkspace />
                 </LazySection>
               </SectionGuard>
             )}

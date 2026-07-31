@@ -3402,16 +3402,19 @@ export type Database = {
       }
       app_permissions: {
         Row: {
+          description: string | null
           group_key: string
           key: string
           label: string
         }
         Insert: {
+          description?: string | null
           group_key: string
           key: string
           label: string
         }
         Update: {
+          description?: string | null
           group_key?: string
           key?: string
           label?: string
@@ -3420,21 +3423,62 @@ export type Database = {
       }
       app_roles: {
         Row: {
+          category: string
+          color_token: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon_name: string
+          is_active: boolean
+          is_system: boolean
           label: string
+          module_keys: string[]
           name: string
+          organization_id: string | null
           sort_order: number
+          updated_at: string
         }
         Insert: {
+          category?: string
+          color_token?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon_name?: string
+          is_active?: boolean
+          is_system?: boolean
           label: string
+          module_keys?: string[]
           name: string
+          organization_id?: string | null
           sort_order?: number
+          updated_at?: string
         }
         Update: {
+          category?: string
+          color_token?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon_name?: string
+          is_active?: boolean
+          is_system?: boolean
           label?: string
+          module_keys?: string[]
           name?: string
+          organization_id?: string | null
           sort_order?: number
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "app_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       attachments: {
         Row: {
@@ -15931,6 +15975,10 @@ export type Database = {
       }
     }
     Functions: {
+      archive_rbac_profile_v1: {
+        Args: { p_org_id: string; p_profile_key: string }
+        Returns: boolean
+      }
       _assert_team_access: {
         Args: { p_team_ids: string[] }
         Returns: undefined
@@ -16026,6 +16074,56 @@ export type Database = {
       anonymize_ai_briefing: {
         Args: { p_briefing_id: string }
         Returns: undefined
+      }
+      is_rbac_profile_available_v1: {
+        Args: {
+          p_module_key: string
+          p_org_id: string
+          p_profile_key: string
+        }
+        Returns: boolean
+      }
+      list_rbac_permissions_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          description: string | null
+          group_key: string
+          label: string
+          module_key: string
+          permission_key: string
+        }[]
+      }
+      list_rbac_profiles_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          category: string
+          color_token: string
+          description: string
+          display_name: string
+          icon_name: string
+          is_active: boolean
+          is_system: boolean
+          module_keys: string[]
+          permission_count: number
+          permission_keys: string[]
+          profile_key: string
+          updated_at: string
+          user_count: number
+        }[]
+      }
+      save_rbac_profile_v1: {
+        Args: {
+          p_category?: string
+          p_color_token?: string
+          p_description?: string
+          p_display_name?: string
+          p_icon_name?: string
+          p_module_keys?: string[]
+          p_org_id: string
+          p_permission_keys?: string[]
+          p_profile_key?: string | null
+        }
+        Returns: string
       }
       apf_can_access_baseline: {
         Args: { _baseline_id: string }

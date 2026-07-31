@@ -16027,6 +16027,15 @@ export type Database = {
         Args: { p_briefing_id: string }
         Returns: undefined
       }
+      apf_can_access_baseline: {
+        Args: { _baseline_id: string }
+        Returns: boolean
+      }
+      apf_can_access_model: { Args: { _model_id: string }; Returns: boolean }
+      apf_can_access_session: {
+        Args: { _session_id: string }
+        Returns: boolean
+      }
       apf_create_dpf_globalweb_model: {
         Args: { p_contract_id: string }
         Returns: string

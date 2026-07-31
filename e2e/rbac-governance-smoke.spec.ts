@@ -45,6 +45,27 @@ test.describe("RBAC — governança e acesso temporário", () => {
       await expect(page.getByRole("tab", { name: tabName })).toBeVisible();
     }
 
+    const auditResponse = page.waitForResponse((response) =>
+      response.url().includes("/rpc/list_rbac_audit_events_v1"),
+    );
+    await page.getByRole("tab", { name: /histórico/i }).click();
+    await assertRpcResponse("list_rbac_audit_events_v1", await auditResponse);
+    await expect(page.getByText(/histórico de acesso|nenhuma alteração encontrada/i).first()).toBeVisible();
+
+    const membersResponse = page.waitForResponse((response) =>
+      response.url().includes("/rpc/get_organization_members_v2"),
+    );
+    await page.getByRole("tab", { name: /simulador/i }).click();
+    await assertRpcResponse("get_organization_members_v2", await membersResponse);
+    await page.getByRole("combobox", { name: /buscar por nome ou e-mail/i }).click();
+    await page.getByRole("option").first().click();
+    const simulationResponse = page.waitForResponse((response) =>
+      response.url().includes("/rpc/simulate_rbac_user_access_v1"),
+    );
+    await page.getByRole("button", { name: /simular acesso/i }).click();
+    await assertRpcResponse("simulate_rbac_user_access_v1", await simulationResponse);
+    await expect(page.getByRole("region", { name: /resumo do acesso simulado/i })).toBeVisible();
+
     const governanceResponse = page.waitForResponse((response) =>
       response.url().includes("/rpc/list_rbac_governance_v1"),
     );

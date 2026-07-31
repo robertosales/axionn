@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/contexts/AuthContext";
 import { useOkrCycles } from "../hooks/useOkrCycles";
 import { useOkrAlignments, useOkrObjectivesV2 } from "../hooks/useOkrObjectivesV2";
 import { OkrKeyResultsDialog } from "../components/OkrKeyResultsDialog";
@@ -74,6 +75,7 @@ function errorMessage(err: unknown): string {
 }
 
 export function OkrObjectivesPage() {
+  const { currentTeamId } = useAuth();
   const cycles = useOkrCycles();
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -95,8 +97,17 @@ export function OkrObjectivesPage() {
       toast.error("Ciclo e título são obrigatórios.");
       return;
     }
+    const isTeamObjective = (form.objective_level ?? "team") === "team";
+    if (isTeamObjective && !currentTeamId) {
+      toast.error("Selecione um time ativo para criar um objetivo de time.");
+      return;
+    }
     try {
-      await objectives.create.mutateAsync(form);
+      await objectives.create.mutateAsync({
+        ...form,
+        team_id: isTeamObjective ? currentTeamId : null,
+        scope_type: form.objective_level ?? "team",
+      });
       toast.success("Objetivo criado.");
       setFormOpen(false);
       setForm(EMPTY_FORM);
@@ -250,12 +261,12 @@ export function OkrObjectivesPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Ciclo</Label>
+              <Label htmlFor="okr-objective-cycle">Ciclo</Label>
               <Select
                 value={form.cycle_id}
                 onValueChange={(v) => setForm((f) => ({ ...f, cycle_id: v }))}
               >
-                <SelectTrigger>
+                <SelectTrigger id="okr-objective-cycle">
                   <SelectValue placeholder="Selecione um ciclo aberto" />
                 </SelectTrigger>
                 <SelectContent>
@@ -268,30 +279,32 @@ export function OkrObjectivesPage() {
               </Select>
             </div>
             <div>
-              <Label>Título</Label>
+              <Label htmlFor="okr-objective-title">Título</Label>
               <Input
+                id="okr-objective-title"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 placeholder="Ex.: Reduzir tempo de resposta em 30%"
               />
             </div>
             <div>
-              <Label>Descrição</Label>
+              <Label htmlFor="okr-objective-description">Descrição</Label>
               <Textarea
+                id="okr-objective-description"
                 value={form.description ?? ""}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={3}
               />
             </div>
             <div>
-              <Label>Nível</Label>
+              <Label htmlFor="okr-objective-level">Nível</Label>
               <Select
                 value={form.objective_level ?? "team"}
                 onValueChange={(v) =>
                   setForm((f) => ({ ...f, objective_level: v as OkrObjectiveLevel }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="okr-objective-level">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

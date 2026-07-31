@@ -8039,6 +8039,44 @@ export type Database = {
           },
         ]
       }
+      okr_export_events: {
+        Row: {
+          created_at: string
+          cycle_ids: string[]
+          export_format: string
+          id: string
+          organization_id: string
+          requested_by: string
+          row_count: number
+        }
+        Insert: {
+          created_at?: string
+          cycle_ids?: string[]
+          export_format: string
+          id?: string
+          organization_id: string
+          requested_by: string
+          row_count?: number
+        }
+        Update: {
+          created_at?: string
+          cycle_ids?: string[]
+          export_format?: string
+          id?: string
+          organization_id?: string
+          requested_by?: string
+          row_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_export_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_initiative_dependencies: {
         Row: {
           created_at: string
@@ -15989,6 +16027,15 @@ export type Database = {
         Args: { p_briefing_id: string }
         Returns: undefined
       }
+      apf_can_access_baseline: {
+        Args: { _baseline_id: string }
+        Returns: boolean
+      }
+      apf_can_access_model: { Args: { _model_id: string }; Returns: boolean }
+      apf_can_access_session: {
+        Args: { _session_id: string }
+        Returns: boolean
+      }
       apf_create_dpf_globalweb_model: {
         Args: { p_contract_id: string }
         Returns: string
@@ -17415,6 +17462,15 @@ export type Database = {
           status: Database["public"]["Enums"]["org_status"]
         }[]
       }
+      get_okr_dashboard_v1: {
+        Args: {
+          p_compare_cycle_id?: string
+          p_cycle_id?: string
+          p_mode?: string
+          p_org_id: string
+        }
+        Returns: Json
+      }
       get_okr_entitlement_matrix_v1: {
         Args: { p_org_id: string }
         Returns: {
@@ -18378,6 +18434,17 @@ export type Database = {
         }
         Returns: string
       }
+      manage_organization_member_v1: {
+        Args: {
+          p_display_name?: string
+          p_is_active?: boolean
+          p_module_keys?: string[]
+          p_org_id: string
+          p_role?: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       match_similar_apf_cases:
         | {
             Args: {
@@ -18585,6 +18652,10 @@ export type Database = {
         Returns: undefined
       }
       reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
+      request_okr_export_v1: {
+        Args: { p_cycle_ids: string[]; p_format: string; p_org_id: string }
+        Returns: Json
+      }
       request_okr_measurement_v2: {
         Args: { p_key_result_id: string }
         Returns: string

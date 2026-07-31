@@ -204,8 +204,9 @@ export function OkrObjectiveReviewDialog({
           </div>
 
           <div>
-            <Label>Resumo do resultado *</Label>
+            <Label htmlFor="okr-review-outcome-summary">Resumo do resultado *</Label>
             <Textarea
+              id="okr-review-outcome-summary"
               rows={3}
               disabled={readOnly}
               value={form.outcome_summary}
@@ -233,8 +234,9 @@ export function OkrObjectiveReviewDialog({
             </div>
           </div>
           <div>
-            <Label>Lições aprendidas</Label>
+            <Label htmlFor="okr-review-lessons-learned">Lições aprendidas</Label>
             <Textarea
+              id="okr-review-lessons-learned"
               rows={2}
               disabled={readOnly}
               value={form.lessons_learned ?? ""}

@@ -44,7 +44,9 @@ export function useUsersAdmin(contractId?: string | null) {
       await (supabase as any).rpc(
         "is_organization_legacy_permission_fallback_enabled",
       );
-    return fallbackError === null && fallbackEnabled !== true;
+    // Com tenancy ativa, falha ao consultar o fallback não pode reabrir writes
+    // legados globais. A autoridade organizacional deve falhar fechada.
+    return fallbackError !== null || fallbackEnabled !== true;
   }, []);
 
   const load = useCallback(async () => {

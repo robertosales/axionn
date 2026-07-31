@@ -117,8 +117,12 @@ export function OkrInitiativesDialog({
         <div className="space-y-4">
           <div className="grid grid-cols-[2fr_1fr_1fr_auto] items-end gap-3">
             <div>
-              <Label>Título</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+              <Label htmlFor="okr-initiative-title">Título</Label>
+              <Input
+                id="okr-initiative-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
             </div>
             <div>
               <Label>Prioridade</Label>

@@ -102,8 +102,9 @@ export function OkrCycleReviewPanel({ cycleId }: { cycleId: string | null }) {
 
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <Label>Principais conquistas</Label>
+                <Label htmlFor="okr-cycle-review-achievements">Principais conquistas</Label>
                 <Textarea
+                  id="okr-cycle-review-achievements"
                   rows={3}
                   disabled={approved}
                   value={form.main_achievements ?? ""}
@@ -111,8 +112,9 @@ export function OkrCycleReviewPanel({ cycleId }: { cycleId: string | null }) {
                 />
               </div>
               <div>
-                <Label>Principais falhas</Label>
+                <Label htmlFor="okr-cycle-review-failures">Principais falhas</Label>
                 <Textarea
+                  id="okr-cycle-review-failures"
                   rows={3}
                   disabled={approved}
                   value={form.main_failures ?? ""}
@@ -120,8 +122,9 @@ export function OkrCycleReviewPanel({ cycleId }: { cycleId: string | null }) {
                 />
               </div>
               <div>
-                <Label>Dependências entre times</Label>
+                <Label htmlFor="okr-cycle-review-dependencies">Dependências entre times</Label>
                 <Textarea
+                  id="okr-cycle-review-dependencies"
                   rows={2}
                   disabled={approved}
                   value={form.cross_team_dependencies ?? ""}
@@ -131,8 +134,9 @@ export function OkrCycleReviewPanel({ cycleId }: { cycleId: string | null }) {
                 />
               </div>
               <div>
-                <Label>Lições aprendidas</Label>
+                <Label htmlFor="okr-cycle-review-lessons">Lições aprendidas</Label>
                 <Textarea
+                  id="okr-cycle-review-lessons"
                   rows={2}
                   disabled={approved}
                   value={form.lessons_learned ?? ""}
@@ -140,8 +144,9 @@ export function OkrCycleReviewPanel({ cycleId }: { cycleId: string | null }) {
                 />
               </div>
               <div className="md:col-span-2">
-                <Label>Recomendações estratégicas</Label>
+                <Label htmlFor="okr-cycle-review-recommendations">Recomendações estratégicas</Label>
                 <Textarea
+                  id="okr-cycle-review-recommendations"
                   rows={2}
                   disabled={approved}
                   value={form.strategic_recommendations ?? ""}

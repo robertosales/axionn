@@ -30,3 +30,6 @@ dist-ssr
 .env.development
 .env.production
 .env.staging
+
+# Credenciais de E2E
+.env.e2e

@@ -174,16 +174,18 @@ export function OkrKeyResultsDialog({
               {editing ? "Editar Key Result" : "Novo Key Result"}
             </h4>
             <div>
-              <Label>Título</Label>
+              <Label htmlFor="okr-kr-title">Título</Label>
               <Input
+                id="okr-kr-title"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 placeholder="Ex.: Reduzir MTTR de 8h para 4h"
               />
             </div>
             <div>
-              <Label>Descrição</Label>
+              <Label htmlFor="okr-kr-description">Descrição</Label>
               <Textarea
+                id="okr-kr-description"
                 value={form.description ?? ""}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={2}
@@ -230,8 +232,9 @@ export function OkrKeyResultsDialog({
                 </Select>
               </div>
               <div>
-                <Label>Peso (0–100)</Label>
+                <Label htmlFor="okr-kr-weight">Peso (0–100)</Label>
                 <Input
+                  id="okr-kr-weight"
                   type="number"
                   min={0}
                   max={100}
@@ -266,8 +269,9 @@ export function OkrKeyResultsDialog({
             {!isBool && !isRange && (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <div>
-                  <Label>Baseline</Label>
+                  <Label htmlFor="okr-kr-baseline">Baseline</Label>
                   <Input
+                    id="okr-kr-baseline"
                     type="number"
                     value={form.baseline_value ?? ""}
                     onChange={(e) =>
@@ -276,8 +280,9 @@ export function OkrKeyResultsDialog({
                   />
                 </div>
                 <div>
-                  <Label>Atual</Label>
+                  <Label htmlFor="okr-kr-current">Atual</Label>
                   <Input
+                    id="okr-kr-current"
                     type="number"
                     value={form.current_value ?? ""}
                     onChange={(e) =>
@@ -286,8 +291,9 @@ export function OkrKeyResultsDialog({
                   />
                 </div>
                 <div>
-                  <Label>Meta</Label>
+                  <Label htmlFor="okr-kr-target">Meta</Label>
                   <Input
+                    id="okr-kr-target"
                     type="number"
                     value={form.target_value ?? ""}
                     onChange={(e) =>
@@ -301,8 +307,9 @@ export function OkrKeyResultsDialog({
             {isRange && (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
                 <div>
-                  <Label>Baseline</Label>
+                  <Label htmlFor="okr-kr-range-baseline">Baseline</Label>
                   <Input
+                    id="okr-kr-range-baseline"
                     type="number"
                     value={form.baseline_value ?? ""}
                     onChange={(e) =>
@@ -311,8 +318,9 @@ export function OkrKeyResultsDialog({
                   />
                 </div>
                 <div>
-                  <Label>Atual</Label>
+                  <Label htmlFor="okr-kr-range-current">Atual</Label>
                   <Input
+                    id="okr-kr-range-current"
                     type="number"
                     value={form.current_value ?? ""}
                     onChange={(e) =>

@@ -57,7 +57,7 @@ test.describe("RBAC — governança e acesso temporário", () => {
     );
     await page.getByRole("tab", { name: /simulador/i }).click();
     await assertRpcResponse("get_organization_members_v2", await membersResponse);
-    await page.getByRole("combobox", { name: /buscar por nome ou e-mail/i }).click();
+    await page.getByRole("combobox", { name: /usuário para simulação/i }).click();
     await page.getByRole("option").first().click();
     const simulationResponse = page.waitForResponse((response) =>
       response.url().includes("/rpc/simulate_rbac_user_access_v1"),

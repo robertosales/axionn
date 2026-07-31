@@ -106,7 +106,7 @@ function MemberPicker({ open, onOpenChange, members, selected, onSelect }: { ope
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className="h-11 w-full justify-between px-3 font-normal">
+        <Button variant="outline" role="combobox" aria-label="Usuário para simulação" aria-expanded={open} className="h-11 w-full justify-between px-3 font-normal">
           <span className="min-w-0 truncate text-left">{selected ? `${selected.displayName} · ${selected.email}` : "Buscar por nome ou e-mail"}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
         </Button>

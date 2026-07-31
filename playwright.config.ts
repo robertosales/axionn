@@ -26,7 +26,11 @@ if (existsSync(".env.e2e")) {
   }
 }
 
-const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:4173";
+const useLocalApp = process.env.E2E_USE_LOCAL_APP === "true";
+const localAppURL = "http://127.0.0.1:4173";
+const baseURL = useLocalApp
+  ? localAppURL
+  : process.env.E2E_BASE_URL ?? localAppURL;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -47,12 +51,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: process.env.E2E_BASE_URL
-    ? undefined
-    : {
+  webServer: useLocalApp || !process.env.E2E_BASE_URL
+    ? {
         command: "npm.cmd run dev -- --host 127.0.0.1 --port 4173",
-        url: "http://127.0.0.1:4173",
+        url: localAppURL,
         reuseExistingServer: true,
         timeout: 120_000,
-      },
+      }
+    : undefined,
 });

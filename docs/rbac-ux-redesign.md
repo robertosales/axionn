@@ -124,8 +124,9 @@ features/rbac/
 - Simulador “ver como usuário” com perfis efetivos por módulo.
 - Histórico global tenant-scoped com busca, filtros e exportação CSV.
 
-## Evoluções futuras
+## Evoluções entregues na fase de governança
 
-- Aprovação em duas etapas para perfis privilegiados.
-- Perfis temporários com expiração automática.
-- Sugestões de menor privilégio baseadas no uso real.
+- Aprovação em duas etapas para alterações de perfis privilegiados, com separação obrigatória entre solicitante e revisor.
+- Atribuições temporárias por módulo, com prazo máximo de 365 dias, justificativa auditável e expiração aplicada nos verificadores de runtime.
+- Central de governança com solicitações pendentes, acessos temporários e recomendações de menor privilégio.
+- Recomendações baseadas em evidências reais de atividade dos últimos 90 dias, status do membro e expiração; a interface explicita que esses sinais não medem cada permissão individualmente.

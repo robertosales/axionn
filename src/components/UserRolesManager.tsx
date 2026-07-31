@@ -73,6 +73,17 @@ import {
 
 const CONTRACT_ID = "d59ab6dc-421f-41b4-b415-ae0bc072ebd4";
 
+function toLocalDateTimeInput(value: Date) {
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function normalizeIso(value: unknown) {
+  if (!value) return "permanent";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+}
+
 // ─── AuditLog exportado para uso no Sheet ────────────────────────────────────
 
 interface AuditEntry {
@@ -336,6 +347,10 @@ export function UserRolesManager() {
                   String(moduleRole.role_name || "member"),
                 ),
                 roleLabel: profileLabels.get(String(moduleRole.role_name || "member")),
+                expiresAt: moduleRole.expires_at ? String(moduleRole.expires_at) : null,
+                justification: moduleRole.assignment_justification
+                  ? String(moduleRole.assignment_justification)
+                  : null,
               });
             },
           );
@@ -481,6 +496,11 @@ export function UserRolesManager() {
             ? "qa"
             : found.role
           : profileOptionsByModule[key][0]?.value ?? PROFILES_BY_MODULE[key][0].value,
+        assignmentMode: found?.expiresAt ? "temporary" : "permanent",
+        expiresAt: found?.expiresAt
+          ? toLocalDateTimeInput(new Date(found.expiresAt))
+          : toLocalDateTimeInput(new Date(Date.now() + 7 * 86_400_000)),
+        justification: found?.justification ?? "",
       };
     });
     setPendingName(user.display_name === "—" ? "" : user.display_name);
@@ -503,6 +523,18 @@ export function UserRolesManager() {
     setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], role } }));
   }
 
+  function setAssignmentMode(key: ModuleKey, assignmentMode: "permanent" | "temporary") {
+    setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], assignmentMode } }));
+  }
+
+  function setExpiration(key: ModuleKey, expiresAt: string) {
+    setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], expiresAt } }));
+  }
+
+  function setJustification(key: ModuleKey, justification: string) {
+    setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], justification } }));
+  }
+
   // ── Salvar ──────────────────────────────────────────────────────────────────
   async function saveUser() {
     const user = sheetUser;
@@ -511,6 +543,19 @@ export function UserRolesManager() {
     if (!trimmed) { toast.error("O nome não pode estar vazio"); return; }
     const enabled = MODULES.filter(m => pendingModules[m.key]?.enabled);
     if (enabled.length === 0) { toast.error("Selecione pelo menos um módulo"); return; }
+    const invalidTemporary = enabled.find(({ key }) => {
+      const pending = pendingModules[key];
+      if (pending.assignmentMode !== "temporary") return false;
+      const expiration = new Date(pending.expiresAt);
+      return !pending.expiresAt
+        || Number.isNaN(expiration.getTime())
+        || expiration.getTime() <= Date.now() + 5 * 60_000
+        || pending.justification.trim().length < 10;
+    });
+    if (invalidTemporary) {
+      toast.error("Revise o prazo e informe uma justificativa com pelo menos 10 caracteres.");
+      return;
+    }
     setSaving(true);
     try {
       if (useOrganizationAuthority) {
@@ -522,6 +567,12 @@ export function UserRolesManager() {
           role_name: normalizeModuleRoleName(
             pendingModules[module.key].role,
           ),
+          expires_at: pendingModules[module.key].assignmentMode === "temporary"
+            ? new Date(pendingModules[module.key].expiresAt).toISOString()
+            : null,
+          justification: pendingModules[module.key].assignmentMode === "temporary"
+            ? pendingModules[module.key].justification.trim()
+            : null,
         }));
         const { data, error } = await (supabase as any).rpc(
           "manage_organization_member_profile_v2",
@@ -549,13 +600,13 @@ export function UserRolesManager() {
         if (verificationError) throw verificationError;
 
         const expectedSignature = expectedModuleRoles
-          .map((item) => `${item.module_key}:${item.role_name}`)
+          .map((item) => `${item.module_key}:${item.role_name}:${normalizeIso(item.expires_at)}`)
           .sort()
           .join("|");
         const persistedSignature = (persistedRoles || [])
           .filter((item: any) => String(item.user_id) === user.user_id)
           .map((item: any) =>
-            `${String(item.module_key)}:${normalizeModuleRoleName(String(item.role_name))}`,
+            `${String(item.module_key)}:${normalizeModuleRoleName(String(item.role_name))}:${normalizeIso(item.expires_at)}`,
           )
           .sort()
           .join("|");
@@ -1067,6 +1118,9 @@ export function UserRolesManager() {
         onNameChange={setPendingName}
         onToggleModule={toggleModule}
         onRoleChange={setModuleRole}
+        onAssignmentModeChange={setAssignmentMode}
+        onExpirationChange={setExpiration}
+        onJustificationChange={setJustification}
         onContractRoleChange={setPendingContractRole}
         onEmail={() => {
           if (!sheetUser) return;

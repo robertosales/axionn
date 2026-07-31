@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Eye, FileClock, KeyRound, ShieldCheck, UsersRound } from "lucide-react";
+import { Eye, FileClock, KeyRound, ShieldCheck, UserRoundCheck, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,6 +20,12 @@ const RbacAccessSimulator = lazy(() =>
 const RbacAuditPanel = lazy(() =>
   import("@/features/rbac/components/RbacAuditPanel").then((module) => ({
     default: module.RbacAuditPanel,
+  })),
+);
+
+const RbacGovernancePanel = lazy(() =>
+  import("@/features/rbac/components/RbacGovernancePanel").then((module) => ({
+    default: module.RbacGovernancePanel,
   })),
 );
 
@@ -66,6 +72,10 @@ export default function RbacWorkspace() {
               <FileClock className="h-4 w-4" aria-hidden="true" />
               Histórico
             </TabsTrigger>
+            <TabsTrigger value="governance" className="h-10 gap-2 rounded-lg px-4">
+              <UserRoundCheck className="h-4 w-4" aria-hidden="true" />
+              Governança
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -88,6 +98,11 @@ export default function RbacWorkspace() {
         <TabsContent value="history" className="mt-0 focus-visible:outline-none">
           <Suspense fallback={<InsightsSkeleton label="Carregando histórico RBAC" />}>
             <RbacAuditPanel />
+          </Suspense>
+        </TabsContent>
+        <TabsContent value="governance" className="mt-0 focus-visible:outline-none">
+          <Suspense fallback={<InsightsSkeleton label="Carregando governança de acesso" />}>
+            <RbacGovernancePanel />
           </Suspense>
         </TabsContent>
       </Tabs>

@@ -159,6 +159,16 @@ export function RbacProfileWizard({
     () => permissions.filter((permission) => permissionKeys.includes(permission.key)),
     [permissionKeys, permissions],
   );
+  const privilegedPermissions = useMemo(
+    () => selectedPermissions.filter((permission) => permission.isPrivileged),
+    [selectedPermissions],
+  );
+  const currentProfileHasPrivilege = Boolean(
+    profile?.permissionKeys.some((key) => permissions.some(
+      (permission) => permission.key === key && permission.isPrivileged,
+    )),
+  );
+  const requiresApproval = privilegedPermissions.length > 0 || currentProfileHasPrivilege;
   const scopedPermissions = useMemo(
     () => permissions.filter((permission) => moduleKeys.includes(permission.moduleKey)),
     [moduleKeys, permissions],
@@ -622,6 +632,18 @@ export function RbacProfileWizard({
                         </AlertDescription>
                       </Alert>
                     )}
+
+                    {!readOnly && requiresApproval && (
+                      <Alert className="border-amber-500/40 bg-amber-500/5" role="status">
+                        <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <AlertTitle>Revisão por outro administrador</AlertTitle>
+                        <AlertDescription>
+                          Este perfil {privilegedPermissions.length > 0
+                            ? `inclui ${privilegedPermissions.length} permissão(ões) privilegiada(s)`
+                            : "já possui permissões privilegiadas"}. Ao continuar, a alteração ficará pendente até ser aprovada por um segundo administrador.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                 )}
               </div>
@@ -660,7 +682,7 @@ export function RbacProfileWizard({
                     ) : (
                       <Save className="mr-2 h-4 w-4" />
                     )}
-                    Salvar perfil
+                    {requiresApproval ? "Enviar para aprovação" : "Salvar perfil"}
                   </Button>
                 ) : null}
               </DialogFooter>

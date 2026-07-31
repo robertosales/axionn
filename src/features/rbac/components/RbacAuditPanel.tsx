@@ -17,6 +17,9 @@ const ACTIONS: Array<{ value: RbacAuditAction; label: string }> = [
   { value: "rbac_profile_created", label: "Perfil criado" },
   { value: "rbac_profile_updated", label: "Perfil atualizado" },
   { value: "rbac_profile_archived", label: "Perfil arquivado" },
+  { value: "rbac_profile_change_requested", label: "Aprovação solicitada" },
+  { value: "rbac_profile_change_approved", label: "Alteração aprovada" },
+  { value: "rbac_profile_change_rejected", label: "Alteração rejeitada" },
   { value: "member_profile_managed", label: "Atribuição alterada" },
 ];
 
@@ -154,6 +157,9 @@ function getActionConfig(action: RbacAuditAction) {
   if (action === "rbac_profile_created") return { label: "Perfil criado", icon: Plus, surface: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" };
   if (action === "rbac_profile_updated") return { label: "Perfil atualizado", icon: PencilLine, surface: "bg-blue-500/10 text-blue-700 dark:text-blue-300" };
   if (action === "rbac_profile_archived") return { label: "Perfil arquivado", icon: Archive, surface: "bg-amber-500/10 text-amber-800 dark:text-amber-300" };
+  if (action === "rbac_profile_change_requested") return { label: "Aprovação solicitada", icon: FileClock, surface: "bg-amber-500/10 text-amber-800 dark:text-amber-300" };
+  if (action === "rbac_profile_change_approved") return { label: "Alteração aprovada", icon: Plus, surface: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" };
+  if (action === "rbac_profile_change_rejected") return { label: "Alteração rejeitada", icon: AlertTriangle, surface: "bg-destructive/10 text-destructive" };
   return { label: "Atribuição alterada", icon: UserRoundCog, surface: "bg-violet-500/10 text-violet-700 dark:text-violet-300" };
 }
 

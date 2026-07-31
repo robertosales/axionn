@@ -67,19 +67,23 @@ export function useRbacProfiles() {
     setLoading(true);
     setError(null);
 
-    const [profilesResult, permissionsResult] = await Promise.all([
+    const [profilesResult, permissionsResult, privilegedResult] = await Promise.all([
       supabase.rpc("list_rbac_profiles_v1", {
         p_org_id: currentOrganizationId,
       }),
       supabase.rpc("list_rbac_permissions_v1", {
         p_org_id: currentOrganizationId,
       }),
+      (supabase as any).rpc("list_rbac_privileged_permissions_v1", {
+        p_org_id: currentOrganizationId,
+      }),
     ]);
 
-    if (profilesResult.error || permissionsResult.error) {
+    if (profilesResult.error || permissionsResult.error || privilegedResult.error) {
       console.error("[useRbacProfiles] load failed", {
         profilesError: profilesResult.error,
         permissionsError: permissionsResult.error,
+        privilegedError: privilegedResult.error,
       });
       setProfiles([]);
       setPermissions([]);
@@ -93,9 +97,22 @@ export function useRbacProfiles() {
     setProfiles(
       (profilesResult.data ?? []).map(normalizeProfile),
     );
-    setPermissions(
-      (permissionsResult.data ?? []).map(normalizePermission),
+    const privileged = new Map(
+      (privilegedResult.data ?? []).map((row: Record<string, unknown>) => [
+        String(row.permission_key),
+        row,
+      ]),
     );
+    setPermissions((permissionsResult.data ?? []).map((row) => {
+      const permission = normalizePermission(row);
+      const risk = privileged.get(permission.key);
+      return {
+        ...permission,
+        isPrivileged: Boolean(risk),
+        riskLevel: risk?.risk_level as RbacPermission["riskLevel"],
+        riskReason: risk ? String(risk.reason) : undefined,
+      };
+    }));
     setLoading(false);
   }, [currentOrganizationId]);
 
@@ -111,9 +128,13 @@ export function useRbacProfiles() {
 
       setSaving(true);
       try {
-        const { data, error: saveError } = await supabase.rpc(
-          "save_rbac_profile_v1",
-          {
+        const currentProfile = profiles.find((profile) => profile.key === draft.profileKey);
+        const privilegedKeys = new Set(
+          permissions.filter((permission) => permission.isPrivileged).map((permission) => permission.key),
+        );
+        const requiresApproval = draft.permissionKeys.some((key) => privilegedKeys.has(key))
+          || Boolean(currentProfile?.permissionKeys.some((key) => privilegedKeys.has(key)));
+        const payload = {
             p_org_id: currentOrganizationId,
             p_profile_key: draft.profileKey,
             p_display_name: draft.displayName.trim(),
@@ -123,20 +144,26 @@ export function useRbacProfiles() {
             p_icon_name: draft.iconName,
             p_module_keys: draft.moduleKeys,
             p_permission_keys: draft.permissionKeys,
-          },
-        );
+        };
+        const { data, error: saveError } = requiresApproval
+          ? await (supabase as any).rpc("submit_rbac_profile_change_v1", payload)
+          : await supabase.rpc("save_rbac_profile_v1", payload);
 
         if (saveError) throw saveError;
         await refresh();
-        toast.success(
-          draft.profileKey ? "Perfil atualizado com sucesso" : "Perfil criado com sucesso",
-        );
+        if (requiresApproval) {
+          toast.success("Alteração enviada para aprovação", {
+            description: "Outro administrador deve revisar a solicitação em Governança.",
+          });
+          return String((data as Record<string, unknown>)?.profile_key ?? draft.profileKey ?? "pending");
+        }
+        toast.success(draft.profileKey ? "Perfil atualizado com sucesso" : "Perfil criado com sucesso");
         return String(data);
       } finally {
         setSaving(false);
       }
     },
-    [currentOrganizationId, refresh],
+    [currentOrganizationId, permissions, profiles, refresh],
   );
 
   const archiveProfile = useCallback(

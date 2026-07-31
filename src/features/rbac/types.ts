@@ -14,6 +14,9 @@ export interface RbacPermission {
   description: string | null;
   groupKey: string;
   moduleKey: RbacModuleKey;
+  isPrivileged?: boolean;
+  riskLevel?: "high" | "critical";
+  riskReason?: string;
 }
 
 export interface RbacProfile {
@@ -49,7 +52,57 @@ export type RbacAuditAction =
   | "rbac_profile_created"
   | "rbac_profile_updated"
   | "rbac_profile_archived"
-  | "member_profile_managed";
+  | "member_profile_managed"
+  | "rbac_profile_change_requested"
+  | "rbac_profile_change_approved"
+  | "rbac_profile_change_rejected";
+
+export interface RbacGovernanceRequest {
+  id: string;
+  profileKey: string;
+  changeType: "create" | "update";
+  riskLevel: "high" | "critical";
+  riskReasons: string[];
+  proposedSnapshot: Record<string, unknown>;
+  requestedBy: string;
+  requesterName: string;
+  createdAt: string;
+  expiresAt: string;
+  canReview: boolean;
+}
+
+export interface RbacTemporaryAssignment {
+  userId: string;
+  displayName: string;
+  moduleKey: RbacModuleKey;
+  profileKey: string;
+  profileName: string;
+  expiresAt: string;
+  justification: string;
+  isExpired: boolean;
+}
+
+export interface RbacLeastPrivilegeRecommendation {
+  id: string;
+  userId: string;
+  displayName: string;
+  moduleKey: RbacModuleKey;
+  profileKey: string;
+  profileName: string;
+  severity: "medium" | "high";
+  kind: "expired_access" | "inactive_member_access" | "low_activity";
+  lastActivityAt: string | null;
+  events90d: number;
+  evidence: string;
+}
+
+export interface RbacGovernanceOverview {
+  pendingRequests: RbacGovernanceRequest[];
+  temporaryAssignments: RbacTemporaryAssignment[];
+  recommendations: RbacLeastPrivilegeRecommendation[];
+  generatedAt: string;
+  activityWindowDays: number;
+}
 
 export interface RbacAuditEvent {
   id: string;

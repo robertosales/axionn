@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   Save, Mail, KeyRound, UserX, UserCheck,
-  Zap, Shield, BookOpen, Building2,
+  Zap, Shield, BookOpen, Building2, CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getInitials, formatPersonName } from "@/lib/personName";
@@ -94,6 +94,8 @@ export interface ModuleAccess {
   module: ModuleKey;
   role: string;
   roleLabel?: string;
+  expiresAt?: string | null;
+  justification?: string | null;
 }
 
 export function normalizeModuleRoleName(role: string): string {
@@ -113,7 +115,13 @@ export interface UserRow {
 }
 
 export interface PendingModules {
-  [key: string]: { enabled: boolean; role: string };
+  [key: string]: {
+    enabled: boolean;
+    role: string;
+    assignmentMode: "permanent" | "temporary";
+    expiresAt: string;
+    justification: string;
+  };
 }
 
 interface Props {
@@ -130,6 +138,9 @@ interface Props {
   onNameChange:        (v: string) => void;
   onToggleModule:      (key: ModuleKey) => void;
   onRoleChange:        (key: ModuleKey, role: string) => void;
+  onAssignmentModeChange:(key: ModuleKey, mode: "permanent" | "temporary") => void;
+  onExpirationChange:  (key: ModuleKey, value: string) => void;
+  onJustificationChange:(key: ModuleKey, value: string) => void;
   onContractRoleChange:(v: boolean) => void;
   onEmail:             () => void;
   onReset:             () => void;
@@ -142,6 +153,7 @@ export function UserProfileSheet({
   saving, profileOptionsByModule = PROFILES_BY_MODULE,
   onClose, onSave, onNameChange,
   onToggleModule, onRoleChange, onContractRoleChange,
+  onAssignmentModeChange, onExpirationChange, onJustificationChange,
   onEmail, onReset, onToggleActive,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"perfil" | "historico">("perfil");
@@ -295,14 +307,14 @@ export function UserProfileSheet({
                           />
                         </div>
                         {pm?.enabled && (
-                          <div>
+                          <div className="space-y-3">
                             <Label className="text-[10px] text-muted-foreground">Perfil em {mod.label}</Label>
                             <Select
                               value={pm.role}
                               onValueChange={role => onRoleChange(mod.key, role)}
                             >
                               <SelectTrigger
-                                className="h-7 mt-1 text-xs"
+                                className="mt-1 h-11 text-sm"
                                 aria-label={`Perfil em ${mod.label}`}
                               >
                                 <SelectValue />
@@ -315,6 +327,47 @@ export function UserProfileSheet({
                                 ))}
                               </SelectContent>
                             </Select>
+
+                            <div className="grid gap-2">
+                              <Label className="text-xs" htmlFor={`assignment-mode-${mod.key}`}>Duração do acesso</Label>
+                              <Select
+                                value={pm.assignmentMode}
+                                onValueChange={(value: "permanent" | "temporary") => onAssignmentModeChange(mod.key, value)}
+                              >
+                                <SelectTrigger id={`assignment-mode-${mod.key}`} className="h-11" aria-label={`Duração do acesso em ${mod.label}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="permanent">Permanente</SelectItem>
+                                  <SelectItem value="temporary">Temporário</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {pm.assignmentMode === "temporary" && (
+                              <div className="space-y-3 rounded-xl border border-blue-500/25 bg-blue-500/5 p-3">
+                                <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+                                  <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                                  Expiração automática
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label className="text-xs" htmlFor={`expires-${mod.key}`}>Acesso válido até</Label>
+                                  <Input id={`expires-${mod.key}`} type="datetime-local" value={pm.expiresAt}
+                                    onChange={(event) => onExpirationChange(mod.key, event.target.value)}
+                                    min={toLocalDateTimeInput(new Date(Date.now() + 10 * 60_000))}
+                                    max={toLocalDateTimeInput(new Date(Date.now() + 365 * 86_400_000))}
+                                    className="h-11 text-sm" />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label className="text-xs" htmlFor={`justification-${mod.key}`}>Justificativa</Label>
+                                  <Input id={`justification-${mod.key}`} value={pm.justification}
+                                    onChange={(event) => onJustificationChange(mod.key, event.target.value)}
+                                    placeholder="Ex.: cobertura de férias por duas semanas"
+                                    maxLength={280} className="h-11 text-sm" />
+                                  <p className="text-[11px] text-muted-foreground">Mínimo de 10 caracteres. O motivo fica registrado na auditoria.</p>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -398,6 +451,11 @@ export function legacyToModuleRoles(module_access: string): ModuleAccess[] {
   if (module_access === "sala_agil")   return [{ module: "sala_agil",   role: "member" }];
   if (module_access === "sustentacao") return [{ module: "sustentacao", role: "member" }];
   return [];
+}
+
+function toLocalDateTimeInput(value: Date) {
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 16);
 }
 
 // ─── ModuleTags ───────────────────────────────────────────────────────────────

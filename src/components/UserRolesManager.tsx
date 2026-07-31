@@ -228,8 +228,8 @@ export function UserRolesManager() {
   const [loading,       setLoading]       = useState(false);
   const [profileOptionsByModule, setProfileOptionsByModule] =
     useState<ProfileOptionsByModule>(PROFILES_BY_MODULE);
-  const [organizationAuthorityLocked, setOrganizationAuthorityLocked] =
-    useState(false);
+  const useOrganizationAuthority =
+    ORGANIZATION_TENANCY_ENABLED && Boolean(currentOrganizationId);
   const [searchFilter,  setSearchFilter]  = useState("");
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
   const debouncedSearch = useDebounce(searchFilter);
@@ -256,24 +256,10 @@ export function UserRolesManager() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      if (ORGANIZATION_TENANCY_ENABLED) {
-        const { data: fallbackEnabled, error: fallbackError } =
-          await (supabase as any).rpc(
-            "is_organization_legacy_permission_fallback_enabled",
-          );
-
+      if (useOrganizationAuthority) {
         if (currentOrganizationId && isOrganizationAdmin) {
-          // O fallback controla a autoridade de escrita, não o escopo de
-          // leitura. Admins da organização sempre listam pelo RPC tenant-scoped.
-          setOrganizationAuthorityLocked(
-            fallbackError !== null || fallbackEnabled !== true,
-          );
+          // Leitura e escrita usam a mesma autoridade tenant-scoped.
           setIsCurrentUserAdmin(isOrganizationAdmin);
-
-          if (!currentOrganizationId || !isOrganizationAdmin) {
-            setUsers([]);
-            return;
-          }
 
           const [membersRes, moduleRolesRes, contractRolesRes, rbacProfilesRes] = await Promise.all([
             (supabase as any).rpc("get_organization_members_v2", {
@@ -394,9 +380,11 @@ export function UserRolesManager() {
           );
           return;
         }
-      }
 
-      setOrganizationAuthorityLocked(false);
+        setUsers([]);
+        setIsCurrentUserAdmin(false);
+        return;
+      }
 
       // Verifica se o usuário atual é admin_master
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -457,7 +445,7 @@ export function UserRolesManager() {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganizationId, isOrganizationAdmin]);
+  }, [currentOrganizationId, isOrganizationAdmin, useOrganizationAuthority]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -525,11 +513,17 @@ export function UserRolesManager() {
     if (enabled.length === 0) { toast.error("Selecione pelo menos um módulo"); return; }
     setSaving(true);
     try {
-      if (organizationAuthorityLocked) {
+      if (useOrganizationAuthority) {
         if (!currentOrganizationId) {
           throw new Error("Organização não selecionada.");
         }
-        const { error } = await (supabase as any).rpc(
+        const expectedModuleRoles = enabled.map((module) => ({
+          module_key: module.key,
+          role_name: normalizeModuleRoleName(
+            pendingModules[module.key].role,
+          ),
+        }));
+        const { data, error } = await (supabase as any).rpc(
           "manage_organization_member_profile_v2",
           {
             p_org_id: currentOrganizationId,
@@ -539,18 +533,41 @@ export function UserRolesManager() {
             // módulos aqui nunca deve promover privilégios.
             p_role: null,
             p_is_active: null,
-            p_module_roles: enabled.map((module) => ({
-              module_key: module.key,
-              role_name: normalizeModuleRoleName(
-                pendingModules[module.key].role,
-              ),
-            })),
+            p_module_roles: expectedModuleRoles,
           },
         );
         if (error) throw error;
-        toast.success("Perfil atualizado!");
-        closeSheet();
+        if (data !== true) {
+          throw new Error("O servidor não confirmou a atualização do perfil.");
+        }
+
+        const { data: persistedRoles, error: verificationError } =
+          await (supabase as any).rpc(
+            "get_organization_member_module_roles_v1",
+            { p_org_id: currentOrganizationId },
+          );
+        if (verificationError) throw verificationError;
+
+        const expectedSignature = expectedModuleRoles
+          .map((item) => `${item.module_key}:${item.role_name}`)
+          .sort()
+          .join("|");
+        const persistedSignature = (persistedRoles || [])
+          .filter((item: any) => String(item.user_id) === user.user_id)
+          .map((item: any) =>
+            `${String(item.module_key)}:${normalizeModuleRoleName(String(item.role_name))}`,
+          )
+          .sort()
+          .join("|");
+        if (persistedSignature !== expectedSignature) {
+          throw new Error(
+            "A alteração não foi persistida. Atualize a página e tente novamente.",
+          );
+        }
+
         await fetchUsers();
+        closeSheet();
+        toast.success("Perfil atualizado e confirmado.");
         return;
       }
 
@@ -608,7 +625,7 @@ export function UserRolesManager() {
     setToggleState(p => ({ ...p, saving: true }));
     const newActive = !user.is_active;
     try {
-      if (organizationAuthorityLocked) {
+      if (useOrganizationAuthority) {
         if (!currentOrganizationId) {
           throw new Error("Organização não selecionada.");
         }
@@ -674,7 +691,7 @@ export function UserRolesManager() {
     setBulkRunning(true);
     const results = await Promise.allSettled(
       targets.map(async (user) => {
-        if (organizationAuthorityLocked) {
+        if (useOrganizationAuthority) {
           if (!currentOrganizationId) {
             throw new Error("Organização não selecionada.");
           }

@@ -38,16 +38,8 @@ export function useUsersAdmin(contractId?: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isOrganizationAuthorityCutover = useCallback(async () => {
-    if (!ORGANIZATION_TENANCY_ENABLED) return false;
-    const { data: fallbackEnabled, error: fallbackError } =
-      await (supabase as any).rpc(
-        "is_organization_legacy_permission_fallback_enabled",
-      );
-    // Com tenancy ativa, falha ao consultar o fallback não pode reabrir writes
-    // legados globais. A autoridade organizacional deve falhar fechada.
-    return fallbackError !== null || fallbackEnabled !== true;
-  }, []);
+  const useOrganizationAuthority =
+    ORGANIZATION_TENANCY_ENABLED && Boolean(currentOrganizationId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,10 +56,6 @@ export function useUsersAdmin(contractId?: string | null) {
           (ucData ?? []).map((row: any) => row.user_id as string),
         );
       }
-
-      const useOrganizationAuthority =
-        (await isOrganizationAuthorityCutover()) &&
-        Boolean(currentOrganizationId);
 
       if (useOrganizationAuthority && currentOrganizationId) {
         const [membersRes, moduleRolesRes, contractRolesRes] = await Promise.all([
@@ -277,7 +265,7 @@ export function useUsersAdmin(contractId?: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [contractId, currentOrganizationId, isOrganizationAuthorityCutover]);
+  }, [contractId, currentOrganizationId, useOrganizationAuthority]);
 
   useEffect(() => {
     void load();
@@ -287,7 +275,7 @@ export function useUsersAdmin(contractId?: string | null) {
     userId: string,
     moduleRoles: UserModuleRole[],
   ) => {
-    if (await isOrganizationAuthorityCutover()) {
+    if (useOrganizationAuthority) {
       if (!currentOrganizationId) throw new Error("Organizacao nao selecionada.");
       const { error: updateError } = await (supabase as any).rpc(
         "manage_organization_member_profile_v2",
@@ -374,16 +362,45 @@ export function useUsersAdmin(contractId?: string | null) {
     },
   ) => {
     try {
+      if (useOrganizationAuthority) {
+        if (!currentOrganizationId) {
+          throw new Error("Organização não selecionada.");
+        }
+        const { error: memberError } = await (supabase as any).rpc(
+          "manage_organization_member_profile_v2",
+          {
+            p_org_id: currentOrganizationId,
+            p_user_id: userId,
+            p_display_name: data.display_name ?? null,
+            p_role: null,
+            p_is_active: data.is_active ?? null,
+            p_module_roles: data.module_roles
+              ? data.module_roles.map((moduleRole) => ({
+                  module_key: moduleRole.module,
+                  role_name:
+                    moduleRole.role_name === "qa"
+                      ? "qa_analyst"
+                      : moduleRole.role_name,
+                }))
+              : null,
+          },
+        );
+        if (memberError) throw memberError;
+        if (data.contract_role) {
+          await saveContractRole(userId, data.contract_role);
+        }
+        toast.success("Usuário atualizado");
+        await load();
+        return true;
+      }
+
       const profileData: Record<string, any> = {};
       if (data.display_name !== undefined) {
         profileData.display_name = data.display_name;
       }
       if (data.team_id !== undefined) profileData.team_id = data.team_id;
       if (data.is_active !== undefined) profileData.is_active = data.is_active;
-      if (
-        data.module_access !== undefined &&
-        !(await isOrganizationAuthorityCutover())
-      ) {
+      if (data.module_access !== undefined) {
         profileData.module_access = data.module_access;
       }
 
@@ -414,7 +431,7 @@ export function useUsersAdmin(contractId?: string | null) {
   };
 
   const toggleAdmin = async (userId: string, isAdmin: boolean) => {
-    if (await isOrganizationAuthorityCutover()) {
+    if (useOrganizationAuthority) {
       if (!currentOrganizationId) {
         toast.error("Organizacao nao selecionada");
         return false;
@@ -465,6 +482,31 @@ export function useUsersAdmin(contractId?: string | null) {
   };
 
   const toggleActive = async (userId: string, active: boolean) => {
+    if (useOrganizationAuthority) {
+      if (!currentOrganizationId) {
+        toast.error("Organização não selecionada");
+        return false;
+      }
+      const { error: memberError } = await (supabase as any).rpc(
+        "manage_organization_member_profile_v2",
+        {
+          p_org_id: currentOrganizationId,
+          p_user_id: userId,
+          p_display_name: null,
+          p_role: null,
+          p_is_active: active,
+          p_module_roles: null,
+        },
+      );
+      if (memberError) {
+        toast.error("Erro ao alterar status");
+        return false;
+      }
+      toast.success(active ? "Usuário reativado" : "Usuário desativado");
+      await load();
+      return true;
+    }
+
     const { error: activeError } = await supabase
       .from("profiles")
       .update({ is_active: active })
@@ -509,7 +551,7 @@ export function useUsersAdmin(contractId?: string | null) {
         return false;
       }
 
-      if (await isOrganizationAuthorityCutover()) {
+      if (useOrganizationAuthority) {
         toast.error(
           "Crie membros pela administracao da organizacao apos o cutover.",
         );

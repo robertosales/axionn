@@ -69,6 +69,10 @@ describe("tenant-scoped RBAC profile management", () => {
     expect(assignments).toContain("profileOptionsByModule");
     expect(assignments).toContain('"manage_organization_member_profile_v2"');
     expect(migration).toContain("is_rbac_profile_available_v1");
+    expect(assignments).toContain("persistedSignature !== expectedSignature");
+    expect(assignments).not.toContain(
+      '"is_organization_legacy_permission_fallback_enabled"',
+    );
   });
 
   it("ships a read-only database validation gate", () => {

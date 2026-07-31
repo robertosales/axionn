@@ -75,12 +75,16 @@ describe("organization member RBAC management", () => {
     );
   });
 
-  it("fails closed when the legacy fallback state cannot be resolved", () => {
-    expect(manager).toContain(
-      "fallbackError !== null || fallbackEnabled !== true",
-    );
-    expect(adminHook).toContain(
-      "fallbackError !== null || fallbackEnabled !== true",
-    );
+  it("uses the organization authority for both reads and writes", () => {
+    for (const source of [manager, adminHook]) {
+      expect(source).toContain(
+        "ORGANIZATION_TENANCY_ENABLED && Boolean(currentOrganizationId)",
+      );
+      expect(source).not.toContain(
+        '"is_organization_legacy_permission_fallback_enabled"',
+      );
+    }
+    expect(manager).toContain("persistedSignature !== expectedSignature");
+    expect(manager).toContain("Perfil atualizado e confirmado.");
   });
 });

@@ -170,6 +170,10 @@ export function getRbacCategoryLabel(category: string) {
   return RBAC_CATEGORIES.find((entry) => entry.value === category)?.label ?? "Personalizado";
 }
 
+export function getRbacGroupLabel(groupKey: string) {
+  return RBAC_PERMISSION_GROUPS[groupKey]?.label ?? "Permissões gerais";
+}
+
 export function emptyRbacDraft(): RbacProfileDraft {
   return {
     profileKey: null,

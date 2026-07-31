@@ -30,6 +30,8 @@ describe("tenant-scoped RBAC profile management", () => {
     expect(workspace).toContain('value="assignments"');
     expect(workspace).toContain("<RbacProfilesManager />");
     expect(workspace).toContain("<UserRolesManager />");
+    expect(workspace).toContain('value="simulator"');
+    expect(workspace).toContain('value="history"');
   });
 
   it("implements the four-step profile wizard and permission controls", () => {

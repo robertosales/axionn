@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { KeyRound, ShieldCheck, UsersRound } from "lucide-react";
+import { Eye, FileClock, KeyRound, ShieldCheck, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,6 +8,18 @@ import { RbacProfilesManager } from "@/features/rbac/components/RbacProfilesMana
 const UserRolesManager = lazy(() =>
   import("@/components/UserRolesManager").then((module) => ({
     default: module.UserRolesManager,
+  })),
+);
+
+const RbacAccessSimulator = lazy(() =>
+  import("@/features/rbac/components/RbacAccessSimulator").then((module) => ({
+    default: module.RbacAccessSimulator,
+  })),
+);
+
+const RbacAuditPanel = lazy(() =>
+  import("@/features/rbac/components/RbacAuditPanel").then((module) => ({
+    default: module.RbacAuditPanel,
   })),
 );
 
@@ -46,6 +58,14 @@ export default function RbacWorkspace() {
               <UsersRound className="h-4 w-4" aria-hidden="true" />
               Atribuições
             </TabsTrigger>
+            <TabsTrigger value="simulator" className="h-10 gap-2 rounded-lg px-4">
+              <Eye className="h-4 w-4" aria-hidden="true" />
+              Simulador
+            </TabsTrigger>
+            <TabsTrigger value="history" className="h-10 gap-2 rounded-lg px-4">
+              <FileClock className="h-4 w-4" aria-hidden="true" />
+              Histórico
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -56,6 +76,18 @@ export default function RbacWorkspace() {
         <TabsContent value="assignments" className="mt-0 focus-visible:outline-none">
           <Suspense fallback={<AssignmentsSkeleton />}>
             <UserRolesManager />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="simulator" className="mt-0 focus-visible:outline-none">
+          <Suspense fallback={<InsightsSkeleton label="Carregando simulador de acesso" />}>
+            <RbacAccessSimulator />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-0 focus-visible:outline-none">
+          <Suspense fallback={<InsightsSkeleton label="Carregando histórico RBAC" />}>
+            <RbacAuditPanel />
           </Suspense>
         </TabsContent>
       </Tabs>
@@ -72,3 +104,11 @@ function AssignmentsSkeleton() {
   );
 }
 
+function InsightsSkeleton({ label }: { label: string }) {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label={label}>
+      <Skeleton className="h-44 rounded-2xl" />
+      <Skeleton className="h-64 rounded-2xl" />
+    </div>
+  );
+}

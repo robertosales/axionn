@@ -26,11 +26,20 @@ Perfis e permissões
 │       ├── 2. Módulos
 │       ├── 3. Permissões
 │       └── 4. Revisão
-└── Atribuições
-    ├── Busca de usuários
-    ├── Módulos e perfis atribuídos
-    ├── Times e status
-    └── Ações administrativas existentes
+├── Atribuições
+│   ├── Busca de usuários
+│   ├── Módulos e perfis atribuídos
+│   ├── Times e status
+│   └── Ações administrativas existentes
+├── Simulador
+│   ├── Busca de membro
+│   ├── Perfis efetivos por módulo
+│   ├── Permissões agrupadas
+│   └── Alertas de bypass administrativo e conta inativa
+└── Histórico
+    ├── Busca e filtros por evento/perfil
+    ├── Linha do tempo tenant-scoped
+    └── Exportação CSV
 ```
 
 ## Fluxo principal
@@ -42,6 +51,9 @@ Perfis e permissões
 5. Pesquisa permissões, expande grupos e usa seleção individual ou em massa.
 6. Revisa módulos, permissões e usuários impactados.
 7. Salva e recebe confirmação; em erro, permanece no passo atual com uma ação de recuperação.
+8. Compara dois perfis antes de substituir ou duplicar responsabilidades.
+9. Simula o acesso efetivo de um membro sem alterar sua atribuição.
+10. Consulta e exporta o histórico global de mudanças RBAC da organização.
 
 ## Wireframe
 
@@ -100,14 +112,20 @@ features/rbac/
     ├── RbacProfileCard.tsx
     ├── RbacProfileWizard.tsx
     ├── RbacPermissionMatrix.tsx
-    └── RbacProfilesManager.tsx
+    ├── RbacProfilesManager.tsx
+    ├── RbacProfileComparisonDialog.tsx
+    ├── RbacAccessSimulator.tsx
+    └── RbacAuditPanel.tsx
 ```
+
+## Evoluções entregues na fase de insights
+
+- Comparação lado a lado entre dois perfis, com diferenças por permissão.
+- Simulador “ver como usuário” com perfis efetivos por módulo.
+- Histórico global tenant-scoped com busca, filtros e exportação CSV.
 
 ## Evoluções futuras
 
-- Comparação lado a lado entre dois perfis.
-- Simulador “ver como usuário”.
 - Aprovação em duas etapas para perfis privilegiados.
 - Perfis temporários com expiração automática.
 - Sugestões de menor privilégio baseadas no uso real.
-- Histórico global de mudanças e exportação para auditoria.

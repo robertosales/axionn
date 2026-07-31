@@ -16093,6 +16093,24 @@ export type Database = {
           permission_key: string
         }[]
       }
+      list_rbac_audit_events_v1: {
+        Args: {
+          p_limit?: number
+          p_org_id: string
+          p_profile_key?: string | null
+        }
+        Returns: {
+          action: string
+          actor_id: string | null
+          actor_name: string
+          audit_id: string
+          created_at: string
+          details: Json
+          profile_key: string | null
+          subject_name: string | null
+          subject_user_id: string | null
+        }[]
+      }
       list_rbac_profiles_v1: {
         Args: { p_org_id: string }
         Returns: {
@@ -16124,6 +16142,10 @@ export type Database = {
           p_profile_key?: string | null
         }
         Returns: string
+      }
+      simulate_rbac_user_access_v1: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: Json
       }
       apf_can_access_baseline: {
         Args: { _baseline_id: string }

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Archive,
+  GitCompareArrows,
   KeyRound,
   Plus,
   RotateCcw,
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RbacProfileCard } from "@/features/rbac/components/RbacProfileCard";
+import { RbacProfileComparisonDialog } from "@/features/rbac/components/RbacProfileComparisonDialog";
 import { RbacProfileWizard } from "@/features/rbac/components/RbacProfileWizard";
 import { useRbacProfiles } from "@/features/rbac/hooks/useRbacProfiles";
 import { RBAC_CATEGORIES, RBAC_MODULES } from "@/features/rbac/rbacCatalog";
@@ -73,6 +75,7 @@ export function RbacProfilesManager() {
   const [archiveTarget, setArchiveTarget] = useState<RbacProfile | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
 
   const filteredProfiles = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
@@ -249,10 +252,16 @@ export function RbacProfilesManager() {
             </Select>
           </div>
 
-          <Button className="h-11 xl:ml-auto" onClick={() => openWizard("create")}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo perfil
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row xl:ml-auto">
+            <Button variant="outline" className="h-11" disabled={profiles.length < 2} onClick={() => setComparisonOpen(true)}>
+              <GitCompareArrows className="mr-2 h-4 w-4" />
+              Comparar
+            </Button>
+            <Button className="h-11" onClick={() => openWizard("create")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo perfil
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -312,6 +321,13 @@ export function RbacProfilesManager() {
           window.setTimeout(() => setHighlightedKey(null), 3000);
           return savedKey;
         }}
+      />
+
+      <RbacProfileComparisonDialog
+        open={comparisonOpen}
+        profiles={profiles}
+        permissions={permissions}
+        onOpenChange={setComparisonOpen}
       />
 
       <AlertDialog

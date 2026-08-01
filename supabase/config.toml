@@ -9,6 +9,9 @@ verify_jwt = true
 [functions.process-ai-briefing]
 verify_jwt = true
 
+[functions.teams-meeting-connector]
+verify_jwt = true
+
 [functions.gitlab-webhook-register]
 verify_jwt = true
 

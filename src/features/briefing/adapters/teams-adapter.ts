@@ -44,7 +44,7 @@ export class MicrosoftTeamsAdapter implements MeetingProvider {
 
       return {
         success: true,
-        organizationId: this.organizationId!,,
+        organizationId: this.organizationId!,
         integrationId: this.integrationId,
         expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
         scopes: requiredScopes,
@@ -52,7 +52,7 @@ export class MicrosoftTeamsAdapter implements MeetingProvider {
     } catch (error) {
       return {
         success: false,
-        organizationId: this.organizationId!,,
+        organizationId: this.organizationId!,
         integrationId: undefined,
         expiresAt: '',
         scopes: [],

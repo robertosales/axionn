@@ -201,7 +201,7 @@ export class TeamsGraphClient {
   }
 
   async resolveOnlineMeeting(joinWebUrl: string): Promise<TeamsOnlineMeeting | null> {
-    const escaped = joinWebUrl.replaceAll("'", "''");
+    const escaped = joinWebUrl.split("'").join("''");
     const url = new URL("https://graph.microsoft.com/v1.0/me/onlineMeetings");
     url.searchParams.set("$filter", `JoinWebUrl eq '${escaped}'`);
     const page = await this.request<GraphPage<TeamsOnlineMeeting>>(url.toString());

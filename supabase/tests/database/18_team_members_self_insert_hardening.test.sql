@@ -32,8 +32,12 @@ select ok(
 );
 
 select ok(
-  not has_table_privilege('anon', 'public.team_members', 'insert'),
-  'anonymous users cannot insert team memberships'
+  has_function_privilege(
+    'service_role',
+    'public.add_organization_team_member_v2(uuid,uuid,uuid,text)',
+    'execute'
+  ),
+  'service role retains the guarded membership RPC'
 );
 
 select * from finish();

@@ -97,7 +97,7 @@ export function useRbacProfiles() {
     setProfiles(
       (profilesResult.data ?? []).map(normalizeProfile),
     );
-    const privileged = new Map(
+    const privileged = new Map<string, Record<string, unknown>>(
       (privilegedResult.data ?? []).map((row: Record<string, unknown>) => [
         String(row.permission_key),
         row,

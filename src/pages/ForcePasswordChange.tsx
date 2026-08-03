@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 // Fluxo de troca obrigatória de senha: a flag profiles.must_change_password é
 // baixada ANTES do PUT /auth/v1/user (que invalida a sessão e impede o UPDATE).
 import { supabase } from "@/integrations/supabase/client";
+import { passwordPolicyError } from "@/lib/passwordPolicy";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,8 +43,9 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
     if (submittingRef.current) return;
     submittingRef.current = true;
     setErrorMsg(null);
-    if (password.length < 6) {
-      const m = "A senha deve ter ao menos 6 caracteres";
+    const policyError = passwordPolicyError(password);
+    if (policyError) {
+      const m = policyError;
       setErrorMsg(m); toast.error(m);
       submittingRef.current = false;
       return;
@@ -157,7 +159,7 @@ export default function ForcePasswordChange({ onDone }: { onDone: () => void }) 
         friendly =
           "Esta senha foi identificada em vazamentos públicos ou é muito fraca. Use uma senha forte (letras maiúsculas, minúsculas, números e símbolos).";
       } else if (/at least.*characters|minimum.*length|too short/i.test(msg)) {
-        friendly = "A senha não atende ao tamanho mínimo exigido (mín. 6 caracteres).";
+        friendly = "A senha não atende ao tamanho mínimo exigido (mín. 12 caracteres).";
       } else if (/should contain|must contain|requires/i.test(msg)) {
         friendly = "A senha não atende aos requisitos de complexidade exigidos pelo sistema.";
       } else if (status === 401 || status === 403 || /jwt|session|not authenticated/i.test(msg)) {

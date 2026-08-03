@@ -21,11 +21,7 @@ export function PromptPreview({ prompt }: Props) {
   }
 
   // Substitui variáveis por exemplo colorido
-  const rendered = prompt.replace(/\{\{([A-Z_]+)\}\}/g, (match, key) => {
-    const v = VARIABLE_MAP.get(key);
-    if (v) return `<mark class="bg-primary/10 text-primary rounded px-0.5 font-semibold not-italic">${v.example}</mark>`;
-    return `<mark class="bg-destructive/10 text-destructive rounded px-0.5 font-semibold">${match}</mark>`;
-  });
+  const parts = prompt.split(/(\{\{[A-Z_]+\}\})/g);
 
   const unknownVars = extractVariables(prompt).filter((k) => !VARIABLE_MAP.has(k));
 
@@ -41,10 +37,23 @@ export function PromptPreview({ prompt }: Props) {
           </Badge>
         )}
       </div>
-      <div
-        className="text-xs leading-relaxed whitespace-pre-wrap font-mono bg-muted/40 rounded-md p-3 border border-border max-h-48 overflow-y-auto"
-        dangerouslySetInnerHTML={{ __html: rendered }}
-      />
+      <div className="text-xs leading-relaxed whitespace-pre-wrap font-mono bg-muted/40 rounded-md p-3 border border-border max-h-48 overflow-y-auto">
+        {parts.map((part, index) => {
+          const match = /^\{\{([A-Z_]+)\}\}$/.exec(part);
+          if (!match) return <span key={index}>{part}</span>;
+          const variable = VARIABLE_MAP.get(match[1]);
+          return (
+            <mark
+              key={index}
+              className={variable
+                ? "bg-primary/10 text-primary rounded px-0.5 font-semibold not-italic"
+                : "bg-destructive/10 text-destructive rounded px-0.5 font-semibold"}
+            >
+              {variable?.example ?? part}
+            </mark>
+          );
+        })}
+      </div>
     </div>
   );
 }

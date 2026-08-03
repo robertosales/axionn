@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { readTextBody } from '../_shared/request-body.ts';
 import { parseUserStoryContent } from '../_shared/user-story-content.ts';
 import { resolveGitlabBacklogPlacement } from '../_shared/gitlab-backlog-placement.ts';
 
@@ -47,7 +48,7 @@ serve(async (req: Request) => {
     const eventType = normalizeEventType(req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown');
     const signature = req.headers.get('x-gitlab-token') || req.headers.get('x-hub-signature-256');
 
-    const rawBody = await req.text();
+    const rawBody = await readTextBody(req, 2_000_000);
     let payload: Record<string, unknown>;
     try {
       payload = JSON.parse(rawBody);

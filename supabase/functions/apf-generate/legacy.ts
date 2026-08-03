@@ -27,6 +27,7 @@ import {
 } from "https://esm.sh/docx@8.5.0";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertSafeOutboundUrl, hostsFromEnv } from "../_shared/outbound-url.ts";
 
 const SITE_URL = Deno.env.get("SITE_URL") ?? "*";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -891,10 +892,14 @@ async function callProvider(
     );
   }
 
-  const baseUrl = row.api_base_url;
-  if (!baseUrl) {
+  if (!row.api_base_url) {
     throw new Error(`Provider "${row.name}" sem api_base_url configurada.`);
   }
+  const baseUrl = assertSafeOutboundUrl(row.api_base_url, {
+    allowedHosts: hostsFromEnv("AI_PROVIDER_ALLOWED_HOSTS", [
+      "api.openai.com", "api.anthropic.com", "openrouter.ai", "ai.gateway.lovable.dev",
+    ]),
+  }).href;
 
   const defaultModels: Record<string, string> = {
     openai: "gpt-4o-mini",

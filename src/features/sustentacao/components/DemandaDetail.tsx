@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { getInitials, formatPersonName } from "@/lib/personName";
+import { safeExternalUrl } from "@/lib/security";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1848,7 +1849,7 @@ export function DemandaDetail({
                             {ev.descricao && <p className="text-xs text-muted-foreground truncate">{ev.descricao}</p>}
                             <p className="text-xs text-muted-foreground">
                               {ev.tipo === "link" && ev.url_externa ? (
-                                <a href={ev.url_externa} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: TEAL }}>
+                                <a href={safeExternalUrl(ev.url_externa)} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: TEAL }}>
                                   {ev.url_externa}
                                 </a>
                               ) : ev.file_name ? (

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { readJsonBody } from '../_shared/request-body.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -51,27 +52,38 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const authHeader = req.headers.get('authorization');
+    const authHeader = req.headers.get('authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const trustedService = authHeader === `Bearer ${supabaseServiceKey}`;
     let userId: string | null = null;
     let organizationId: string | null = null;
 
-    if (authHeader) {
+    if (!trustedService) {
       const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-      if (!authError && user) {
-        userId = user.id;
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('organization_id')
-          .eq('id', user.id)
-          .single();
-        organizationId = profile?.organization_id || null;
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
+      userId = user.id;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .single();
+      organizationId = profile?.organization_id || null;
     }
 
-    const body = await req.json();
+    const body = await readJsonBody<Record<string, unknown>>(req, 256_000);
     const { events, type } = body;
 
-    if (!events || !Array.isArray(events)) {
+    if (!events || !Array.isArray(events) || events.length === 0 || events.length > 100) {
       return new Response(JSON.stringify({ error: 'Invalid payload: events array required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -81,6 +93,12 @@ serve(async (req: Request) => {
     const results = [];
 
     if (type === 'user_usage') {
+      if (!userId || !organizationId) {
+        return new Response(JSON.stringify({ error: 'User organization is required' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       for (const event of events as TelemetryEvent[]) {
         const { data, error } = await supabase.rpc('log_user_usage_event', {
           p_tenant_id: organizationId,
@@ -98,6 +116,12 @@ serve(async (req: Request) => {
         results.push({ event_type: event.event_type, success: !error, error: error?.message, event_id: data });
       }
     } else if (type === 'integration_usage') {
+      if (!trustedService) {
+        return new Response(JSON.stringify({ error: 'Service authentication required' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       for (const event of events as IntegrationEvent[]) {
         const { data, error } = await supabase.rpc('log_integration_usage_event', {
           p_tenant_id: organizationId,

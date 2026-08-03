@@ -3,6 +3,7 @@ import { useSprint } from "@/contexts/SprintContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { createNotifications } from "@/features/notifications/services/notifications.service";
+import { safeExternalUrl } from "@/lib/security";
 import type { Impediment, ImpedimentType, ImpedimentCriticality } from "@/types/sprint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -332,7 +333,7 @@ export function ImpedimentList() {
                           </Badge>
                           {impediment.ticketUrl && (
                             <a
-                              href={impediment.ticketUrl}
+                              href={safeExternalUrl(impediment.ticketUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-primary hover:underline flex items-center gap-1"

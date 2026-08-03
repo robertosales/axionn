@@ -34,11 +34,26 @@ export function isAllowedUrl(url: string): boolean {
     // Permite caminhos relativos e origens whitelistadas
     return (
       parsed.protocol === "https:" &&
-      ALLOWED_URL_ORIGINS.some((o) => o && parsed.origin.endsWith(o.replace("https://", "")))
+      !parsed.username &&
+      !parsed.password &&
+      ALLOWED_URL_ORIGINS.some((origin) => origin && parsed.origin === origin)
     );
   } catch {
     // URL relativa é sempre permitida
     return url.startsWith("/");
+  }
+}
+
+/** Returns only web URLs; blocks javascript:, data:, embedded credentials and malformed input. */
+export function safeExternalUrl(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (!["https:", "http:"].includes(parsed.protocol)) return undefined;
+    if (parsed.username || parsed.password) return undefined;
+    return parsed.toString();
+  } catch {
+    return undefined;
   }
 }
 

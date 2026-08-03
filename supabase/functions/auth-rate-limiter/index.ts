@@ -120,19 +120,30 @@ serve(async (req: Request) => {
     const endpoint = (body?.endpoint ?? "default").toLowerCase().replace(/[^a-z_]/g, "");
     const config = LIMITS[endpoint] ?? LIMITS.default;
 
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    const ip = (
+      req.headers.get("cf-connecting-ip") ??
       req.headers.get("x-real-ip") ??
-      "unknown";
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+      "unknown"
+    ).replace(/[^0-9a-fA-F:.,]/g, "").slice(0, 64) || "unknown";
 
     const rateLimitKey = `rl:${ip}:${endpoint}`;
 
     const redisUrl   = Deno.env.get("UPSTASH_REDIS_REST_URL");
     const redisToken = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
 
-    const result = (redisUrl && redisToken)
-      ? await redisCheck(rateLimitKey, config.max, config.windowSec, redisUrl, redisToken)
-      : memCheck(rateLimitKey, config.max, config.windowSec);
+    let result: { allowed: boolean; remaining: number; resetAt: number };
+    if (redisUrl && redisToken) {
+      try {
+        result = await redisCheck(rateLimitKey, config.max, config.windowSec, redisUrl, redisToken);
+      } catch (redisError) {
+        console.error("[auth-rate-limiter] Redis unavailable; using local fallback",
+          redisError instanceof Error ? redisError.message : "REDIS_UNAVAILABLE");
+        result = memCheck(rateLimitKey, config.max, config.windowSec);
+      }
+    } else {
+      result = memCheck(rateLimitKey, config.max, config.windowSec);
+    }
 
     const rateLimitHeaders = {
       ...corsHeaders,
@@ -160,8 +171,8 @@ serve(async (req: Request) => {
   } catch (err) {
     console.error("[auth-rate-limiter] error:", err);
     return new Response(
-      JSON.stringify({ allowed: true, remaining: -1, warning: "rate limiter unavailable" }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ allowed: false, remaining: 0, error: "rate limiter unavailable" }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" } },
     );
   }
 });

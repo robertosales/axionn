@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { readTextBody } from '../_shared/request-body.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,7 +46,7 @@ serve(async (req: Request) => {
 
     // Verify webhook signature
     const signature = req.headers.get('x-apex-signature');
-    const rawBody = await req.text();
+    const rawBody = await readTextBody(req, 1_000_000);
 
     // Find integration by webhook URL or application ID
     const payload: ApexWebhookPayload = JSON.parse(rawBody);
@@ -95,8 +96,21 @@ serve(async (req: Request) => {
       integrationId: integration.id,
     };
 
-    // Verify signature if configured
-    if (integration.webhook_secret_encrypted && signature) {
+    // Webhooks fail closed: an integration without a configured secret is not
+    // allowed to process privileged writes.
+    if (!integration.webhook_secret_encrypted) {
+      return new Response(JSON.stringify({ error: 'Webhook authentication is not configured' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    {
+      if (!signature) {
+        return new Response(JSON.stringify({ error: 'Missing signature' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const isValid = await verifyApexSignature(rawBody, signature, integration.webhook_secret_encrypted);
       if (!isValid) {
         console.warn('[APEX Webhook] Invalid signature');

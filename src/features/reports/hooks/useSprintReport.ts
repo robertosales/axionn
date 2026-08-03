@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth }  from "@/contexts/AuthContext";
-import { exportToCSV, exportToPDF } from "../utils/exportUtils";
+import { escapeHtml, exportToCSV, exportToPDF } from "../utils/exportUtils";
 import { fetchActiveMemberIds, tagExMember } from "@/lib/teamMemberFilter";
 
 export interface SprintReportHU {
@@ -109,13 +109,13 @@ export function useSprintReport() {
     if (!report) return;
     const rows = report.hus.map(h => `
       <tr>
-        <td>${h.code}</td><td>${h.title}</td><td>${h.status}</td>
-        <td>${h.assignee_name}</td><td>${h.priority ?? "—"}</td>
+        <td>${escapeHtml(h.code)}</td><td>${escapeHtml(h.title)}</td><td>${escapeHtml(h.status)}</td>
+        <td>${escapeHtml(h.assignee_name)}</td><td>${escapeHtml(h.priority ?? "—")}</td>
         <td>${h.story_points ?? 0}</td><td>${h.estimated_hours ?? 0}h</td>
       </tr>`).join("");
     exportToPDF(`Relatório ${report.sprintName}`, `
-      <h1>Relatório de Sprint — ${report.sprintName}</h1>
-      <p class="meta">Período: ${report.startDate} → ${report.endDate} •
+      <h1>Relatório de Sprint — ${escapeHtml(report.sprintName)}</h1>
+      <p class="meta">Período: ${escapeHtml(report.startDate)} → ${escapeHtml(report.endDate)} •
         ${report.totalHUs} HUs • ${report.doneHUs} concluídas •
         ${report.donePoints}/${report.totalPoints} pts • ${report.totalHours}h estimadas</p>
       <table>

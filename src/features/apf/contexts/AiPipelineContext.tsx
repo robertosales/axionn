@@ -65,17 +65,14 @@ const AiPipelineContext = createContext<AiPipelineState | null>(null);
 export function AiPipelineProvider({ children }: { children: ReactNode }) {
   const [aiProviders, setAiProviders]               = useState<AIProvider[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState("");
-  const [apiKey, setApiKey]                         = useState(() => sessionStorage.getItem("apf_ai_api_key") || "");
+  // Provider credentials remain only in memory. Browser storage is readable
+  // by any script that executes in this origin and must not hold API keys.
+  const [apiKey, setApiKey]                         = useState("");
   const [loadingProviders, setLoadingProviders]     = useState(true);
   const [activePipelineSprintId, setActivePipelineSprintId] = useState("");
   const [lastHuGenerationId, setLastHuGenerationId] = useState<string | null>(null);
   const [lastPfAnalysisId, setLastPfAnalysisId]     = useState<string | null>(null);
   const [calibrationContext, setCalibrationContext] = useState("");
-
-  useEffect(() => {
-    if (apiKey) sessionStorage.setItem("apf_ai_api_key", apiKey);
-    else sessionStorage.removeItem("apf_ai_api_key");
-  }, [apiKey]);
 
   useEffect(() => {
     setLoadingProviders(true);

@@ -1,6 +1,7 @@
 // Redeploy bump: 2026-07-09 — versao final do modulo Briefing IA com governanca SaaS
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertSafeOutboundUrl, hostsFromEnv } from "../_shared/outbound-url.ts";
 
 const SITE_URL = Deno.env.get("SITE_URL") ?? "*";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -733,13 +734,18 @@ async function callProvider(
     };
   }
 
-  if (!provider.api_base_url || !/^https:\/\//i.test(provider.api_base_url)) {
+  if (!provider.api_base_url) {
     throw new HttpError(
       503,
       "AI_PROVIDER_URL_INVALID",
       "Endpoint do provedor invalido",
     );
   }
+  const providerUrl = assertSafeOutboundUrl(provider.api_base_url, {
+    allowedHosts: hostsFromEnv("AI_PROVIDER_ALLOWED_HOSTS", [
+      "api.openai.com", "api.anthropic.com", "openrouter.ai", "ai.gateway.lovable.dev",
+    ]),
+  });
   if (!model) {
     throw new HttpError(
       503,
@@ -748,7 +754,7 @@ async function callProvider(
     );
   }
 
-  const response = await fetchWithRetry(provider.api_base_url, {
+  const response = await fetchWithRetry(providerUrl.href, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

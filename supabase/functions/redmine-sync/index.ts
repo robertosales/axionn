@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { assertSafeOutboundUrl, hostsFromEnv } from '../_shared/outbound-url.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,11 +105,25 @@ serve(async (req: Request) => {
 
     // Verify webhook signature
     const signature = req.headers.get('x-redmine-api-key');
-    if (integration.webhook_secret_encrypted && signature) {
-      // In production, decrypt and verify
-      const isValid = signature === integration.webhook_secret_encrypted; // Placeholder
+    if (!integration.webhook_secret_encrypted) {
+      return new Response(JSON.stringify({ error: 'Webhook authentication is not configured' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    {
+      if (!signature) {
+        return new Response(JSON.stringify({ error: 'Missing webhook signature' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const isValid = signature === integration.webhook_secret_encrypted;
       if (!isValid) {
-        throw new Error('Invalid webhook signature');
+        return new Response(JSON.stringify({ error: 'Invalid webhook signature' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
     }
 
@@ -482,7 +497,9 @@ async function bulkSyncIssues(supabase: any, integration: any, correlationId: st
 
   try {
     // Build Redmine API query
-    const baseUrl = integration.base_url.replace(/\/$/, '');
+    const baseUrl = assertSafeOutboundUrl(integration.base_url, {
+      allowedHosts: hostsFromEnv('REDMINE_ALLOWED_HOSTS'),
+    }).href.replace(/\/$/, '');
     const apiKey = integration.api_key_encrypted; // Would need decryption
     const projectIds = integration.sync_filter_json?.project_ids || [];
 

@@ -11,6 +11,7 @@ import {
   Mail,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { passwordPolicyError } from "@/lib/passwordPolicy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -163,8 +164,9 @@ const ResetPassword = () => {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (password.length < 6) {
-      toast.error("A senha deve ter ao menos 6 caracteres");
+    const policyError = passwordPolicyError(password);
+    if (policyError) {
+      toast.error(policyError);
       return;
     }
     if (password !== confirm) {

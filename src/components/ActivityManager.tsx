@@ -289,7 +289,7 @@ export function ActivityManager() {
                 <Plus className="h-4 w-4" /> Nova Atividade
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-2xl gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-3rem)] sm:p-0">
+            <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[760px] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100dvh-3rem)] sm:p-0">
               <DialogHeader className="border-b bg-muted/30 px-5 py-4 sm:px-6">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -303,8 +303,8 @@ export function ActivityManager() {
                   </div>
                 </div>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
-                <div className="space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+              <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
                 <div>
                   <Label htmlFor="activity-title">Título <span className="text-destructive">*</span></Label>
                   <Input id="activity-title" autoFocus value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }} placeholder="Ex.: Revisar fluxo de autenticação" className="mt-1.5 h-11" aria-invalid={!!errors.title} aria-describedby={errors.title ? "activity-title-error" : undefined} />

@@ -12,6 +12,8 @@ const epicManager = readFileSync(resolve(process.cwd(), "src/components/EpicMana
 const backlogReport = readFileSync(resolve(process.cwd(), "src/components/sala-agil/reports/RelatorioBacklog.tsx"), "utf8");
 const preview = readFileSync(resolve(process.cwd(), "src/components/HUPreviewSheet.tsx"), "utf8");
 const hardening = readFileSync(resolve(process.cwd(), "supabase/migrations/20260804190000_backlog_features_hardening.sql"), "utf8");
+const readiness = readFileSync(resolve(process.cwd(), "supabase/audits/20260804_backlog_features_readiness.sql"), "utf8");
+const indexPage = readFileSync(resolve(process.cwd(), "src/pages/Index.tsx"), "utf8");
 
 describe("backlog feature hierarchy contract", () => {
   it("keeps commercial and backlog features as separate concepts", () => {
@@ -59,5 +61,11 @@ describe("backlog feature hierarchy contract", () => {
     expect(hardening).toContain("backlog_feature_has_user_stories");
     expect(hardening).toContain("prevent_linked_backlog_feature_delete");
     expect(hardening).toContain("revoke all on function public.validate_backlog_hierarchy()");
+  });
+
+  it("provides a first-class feature page and a rollout readiness audit", () => {
+    expect(indexPage).toContain('active === "features"');
+    expect(readiness).toContain("hierarchy_mismatches");
+    expect(readiness).toContain("legacy_epic_stories");
   });
 });

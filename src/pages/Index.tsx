@@ -133,6 +133,7 @@ const VALID_SECTIONS = [
   "calendario",
   "equipe",
   "epicos",
+  "features",
   "atividades",
   "impedimentos",
   "times",
@@ -452,6 +453,14 @@ const Index = () => {
               <SectionGuard permission="manage_roles">
                 <LazySection name="Perfis">
                   <RbacWorkspace />
+                </LazySection>
+              </SectionGuard>
+            )}
+
+            {active === "features" && (
+              <SectionGuard permission="view_backlog">
+                <LazySection name="Features">
+                  <FeatureManager />
                 </LazySection>
               </SectionGuard>
             )}

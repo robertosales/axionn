@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   BarChart3,
+  Boxes,
   Building2,
   Calendar,
   CheckSquare,
@@ -157,6 +158,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
       { id: "board", label: "Board Kanban", icon: Kanban, route: "/sala-agil/board" },
       { id: "backlog", label: "Backlog", icon: ListTodo, route: "/sala-agil/backlog" },
       { id: "epicos", label: "Épicos", icon: Layers, route: "/sala-agil/epicos" },
+      { id: "features", label: "Features", icon: Boxes, route: "/sala-agil/features" },
     ],
   },
   {

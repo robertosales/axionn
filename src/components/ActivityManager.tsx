@@ -20,8 +20,10 @@ import {
   X,
   Copy,
   User,
+  Bug,
+  Info,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getTotalHoursForHU, ActivityType, ACTIVITY_TYPE_LABELS } from "@/types/sprint";
 import { toast } from "sonner";
@@ -287,43 +289,50 @@ export function ActivityManager() {
                 <Plus className="h-4 w-4" /> Nova Atividade
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <ListTodo className="h-5 w-5 text-primary" />
-                  {isCloning ? "Clonar Atividade" : editId ? "Editar Atividade" : "Nova Atividade"}
-                </DialogTitle>
+            <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-2xl gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-3rem)] sm:p-0">
+              <DialogHeader className="border-b bg-muted/30 px-5 py-4 sm:px-6">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    {activityType === "bug" ? <Bug className="h-5 w-5" /> : <ListTodo className="h-5 w-5" />}
+                  </div>
+                  <div>
+                    <DialogTitle>{isCloning ? "Clonar atividade" : editId ? "Editar atividade" : "Nova atividade"}</DialogTitle>
+                    <DialogDescription className="mt-1">
+                      {isCloning ? "Revise os dados da cópia antes de criar a nova atividade." : editId ? "Atualize as informações e salve suas alterações." : "Registre o trabalho, o responsável e o período planejado."}
+                    </DialogDescription>
+                  </div>
+                </div>
               </DialogHeader>
-              {isCloning && (
-                <p className="text-xs text-muted-foreground -mt-2 mb-1">
-                  📋 Ajuste os dados abaixo e salve para criar uma nova atividade baseada na original.
-                </p>
-              )}
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+                <div className="space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
                 <div>
-                  <Label>Título <span className="text-destructive">*</span></Label>
-                  <Input value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }} placeholder="Descrição da atividade" className="mt-1" />
-                  {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
+                  <Label htmlFor="activity-title">Título <span className="text-destructive">*</span></Label>
+                  <Input id="activity-title" autoFocus value={title} onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: "" })); }} placeholder="Ex.: Revisar fluxo de autenticação" className="mt-1.5 h-11" aria-invalid={!!errors.title} aria-describedby={errors.title ? "activity-title-error" : undefined} />
+                  {errors.title && <p id="activity-title-error" role="alert" className="mt-1.5 text-xs font-medium text-destructive">{errors.title}</p>}
                 </div>
                 <div>
-                  <Label>Descrição</Label>
-                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes técnicos, observações..." className="mt-1" />
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="activity-description">Descrição</Label>
+                    <span className="text-xs text-muted-foreground">Opcional</span>
+                  </div>
+                  <Textarea id="activity-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Inclua contexto, critérios ou observações relevantes..." className="mt-1.5 min-h-24 resize-y" />
                 </div>
-                <div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
                   <Label>Tipo <span className="text-destructive">*</span></Label>
                   <Select value={activityType} onValueChange={(v) => setActivityType(v as ActivityType)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1.5 h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Object.entries(ACTIVITY_TYPE_LABELS).map(([k, v]) => (
                         <SelectItem key={k} value={k}>{v.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div>
+                  </div>
+                  <div>
                   <Label>User Story <span className="text-destructive">*</span></Label>
                   <Select value={huId} onValueChange={(v) => { setHuId(v); setErrors((p) => ({ ...p, huId: "" })); }}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a HU" /></SelectTrigger>
+                    <SelectTrigger className="mt-1.5 h-11" aria-invalid={!!errors.huId}><SelectValue placeholder="Selecione a HU" /></SelectTrigger>
                     <SelectContent>
                       {allTeamStories.map((hu) => {
                         const used = getTotalHoursForHU(activities, hu.id);
@@ -335,58 +344,66 @@ export function ActivityManager() {
                       })}
                     </SelectContent>
                   </Select>
-                  {errors.huId && <p className="text-xs text-destructive mt-1">{errors.huId}</p>}
+                  {errors.huId && <p role="alert" className="mt-1.5 text-xs font-medium text-destructive">{errors.huId}</p>}
+                  </div>
                 </div>
-                <div>
+                <div className="border-t pt-5">
                   <Label>Responsável <span className="text-destructive">*</span></Label>
                   <Select value={assigneeId} onValueChange={(v) => { setAssigneeId(v); setErrors((p) => ({ ...p, assigneeId: "" })); }}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
+                    <SelectTrigger className="mt-1.5 h-11" aria-invalid={!!errors.assigneeId}><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
                     <SelectContent>
                       {developerOptions.map((dev) => (
                         <SelectItem key={dev.id} value={dev.id}>{dev.name} — {dev.role}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.assigneeId && <p className="text-xs text-destructive mt-1">{errors.assigneeId}</p>}
+                  {errors.assigneeId && <p role="alert" className="mt-1.5 text-xs font-medium text-destructive">{errors.assigneeId}</p>}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label>Duração estimada <span className="text-destructive">*</span></Label>
-                    <div className="relative mt-1">
+                    <Label htmlFor="activity-duration">Duração estimada <span className="text-destructive">*</span></Label>
+                    <div className="relative mt-1.5">
                       <Input
-                        placeholder="H:MM" value={duration}
+                        id="activity-duration" inputMode="numeric" placeholder="H:MM" value={duration}
                         onChange={(e) => { setDuration(e.target.value); setErrors((p) => ({ ...p, hours: "" })); }}
                         onBlur={() => { if (/^\d+$/.test(duration)) setDuration(`${duration}:00`); }}
-                        className="pr-14"
+                        className="h-11 pr-14 font-medium tabular-nums" aria-invalid={!!errors.hours}
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">h:min</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      Ex: <b>0:15</b> (15min), <b>0:30</b> (30min), <b>1:30</b> (1h30){isLimitado && " · máx 8:00"}
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      Ex.: 0:30 ou 1:30{isLimitado && " · máximo de 8:00"}
                     </p>
-                    {errors.hours && <p className="text-xs text-destructive mt-1">{errors.hours}</p>}
+                    {errors.hours && <p role="alert" className="mt-1.5 text-xs font-medium text-destructive">{errors.hours}</p>}
                   </div>
                   <div>
-                    <Label>Data início <span className="text-destructive">*</span></Label>
-                    <Input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setErrors((p) => ({ ...p, startDate: "" })); }} className="mt-1" />
-                    {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
+                    <Label htmlFor="activity-start-date">Data de início <span className="text-destructive">*</span></Label>
+                    <Input id="activity-start-date" type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setErrors((p) => ({ ...p, startDate: "" })); }} className="mt-1.5 h-11" aria-invalid={!!errors.startDate} />
+                    {errors.startDate && <p role="alert" className="mt-1.5 text-xs font-medium text-destructive">{errors.startDate}</p>}
                   </div>
                 </div>
                 {activityType === "bug" && editId && !isCloning && currentTeamId && (
                   <div className="border-t pt-3 space-y-2">
-                    <Label className="text-xs font-semibold text-destructive flex items-center gap-1.5">🐛 Prints / Evidências do Bug</Label>
+                    <Label className="flex items-center gap-1.5 text-xs font-semibold text-destructive"><Bug className="h-4 w-4" /> Prints / Evidências do bug</Label>
                     <FileUploader entityType="activity" entityId={editId} teamId={currentTeamId} />
                   </div>
                 )}
                 {activityType === "bug" && (!editId || isCloning) && (
-                  <div className="text-xs bg-destructive/10 border border-destructive/30 text-destructive rounded p-2">
-                    🐛 Após salvar, edite a atividade para anexar prints. A HU será movida para a coluna <b>Bug</b>.
+                  <div className="flex gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-xs leading-relaxed text-destructive">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>Após salvar, edite a atividade para anexar evidências. A HU será movida para a coluna <b>Bug</b>.</span>
                   </div>
                 )}
-                <Button type="submit" className="w-full gap-2" disabled={submitting}>
-                  {submitting ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-foreground" /> : isCloning ? <Copy className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                  {isCloning ? "Salvar como Nova Atividade" : editId ? "Salvar Alterações" : "Criar Atividade"}
-                </Button>
+                </div>
+                <DialogFooter className="shrink-0 bg-background px-5 py-4 sm:px-6">
+                  <DialogClose asChild>
+                    <Button type="button" variant="outline" disabled={submitting}>Cancelar</Button>
+                  </DialogClose>
+                  <Button type="submit" className="min-w-36 gap-2" disabled={submitting}>
+                    {submitting ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" /> : isCloning ? <Copy className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {submitting ? "Salvando..." : isCloning ? "Salvar como nova" : editId ? "Salvar alterações" : "Criar atividade"}
+                  </Button>
+                </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>

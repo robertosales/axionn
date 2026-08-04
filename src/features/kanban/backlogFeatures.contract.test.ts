@@ -10,6 +10,8 @@ const kanbanBoard = readFileSync(resolve(process.cwd(), "src/components/KanbanBo
 const kanbanCard = readFileSync(resolve(process.cwd(), "src/components/KanbanCard.tsx"), "utf8");
 const epicManager = readFileSync(resolve(process.cwd(), "src/components/EpicManager.tsx"), "utf8");
 const backlogReport = readFileSync(resolve(process.cwd(), "src/components/sala-agil/reports/RelatorioBacklog.tsx"), "utf8");
+const preview = readFileSync(resolve(process.cwd(), "src/components/HUPreviewSheet.tsx"), "utf8");
+const hardening = readFileSync(resolve(process.cwd(), "supabase/migrations/20260804190000_backlog_features_hardening.sql"), "utf8");
 
 describe("backlog feature hierarchy contract", () => {
   it("keeps commercial and backlog features as separate concepts", () => {
@@ -46,5 +48,16 @@ describe("backlog feature hierarchy contract", () => {
     expect(epicManager).toContain("featureHUs.map");
     expect(backlogReport).toContain('header: "Feature"');
     expect(backlogReport).toContain("Feature: r.feature");
+  });
+
+  it("shows feature identity in story lists and previews", () => {
+    expect(preview).toContain('label="Feature"');
+    expect(preview).toContain("hu.featureId");
+  });
+
+  it("enforces linked-feature deletion and protects internal trigger functions", () => {
+    expect(hardening).toContain("backlog_feature_has_user_stories");
+    expect(hardening).toContain("prevent_linked_backlog_feature_delete");
+    expect(hardening).toContain("revoke all on function public.validate_backlog_hierarchy()");
   });
 });

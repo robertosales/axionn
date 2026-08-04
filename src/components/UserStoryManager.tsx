@@ -451,6 +451,7 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
           const blocked       = hasActiveImpediment(hu);
           const activeImps    = (hu.impediments || []).filter((i) => !i.resolvedAt).length;
           const epic          = hu.epicId ? epics.find((e) => e.id === hu.epicId) : null;
+          const feature       = hu.featureId ? features.find((item) => item.id === hu.featureId) : null;
           const completionPct = huActivities.length > 0
             ? Math.round((closedAct.length / huActivities.length) * 100) : 0;
           const assignee      = hu.assigneeId ? developers.find((d) => d.id === hu.assigneeId) : null;
@@ -477,6 +478,12 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
                         style={{ backgroundColor: epic.color + "22", color: epic.color }}>
                         <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ backgroundColor: epic.color }} />
                         {epic.name}
+                      </span>
+                    )}
+                    {feature && (
+                      <span className="flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${feature.color}12`, borderColor: `${feature.color}55`, color: feature.color }}>
+                        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: feature.color }} />
+                        {feature.name}
                       </span>
                     )}
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${pInfo.color} shrink-0`}>

@@ -18,6 +18,7 @@ import {
   Tag,
   Calendar,
   Layers,
+  Boxes,
   ListChecks,
   Pencil,
   Target,
@@ -75,7 +76,7 @@ interface Props {
 }
 
 export function HUPreviewSheet({ hu, open, onClose, onEdit }: Props) {
-  const { activities, developers, workflowColumns, epics, sprints } =
+  const { activities, developers, workflowColumns, epics, features, sprints } =
     useSprint() as any;
 
   if (!hu) return null;
@@ -89,6 +90,7 @@ export function HUPreviewSheet({ hu, open, onClose, onEdit }: Props) {
 
   const assignee  = hu.assigneeId ? developers.find((d: any) => d.id === hu.assigneeId) : null;
   const epic      = hu.epicId     ? epics.find((e: any) => e.id === hu.epicId)          : null;
+  const feature   = hu.featureId  ? features.find((f: any) => f.id === hu.featureId)    : null;
   const statusCol = workflowColumns.find((c: any) => c.key === hu.status);
   const sprint    = hu.sprintId   ? sprints?.find((s: any) => s.id === hu.sprintId)     : null;
   const initials  = assignee?.name ? getInitials(assignee.name) : "?";
@@ -220,6 +222,19 @@ export function HUPreviewSheet({ hu, open, onClose, onEdit }: Props) {
                     <span className="flex items-center gap-1.5 min-w-0">
                       <span className="h-2 w-2 rounded-full shrink-0" style={{ background: epic.color }} />
                       <span className="truncate">{epic.name}</span>
+                    </span>
+                  }
+                />
+              )}
+
+              {feature && (
+                <MetaRow
+                  icon={<Boxes className="h-3 w-3" />}
+                  label="Feature"
+                  value={
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ background: feature.color }} />
+                      <span className="truncate">{feature.name}</span>
                     </span>
                   }
                 />

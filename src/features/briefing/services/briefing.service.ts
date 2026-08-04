@@ -459,7 +459,28 @@ export async function applyBriefingSuggestion(suggestionId: string) {
   const { data, error } = await supabase.rpc("apply_ai_briefing_suggestion", {
     p_suggestion_id: suggestionId,
   });
-  assertNoError(error);
+  if (error) {
+    const friendly: Record<string, string> = {
+      briefing_apply_sprint_required:
+        "A equipe não possui uma sprint aberta. Crie ou ative uma sprint antes de aplicar a sugestão.",
+      briefing_apply_team_required:
+        "Este briefing não está vinculado a uma equipe.",
+      briefing_suggestion_requires_approval:
+        "Aprove a sugestão antes de aplicá-la.",
+      briefing_suggestion_not_applicable:
+        "Este tipo de sugestão não pode ser aplicado ao backlog.",
+      briefing_apply_access_denied: "Você não tem acesso a este briefing.",
+      briefing_apply_team_access_denied:
+        "Você não faz parte da equipe deste briefing.",
+      briefing_apply_entitlement_required:
+        "Seu plano não inclui a aplicação automática de sugestões.",
+      briefing_suggestion_not_found: "Sugestão não encontrada.",
+    };
+    const key = Object.keys(friendly).find((code) =>
+      error.message.includes(code),
+    );
+    throw new Error(key ? friendly[key] : error.message);
+  }
   const result = Array.isArray(data) ? data[0] : data;
   if (!result) throw new Error("A aplicação não retornou o registro criado.");
   return result as {

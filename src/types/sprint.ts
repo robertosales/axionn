@@ -168,6 +168,16 @@ export interface Epic {
   updatedAt?: string | null;
 }
 
+export interface BacklogFeature {
+  id: string;
+  epicId: string;
+  name: string;
+  color: string;
+  description?: string | null;
+  createdAt?: string;
+  updatedAt?: string | null;
+}
+
 // ── Developer ─────────────────────────────────────────────────────────────────
 
 export interface Developer {
@@ -213,6 +223,7 @@ export interface UserStory {
   status: KanbanStatus;
   sprintId: string | null;
   epicId?: string | null;
+  featureId?: string | null;
   assigneeId?: string | null;
   sizeReference?: SizeReference | null;
   storyPoints?: number | null;

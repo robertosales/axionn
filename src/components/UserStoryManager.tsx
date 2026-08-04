@@ -51,7 +51,7 @@ interface UserStoryManagerProps {
 export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStoryManagerProps) {
   const {
     userStories, addUserStory, removeUserStory, updateUserStory,
-    activities, activeSprint, sprints, epics, workflowColumns,
+    activities, activeSprint, sprints, epics, features, workflowColumns,
     customFields, developers, loading,
   } = useSprint();
   const { currentTeamId } = useAuth();
@@ -64,6 +64,7 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
   const [selectedSize, setSelectedSize]   = useState<string | null>(null);
   const [priority, setPriority]           = useState<"baixa"|"media"|"alta"|"critica">("media");
   const [epicId, setEpicId]               = useState<string>("");
+  const [featureId, setFeatureId]         = useState<string>("");
   const [startDate, setStartDate]         = useState("");
   const [endDate, setEndDate]             = useState("");
   const [functionPoints, setFunctionPoints] = useState<string>("");
@@ -85,6 +86,7 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter]     = useState("all");
   const [epicFilter, setEpicFilter]         = useState("all");
+  const [featureFilter, setFeatureFilter]   = useState("all");
   const [localSprintId, setLocalSprintId]   = useState<string | null>(null);
   const effectiveSprintId = resolveBacklogSprintId(selectedSprintId ?? localSprintId, activeSprint?.id);
 
@@ -92,11 +94,12 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
     searchFilter !== "" ||
     priorityFilter !== "all" ||
     statusFilter !== "all" ||
-    epicFilter !== "all";
+    epicFilter !== "all" ||
+    featureFilter !== "all";
 
   const clearFilters = () => {
     setSearchFilter(""); setPriorityFilter("all");
-    setStatusFilter("all"); setEpicFilter("all");
+    setStatusFilter("all"); setEpicFilter("all"); setFeatureFilter("all");
   };
 
   const filteredStories = useMemo(() => {
@@ -108,15 +111,16 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
     if (priorityFilter !== "all") stories = stories.filter((hu) => hu.priority === priorityFilter);
     if (statusFilter !== "all")   stories = stories.filter((hu) => hu.status === statusFilter);
     if (epicFilter !== "all")     stories = stories.filter((hu) => hu.epicId === epicFilter);
+    if (featureFilter !== "all")  stories = stories.filter((hu) => hu.featureId === featureFilter);
     return stories;
-  }, [userStories, effectiveSprintId, debouncedSearch, priorityFilter, statusFilter, epicFilter]);
+  }, [userStories, effectiveSprintId, debouncedSearch, priorityFilter, statusFilter, epicFilter, featureFilter]);
 
   const { paginatedItems: sprintStories, currentPage, setCurrentPage, totalItems, pageSize } =
     usePagination(filteredStories, { pageSize: 10 });
 
   const resetForm = () => {
     setTitle(""); setContent(""); setSelectedSize(null);
-    setPriority("media"); setEpicId(""); setSprintId(activeSprint?.id || "");
+    setPriority("media"); setEpicId(""); setFeatureId(""); setSprintId(activeSprint?.id || "");
     setStatusField(workflowColumns[0]?.key || ""); setStartDate(""); setEndDate("");
     setFunctionPoints(""); setAssigneeId(""); setCustomFieldValues({}); setErrors({});
   };
@@ -150,7 +154,7 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
         acceptanceCriteria: parsedContent.acceptanceCriteria || null,
         ...sizeData, priority,
         sprintId: sprintId === "" ? null : sprintId,
-        epicId: epicId || null, customFields: customFieldValues,
+        epicId: epicId || null, featureId: featureId || null, customFields: customFieldValues,
         startDate: startDate || undefined, endDate: endDate || undefined,
         functionPoints: fp, assigneeId: assigneeId || null,
       } as any);
@@ -242,7 +246,7 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
                 </div>
                 <div>
                   <Label className="text-xs">Épico</Label>
-                  <Select value={epicId || "none"} onValueChange={(v) => setEpicId(v === "none" ? "" : v)}>
+                  <Select value={epicId || "none"} onValueChange={(v) => { const next = v === "none" ? "" : v; setEpicId(next); if (!features.some((f) => f.id === featureId && f.epicId === next)) setFeatureId(""); }}>
                     <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder="Sem épico" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sem épico</SelectItem>
@@ -251,6 +255,16 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
                           <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: ep.color }} />{ep.name}</div>
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Feature</Label>
+                  <Select value={featureId || "none"} onValueChange={(v) => setFeatureId(v === "none" ? "" : v)} disabled={!epicId}>
+                    <SelectTrigger className="mt-1 h-9 text-xs"><SelectValue placeholder={epicId ? "Sem feature" : "Selecione um épico"} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem feature</SelectItem>
+                      {features.filter((feature) => feature.epicId === epicId).map((feature) => <SelectItem key={feature.id} value={feature.id}>{feature.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -397,6 +411,15 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
               <SelectContent>
                 <SelectItem value="all">Todos épicos</SelectItem>
                 {epics.map((ep) => <SelectItem key={ep.id} value={ep.id}>{ep.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          {features.length > 0 && (
+            <Select value={featureFilter} onValueChange={(v) => { setFeatureFilter(v); setCurrentPage(1); }}>
+              <SelectTrigger className="h-8 w-[140px] text-xs bg-background"><SelectValue placeholder="Feature" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas features</SelectItem>
+                {features.filter((feature) => epicFilter === "all" || feature.epicId === epicFilter).map((feature) => <SelectItem key={feature.id} value={feature.id}>{feature.name}</SelectItem>)}
               </SelectContent>
             </Select>
           )}

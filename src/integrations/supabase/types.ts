@@ -5667,6 +5667,54 @@ export type Database = {
           },
         ]
       }
+      backlog_features: {
+        Row: {
+          color: string
+          created_at: string
+          description: string
+          epic_id: string
+          id: string
+          name: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string
+          epic_id: string
+          id?: string
+          name: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string
+          epic_id?: string
+          id?: string
+          name?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backlog_features_epic_id_fkey"
+            columns: ["epic_id"]
+            isOneToOne: false
+            referencedRelation: "epics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backlog_features_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_app_user_mappings: {
         Row: {
           axionn_user_id: string | null
@@ -15844,6 +15892,7 @@ export type Database = {
           description: string | null
           end_date: string | null
           epic_id: string | null
+          feature_id: string | null
           estimated_hours: number | null
           external_reference: string | null
           function_points: number | null
@@ -15884,6 +15933,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           epic_id?: string | null
+          feature_id?: string | null
           estimated_hours?: number | null
           external_reference?: string | null
           function_points?: number | null
@@ -15924,6 +15974,7 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           epic_id?: string | null
+          feature_id?: string | null
           estimated_hours?: number | null
           external_reference?: string | null
           function_points?: number | null

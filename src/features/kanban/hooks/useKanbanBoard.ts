@@ -50,6 +50,9 @@ export interface KanbanCard {
   assignee_name?:  string;
   assignee_avatar?: string | null;
   epic_id:         string | null;
+  feature_id:      string | null;
+  feature_name?:   string;
+  feature_color?:  string;
   epic_name?:      string;
   epic_color?:     string;
   sprint_id:       string | null;
@@ -62,6 +65,7 @@ export interface KanbanFilters {
   assigneeId: string;
   priority:   string;
   epicId:     string;
+  featureId:  string;
   sprintId:   string;
   swimlane:   boolean;
 }
@@ -106,6 +110,12 @@ async function fetchEpics(teamId: string) {
   return (data ?? []) as { id: string; name: string; color: string }[];
 }
 
+async function fetchFeatures(teamId: string) {
+  const { data, error } = await supabase.from("backlog_features").select("id, epic_id, name, color").eq("team_id", teamId);
+  if (error) throw error;
+  return data ?? [];
+}
+
 async function fetchSprints(teamId: string) {
   const { data, error } = await supabase
     .from("sprints")
@@ -125,17 +135,22 @@ function enrichCards(
   raw:   any[],
   devs:  { id: string; name: string; avatar: string | null }[],
   epics: { id: string; name: string; color: string }[],
+  features: { id: string; epic_id: string; name: string; color: string }[],
 ): KanbanCard[] {
   const devMap:  Record<string, { name: string; avatar: string | null }> = {};
   const epicMap: Record<string, { name: string; color: string }>         = {};
+  const featureMap: Record<string, { name: string; color: string }>      = {};
   devs.forEach(d  => { devMap[d.id]  = { name: d.name,  avatar: d.avatar }; });
   epics.forEach(e => { epicMap[e.id] = { name: e.name,  color:  e.color  }; });
+  features.forEach(f => { featureMap[f.id] = { name: f.name, color: f.color }; });
   return raw.map(h => ({
     ...h,
     assignee_name:   h.assignee_id ? devMap[h.assignee_id]?.name   : undefined,
     assignee_avatar: h.assignee_id ? devMap[h.assignee_id]?.avatar  : undefined,
     epic_name:       h.epic_id     ? epicMap[h.epic_id]?.name       : undefined,
     epic_color:      h.epic_id     ? epicMap[h.epic_id]?.color      : undefined,
+    feature_name:    h.feature_id  ? featureMap[h.feature_id]?.name : undefined,
+    feature_color:   h.feature_id  ? featureMap[h.feature_id]?.color : undefined,
     is_blocked:      BLOCKED_STATUSES.includes(h.status),
   })) as KanbanCard[];
 }
@@ -149,6 +164,7 @@ async function fetchCards(
   sprintFilter: string,
   devs:  { id: string; name: string; avatar: string | null }[],
   epics: { id: string; name: string; color: string }[],
+  features: { id: string; epic_id: string; name: string; color: string }[],
 ): Promise<KanbanCard[]> {
   const activeSprint   = sprints.find(s => s.is_active);
   const targetSprintId =
@@ -158,14 +174,14 @@ async function fetchCards(
     .from("user_stories")
     .select(
       "id, code, title, status, priority, story_points, estimated_hours, " +
-      "assignee_id, epic_id, sprint_id, position, team_id"
+      "assignee_id, epic_id, feature_id, sprint_id, position, team_id"
     )
     .eq("team_id", teamId)
     .eq("sprint_id", targetSprintId!)
     .order("position")
     .limit(200);
   if (error) throw error;
-  return enrichCards(data ?? [], devs, epics);
+  return enrichCards(data ?? [], devs, epics, features);
 }
 
 /**
@@ -183,12 +199,13 @@ async function fetchCardsPage(
   cursor: string | null,
   devs:   { id: string; name: string; avatar: string | null }[],
   epics:  { id: string; name: string; color: string }[],
+  features: { id: string; epic_id: string; name: string; color: string }[],
 ): Promise<CardsPage> {
   let q = supabase
     .from("user_stories")
     .select(
       "id, code, title, status, priority, story_points, estimated_hours, " +
-      "assignee_id, epic_id, sprint_id, position, team_id"
+      "assignee_id, epic_id, feature_id, sprint_id, position, team_id"
     )
     .eq("team_id", teamId)
     .order("position", { ascending: true })
@@ -206,7 +223,7 @@ async function fetchCardsPage(
   if (error) throw error;
 
   const raw  = data ?? [];
-  const items = enrichCards(raw, devs, epics);
+  const items = enrichCards(raw, devs, epics, features);
   const last  = raw[raw.length - 1] as any;
   const nextCursor = items.length < KANBAN_PAGE_SIZE
     ? null
@@ -223,7 +240,7 @@ export function useKanbanBoard() {
 
   const [dragging,  setDraggingState] = useState<string | null>(null);
   const [filters,   setFilters]       = useState<KanbanFilters>({
-    assigneeId: "all", priority: "all", epicId: "all", sprintId: "active", swimlane: false,
+    assigneeId: "all", priority: "all", epicId: "all", featureId: "all", sprintId: "active", swimlane: false,
   });
 
   const draggingRef    = useRef(false);
@@ -250,6 +267,10 @@ export function useKanbanBoard() {
     staleTime: STALE.REFERENCE,
   });
 
+  const { data: features = [] } = useQuery({
+    queryKey: [...KEYS.kanban.all(teamId), "features"], queryFn: () => fetchFeatures(teamId), enabled: !!teamId, staleTime: STALE.REFERENCE,
+  });
+
   const { data: sprints = [] } = useQuery({
     queryKey:  KEYS.sprints.all(teamId),
     queryFn:   () => fetchSprints(teamId),
@@ -270,7 +291,7 @@ export function useKanbanBoard() {
   } = useInfiniteQuery({
     queryKey:         infiniteKey,
     queryFn:          ({ pageParam }) =>
-      fetchCardsPage(teamId, pageParam as string | null, devs, epics),
+      fetchCardsPage(teamId, pageParam as string | null, devs, epics, features),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled:          !!teamId && isAllSprints && devs.length > 0,
@@ -281,7 +302,7 @@ export function useKanbanBoard() {
   const boardKey = KEYS.kanban.board(teamId, filters.sprintId);
   const { data: boardCards = [], isLoading: loadingBoard } = useQuery({
     queryKey:  boardKey,
-    queryFn:   () => fetchCards(teamId, sprints, filters.sprintId, devs, epics),
+    queryFn:   () => fetchCards(teamId, sprints, filters.sprintId, devs, epics, features),
     enabled:   !!teamId && !isAllSprints && sprints.length > 0 && devs.length > 0,
     staleTime: STALE.REALTIME,
   });
@@ -400,6 +421,7 @@ export function useKanbanBoard() {
       if (filters.assigneeId !== "all" && c.assignee_id !== filters.assigneeId) return false;
       if (filters.priority   !== "all" && c.priority    !== filters.priority)   return false;
       if (filters.epicId     !== "all" && c.epic_id     !== filters.epicId)     return false;
+      if (filters.featureId  !== "all" && c.feature_id  !== filters.featureId)  return false;
       if (filters.sprintId === "active") {
         if (!activeSprint || c.sprint_id !== activeSprint.id)                   return false;
       } else if (filters.sprintId !== "all") {
@@ -432,6 +454,7 @@ export function useKanbanBoard() {
     filteredCards,
     devs,
     epics,
+    features,
     sprints,
     loading,
     loadingMore,

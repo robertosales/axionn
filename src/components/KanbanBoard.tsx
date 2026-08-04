@@ -48,7 +48,7 @@ function loadFiltros(): KanbanFiltros | null {
   try {
     const raw = sessionStorage.getItem(SS_FILTROS_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as KanbanFiltros;
+    return { ...KANBAN_FILTROS_DEFAULT, ...(JSON.parse(raw) as Partial<KanbanFiltros>) };
   } catch { return null; }
 }
 
@@ -194,6 +194,8 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     userStories,
     workflowColumns,
     developers,
+    epics,
+    features,
     sprints,
     updateUserStoryStatus,
     reorderUserStories,
@@ -354,6 +356,10 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
       items = items.filter((h: any) => h.priority === filtros.prioridade);
     if (filtros.status !== "all")
       items = items.filter((h: any) => h.status === filtros.status);
+    if (filtros.epicId !== "all")
+      items = items.filter((h: any) => h.epicId === filtros.epicId);
+    if (filtros.featureId !== "all")
+      items = items.filter((h: any) => h.featureId === filtros.featureId);
     return [...items].sort(
       (a: any, b: any) =>
         (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
@@ -552,6 +558,8 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
               developers={developers ?? []}
               workflowColumns={workflowColumns ?? []}
               sprints={sprints ?? []}
+              epics={epics ?? []}
+              features={features ?? []}
               totalFiltrado={sprintStories.length}
               currentUserId={currentUserId}
             />

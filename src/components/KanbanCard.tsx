@@ -204,6 +204,13 @@ const EpicBadge = memo(function EpicBadge({ epicId }: { epicId: string }) {
   );
 });
 
+const FeatureBadge = memo(function FeatureBadge({ featureId }: { featureId: string }) {
+  const { features } = useSprint();
+  const feature = useMemo(() => features.find((item) => item.id === featureId), [features, featureId]);
+  if (!feature) return null;
+  return <span className="inline-flex max-w-full items-center gap-1 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-medium" style={{ color: feature.color, borderColor: `${feature.color}55`, backgroundColor: `${feature.color}12` }}><span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: feature.color }} /><span className="truncate">{feature.name}</span></span>;
+});
+
 // ─── ActivityProgressBar ───────────────────────────────────────────────────────
 
 const ActivityProgressBar = memo(function ActivityProgressBar({
@@ -406,6 +413,7 @@ function huPropsAreEqual(prev: KanbanCardProps, next: KanbanCardProps) {
     p.sizeReference  === n.sizeReference  &&
     p.status         === n.status         &&
     p.epicId         === n.epicId         &&
+    p.featureId      === n.featureId      &&
     p.assigneeId     === n.assigneeId     &&
     JSON.stringify(p.tags) === JSON.stringify(n.tags) &&
     prev.columnKey         === next.columnKey         &&
@@ -594,7 +602,7 @@ export const KanbanCard = memo(function KanbanCard({
         )}
 
         {/* ── Epic / Categoria ── */}
-        {hu.epicId && <EpicBadge epicId={hu.epicId} />}
+        {(hu.epicId || hu.featureId) && <div className="flex flex-wrap items-center gap-1.5">{hu.epicId && <EpicBadge epicId={hu.epicId} />}{hu.featureId && <FeatureBadge featureId={hu.featureId} />}</div>}
 
         {/* ── Barra de progresso de atividades ── */}
         <ActivityProgressBar activities={activities} />

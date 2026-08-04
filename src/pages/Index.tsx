@@ -30,6 +30,7 @@ const MetricsDashboard = lazy(() =>
   import("@/components/MetricsDashboard").then((m) => ({ default: m.MetricsDashboard })),
 );
 const EpicManager = lazy(() => import("@/components/EpicManager").then((m) => ({ default: m.EpicManager })));
+const FeatureManager = lazy(() => import("@/components/FeatureManager").then((m) => ({ default: m.FeatureManager })));
 const WorkflowManager = lazy(() =>
   import("@/components/WorkflowManager").then((m) => ({ default: m.WorkflowManager })),
 );
@@ -375,7 +376,10 @@ const Index = () => {
             {active === "epicos" && (
               <SectionGuard permission="view_backlog">
                 <LazySection name="Épicos">
-                  <EpicManager />
+                  <div className="space-y-8">
+                    <EpicManager />
+                    <FeatureManager />
+                  </div>
                 </LazySection>
               </SectionGuard>
             )}

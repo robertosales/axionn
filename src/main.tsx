@@ -14,6 +14,8 @@
 
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { AppErrorBoundary } from "./components/system/AppErrorBoundary";
+import { installChunkRecovery } from "./lib/chunkRecovery";
 import "./index.css";
 
 // ── Pilar 1 & 3 ─ Monitoring bootstrap ───────────────────────────────────────
@@ -23,6 +25,7 @@ let stopMonitoring = () => {};
 let monitoringDisposed = false;
 const stopConnMonitor   = initConnectionMonitor();
 const stopErrorHandlers = initGlobalErrorHandlers();
+const stopChunkRecovery = installChunkRecovery();
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
@@ -30,6 +33,7 @@ if (import.meta.hot) {
     stopMonitoring();
     stopConnMonitor();
     stopErrorHandlers();
+    stopChunkRecovery();
   });
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,7 +48,11 @@ if (import.meta.hot) {
  * Mantemos StrictMode ativo apenas em desenvolvimento (import.meta.env.DEV).
  * Em produção o render é direto, sem dupla montagem.
  */
-const app = <App />;
+const app = (
+  <AppErrorBoundary>
+    <App />
+  </AppErrorBoundary>
+);
 
 if (import.meta.env.DEV) {
   const { StrictMode } = await import("react");

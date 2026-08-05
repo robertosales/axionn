@@ -10453,7 +10453,9 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          invited_by: string | null
           is_active: boolean
+          joined_at: string
           org_id: string
           role: Database["public"]["Enums"]["org_member_role"]
           updated_at: string
@@ -10463,7 +10465,9 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          invited_by?: string | null
           is_active?: boolean
+          joined_at?: string
           org_id: string
           role?: Database["public"]["Enums"]["org_member_role"]
           updated_at?: string
@@ -10473,7 +10477,9 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          invited_by?: string | null
           is_active?: boolean
+          joined_at?: string
           org_id?: string
           role?: Database["public"]["Enums"]["org_member_role"]
           updated_at?: string

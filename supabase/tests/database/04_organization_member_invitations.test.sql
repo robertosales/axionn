@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(30);
+select plan(34);
 
 create or replace function pg_temp.authenticate_as(p_user_id uuid)
 returns void
@@ -90,6 +90,8 @@ select has_table('public', 'organization_invitations', 'organization invitations
 select has_table('public', 'organization_member_modules', 'organization member modules table exists');
 select has_table('public', 'organization_membership_audit_log', 'organization membership audit table exists');
 select has_column('public', 'organization_members', 'is_active', 'organization memberships support soft deactivation');
+select has_column('public', 'organization_members', 'invited_by', 'organization memberships retain their inviter');
+select has_column('public', 'organization_members', 'joined_at', 'organization memberships retain their join timestamp');
 
 select is(
   (select normalized_email from invite_fixture),

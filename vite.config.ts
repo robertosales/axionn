@@ -30,6 +30,11 @@ export default defineConfig(({ mode }) => {
     env.VITE_SUPABASE_ANON_KEY ||
     FALLBACK_SUPABASE_PUBLISHABLE_KEY;
 
+  // Enforcement de MFA no Backoffice: em produção o padrão é obrigatório,
+  // salvo se a variável for explicitamente definida (rollback = "false").
+  const backofficeMfaRequired =
+    env.VITE_BACKOFFICE_MFA_REQUIRED ?? (mode === "production" ? "true" : "false");
+
   return {
   server: {
     host: "::",
@@ -50,6 +55,7 @@ export default defineConfig(({ mode }) => {
     "import.meta.env.VITE_APP_BUILD_DATE": JSON.stringify(buildDate),
     "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
     "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabaseKey),
+    "import.meta.env.VITE_BACKOFFICE_MFA_REQUIRED": JSON.stringify(backofficeMfaRequired),
   },
   };
 });

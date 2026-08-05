@@ -27,6 +27,7 @@ import { useAppResilience } from "@/hooks/useAppResilience";
 import { supabase } from "@/integrations/supabase/client";
 import { BackofficeGuard } from "@/backoffice/guards/BackofficeGuard";
 import { BackofficeLayout } from "@/backoffice/components/BackofficeLayout";
+import { BackofficeMfaGuard } from "@/features/security/components/BackofficeMfaGuard";
 import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
 import { AppShell } from "@/components/layout/AppShell";
 import { QualityAccessGuard } from "@/features/quality/components/QualityAccessGuard";
@@ -45,6 +46,7 @@ const QualityTestPlansPage = lazy(() => import("./features/quality/pages/TestPla
 const QualityTestRunsPage = lazy(() => import("./features/quality/pages/TestRunsPage"));
 const QualityTestRunPage = lazy(() => import("./features/quality/pages/TestRunPage"));
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange.tsx"));
+const MfaSecurityPage = lazy(() => import("./features/security/pages/MfaSecurityPage"));
 const AcceptOrganizationInvitation = lazy(
   () => import("./pages/AcceptOrganizationInvitation.tsx"),
 );
@@ -449,7 +451,9 @@ function BackofficeRoute({
   return (
     <AuthenticatedRoute>
       <BackofficeGuard requiredRoles={requiredRoles}>
-        <BackofficeLayout>{children}</BackofficeLayout>
+        <BackofficeMfaGuard>
+          <BackofficeLayout>{children}</BackofficeLayout>
+        </BackofficeMfaGuard>
       </BackofficeGuard>
     </AuthenticatedRoute>
   );
@@ -467,6 +471,7 @@ function AppRoutes() {
           <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/security/mfa" element={<AuthenticatedRoute><MfaSecurityPage /></AuthenticatedRoute>} />
           <Route path="/accept-invitation" element={<AcceptOrganizationInvitation />} />
           <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
           <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />

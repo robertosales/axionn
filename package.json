@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:public": "playwright test e2e/public-shell-smoke.spec.ts",
     "test:e2e:okr": "playwright test e2e/okr-cycle-closure.spec.ts",
     "test:e2e:rbac": "playwright test e2e/rbac-governance-smoke.spec.ts",
     "test:watch": "vitest",

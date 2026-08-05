@@ -17,15 +17,16 @@ import App from "./App";
 import "./index.css";
 
 // ── Pilar 1 & 3 ─ Monitoring bootstrap ───────────────────────────────────────
-import { initMonitoring } from "./lib/monitoring";
 import { initConnectionMonitor, initGlobalErrorHandlers } from "./lib/error-interceptor";
 
-const stopMonitoring    = initMonitoring();
+let stopMonitoring = () => {};
+let monitoringDisposed = false;
 const stopConnMonitor   = initConnectionMonitor();
 const stopErrorHandlers = initGlobalErrorHandlers();
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    monitoringDisposed = true;
     stopMonitoring();
     stopConnMonitor();
     stopErrorHandlers();
@@ -53,3 +54,14 @@ if (import.meta.env.DEV) {
 } else {
   createRoot(document.getElementById("root")!).render(app);
 }
+
+// Observabilidade não bloqueia a primeira renderização. O chunk do Sentry,
+// tracing e replay é carregado em paralelo somente após o bootstrap visual.
+void import("./lib/monitoring")
+  .then(({ initMonitoring }) => {
+    if (monitoringDisposed) return;
+    stopMonitoring = initMonitoring();
+  })
+  .catch((error: unknown) => {
+    console.warn("[Monitoring] Não foi possível inicializar a observabilidade.", error);
+  });

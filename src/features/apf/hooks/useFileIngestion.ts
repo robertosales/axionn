@@ -1,11 +1,5 @@
 import { useState, useCallback } from "react";
-import * as XLSX from "xlsx";
-import mammoth from "mammoth";
-import * as pdfjsLib from "pdfjs-dist";
 import { toast } from "sonner";
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 export interface IngestedFile {
   name: string;
@@ -35,10 +29,12 @@ export function useFileIngestion() {
       if (type === "md" || type === "txt") {
         content = await file.text();
       } else if (type === "docx") {
+        const { default: mammoth } = await import("mammoth");
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
         content = result.value;
       } else if (type === "xlsx" || type === "xls") {
+        const XLSX = await import("xlsx");
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer);
 
@@ -68,6 +64,11 @@ export function useFileIngestion() {
         });
         content = sheetMarkdown;
       } else if (type === "pdf") {
+        const pdfjsLib = await import("pdfjs-dist");
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/build/pdf.worker.min.mjs",
+          import.meta.url,
+        ).toString();
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;

@@ -1,6 +1,3 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 import type { ReportPayload } from "../hooks/useReportBuilder";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -13,7 +10,11 @@ function hrs(v: number) { return `${v}h`; }
 function sign(v: number) { return (v > 0 ? "+" : "") + v + "h"; }
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
-export function exportToPDF(payload: ReportPayload) {
+export async function exportToPDF(payload: ReportPayload) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const { config, kpis, sprints, comparativo } = payload;
   const geradoEm = new Date().toLocaleString("pt-BR");
@@ -115,7 +116,8 @@ export function exportToPDF(payload: ReportPayload) {
 }
 
 // ── Excel ─────────────────────────────────────────────────────────────────────
-export function exportToExcel(payload: ReportPayload) {
+export async function exportToExcel(payload: ReportPayload) {
+  const XLSX = await import("xlsx");
   const { config, kpis, sprints, comparativo } = payload;
   const wb = XLSX.utils.book_new();
 

@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 /**
  * Lê uma planilha de Baseline APF e devolve uma tabela Markdown enxuta
  * com apenas as colunas estritamente necessárias para a IA.
@@ -7,6 +5,7 @@ import * as XLSX from "xlsx";
  */
 export async function baselineFileToMarkdown(file: File): Promise<string | null> {
   try {
+    const XLSX = await import("xlsx");
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
 

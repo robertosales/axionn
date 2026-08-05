@@ -6,6 +6,11 @@ const migration = readFileSync(
   "utf8",
 ).toLowerCase();
 
+const compatibilityMigration = readFileSync(
+  "supabase/migrations/20260804204000_quality_cases_entitlement_compatibility.sql",
+  "utf8",
+).toLowerCase();
+
 describe("quality commercial entitlement contract", () => {
   it("uses the granular catalog capability as the module gate", () => {
     expect(migration).toContain(
@@ -21,6 +26,16 @@ describe("quality commercial entitlement contract", () => {
       "public.get_effective_organization_entitlements(p_org_id)",
     );
     expect(migration).toContain("and entitlement.enabled");
+  });
+
+  it("seeds the granular Quality gate into the catalog used by the resolver", () => {
+    expect(compatibilityMigration).toContain(
+      "insert into public.saas_plan_entitlements",
+    );
+    expect(compatibilityMigration).toContain("'quality.cases.view'");
+    expect(compatibilityMigration).toContain(
+      "delete from public.organization_entitlement_cache",
+    );
   });
 
   it("prevents authenticated users from probing another tenant", () => {

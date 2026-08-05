@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ export function FileUploader({ entityType, entityId, teamId }: FileUploaderProps
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  const fetchAttachments = async () => {
+  const fetchAttachments = useCallback(async () => {
     const { data } = await supabase
       .from("attachments")
       .select("*")
@@ -33,11 +33,11 @@ export function FileUploader({ entityType, entityId, teamId }: FileUploaderProps
       .eq("entity_id", entityId)
       .order("created_at", { ascending: false });
     setAttachments((data as any[]) || []);
-  };
+  }, [entityId, entityType]);
 
   useEffect(() => {
     if (entityId) fetchAttachments();
-  }, [entityId]);
+  }, [entityId, fetchAttachments]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

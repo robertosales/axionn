@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   fetchActivityComments,
   fetchTeamMembersForMentions,
@@ -41,20 +41,20 @@ export function ActivityComments({ activityId, teamId }: { activityId: string; t
   const [allMembers, setAllMembers] = useState<MentionSuggestion[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     const list = await fetchActivityComments(activityId);
     setComments(list);
-  };
+  }, [activityId]);
 
-  const fetchTeamMembers = async () => {
+  const fetchTeamMembers = useCallback(async () => {
     const members = await fetchTeamMembersForMentions(teamId);
     setAllMembers(members);
-  };
+  }, [teamId]);
 
   useEffect(() => {
     fetchComments();
     fetchTeamMembers();
-  }, [activityId]);
+  }, [fetchComments, fetchTeamMembers]);
 
   const handleContentChange = (value: string) => {
     setContent(value);

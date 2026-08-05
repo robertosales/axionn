@@ -7,7 +7,9 @@
     // CRÍTICO: precisa das duas linhas abaixo
     document.documentElement.classList.remove("dark", "light");
     if (theme === "dark") document.documentElement.classList.add("dark");
-  } catch {}
+  } catch {
+    // Falha de storage não deve impedir a inicialização da aplicação.
+  }
 })();
 
 import { createRoot } from "react-dom/client";

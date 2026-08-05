@@ -175,10 +175,12 @@ const ResetPassword = () => {
     }
 
     setLoading(true);
-    const { allowed, retryAfter } = await checkAuthRateLimit("reset_password");
+    const { allowed, retryAfter, unavailable } = await checkAuthRateLimit("reset_password");
     if (!allowed) {
       toast.error(
-        retryAfter
+        unavailable
+          ? "A proteção de acesso está temporariamente indisponível. Tente novamente em instantes."
+          : retryAfter
           ? `Muitas tentativas de redefinição. Aguarde ${retryAfter}s.`
           : "Muitas tentativas. Tente novamente em instantes.",
       );
@@ -233,10 +235,12 @@ const ResetPassword = () => {
     }
 
     setLoading(true);
-    const { allowed, retryAfter } = await checkAuthRateLimit("reset_password");
+    const { allowed, retryAfter, unavailable } = await checkAuthRateLimit("reset_password", normalizedEmail);
     if (!allowed) {
       toast.error(
-        retryAfter
+        unavailable
+          ? "A proteção de acesso está temporariamente indisponível. Tente novamente em instantes."
+          : retryAfter
           ? `Muitas solicitações. Aguarde ${retryAfter}s para tentar novamente.`
           : "Muitas solicitações. Tente novamente em instantes.",
       );

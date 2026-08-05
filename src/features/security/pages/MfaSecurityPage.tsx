@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { checkAuthRateLimit } from "@/lib/authRateLimiter";
 
 type Enrollment = { factorId: string; qrCode: string; secret: string };
 
@@ -77,6 +78,15 @@ export default function MfaSecurityPage() {
     const factorId = enrollment?.factorId ?? verifiedFactors[0]?.id;
     if (!factorId || code.length !== 6) return;
     setSubmitting(true);
+    const limit = await checkAuthRateLimit("otp", factorId);
+    if (!limit.allowed) {
+      toast.error(limit.unavailable
+        ? "A proteção de acesso está temporariamente indisponível. Tente novamente em instantes."
+        : `Muitas tentativas de código. Aguarde ${limit.retryAfter ?? 60}s.`);
+      setCode("");
+      setSubmitting(false);
+      return;
+    }
     const result = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
     if (result.error) {
       toast.error("Código inválido ou expirado. Confira o autenticador e tente novamente.");

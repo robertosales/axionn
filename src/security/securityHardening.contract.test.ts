@@ -70,10 +70,14 @@ describe("commercial security hardening", () => {
 
   it("does not fail open when the authentication limiter is unavailable", () => {
     const limiter = source("supabase/functions/auth-rate-limiter/index.ts");
-    expect(limiter).toContain("using local fallback");
+    const client = source("src/lib/authRateLimiter.ts");
+    expect(limiter).toContain("AUTH_RATE_LIMIT_ALLOW_MEMORY_FALLBACK");
+    expect(limiter).toContain("DISTRIBUTED_RATE_LIMITER_NOT_CONFIGURED");
     expect(limiter).toContain('JSON.stringify({ allowed: false');
     expect(limiter).toContain("status: 503");
     expect(limiter).not.toContain('JSON.stringify({ allowed: true, remaining: -1');
+    expect(client).toContain("allowed: false");
+    expect(client).not.toContain("allowed: true, remaining: -1");
   });
 
   it("allowlists configurable outbound destinations to prevent SSRF", () => {

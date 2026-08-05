@@ -28,6 +28,13 @@ describe("distributed authentication rate limiter", () => {
     expect(client).not.toContain("allowed: true, remaining: -1");
   });
 
+  it("accepts the headers sent by the Supabase browser client", () => {
+    const edge = source("supabase/functions/auth-rate-limiter/index.ts");
+    expect(edge).toContain(
+      '"Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"',
+    );
+  });
+
   it("protects password login, recovery and MFA verification", () => {
     const auth = source("src/pages/Auth.tsx");
     const reset = source("src/pages/ResetPassword.tsx");

@@ -110,7 +110,7 @@ serve(async (req: Request) => {
   const corsHeaders = {
     "Access-Control-Allow-Origin":  Deno.env.get("SITE_URL") ?? (allowMemoryFallback ? "*" : "null"),
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   };
 
   if (req.method === "OPTIONS") {

@@ -13,7 +13,7 @@ em vez de remover a proteção contra brute force.
 
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
-- `SITE_URL=https://axionn.lovable.app`
+- `SITE_URL=https://axionn.app`
 - `AUTH_RATE_LIMIT_ALLOW_MEMORY_FALLBACK=false`
 
 Não usar prefixo `VITE_`. Esses valores pertencem exclusivamente à Edge Function

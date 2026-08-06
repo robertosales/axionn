@@ -5,11 +5,13 @@ const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:8080";
 const EXPOSE_TEMP_PWD = Deno.env.get("EXPOSE_TEMP_PASSWORD") !== "false";
 
 const PUBLIC_SITE_URL =
-  Deno.env.get("PUBLIC_SITE_URL") ?? (SITE_URL && SITE_URL !== "*" ? SITE_URL : "https://usesprintflow.lovable.app");
+  Deno.env.get("PUBLIC_SITE_URL") ?? (SITE_URL && SITE_URL !== "*" ? SITE_URL : "https://axionn.app");
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:8080",
   "http://localhost:3000",
+  "https://axionn.app",
+  "https://www.axionn.app",
   "https://axionn.lovable.app",
   "https://usesprintflow.lovable.app",
 ];

@@ -107,10 +107,41 @@ serve(async (req: Request) => {
   // const ANON_KEY = _publishKeys ? JSON.parse(_publishKeys).anon : Deno.env.get("SUPABASE_ANON_KEY")!;
 
   const allowMemoryFallback = Deno.env.get("AUTH_RATE_LIMIT_ALLOW_MEMORY_FALLBACK") === "true";
+
+  // Origem oficial + origens auxiliares (preview/local). Nunca "*" em produção.
+  const siteUrl = Deno.env.get("SITE_URL") ?? "https://axionn.app";
+  const extraOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+    .split(",").map((o) => o.trim()).filter(Boolean);
+  const allowedOrigins = new Set<string>([
+    siteUrl,
+    "https://axionn.app",
+    "https://www.axionn.app",
+    "https://axionn.lovable.app",
+    ...extraOrigins,
+    ...(allowMemoryFallback ? ["http://localhost:8080", "http://localhost:3000"] : []),
+  ]);
+
+  const requestOrigin = req.headers.get("origin");
+  const isPreviewOrigin = (() => {
+    if (!requestOrigin) return false;
+    try {
+      const url = new URL(requestOrigin);
+      return url.protocol === "https:" &&
+        (url.hostname.endsWith(".lovable.app") || url.hostname.endsWith(".lovableproject.com"));
+    } catch {
+      return false;
+    }
+  })();
+
+  const allowOrigin = requestOrigin && (allowedOrigins.has(requestOrigin) || isPreviewOrigin)
+    ? requestOrigin
+    : siteUrl;
+
   const corsHeaders = {
-    "Access-Control-Allow-Origin":  Deno.env.get("SITE_URL") ?? (allowMemoryFallback ? "*" : "null"),
+    "Access-Control-Allow-Origin":  allowOrigin,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Vary": "Origin",
   };
 
   if (req.method === "OPTIONS") {

@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   Boxes,
+  Bug,
   Building2,
   Calendar,
   CheckSquare,
@@ -144,14 +145,17 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
     id: "sala-agil-quality",
     label: "Qualidade",
     items: [
+      { id: "quality-overview", label: "Visão Geral", icon: LayoutDashboard, route: "/sala-agil/qualidade" },
       { id: "quality-cases", label: "Casos de Teste", icon: ClipboardCheck, route: "/sala-agil/qualidade/casos" },
       { id: "quality-suites", label: "Suítes", icon: Layers, route: "/sala-agil/qualidade/suites" },
       { id: "quality-plans", label: "Planos", icon: ClipboardList, route: "/sala-agil/qualidade/planos" },
       { id: "quality-runs", label: "Execuções", icon: Play, route: "/sala-agil/qualidade/execucoes" },
-    ],
-  },
-  {
-    id: "sala-agil-sprints",
+        { id: "quality-findings", label: "Achados", icon: Bug, route: "/sala-agil/qualidade/achados" },
+        { id: "quality-coverage", label: "Cobertura", icon: GitBranch, route: "/sala-agil/qualidade/cobertura" },
+      ],
+    },
+    {
+      id: "sala-agil-sprints",
     label: "Sprints",
     items: [
       { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, route: "/sala-agil/dashboard" },

@@ -17815,6 +17815,10 @@ export type Database = {
         }
         Returns: string
       }
+      create_quality_finding_v1: {
+        Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
       create_quality_test_case_v1: {
         Args: { p_correlation_id?: string; p_org_id: string; p_payload: Json }
         Returns: string
@@ -20504,6 +20508,15 @@ export type Database = {
           p_metadata: Json
           p_name: string
           p_plan_id: string
+          p_status: string
+        }
+        Returns: undefined
+      }
+      update_quality_finding_status_v1: {
+        Args: {
+          p_correlation_id?: string
+          p_finding_id: string
+          p_org_id: string
           p_status: string
         }
         Returns: undefined

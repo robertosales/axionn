@@ -29,7 +29,7 @@ describe("Quality Intelligence route access contract", () => {
         /<Route path="\/sala-agil\/qualidade[^"]*"[^]*?<QualityAccessGuard>/g,
       ) ?? [];
 
-    expect(qualityRoutes).toHaveLength(6);
+    expect(qualityRoutes).toHaveLength(8);
     expect(guardedRoutes).toHaveLength(qualityRoutes.length);
   });
 });

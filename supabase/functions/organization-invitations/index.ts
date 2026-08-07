@@ -4,7 +4,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const PUBLIC_SITE_URL =
   Deno.env.get("PUBLIC_SITE_URL") ??
   Deno.env.get("SITE_URL") ??
-  "https://axionn.lovable.app";
+  "https://axionn.app";
 const EXPOSE_INVITE_LINKS = Deno.env.get("EXPOSE_ORGANIZATION_INVITE_LINKS") === "true";
 
 let SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -36,6 +36,8 @@ if (!SERVICE_KEY || !ANON_KEY) {
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   "http://localhost:8080",
   "http://localhost:3000",
+  "https://axionn.app",
+  "https://www.axionn.app",
   "https://axionn.lovable.app",
   "https://usesprintflow.lovable.app",
 ]);

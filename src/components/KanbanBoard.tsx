@@ -48,19 +48,23 @@ function loadFiltros(): KanbanFiltros | null {
   try {
     const raw = sessionStorage.getItem(SS_FILTROS_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as KanbanFiltros;
+    return { ...KANBAN_FILTROS_DEFAULT, ...(JSON.parse(raw) as Partial<KanbanFiltros>) };
   } catch { return null; }
 }
 
 function saveFiltros(f: KanbanFiltros) {
-  try { sessionStorage.setItem(SS_FILTROS_KEY, JSON.stringify(f)); } catch {}
+  try { sessionStorage.setItem(SS_FILTROS_KEY, JSON.stringify(f)); } catch {
+    // Persistência é opcional (pode estar indisponível em modo privado).
+  }
 }
 
 function clearKanbanSession() {
   try {
     sessionStorage.removeItem(SS_FILTROS_KEY);
     sessionStorage.removeItem(SS_EXPANDED_KEY);
-  } catch {}
+  } catch {
+    // Limpeza best-effort; não deve bloquear o Kanban.
+  }
 }
 
 function hasSavedExpandedCols(): boolean {
@@ -100,7 +104,9 @@ function saveExpandedCols(expanded: Set<string>, allKeys: string[]) {
       ...allKeys.filter((k) => !expanded.has(k)).map((k) => `__hidden__${k}`),
     ];
     sessionStorage.setItem(SS_EXPANDED_KEY, JSON.stringify(payload));
-  } catch {}
+  } catch {
+    // Persistência é opcional (pode estar indisponível em modo privado).
+  }
 }
 
 function buildDefaultExpandedCols(allKeys: string[], colItemsMap: Record<string, any[]>): Set<string> {
@@ -194,6 +200,8 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     userStories,
     workflowColumns,
     developers,
+    epics,
+    features,
     sprints,
     updateUserStoryStatus,
     reorderUserStories,
@@ -251,7 +259,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
       }
       return prev;
     });
-  }, [activeSprint?.id]);
+  }, [activeSprint]);
 
   const canMove = true;
 
@@ -291,7 +299,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     if (hasColumnPreference) {
       setExpandedCols(loadExpandedCols(allColKeys));
     }
-  }, [allColKeys.join(","), hasColumnPreference]);
+  }, [allColKeys, hasColumnPreference]);
 
   const toggleCol = useCallback((key: string) => {
     setHasColumnPreference(true);
@@ -354,6 +362,10 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
       items = items.filter((h: any) => h.priority === filtros.prioridade);
     if (filtros.status !== "all")
       items = items.filter((h: any) => h.status === filtros.status);
+    if (filtros.epicId !== "all")
+      items = items.filter((h: any) => h.epicId === filtros.epicId);
+    if (filtros.featureId !== "all")
+      items = items.filter((h: any) => h.featureId === filtros.featureId);
     return [...items].sort(
       (a: any, b: any) =>
         (localPositions[a.id] ?? a.position ?? 0) - (localPositions[b.id] ?? b.position ?? 0),
@@ -373,7 +385,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
   useEffect(() => {
     if (hasColumnPreference || kanbanLoading || allColKeys.length === 0) return;
     setExpandedCols(buildDefaultExpandedCols(allColKeys, colItemsMap));
-  }, [allColKeys.join(","), colItemsMap, hasColumnPreference, kanbanLoading]);
+  }, [allColKeys, colItemsMap, hasColumnPreference, kanbanLoading]);
 
   const colHexMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -552,6 +564,8 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
               developers={developers ?? []}
               workflowColumns={workflowColumns ?? []}
               sprints={sprints ?? []}
+              epics={epics ?? []}
+              features={features ?? []}
               totalFiltrado={sprintStories.length}
               currentUserId={currentUserId}
             />

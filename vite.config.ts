@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
@@ -15,7 +15,45 @@ const buildDate = new Date().toLocaleDateString("pt-BR", {
   timeZone: "America/Sao_Paulo",
 });
 
-export default defineConfig(({ mode }) => ({
+function stableVendorChunk(moduleId: string): string | undefined {
+  const id = moduleId.replace(/\\/g, "/");
+  if (!id.includes("/node_modules/")) return undefined;
+
+  if (
+    id.includes("/node_modules/react/") ||
+    id.includes("/node_modules/react-dom/") ||
+    id.includes("/node_modules/react-router") ||
+    id.includes("/node_modules/@remix-run/") ||
+    id.includes("/node_modules/scheduler/")
+  ) return "vendor-react";
+
+  if (id.includes("/node_modules/@supabase/")) return "vendor-supabase";
+  if (id.includes("/node_modules/@tanstack/")) return "vendor-query";
+  return undefined;
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const isTest = mode === "test";
+  const supabaseUrl = env.VITE_SUPABASE_URL || (isTest ? "https://test.supabase.invalid" : "");
+  const supabaseKey =
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    env.VITE_SUPABASE_ANON_KEY ||
+    (isTest ? "test-publishable-key" : "");
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "Configuração Supabase ausente: defina VITE_SUPABASE_URL e " +
+      "VITE_SUPABASE_PUBLISHABLE_KEY para este ambiente.",
+    );
+  }
+
+  // Enforcement de MFA no Backoffice: em produção o padrão é obrigatório,
+  // salvo se a variável for explicitamente definida (rollback = "false").
+  const backofficeMfaRequired =
+    env.VITE_BACKOFFICE_MFA_REQUIRED ?? (mode === "production" ? "true" : "false");
+
+  return {
   server: {
     host: "::",
     port: 8080,
@@ -33,5 +71,15 @@ export default defineConfig(({ mode }) => ({
     // Substitui literalmente no bundle — tree-shakeable e sem overhead de runtime
     "import.meta.env.VITE_APP_VERSION":    JSON.stringify(version),
     "import.meta.env.VITE_APP_BUILD_DATE": JSON.stringify(buildDate),
+    "import.meta.env.VITE_BACKOFFICE_MFA_REQUIRED": JSON.stringify(backofficeMfaRequired),
   },
-}));
+  build: {
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks: stableVendorChunk,
+      },
+    },
+  },
+  };
+});

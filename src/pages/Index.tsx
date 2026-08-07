@@ -18,9 +18,7 @@ import { ImpedimentList } from "@/components/ImpedimentManager";
 
 // ─── Componentes pesados — lazy loaded  ───────────────────────────────────────
 const AgileHistory = lazy(() => import("@/components/AgileHistory").then((m) => ({ default: m.AgileHistory })));
-const UserRolesManager = lazy(() =>
-  import("@/components/UserRolesManager").then((m) => ({ default: m.UserRolesManager })),
-);
+const RbacWorkspace = lazy(() => import("@/features/rbac/RbacWorkspace"));
 const PlanningPoker = lazy(() => import("@/components/PlanningPoker").then((m) => ({ default: m.PlanningPoker })));
 const UserStoryManager = lazy(() =>
   import("@/components/UserStoryManager").then((m) => ({ default: m.UserStoryManager })),
@@ -32,6 +30,7 @@ const MetricsDashboard = lazy(() =>
   import("@/components/MetricsDashboard").then((m) => ({ default: m.MetricsDashboard })),
 );
 const EpicManager = lazy(() => import("@/components/EpicManager").then((m) => ({ default: m.EpicManager })));
+const FeatureManager = lazy(() => import("@/components/FeatureManager").then((m) => ({ default: m.FeatureManager })));
 const WorkflowManager = lazy(() =>
   import("@/components/WorkflowManager").then((m) => ({ default: m.WorkflowManager })),
 );
@@ -134,6 +133,7 @@ const VALID_SECTIONS = [
   "calendario",
   "equipe",
   "epicos",
+  "features",
   "atividades",
   "impedimentos",
   "times",
@@ -377,7 +377,10 @@ const Index = () => {
             {active === "epicos" && (
               <SectionGuard permission="view_backlog">
                 <LazySection name="Épicos">
-                  <EpicManager />
+                  <div className="space-y-8">
+                    <EpicManager />
+                    <FeatureManager />
+                  </div>
                 </LazySection>
               </SectionGuard>
             )}
@@ -449,7 +452,15 @@ const Index = () => {
             {active === "perfis" && (
               <SectionGuard permission="manage_roles">
                 <LazySection name="Perfis">
-                  <UserRolesManager />
+                  <RbacWorkspace />
+                </LazySection>
+              </SectionGuard>
+            )}
+
+            {active === "features" && (
+              <SectionGuard permission="view_backlog">
+                <LazySection name="Features">
+                  <FeatureManager />
                 </LazySection>
               </SectionGuard>
             )}

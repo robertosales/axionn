@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchKnowledgePatterns,
   fetchLearningMetrics,
@@ -17,6 +18,7 @@ import {
 } from "../services/knowledge.service";
 
 export function useKnowledgeLibrary() {
+  const { currentTeamId } = useAuth();
   const [patterns, setPatterns]       = useState<KnowledgePattern[]>([]);
   const [metrics, setMetrics]         = useState<LearningMetric[]>([]);
   const [stats, setStats]             = useState<KnowledgeStats | null>(null);
@@ -27,14 +29,21 @@ export function useKnowledgeLibrary() {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
+    if (!currentTeamId) {
+      setPatterns([]);
+      setMetrics([]);
+      setStats(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const status = statusFilter === "all" ? undefined : statusFilter;
       const domain = domainFilter  === "all" ? undefined : domainFilter;
       const [p, m, s] = await Promise.all([
-        fetchKnowledgePatterns(status, domain),
-        fetchLearningMetrics(12),
-        fetchKnowledgeStats(),
+        fetchKnowledgePatterns(currentTeamId, status, domain),
+        fetchLearningMetrics(currentTeamId, 12),
+        fetchKnowledgeStats(currentTeamId),
       ]);
       setPatterns(p);
       setMetrics(m);
@@ -47,14 +56,15 @@ export function useKnowledgeLibrary() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, domainFilter]);
+  }, [statusFilter, domainFilter, currentTeamId]);
 
   useEffect(() => { load(); }, [load]);
 
   const approvePattern = useCallback(async (id: string) => {
+    if (!currentTeamId) return;
     setUpdating(id);
     try {
-      await updatePatternStatus(id, "validated");
+      await updatePatternStatus(currentTeamId, id, "validated");
       setPatterns((prev) =>
         prev.map((p) => p.id === id ? { ...p, status: "validated" as PatternStatus } : p),
       );
@@ -66,12 +76,13 @@ export function useKnowledgeLibrary() {
     } finally {
       setUpdating(null);
     }
-  }, []);
+  }, [currentTeamId]);
 
   const rejectPattern = useCallback(async (id: string) => {
+    if (!currentTeamId) return;
     setUpdating(id);
     try {
-      await updatePatternStatus(id, "rejected");
+      await updatePatternStatus(currentTeamId, id, "rejected");
       setPatterns((prev) =>
         prev.map((p) => p.id === id ? { ...p, status: "rejected" as PatternStatus } : p),
       );
@@ -83,7 +94,7 @@ export function useKnowledgeLibrary() {
     } finally {
       setUpdating(null);
     }
-  }, []);
+  }, [currentTeamId]);
 
   // Lista de domínios únicos para o filtro
   const domains = Array.from(

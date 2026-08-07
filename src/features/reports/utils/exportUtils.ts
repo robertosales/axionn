@@ -1,5 +1,14 @@
 // Exportação CSV e PDF (sem dependência externa para CSV, usa window.print para PDF)
 
+export function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function exportToCSV(filename: string, headers: string[], rows: (string | number | null | undefined)[][]) {
   const escape = (v: string | number | null | undefined) => {
     const s = String(v ?? "");
@@ -26,7 +35,7 @@ export function exportToPDF(title: string, htmlContent: string) {
   win.document.write(`
     <!DOCTYPE html><html><head>
     <meta charset="utf-8">
-    <title>${title}</title>
+    <title>${escapeHtml(title)}</title>
     <style>
       body { font-family: Arial, sans-serif; font-size: 12px; padding: 24px; color: #111; }
       h1 { font-size: 18px; margin-bottom: 16px; }

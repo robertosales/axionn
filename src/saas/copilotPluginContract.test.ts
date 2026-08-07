@@ -14,12 +14,22 @@ describe("copilot plugin contract", () => {
   it("requires bearer authentication for protected routes", () => {
     expect(source).toContain("Authorization Bearer token ausente.");
     expect(source).toContain("Token inválido.");
-    expect(source).toContain("const expected = Deno.env.get(\"COPILOT_PLUGIN_TOKEN\")");
+    expect(source).toContain('Deno.env.get("COPILOT_PLUGIN_TOKEN")');
+    expect(source).toContain("tokenMatches");
   });
 
-  it("returns structured responses for chat and metrics actions", () => {
-    expect(source).toContain("answer:");
-    expect(source).toContain("actions:");
-    expect(source).toContain("data:");
+  it("does not advertise or return mocked capabilities", () => {
+    expect(source).toContain("capability_not_implemented");
+    expect(source).toContain('capabilities: []');
+    expect(source).not.toMatch(/mockad[oa]|scaffold inicial|dados fictícios foram retornados/i);
+    expect(source).not.toContain('answer: `Recebi sua mensagem');
+  });
+
+  it("derives tenant context from the active plugin record", () => {
+    expect(source).toContain('.from("copilot_plugins")');
+    expect(source).toContain('.eq("is_active", true)');
+    expect(source).toContain("organizationId: plugin.organization_id");
+    expect(source).not.toContain('req.headers.get("x-organization-id")');
+    expect(source).not.toContain('req.headers.get("x-project-id")');
   });
 });

@@ -22,6 +22,7 @@
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertSafeOutboundUrl, hostsFromEnv } from "../_shared/outbound-url.ts";
 
 const SITE_URL = Deno.env.get("SITE_URL") ?? "*";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -298,7 +299,12 @@ async function callProvider(row: ProviderRow, prompt: string, apiKey: string): P
     return callAnthropic(prompt, apiKey, model || "claude-3-5-haiku-20241022");
   }
 
-  const baseUrl = row.api_base_url ?? "https://api.openai.com/v1/chat/completions";
+  const baseUrl = assertSafeOutboundUrl(
+    row.api_base_url ?? "https://api.openai.com/v1/chat/completions",
+    { allowedHosts: hostsFromEnv("AI_PROVIDER_ALLOWED_HOSTS", [
+      "api.openai.com", "api.anthropic.com", "openrouter.ai", "ai.gateway.lovable.dev",
+    ]) },
+  ).href;
   if (!model) throw new Error(`Provider "${row.name}" sem modelo configurado.`);
 
   // Groq, Perplexity e Sakana NÃO suportam response_format:json_object

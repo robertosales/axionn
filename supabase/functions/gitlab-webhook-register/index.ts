@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertSafeOutboundUrl, hostsFromEnv } from "../_shared/outbound-url.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +22,23 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) return json({ error: "Server configuration error" }, 500);
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseUrl || !serviceRoleKey || !anonKey) return json({ error: "Server configuration error" }, 500);
+    const authorization = req.headers.get("authorization") ?? "";
+    if (!authorization.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authorization } },
+    });
+    const { data: authData } = await userClient.auth.getUser();
+    if (!authData.user) return json({ error: "Unauthorized" }, 401);
+    const requestBody = await req.clone().json();
+    if (!requestBody.integrationId) return json({ error: "integrationId required" }, 400);
+    const { data: allowedIntegration } = await userClient
+      .from("git_integrations")
+      .select("id")
+      .eq("id", requestBody.integrationId)
+      .maybeSingle();
+    if (!allowedIntegration) return json({ error: "Integration not found" }, 404);
     supabase = createClient(supabaseUrl, serviceRoleKey);
     ({ integrationId } = await req.json());
     if (!integrationId) return json({ error: "integrationId required" }, 400);
@@ -42,7 +59,10 @@ serve(async (req: Request) => {
     }).eq("id", integrationId);
     if (syncingError) return json({ error: "Failed to update integration status" }, 500);
 
-    const apiBase = (integration.api_url ?? "https://gitlab.com/api/v4").replace(/\/$/, "");
+    const apiBase = assertSafeOutboundUrl(
+      integration.api_url ?? "https://gitlab.com/api/v4",
+      { allowedHosts: hostsFromEnv("GITLAB_ALLOWED_HOSTS", ["gitlab.com"]) },
+    ).toString().replace(/\/$/, "");
     const encodedProject = encodeURIComponent(integration.repository_path);
     const projectUrl = `${apiBase}/projects/${encodedProject}`;
     const hooksUrl = `${projectUrl}/hooks`;

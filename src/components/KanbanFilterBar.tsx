@@ -36,6 +36,8 @@ export interface KanbanFiltros {
   status: string;
   search: string;
   sprintId: string;
+  epicId: string;
+  featureId: string;
 }
 
 export const KANBAN_FILTROS_DEFAULT: KanbanFiltros = {
@@ -45,6 +47,8 @@ export const KANBAN_FILTROS_DEFAULT: KanbanFiltros = {
   status: "all",
   search: "",
   sprintId: "all",
+  epicId: "all",
+  featureId: "all",
 };
 
 export interface KanbanViewSalva {
@@ -74,12 +78,16 @@ const CHIP_COLORS: Record<string, string> = {
   tipo:       "text-violet-400 border-violet-400/40 bg-violet-400/10",
   prioridade: "text-amber-400 border-amber-400/40 bg-amber-400/10",
   status:     "text-cyan-400 border-cyan-400/40 bg-cyan-400/10",
+  epicId:     "text-indigo-400 border-indigo-400/40 bg-indigo-400/10",
+  featureId:  "text-sky-400 border-sky-400/40 bg-sky-400/10",
 };
 
 const CHIP_LABELS: Record<string, string> = {
   tipo:       "Tipo",
   prioridade: "Prioridade",
   status:     "Status",
+  epicId:     "Épico",
+  featureId:  "Feature",
 };
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -91,6 +99,8 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
   developers,
   workflowColumns,
   sprints,
+  epics,
+  features,
   totalFiltrado,
   currentUserId,
 }: {
@@ -100,6 +110,8 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
   developers: any[];
   workflowColumns: any[];
   sprints: any[];
+  epics: any[];
+  features: any[];
   totalFiltrado: number;
   currentUserId?: string;
 }) {
@@ -192,8 +204,10 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
       const col = workflowColumns.find((c: any) => c.key === filtros.status);
       chips.push({ key: "status", display: col?.label ?? filtros.status });
     }
+    if (filtros.epicId !== "all") chips.push({ key: "epicId", display: epics.find((e: any) => e.id === filtros.epicId)?.name ?? "Épico" });
+    if (filtros.featureId !== "all") chips.push({ key: "featureId", display: features.find((f: any) => f.id === filtros.featureId)?.name ?? "Feature" });
     return chips;
-  }, [filtros, workflowColumns]);
+  }, [filtros, workflowColumns, epics, features]);
 
   const advancedFilterCount = activeChips.length;
 
@@ -202,6 +216,8 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
     filtros.tipo !== "all" ||
     filtros.prioridade !== "all" ||
     filtros.status !== "all" ||
+    filtros.epicId !== "all" ||
+    filtros.featureId !== "all" ||
     filtros.search !== "" ||
     filtros.sprintId !== "all";
 
@@ -497,6 +513,20 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
               items={statusItems}
               selected={filtros.status}
               onSelect={(v) => { onChange({ ...filtros, status: v }); setActiveViewId(null); }}
+            />
+            <FilterGroup
+              label="Épico"
+              colorClass="text-indigo-400"
+              items={[{ value: "all", label: "Todos", count: stories.length }, ...epics.map((epic: any) => ({ value: epic.id, label: epic.name, count: stories.filter((story: any) => story.epicId === epic.id).length }))]}
+              selected={filtros.epicId}
+              onSelect={(value) => { onChange({ ...filtros, epicId: value, featureId: "all" }); setActiveViewId(null); }}
+            />
+            <FilterGroup
+              label="Feature"
+              colorClass="text-sky-400"
+              items={[{ value: "all", label: "Todas", count: stories.length }, ...features.filter((feature: any) => filtros.epicId === "all" || feature.epicId === filtros.epicId).map((feature: any) => ({ value: feature.id, label: feature.name, count: stories.filter((story: any) => story.featureId === feature.id).length }))]}
+              selected={filtros.featureId}
+              onSelect={(value) => { onChange({ ...filtros, featureId: value }); setActiveViewId(null); }}
             />
           </PopoverContent>
         </Popover>

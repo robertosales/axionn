@@ -6,7 +6,7 @@ const MODULE_SHELL_PREFIXES = [
 
 export function isModuleShellRoute(pathname: string) {
   return (
-    pathname === "/okr" ||
+    (pathname === "/okr" || pathname.startsWith("/okr/")) ||
     MODULE_SHELL_PREFIXES.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
     )

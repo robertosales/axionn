@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   Save, Mail, KeyRound, UserX, UserCheck,
-  Zap, Shield, BookOpen, Building2,
+  Zap, Shield, BookOpen, Building2, CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getInitials, formatPersonName } from "@/lib/personName";
@@ -87,7 +87,20 @@ export const PROFILES_BY_MODULE: Record<ModuleKey, { value: string; label: strin
   ],
 };
 
-export interface ModuleAccess { module: ModuleKey; role: string; }
+export interface ProfileOption { value: string; label: string; }
+export type ProfileOptionsByModule = Record<ModuleKey, ProfileOption[]>;
+
+export interface ModuleAccess {
+  module: ModuleKey;
+  role: string;
+  roleLabel?: string;
+  expiresAt?: string | null;
+  justification?: string | null;
+}
+
+export function normalizeModuleRoleName(role: string): string {
+  return role === "qa" ? "qa_analyst" : role;
+}
 
 export interface UserRow {
   user_id:              string;
@@ -102,7 +115,13 @@ export interface UserRow {
 }
 
 export interface PendingModules {
-  [key: string]: { enabled: boolean; role: string };
+  [key: string]: {
+    enabled: boolean;
+    role: string;
+    assignmentMode: "permanent" | "temporary";
+    expiresAt: string;
+    justification: string;
+  };
 }
 
 interface Props {
@@ -113,11 +132,15 @@ interface Props {
   pendingContractRole: boolean;          // toggle local do admin_contrato
   isCurrentUserAdmin:  boolean;          // quem edita é admin_master?
   saving:              boolean;
+  profileOptionsByModule?: ProfileOptionsByModule;
   onClose:             () => void;
   onSave:              () => void;
   onNameChange:        (v: string) => void;
   onToggleModule:      (key: ModuleKey) => void;
   onRoleChange:        (key: ModuleKey, role: string) => void;
+  onAssignmentModeChange:(key: ModuleKey, mode: "permanent" | "temporary") => void;
+  onExpirationChange:  (key: ModuleKey, value: string) => void;
+  onJustificationChange:(key: ModuleKey, value: string) => void;
   onContractRoleChange:(v: boolean) => void;
   onEmail:             () => void;
   onReset:             () => void;
@@ -127,9 +150,10 @@ interface Props {
 export function UserProfileSheet({
   user, open,
   pendingName, pendingModules, pendingContractRole, isCurrentUserAdmin,
-  saving,
+  saving, profileOptionsByModule = PROFILES_BY_MODULE,
   onClose, onSave, onNameChange,
   onToggleModule, onRoleChange, onContractRoleChange,
+  onAssignmentModeChange, onExpirationChange, onJustificationChange,
   onEmail, onReset, onToggleActive,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"perfil" | "historico">("perfil");
@@ -174,7 +198,12 @@ export function UserProfileSheet({
                 {effectiveRoles.map(({ module, role }) => {
                   const mod = MODULES.find(m => m.key === module);
                   if (!mod) return null;
-                  const roleLabel = PROFILES_BY_MODULE[module]?.find(p => p.value === role)?.label ?? role;
+                  const normalizedRole = normalizeModuleRoleName(role);
+                  const roleLabel =
+                    profileOptionsByModule[module]?.find(
+                      (profile) =>
+                        normalizeModuleRoleName(profile.value) === normalizedRole,
+                    )?.label ?? normalizedRole;
                   return (
                     <Badge key={module} className={cn("text-[9px] gap-1 px-1.5 py-0", mod.badgeClass)}>
                       {mod.icon}{mod.label}: {roleLabel}
@@ -273,27 +302,72 @@ export function UserProfileSheet({
                           <Switch
                             checked={pm?.enabled ?? false}
                             onCheckedChange={() => onToggleModule(mod.key)}
+                            aria-label={`Acesso ao módulo ${mod.label}`}
                             className="scale-90"
                           />
                         </div>
                         {pm?.enabled && (
-                          <div>
+                          <div className="space-y-3">
                             <Label className="text-[10px] text-muted-foreground">Perfil em {mod.label}</Label>
                             <Select
                               value={pm.role}
                               onValueChange={role => onRoleChange(mod.key, role)}
                             >
-                              <SelectTrigger className="h-7 mt-1 text-xs">
+                              <SelectTrigger
+                                className="mt-1 h-11 text-sm"
+                                aria-label={`Perfil em ${mod.label}`}
+                              >
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {PROFILES_BY_MODULE[mod.key].map(p => (
+                                {profileOptionsByModule[mod.key].map(p => (
                                   <SelectItem key={p.value} value={p.value} className="text-xs">
                                     {p.label}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
+
+                            <div className="grid gap-2">
+                              <Label className="text-xs" htmlFor={`assignment-mode-${mod.key}`}>Duração do acesso</Label>
+                              <Select
+                                value={pm.assignmentMode}
+                                onValueChange={(value: "permanent" | "temporary") => onAssignmentModeChange(mod.key, value)}
+                              >
+                                <SelectTrigger id={`assignment-mode-${mod.key}`} className="h-11" aria-label={`Duração do acesso em ${mod.label}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="permanent">Permanente</SelectItem>
+                                  <SelectItem value="temporary">Temporário</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {pm.assignmentMode === "temporary" && (
+                              <div className="space-y-3 rounded-xl border border-blue-500/25 bg-blue-500/5 p-3">
+                                <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+                                  <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                                  Expiração automática
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label className="text-xs" htmlFor={`expires-${mod.key}`}>Acesso válido até</Label>
+                                  <Input id={`expires-${mod.key}`} type="datetime-local" value={pm.expiresAt}
+                                    onChange={(event) => onExpirationChange(mod.key, event.target.value)}
+                                    min={toLocalDateTimeInput(new Date(Date.now() + 10 * 60_000))}
+                                    max={toLocalDateTimeInput(new Date(Date.now() + 365 * 86_400_000))}
+                                    className="h-11 text-sm" />
+                                </div>
+                                <div className="grid gap-2">
+                                  <Label className="text-xs" htmlFor={`justification-${mod.key}`}>Justificativa</Label>
+                                  <Input id={`justification-${mod.key}`} value={pm.justification}
+                                    onChange={(event) => onJustificationChange(mod.key, event.target.value)}
+                                    placeholder="Ex.: cobertura de férias por duas semanas"
+                                    maxLength={280} className="h-11 text-sm" />
+                                  <p className="text-[11px] text-muted-foreground">Mínimo de 10 caracteres. O motivo fica registrado na auditoria.</p>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -379,13 +453,20 @@ export function legacyToModuleRoles(module_access: string): ModuleAccess[] {
   return [];
 }
 
+function toLocalDateTimeInput(value: Date) {
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 16);
+}
+
 // ─── ModuleTags ───────────────────────────────────────────────────────────────
 export function ModuleTags({
   moduleRoles,
   module_access,
+  profileOptionsByModule = PROFILES_BY_MODULE,
 }: {
   moduleRoles: ModuleAccess[];
   module_access: string;
+  profileOptionsByModule?: ProfileOptionsByModule;
 }) {
   const effective = moduleRoles.length > 0 ? moduleRoles : legacyToModuleRoles(module_access);
   if (effective.length === 0) {
@@ -397,10 +478,15 @@ export function ModuleTags({
   }
   return (
     <span className="flex flex-wrap items-center gap-1">
-      {effective.map(({ module, role }) => {
+      {effective.map(({ module, role, roleLabel: persistedRoleLabel }) => {
         const mod = MODULES.find(m => m.key === module);
         if (!mod) return null;
-        const roleLabel = PROFILES_BY_MODULE[module as ModuleKey]?.find(p => p.value === role)?.label ?? role;
+        const normalizedRole = normalizeModuleRoleName(role);
+        const roleLabel = persistedRoleLabel ??
+          profileOptionsByModule[module as ModuleKey]?.find(
+            (profile) =>
+              normalizeModuleRoleName(profile.value) === normalizedRole,
+          )?.label ?? normalizedRole;
         return (
           <Badge key={module} className={cn("text-[9px] gap-1 px-1.5 py-0", mod.badgeClass)}>
             {mod.icon}{mod.label}: {roleLabel}

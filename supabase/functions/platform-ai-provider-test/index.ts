@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertSafeOutboundUrl, hostsFromEnv } from "../_shared/outbound-url.ts";
 
 const SITE_URL = Deno.env.get("SITE_URL") ?? "*";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -126,12 +127,17 @@ async function callProvider(provider: ProviderRow, apiKey: string) {
       : { ok: false as const, status: 502 };
   }
 
-  if (!provider.api_base_url || !/^https:\/\//i.test(provider.api_base_url)) {
+  if (!provider.api_base_url) {
     return { ok: false as const, status: 422 };
   }
+  const providerUrl = assertSafeOutboundUrl(provider.api_base_url, {
+    allowedHosts: hostsFromEnv("AI_PROVIDER_ALLOWED_HOSTS", [
+      "api.openai.com", "api.anthropic.com", "openrouter.ai", "ai.gateway.lovable.dev",
+    ]),
+  });
   if (!model) return { ok: false as const, status: 422 };
 
-  const response = await fetch(provider.api_base_url, {
+  const response = await fetch(providerUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

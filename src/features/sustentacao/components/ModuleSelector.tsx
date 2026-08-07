@@ -24,7 +24,9 @@ function applyTheme(dark: boolean) {
   }
   try {
     sessionStorage.setItem("theme", dark ? "dark" : "light");
-  } catch {}
+  } catch {
+    // O tema continua aplicado no DOM mesmo sem persistência.
+  }
 }
 
 function ThemeToggle() {

@@ -10,7 +10,9 @@ function getThemeFromDOM(): "light" | "dark" {
   try {
     const saved = sessionStorage.getItem("theme");
     if (saved === "light" || saved === "dark") return saved;
-  } catch {}
+  } catch {
+    // sessionStorage pode estar indisponível; usa preferência do sistema.
+  }
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -20,7 +22,9 @@ function applyTheme(theme: "light" | "dark") {
   root.classList.toggle("dark", theme === "dark");
   try {
     sessionStorage.setItem("theme", theme);
-  } catch {}
+  } catch {
+    // O tema continua aplicado no DOM mesmo sem persistência.
+  }
 }
 
 export function ThemeToggle() {

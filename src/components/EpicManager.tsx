@@ -23,7 +23,7 @@ const EPIC_COLORS = [
 ];
 
 export function EpicManager() {
-  const { epics, addEpic, updateEpic, removeEpic, userStories, activeSprint, workflowColumns, loading } = useSprint();
+  const { epics, features, addEpic, updateEpic, removeEpic, userStories, activeSprint, workflowColumns, loading } = useSprint();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -150,6 +150,8 @@ export function EpicManager() {
             const donePoints = sprintHUs.filter((hu) => hu.status === lastCol).reduce((s, hu) => s + hu.storyPoints, 0);
             const progress = totalPoints > 0 ? Math.round((donePoints / totalPoints) * 100) : 0;
             const expanded = expandedEpic === epic.id;
+            const epicFeatures = features.filter((feature) => feature.epicId === epic.id);
+            const ungroupedHUs = sprintHUs.filter((hu) => !hu.featureId);
 
             return (
               <Card key={epic.id} className="group hover:shadow-md transition-shadow overflow-hidden">
@@ -161,6 +163,7 @@ export function EpicManager() {
                         <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: epic.color }} />
                         <h3 className="font-semibold text-sm">{epic.name}</h3>
                         <Badge variant="secondary" className="text-xs">{sprintHUs.length} HUs</Badge>
+                        <Badge variant="outline" className="text-xs">{epicFeatures.length} Features</Badge>
                         <Badge variant="outline" className="text-xs">{totalPoints} pts</Badge>
                       </div>
                       {epic.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2 ml-5">{epic.description}</p>}
@@ -181,24 +184,20 @@ export function EpicManager() {
                       </Button>
                     </div>
                   </div>
-                  {expanded && sprintHUs.length > 0 && (
-                    <div className="mt-3 ml-5 space-y-1.5">
-                      {sprintHUs.map((hu) => {
-                        const col = workflowColumns.find((c) => c.key === hu.status);
-                        return (
-                          <div key={hu.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2.5 py-1.5">
-                            <Badge variant="outline" className="font-mono text-[10px]">{hu.code}</Badge>
-                            <span className="flex-1 truncate">{hu.title}</span>
-                            {col && (
-                              <Badge variant="secondary" className="text-[10px] gap-1">
-                                <div className={`h-1.5 w-1.5 rounded-full ${col.dotColor}`} />
-                                {col.label}
-                              </Badge>
-                            )}
-                            <SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} />
-                          </div>
-                        );
+                  {expanded && (
+                    <div className="mt-4 ml-5 space-y-3">
+                      {epicFeatures.map((feature) => {
+                        const featureHUs = sprintHUs.filter((hu) => hu.featureId === feature.id);
+                        return <div key={feature.id} className="rounded-lg border bg-muted/20 p-2.5">
+                          <div className="mb-2 flex items-center gap-2 text-xs font-semibold"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: feature.color }} />{feature.name}<Badge variant="secondary" className="ml-auto text-[10px]">{featureHUs.length} HUs</Badge></div>
+                          {featureHUs.length ? <div className="space-y-1.5">{featureHUs.map((hu) => {
+                            const col = workflowColumns.find((c) => c.key === hu.status);
+                            return <div key={hu.id} className="flex items-center gap-2 rounded bg-background px-2.5 py-1.5 text-xs"><Badge variant="outline" className="font-mono text-[10px]">{hu.code}</Badge><span className="flex-1 truncate">{hu.title}</span>{col && <Badge variant="secondary" className="gap-1 text-[10px]"><div className={`h-1.5 w-1.5 rounded-full ${col.dotColor}`} />{col.label}</Badge>}<SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} /></div>;
+                          })}</div> : <p className="text-[11px] text-muted-foreground">Nenhuma HU nesta sprint.</p>}
+                        </div>;
                       })}
+                      {ungroupedHUs.length > 0 && <div className="rounded-lg border border-dashed p-2.5"><p className="mb-2 text-xs font-semibold text-muted-foreground">Sem Feature</p><div className="space-y-1.5">{ungroupedHUs.map((hu) => <div key={hu.id} className="flex items-center gap-2 rounded bg-muted/40 px-2.5 py-1.5 text-xs"><Badge variant="outline" className="font-mono text-[10px]">{hu.code}</Badge><span className="flex-1 truncate">{hu.title}</span><SizeBadge sizeReference={hu.sizeReference} storyPoints={hu.storyPoints} /></div>)}</div></div>}
+                      {!epicFeatures.length && !ungroupedHUs.length && <p className="text-xs text-muted-foreground">Nenhuma Feature ou HU neste épico.</p>}
                     </div>
                   )}
                 </CardContent>

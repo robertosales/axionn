@@ -63,6 +63,7 @@ import {
 } from "../services/briefing.service";
 import type { BriefingSuggestionType, BriefingType } from "../types/briefing";
 import { NextMeetingAgenda } from "../components/NextMeetingAgenda";
+import { MeetingIntegrationPanel } from "../components/MeetingIntegrationPanel";
 import { useDebounce } from "@/shared/hooks/useDebounce";
 import { usePagination } from "@/shared/hooks/usePagination";
 import { PaginationControls } from "@/shared/components/common/Pagination";
@@ -161,6 +162,16 @@ export default function BriefingPage() {
   const canApply = entitlements.some(
     (entitlement) =>
       entitlement.featureKey === "ai.briefing.apply_actions" &&
+      entitlement.enabled,
+  );
+  const meetingIntegrationsEnabled = entitlements.some(
+    (entitlement) =>
+      entitlement.featureKey === "briefing.integrations.enabled" &&
+      entitlement.enabled,
+  );
+  const teamsIntegrationEnabled = entitlements.some(
+    (entitlement) =>
+      entitlement.featureKey === "briefing.integrations.teams" &&
       entitlement.enabled,
   );
   const maxChars =
@@ -783,6 +794,19 @@ export default function BriefingPage() {
           evidências verificáveis.
         </p>
       </div>
+
+      {meetingIntegrationsEnabled &&
+        teamsIntegrationEnabled &&
+        currentOrganizationId &&
+        currentTeamId && (
+          <MeetingIntegrationPanel
+            organizationId={currentOrganizationId}
+            teamId={currentTeamId}
+            onBriefingImported={async (briefingId) => {
+              await openBriefing(briefingId);
+            }}
+          />
+        )}
 
       <Card>
         <CardHeader>

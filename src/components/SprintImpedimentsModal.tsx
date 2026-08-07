@@ -53,6 +53,7 @@ import {
   ImpedimentType,
 } from "@/types/sprint";
 import { cn } from "@/lib/utils";
+import { safeExternalUrl } from "@/lib/security";
 
 interface Props {
   sprint: Sprint;
@@ -137,7 +138,7 @@ function ImpedimentCard({
       <div className="flex items-center gap-3">
         {imp.hasTicket && imp.ticketUrl && (
           <a
-            href={imp.ticketUrl}
+            href={safeExternalUrl(imp.ticketUrl)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-primary hover:underline flex items-center gap-1"

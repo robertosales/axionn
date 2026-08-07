@@ -1,5 +1,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { assertSafeOutboundUrl, hostsFromEnv } from '../_shared/outbound-url.ts';
+import { readTextBody } from '../_shared/request-body.ts';
+
+const MAX_BODY_BYTES = 1_000_000;
+const MAX_BULK_PROJECTS = 50;
+const MAX_BULK_PAGES_PER_PROJECT = 100;
+const PAGE_SIZE = 100;
+const ALLOWED_EVENTS = new Set(['issue_created', 'issue_updated', 'issues_bulk']);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,111 +17,83 @@ const corsHeaders = {
 
 interface RedmineIssue {
   id: number;
-  project: { id: number; name: string };
+  project: { id: number; name?: string };
   tracker: { id: number; name: string };
   status: { id: number; name: string };
-  priority: { id: number; name: string };
-  author: { id: number; name: string };
+  priority?: { id: number; name: string };
+  author?: { id: number; name: string };
   assigned_to?: { id: number; name: string };
   subject: string;
   description?: string;
-  start_date?: string;
-  due_date?: string;
   estimated_hours?: number;
-  spent_hours?: number;
   created_on: string;
   updated_on: string;
   closed_on?: string;
-  custom_fields?: Array<{ id: number; name: string; value: string }>;
+}
+
+interface RedmineScope { projectId: string; teamId: string }
+
+function json(status: number, body: Record<string, unknown>): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 }
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   const correlationId = crypto.randomUUID();
   const startTime = Date.now();
-  let healthContext: {
-    supabase: any;
-    organizationId: string;
-    projectId: string | null;
-    integrationId: string;
-  } | null = null;
+  let healthContext: any = null;
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
     const integrationId = req.headers.get('x-integration-id');
-    if (!integrationId) {
-      return new Response(JSON.stringify({ error: 'Missing x-integration-id header' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    if (!integrationId) return json(400, { error: 'Missing x-integration-id header' });
 
-    // Get integration config
     const { data: integration, error: integrationError } = await supabase
-      .from('redmine_integrations')
-      .select('*')
-      .eq('id', integrationId)
-      .single();
-
+      .from('redmine_integrations').select('*').eq('id', integrationId).single();
     if (integrationError || !integration) {
-      console.warn('[Redmine Sync] Integration not found:', integrationId);
-      return new Response(JSON.stringify({
-        error: 'Integration not found',
-        error_code: 'INTEGRATION_NOT_FOUND',
-        correlation_id: correlationId,
-      }), {
-        status: 409,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json(409, { error: 'Integration not found', error_code: 'INTEGRATION_NOT_FOUND', correlation_id: correlationId });
     }
 
-    const organizationId = integration.organization_id;
     healthContext = {
       supabase,
-      organizationId,
+      organizationId: integration.organization_id,
       projectId: integration.project_id ?? null,
       integrationId,
     };
-
     if (!integration.is_active) {
       await recordRedmineHealth(healthContext, {
-        status: 'degraded',
-        latencyMs: Date.now() - startTime,
-        correlationId,
-        errorCode: 'INTEGRATION_INACTIVE',
-        errorMessage: 'Redmine integration is inactive',
+        status: 'degraded', latencyMs: Date.now() - startTime, correlationId,
+        errorCode: 'INTEGRATION_INACTIVE', errorMessage: 'Redmine integration is inactive',
       });
-      return new Response(JSON.stringify({ error: 'Integration is inactive' }), {
-        status: 409,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json(409, { error: 'Integration is inactive' });
     }
 
-    // Verify webhook signature
-    const signature = req.headers.get('x-redmine-api-key');
-    if (integration.webhook_secret_encrypted && signature) {
-      // In production, decrypt and verify
-      const isValid = signature === integration.webhook_secret_encrypted; // Placeholder
-      if (!isValid) {
-        throw new Error('Invalid webhook signature');
-      }
+    const providedSecret = req.headers.get('x-redmine-api-key');
+    if (!integration.webhook_secret_encrypted) return json(503, { error: 'Webhook authentication is not configured' });
+    if (!providedSecret) return json(401, { error: 'Missing webhook signature' });
+    if (!(await constantTimeEqual(providedSecret, integration.webhook_secret_encrypted))) {
+      return json(401, { error: 'Invalid webhook signature' });
     }
 
-    const payload = await req.json();
-    const eventType = payload.event_type || 'unknown';
+    let payload: any;
+    try {
+      payload = JSON.parse(await readTextBody(req, MAX_BODY_BYTES));
+    } catch {
+      return json(400, { error: 'Invalid webhook payload' });
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !ALLOWED_EVENTS.has(payload.event_type)) {
+      return json(400, { error: 'Unsupported or missing event_type' });
+    }
+    const eventType = payload.event_type as string;
+    if (eventType !== 'issues_bulk') assertValidIssue(payload.issue);
 
     let issuesProcessed = 0;
     let issuesCreated = 0;
@@ -121,411 +101,232 @@ serve(async (req: Request) => {
     let issuesSkipped = 0;
     let issuesFailed = 0;
 
-    // Log sync event start
-    await supabase.rpc('log_redmine_sync_event', {
+    await requireRpc(supabase, 'log_redmine_sync_event', {
       p_integration_id: integrationId,
-      p_organization_id: organizationId,
-      p_sync_type: 'webhook',
-      p_trigger_source: 'webhook',
-      p_status: 'started',
-      p_correlation_id: correlationId,
+      p_organization_id: integration.organization_id,
+      p_sync_type: eventType === 'issues_bulk' ? 'bulk' : 'webhook',
+      p_trigger_source: eventType === 'issues_bulk' ? 'schedule' : 'webhook',
+      p_status: 'started', p_correlation_id: correlationId,
     });
 
-    // Handle different webhook events
     if (eventType === 'issue_updated' || eventType === 'issue_created') {
-      const issue = payload.issue as RedmineIssue;
-      const result = await processIssue(supabase, integration, issue, correlationId);
-      issuesProcessed++;
-      if (result.action === 'created') issuesCreated++;
-      else if (result.action === 'updated') issuesUpdated++;
-      else issuesSkipped++;
-    } else if (eventType === 'issues_bulk') {
-      // Bulk sync from schedule
+      const result = await processIssue(supabase, integration, payload.issue, correlationId);
+      issuesProcessed = 1;
+      if (result.action === 'created') issuesCreated = 1;
+      else if (result.action === 'updated') issuesUpdated = 1;
+      else issuesSkipped = 1;
+    } else {
       const result = await bulkSyncIssues(supabase, integration, correlationId);
-      issuesProcessed = result.processed;
-      issuesCreated = result.created;
-      issuesUpdated = result.updated;
-      issuesSkipped = result.skipped;
-      issuesFailed = result.failed;
+      ({ processed: issuesProcessed, created: issuesCreated, updated: issuesUpdated,
+        skipped: issuesSkipped, failed: issuesFailed } = result);
     }
 
     const completedWithErrors = issuesFailed > 0;
-    await supabase
-      .from('redmine_integrations')
-      .update({
-        last_sync_at: new Date().toISOString(),
-        last_sync_status: completedWithErrors ? 'partial' : 'success',
-        last_sync_items: issuesProcessed,
-        last_sync_error: completedWithErrors
-          ? `${issuesFailed} item(ns) failed during synchronization`
-          : null,
-      })
-      .eq('id', integrationId);
+    const { error: integrationUpdateError } = await supabase.from('redmine_integrations').update({
+      last_sync_at: new Date().toISOString(),
+      last_sync_status: completedWithErrors ? 'partial' : 'success',
+      last_sync_items: issuesProcessed,
+      last_sync_error: completedWithErrors ? `${issuesFailed} item(ns) failed during synchronization` : null,
+    }).eq('id', integrationId).eq('organization_id', integration.organization_id);
+    if (integrationUpdateError) throw integrationUpdateError;
 
     await recordRedmineHealth(healthContext, {
       status: completedWithErrors ? 'degraded' : 'healthy',
-      latencyMs: Date.now() - startTime,
-      correlationId,
+      latencyMs: Date.now() - startTime, correlationId,
       errorCode: completedWithErrors ? 'PARTIAL_SYNC' : undefined,
-      errorMessage: completedWithErrors
-        ? `${issuesFailed} item(ns) failed during synchronization`
-        : undefined,
-      details: {
-        event_type: eventType,
-        processed: issuesProcessed,
-        created: issuesCreated,
-        updated: issuesUpdated,
-        skipped: issuesSkipped,
-        failed: issuesFailed,
-      },
+      errorMessage: completedWithErrors ? `${issuesFailed} item(ns) failed during synchronization` : undefined,
+      details: { event_type: eventType, processed: issuesProcessed, created: issuesCreated,
+        updated: issuesUpdated, skipped: issuesSkipped, failed: issuesFailed },
+    });
+    await requireRpc(supabase, 'log_redmine_sync_event', {
+      p_integration_id: integrationId, p_organization_id: integration.organization_id,
+      p_sync_type: eventType === 'issues_bulk' ? 'bulk' : 'webhook',
+      p_trigger_source: eventType === 'issues_bulk' ? 'schedule' : 'webhook',
+      p_status: completedWithErrors ? 'partial' : 'completed',
+      p_issues_processed: issuesProcessed, p_issues_created: issuesCreated,
+      p_issues_updated: issuesUpdated, p_issues_skipped: issuesSkipped,
+      p_issues_failed: issuesFailed, p_correlation_id: correlationId,
     });
 
-    // Log completion
-    await supabase.rpc('log_redmine_sync_event', {
-      p_integration_id: integrationId,
-      p_organization_id: organizationId,
-      p_sync_type: 'webhook',
-      p_trigger_source: 'webhook',
-      p_status: issuesFailed > 0 ? 'partial' : 'completed',
-      p_issues_processed: issuesProcessed,
-      p_issues_created: issuesCreated,
-      p_issues_updated: issuesUpdated,
-      p_issues_skipped: issuesSkipped,
-      p_issues_failed: issuesFailed,
-      p_correlation_id: correlationId,
-    });
-
-    return new Response(JSON.stringify({
-      success: true,
-      correlation_id: correlationId,
-      processed: issuesProcessed,
-      created: issuesCreated,
-      updated: issuesUpdated,
-      skipped: issuesSkipped,
-      failed: issuesFailed,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json(200, { success: true, correlation_id: correlationId, processed: issuesProcessed,
+      created: issuesCreated, updated: issuesUpdated, skipped: issuesSkipped, failed: issuesFailed });
   } catch (error) {
     console.error('[Redmine Sync] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
+    const safeError = error instanceof Error ? error.message.slice(0, 500) : 'Unknown synchronization error';
     if (healthContext) {
-      await healthContext.supabase
-        .from('redmine_integrations')
-        .update({
-          last_sync_at: new Date().toISOString(),
-          last_sync_status: 'failed',
-          last_sync_error: errorMessage.slice(0, 500),
-        })
-        .eq('id', healthContext.integrationId);
-
+      await healthContext.supabase.from('redmine_integrations').update({
+        last_sync_at: new Date().toISOString(), last_sync_status: 'failed', last_sync_error: safeError,
+      }).eq('id', healthContext.integrationId).eq('organization_id', healthContext.organizationId);
       await recordRedmineHealth(healthContext, {
-        status: 'unhealthy',
-        latencyMs: Date.now() - startTime,
-        correlationId,
-        errorCode: 'SYNC_FAILED',
-        errorMessage,
+        status: 'unhealthy', latencyMs: Date.now() - startTime, correlationId,
+        errorCode: 'SYNC_FAILED', errorMessage: safeError,
+      });
+      await healthContext.supabase.rpc('log_redmine_sync_event', {
+        p_integration_id: healthContext.integrationId, p_organization_id: healthContext.organizationId,
+        p_sync_type: 'webhook', p_trigger_source: 'webhook', p_status: 'failed',
+        p_issues_failed: 1, p_error_details: { error: safeError }, p_correlation_id: correlationId,
       });
     }
-
-    // Log failure
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const integrationId = req.headers.get('x-integration-id');
-    if (integrationId) {
-      const { data: integration } = await supabase
-        .from('redmine_integrations')
-        .select('organization_id')
-        .eq('id', integrationId)
-        .single();
-
-      if (integration) {
-        await supabase.rpc('log_redmine_sync_event', {
-          p_integration_id: integrationId,
-          p_organization_id: integration.organization_id,
-          p_sync_type: 'webhook',
-          p_trigger_source: 'webhook',
-          p_status: 'failed',
-          p_issues_failed: 1,
-          p_error_details: { error: errorMessage.slice(0, 500) },
-          p_correlation_id: correlationId,
-        });
-      }
-    }
-
-    return new Response(JSON.stringify({
-      error: 'Internal server error',
-      correlation_id: correlationId,
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json(500, { error: 'Internal server error', correlation_id: correlationId });
   }
 });
 
-async function recordRedmineHealth(
-  context: {
-    supabase: any;
-    organizationId: string;
-    projectId: string | null;
-    integrationId: string;
-  },
-  event: {
-    status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
-    latencyMs: number;
-    correlationId: string;
-    errorCode?: string;
-    errorMessage?: string;
-    details?: Record<string, unknown>;
-  },
-): Promise<void> {
-  const { error } = await context.supabase
-    .from('integration_health_events')
-    .insert({
-      organization_id: context.organizationId,
-      project_id: context.projectId,
-      provider: 'redmine',
-      integration_id: context.integrationId,
-      check_type: 'sync',
-      status: event.status,
-      latency_ms: event.latencyMs,
-      error_code: event.errorCode ?? null,
-      error_message: event.errorMessage?.slice(0, 500) ?? null,
-      details: event.details ?? {},
-      correlation_id: event.correlationId,
-    });
+async function constantTimeEqual(left: string, right: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', encoder.encode(right), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(left));
+  return crypto.subtle.verify('HMAC', key, signature, encoder.encode(right));
+}
 
-  if (error) {
-    // Health telemetry must not interrupt the synchronization workflow.
-    console.error('[Redmine Sync] Failed to record integration health:', error);
+function assertValidIssue(value: unknown): asserts value is RedmineIssue {
+  const issue = value as any;
+  const validDate = (v: unknown) => typeof v === 'string' && Number.isFinite(Date.parse(v));
+  if (!issue || typeof issue !== 'object' || !Number.isSafeInteger(issue.id) || issue.id <= 0 ||
+      !Number.isSafeInteger(issue.project?.id) || issue.project.id <= 0 ||
+      !Number.isSafeInteger(issue.tracker?.id) || typeof issue.tracker?.name !== 'string' ||
+      !Number.isSafeInteger(issue.status?.id) || typeof issue.status?.name !== 'string' ||
+      typeof issue.subject !== 'string' || issue.subject.trim().length === 0 || issue.subject.length > 500 ||
+      (issue.description != null && (typeof issue.description !== 'string' || issue.description.length > 100_000)) ||
+      !validDate(issue.created_on) || !validDate(issue.updated_on)) {
+    throw new Error('INVALID_REDMINE_ISSUE');
   }
 }
 
-async function processIssue(
-  supabase: any,
-  integration: any,
-  issue: RedmineIssue,
-  correlationId: string
-): Promise<{ action: string }> {
-  // Find existing link
-  const { data: existingLink } = await supabase
-    .from('redmine_issue_links')
-    .select('*')
-    .eq('integration_id', integration.id)
-    .eq('redmine_issue_id', issue.id)
-    .single();
+async function resolveScope(supabase: any, integration: any, issue: RedmineIssue): Promise<RedmineScope> {
+  const mappings = Array.isArray(integration.project_mappings) ? integration.project_mappings : [];
+  const mapping = mappings.find((item: any) =>
+    Number(item?.redmine_project_id) === issue.project.id && typeof item?.axionn_project_id === 'string');
+  const projectId = mapping?.axionn_project_id ?? integration.project_id;
+  if (!projectId) throw new Error('REDMINE_PROJECT_MAPPING_REQUIRED');
 
-  // Map tracker to Axionn entity type
-  const trackerName = issue.tracker?.name || 'Task';
-  const entityType = integration.tracker_mappings?.[trackerName] || 'task';
-
-  // Map status
-  const statusName = issue.status?.name || 'New';
-  const axionnStatus = integration.status_mappings?.[statusName] || mapDefaultStatus(statusName);
-
-  // Map priority
-  const priorityName = issue.priority?.name || 'Normal';
-  const axionnPriority = integration.priority_mappings?.[priorityName] || priorityName;
-
-  // Find or create Axionn entity
-  let axionnEntityId = existingLink?.axionn_entity_id;
-
-  if (!axionnEntityId) {
-    // Try to find by external ID or create new
-    const { data: existingEntity } = await supabase
-      .from(entityType === 'user_story' ? 'user_stories' : 'impediments')
-      .select('id')
-      .eq('organization_id', integration.organization_id)
-      .eq('external_id', `redmine-${issue.id}`)
-      .single();
-
-    if (existingEntity) {
-      axionnEntityId = existingEntity.id;
-    }
-  }
-
-  if (axionnEntityId) {
-    // Update existing
-    const updateData = buildUpdateData(issue, axionnStatus, axionnPriority, integration);
-    await updateAxionnEntity(supabase, entityType, axionnEntityId, updateData, correlationId);
-    return { action: 'updated' };
-  } else if (integration.sync_direction !== 'axionn_to_redmine') {
-    // Create new
-    const createData = buildCreateData(issue, entityType, integration);
-    const newEntity = await createAxionnEntity(supabase, entityType, createData, correlationId);
-    if (newEntity) {
-      axionnEntityId = newEntity.id;
-      await createLink(supabase, integration, issue, entityType, axionnEntityId, 'redmine_to_axionn', correlationId);
-      return { action: 'created' };
-    }
-  }
-
-  return { action: 'skipped' };
-}
-
-function mapDefaultStatus(redmineStatus: string): string {
-  const statusMap: Record<string, string> = {
-    'New': 'todo',
-    'In Progress': 'in_progress',
-    'Resolved': 'done',
-    'Closed': 'done',
-    'Rejected': 'cancelled',
-    'Feedback': 'in_review',
-  };
-  return statusMap[redmineStatus] || 'todo';
-}
-
-function buildUpdateData(issue: RedmineIssue, status: string, priority: string, integration: any): any {
-  return {
-    title: issue.subject,
-    description: issue.description || '',
-    status: status,
-    priority: priority,
-    updated_at: new Date(issue.updated_on).toISOString(),
-    external_updated_at: new Date(issue.updated_on).toISOString(),
-  };
-}
-
-function buildCreateData(issue: RedmineIssue, entityType: string, integration: any): any {
-  const baseData = {
-    organization_id: integration.organization_id,
-    project_id: integration.project_mappings?.find((m: any) => m.redmine_project_id === issue.project.id)?.axionn_project_id,
-    external_id: `redmine-${issue.id}`,
-    title: issue.subject,
-    description: issue.description || '',
-    status: mapDefaultStatus(issue.status?.name || 'New'),
-    priority: issue.priority?.name || 'Normal',
-    created_at: new Date(issue.created_on).toISOString(),
-    updated_at: new Date(issue.updated_on).toISOString(),
-    metadata_json: {
-      redmine_issue_id: issue.id,
-      redmine_project_id: issue.project.id,
-      redmine_tracker: issue.tracker?.name,
-      redmine_author_id: issue.author?.id,
-      redmine_assignee_id: issue.assigned_to?.id,
-      custom_fields: issue.custom_fields,
-    },
-  };
-
-  if (entityType === 'user_story') {
-    return {
-      ...baseData,
-      code: `RM-${issue.id}`,
-      story_points: issue.estimated_hours || null,
-    };
-  } else {
-    return {
-      ...baseData,
-      severity: mapPriorityToSeverity(issue.priority?.name),
-      type: 'bug',
-    };
-  }
-}
-
-function mapPriorityToSeverity(priority: string): string {
-  const map: Record<string, string> = {
-    'Immediate': 'critical',
-    'Urgent': 'high',
-    'High': 'high',
-    'Normal': 'medium',
-    'Low': 'low',
-  };
-  return map[priority] || 'medium';
-}
-
-async function updateAxionnEntity(supabase: any, entityType: string, entityId: string, data: any, correlationId: string): Promise<void> {
-  const table = entityType === 'user_story' ? 'user_stories' : 'impediments';
-  await supabase.from(table).update(data).eq('id', entityId);
-}
-
-async function createAxionnEntity(supabase: any, entityType: string, data: any, correlationId: string): Promise<any> {
-  const table = entityType === 'user_story' ? 'user_stories' : 'impediments';
-  const { data: entity, error } = await supabase.from(table).insert(data).select().single();
+  const { data: project, error } = await supabase.from('projects').select('id, team_id')
+    .eq('id', projectId).eq('org_id', integration.organization_id).maybeSingle();
   if (error) throw error;
-  return entity;
+  if (!project?.team_id) throw new Error('REDMINE_PROJECT_OUT_OF_SCOPE');
+  return { projectId: project.id, teamId: project.team_id };
 }
 
-async function createLink(
-  supabase: any,
-  integration: any,
-  issue: RedmineIssue,
-  entityType: string,
-  entityId: string,
-  direction: string,
-  correlationId: string
-): Promise<void> {
-  await supabase.from('redmine_issue_links').insert({
-    integration_id: integration.id,
-    organization_id: integration.organization_id,
-    redmine_issue_id: issue.id,
-    redmine_project_id: issue.project.id,
-    redmine_tracker_id: issue.tracker?.id,
-    redmine_status_id: issue.status?.id,
-    redmine_priority_id: issue.priority?.id,
-    axionn_entity_type: entityType,
-    axionn_entity_id: entityId,
-    sync_direction: direction,
-    last_synced_at: new Date().toISOString(),
-    last_redmine_updated_on: new Date(issue.updated_on).toISOString(),
+async function processIssue(supabase: any, integration: any, issue: RedmineIssue, correlationId: string) {
+  assertValidIssue(issue);
+  const scope = await resolveScope(supabase, integration, issue);
+  const trackerName = issue.tracker.name;
+  const entityType = integration.tracker_mappings?.[trackerName] ?? 'user_story';
+  if (entityType !== 'user_story') throw new Error('REDMINE_ENTITY_TYPE_NOT_IMPLEMENTED');
+
+  const { data: existingLink, error: linkReadError } = await supabase.from('redmine_issue_links').select('*')
+    .eq('integration_id', integration.id).eq('organization_id', integration.organization_id)
+    .eq('redmine_issue_id', issue.id).maybeSingle();
+  if (linkReadError) throw linkReadError;
+
+  const statusName = issue.status.name;
+  const status = integration.status_mappings?.[statusName] ?? mapDefaultStatus(statusName);
+  const priorityName = issue.priority?.name ?? 'Normal';
+  const priority = integration.priority_mappings?.[priorityName] ?? priorityName.toLowerCase();
+
+  if (existingLink) {
+    if (existingLink.axionn_entity_type !== 'user_story') throw new Error('REDMINE_LINK_ENTITY_TYPE_MISMATCH');
+    const { data: updated, error } = await supabase.from('user_stories').update({
+      title: issue.subject.trim(), description: issue.description ?? '', status, priority,
+      ...(Number.isFinite(issue.estimated_hours) ? { story_points: issue.estimated_hours } : {}),
+    }).eq('id', existingLink.axionn_entity_id).eq('team_id', scope.teamId).select('id').maybeSingle();
+    if (error) throw error;
+    if (!updated) throw new Error('REDMINE_LINK_TARGET_OUT_OF_SCOPE');
+    await updateLink(supabase, existingLink.id, integration, issue);
+    return { action: 'updated' };
+  }
+
+  if (integration.sync_direction === 'axionn_to_redmine') return { action: 'skipped' };
+  const { data: created, error: createError } = await supabase.from('user_stories').insert({
+    team_id: scope.teamId, code: `RM-${issue.id}`, title: issue.subject.trim(),
+    description: issue.description ?? '', status, priority,
+    story_points: Number.isFinite(issue.estimated_hours) ? issue.estimated_hours : 0,
+  }).select('id').single();
+  if (createError) throw createError;
+  await createLink(supabase, integration, issue, created.id, correlationId);
+  return { action: 'created' };
+}
+
+function mapDefaultStatus(status: string): string {
+  return ({ New: 'todo', 'In Progress': 'in_progress', Resolved: 'done', Closed: 'done',
+    Rejected: 'cancelled', Feedback: 'in_review' } as Record<string, string>)[status] ?? 'todo';
+}
+
+async function createLink(supabase: any, integration: any, issue: RedmineIssue, entityId: string, _correlationId: string) {
+  const { error } = await supabase.from('redmine_issue_links').insert({
+    integration_id: integration.id, organization_id: integration.organization_id,
+    redmine_issue_id: issue.id, redmine_project_id: issue.project.id,
+    redmine_tracker_id: issue.tracker.id, redmine_status_id: issue.status.id,
+    redmine_priority_id: issue.priority?.id ?? null, axionn_entity_type: 'user_story',
+    axionn_entity_id: entityId, sync_direction: 'redmine_to_axionn',
+    last_synced_at: new Date().toISOString(), last_redmine_updated_on: new Date(issue.updated_on).toISOString(),
     sync_status: 'synced',
   });
+  if (error) throw error;
 }
 
-async function bulkSyncIssues(supabase: any, integration: any, correlationId: string): Promise<any> {
-  // This would be called by a scheduled job
-  // Fetch issues from Redmine API and process
+async function updateLink(supabase: any, linkId: string, integration: any, issue: RedmineIssue) {
+  const { data, error } = await supabase.from('redmine_issue_links').update({
+    redmine_project_id: issue.project.id, redmine_tracker_id: issue.tracker.id,
+    redmine_status_id: issue.status.id, redmine_priority_id: issue.priority?.id ?? null,
+    last_synced_at: new Date().toISOString(), last_redmine_updated_on: new Date(issue.updated_on).toISOString(),
+    sync_status: 'synced',
+  }).eq('id', linkId).eq('integration_id', integration.id)
+    .eq('organization_id', integration.organization_id).select('id').maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('REDMINE_LINK_OUT_OF_SCOPE');
+}
+
+async function bulkSyncIssues(supabase: any, integration: any, correlationId: string) {
   let processed = 0, created = 0, updated = 0, skipped = 0, failed = 0;
+  const baseUrl = assertSafeOutboundUrl(integration.base_url, {
+    allowedHosts: hostsFromEnv('REDMINE_ALLOWED_HOSTS'),
+  }).href.replace(/\/$/, '');
+  if (!integration.api_key_encrypted) throw new Error('REDMINE_API_KEY_NOT_CONFIGURED');
+  const rawProjectIds = integration.sync_filter_json?.project_ids;
+  const projectIds = Array.isArray(rawProjectIds) ? rawProjectIds.slice(0, MAX_BULK_PROJECTS) : [];
+  if (projectIds.length === 0) throw new Error('REDMINE_BULK_PROJECTS_REQUIRED');
+  if (rawProjectIds.length > MAX_BULK_PROJECTS) throw new Error('REDMINE_BULK_PROJECT_LIMIT_EXCEEDED');
 
-  try {
-    // Build Redmine API query
-    const baseUrl = integration.base_url.replace(/\/$/, '');
-    const apiKey = integration.api_key_encrypted; // Would need decryption
-    const projectIds = integration.sync_filter_json?.project_ids || [];
-
-    for (const projectId of projectIds) {
-      let offset = 0;
-      const limit = 100;
-      let hasMore = true;
-
-      while (hasMore) {
-        const url = `${baseUrl}/issues.json?project_id=${projectId}&limit=${limit}&offset=${offset}&sort=updated_on:desc`;
-        const response = await fetch(url, {
-          headers: { 'X-Redmine-API-Key': apiKey, 'Content-Type': 'application/json' },
-        });
-
-        if (!response.ok) throw new Error(`Redmine API error: ${response.status}`);
-
-        const data = await response.json();
-        const issues = data.issues || [];
-
-        for (const issue of issues) {
-          try {
-            const result = await processIssue(supabase, integration, issue, correlationId);
-            processed++;
-            if (result.action === 'created') created++;
-            else if (result.action === 'updated') updated++;
-            else skipped++;
-          } catch (e) {
-            failed++;
-            console.error(`Failed to process issue ${issue.id}:`, e);
-          }
+  for (const projectId of projectIds) {
+    if (!Number.isSafeInteger(Number(projectId)) || Number(projectId) <= 0) throw new Error('INVALID_REDMINE_PROJECT_ID');
+    for (let page = 0; page < MAX_BULK_PAGES_PER_PROJECT; page++) {
+      const url = `${baseUrl}/issues.json?project_id=${encodeURIComponent(String(projectId))}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}&sort=updated_on:desc`;
+      const response = await fetch(url, { headers: { 'X-Redmine-API-Key': integration.api_key_encrypted, Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`REDMINE_API_${response.status}`);
+      const body = await response.json();
+      if (!Array.isArray(body?.issues) || body.issues.length > PAGE_SIZE) throw new Error('INVALID_REDMINE_API_RESPONSE');
+      for (const issue of body.issues) {
+        try {
+          assertValidIssue(issue);
+          const result = await processIssue(supabase, integration, issue, correlationId);
+          processed++;
+          if (result.action === 'created') created++;
+          else if (result.action === 'updated') updated++;
+          else skipped++;
+        } catch (error) {
+          failed++;
+          console.error('[Redmine Sync] Issue failed:', issue?.id, error);
         }
-
-        hasMore = issues.length === limit;
-        offset += limit;
-
-        // Rate limiting
-        await new Promise(r => setTimeout(r, 100));
       }
+      if (body.issues.length < PAGE_SIZE) break;
+      if (page === MAX_BULK_PAGES_PER_PROJECT - 1) throw new Error('REDMINE_BULK_PAGE_LIMIT_EXCEEDED');
     }
-  } catch (error) {
-    console.error('Bulk sync error:', error);
-    failed++;
   }
-
   return { processed, created, updated, skipped, failed };
+}
+
+async function requireRpc(supabase: any, name: string, args: Record<string, unknown>) {
+  const { error } = await supabase.rpc(name, args);
+  if (error) throw error;
+}
+
+async function recordRedmineHealth(context: any, event: any): Promise<void> {
+  const { error } = await context.supabase.from('integration_health_events').insert({
+    organization_id: context.organizationId, project_id: context.projectId,
+    provider: 'redmine', integration_id: context.integrationId, check_type: 'sync',
+    status: event.status, latency_ms: event.latencyMs, error_code: event.errorCode ?? null,
+    error_message: event.errorMessage?.slice(0, 500) ?? null, details: event.details ?? {},
+    correlation_id: event.correlationId,
+  });
+  if (error) console.error('[Redmine Sync] Failed to record integration health:', error);
 }

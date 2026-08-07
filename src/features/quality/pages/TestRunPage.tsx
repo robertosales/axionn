@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { QUALITY_MANAGEMENT_ENABLED } from "@/lib/featureFlags";
+import { safeExternalUrl } from "@/lib/security";
 import { useRunActions, useTestRun } from "../hooks/useTestRuns";
 import { isTerminalStatus, RUN_ITEM_ACTIVE_STATUSES } from "../utils/qualityRunStatus";
 
@@ -170,7 +171,7 @@ export default function TestRunPage() {
                     <div className="mt-2 flex flex-wrap gap-1">
                       {item.quality_test_evidences.map(ev => (
                         <Badge key={ev.id} variant="secondary" className="text-xs">
-                          {ev.external_url ? <a href={ev.external_url} target="_blank" rel="noopener noreferrer" className="underline">{ev.title}</a> : ev.title}
+                          {safeExternalUrl(ev.external_url) ? <a href={safeExternalUrl(ev.external_url)} target="_blank" rel="noopener noreferrer" className="underline">{ev.title}</a> : ev.title}
                         </Badge>
                       ))}
                     </div>

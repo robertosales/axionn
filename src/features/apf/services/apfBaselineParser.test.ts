@@ -33,8 +33,8 @@ function workbookBuffer(): ArrayBuffer {
 }
 
 describe("parseApfBaselineArrayBuffer", () => {
-  it("agrupa linhas oficiais pelo código EF sem perder os itens", () => {
-    const parsed = parseApfBaselineArrayBuffer(workbookBuffer());
+  it("agrupa linhas oficiais pelo código EF sem perder os itens", async () => {
+    const parsed = await parseApfBaselineArrayBuffer(workbookBuffer());
     const ef172 = parsed.items.filter((item) => item.process_ref === "EF172");
 
     expect(parsed.scope).toBe("project");
@@ -46,16 +46,16 @@ describe("parseApfBaselineArrayBuffer", () => {
     )).toBe(true);
   });
 
-  it("preserva tipo, complexidade e PF Bruto de cada linha", () => {
-    const parsed = parseApfBaselineArrayBuffer(workbookBuffer());
+  it("preserva tipo, complexidade e PF Bruto de cada linha", async () => {
+    const parsed = await parseApfBaselineArrayBuffer(workbookBuffer());
     expect(parsed.items.find((item) => item.description.includes("Distribuir")))
       .toMatchObject({ process_ref: "EF172", function_sigla: "EE", complexity: "Baixa", pf_bruto: 3 });
     expect(parsed.items.find((item) => item.description.includes("Listar")))
       .toMatchObject({ function_sigla: "CE", complexity: "Média", pf_bruto: 4 });
   });
 
-  it("deriva pesos por tipo e complexidade e fatores contratuais", () => {
-    const parsed = parseApfBaselineArrayBuffer(workbookBuffer());
+  it("deriva pesos por tipo e complexidade e fatores contratuais", async () => {
+    const parsed = await parseApfBaselineArrayBuffer(workbookBuffer());
     expect(parsed.functionTypes).toEqual(expect.arrayContaining([
       expect.objectContaining({ sigla: "CE", weights_by_complexity: { Média: 4, Baixa: 3 } }),
       expect.objectContaining({ sigla: "ALI", func_class: "data", weights_by_complexity: { Baixa: 7 } }),
@@ -66,8 +66,8 @@ describe("parseApfBaselineArrayBuffer", () => {
     ]));
   });
 
-  it("mantém itens sem EF pesquisáveis pelo nome", () => {
-    const parsed = parseApfBaselineArrayBuffer(workbookBuffer());
+  it("mantém itens sem EF pesquisáveis pelo nome", async () => {
+    const parsed = await parseApfBaselineArrayBuffer(workbookBuffer());
     expect(parsed.items.find((item) => item.description.startsWith("Serviço"))?.process_ref)
       .toBe("ITEM:servico-auxiliar-sem-codigo-ef");
     expect(parsed.warnings).toContain(

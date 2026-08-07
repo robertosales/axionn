@@ -217,14 +217,44 @@ export function useOrganizationMembers() {
       if (!currentOrganizationId) throw new Error("Organização não selecionada.");
       setMutating(true);
       try {
+        let moduleRoles: Array<{ module_key: string; role_name: string }> | null =
+          null;
+
+        if (input.moduleKeys) {
+          const { data: currentModuleRoles, error: moduleRolesError } =
+            await (supabase as any).rpc(
+              "get_organization_member_module_roles_v1",
+              { p_org_id: currentOrganizationId },
+            );
+
+          if (moduleRolesError) throw moduleRolesError;
+
+          const currentRolesByModule = new Map(
+            ((currentModuleRoles ?? []) as Array<Record<string, unknown>>)
+              .filter((row) => String(row.user_id) === input.userId)
+              .map((row) => [
+                String(row.module_key),
+                String(row.role_name) === "qa"
+                  ? "qa_analyst"
+                  : String(row.role_name ?? "member"),
+              ]),
+          );
+
+          moduleRoles = input.moduleKeys.map((moduleKey) => ({
+            module_key: moduleKey,
+            role_name: currentRolesByModule.get(moduleKey) ?? "member",
+          }));
+        }
+
         const { error: mutationError } = await (supabase as any).rpc(
-          "update_organization_member_v2",
+          "manage_organization_member_profile_v2",
           {
             p_org_id: currentOrganizationId,
             p_user_id: input.userId,
+            p_display_name: null,
             p_role: input.role ?? null,
             p_is_active: input.isActive ?? null,
-            p_module_keys: input.moduleKeys ?? null,
+            p_module_roles: moduleRoles,
           },
         );
         if (mutationError) throw mutationError;

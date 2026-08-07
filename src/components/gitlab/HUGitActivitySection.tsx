@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GitMerge, GitCommit, Rocket, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { safeExternalUrl } from "@/lib/security";
 
 interface Props {
   huId: string;
@@ -102,7 +103,7 @@ export function HUGitActivitySection({ huId, organizationId }: Props) {
                           {mr.state}
                         </Badge>
                         {mr.web_url && (
-                          <a href={mr.web_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-slate-700">
+                          <a href={safeExternalUrl(mr.web_url)} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-slate-700">
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
@@ -141,7 +142,7 @@ export function HUGitActivitySection({ huId, organizationId }: Props) {
                           {c.short_sha ?? c.commit_sha.slice(0, 8)}
                         </span>
                         {c.web_url && (
-                          <a href={c.web_url} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-slate-700">
+                          <a href={safeExternalUrl(c.web_url)} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-slate-700">
                             <ExternalLink className="h-3 w-3" />
                           </a>
                         )}

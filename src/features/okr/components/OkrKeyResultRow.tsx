@@ -3,7 +3,6 @@ import { MessageSquare, Pencil, Archive, X, Check, RefreshCw, History } from "lu
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { OkrKeyResult } from "../types";
-import { calculateKrProgress } from "../domain/okrCalculations";
 import { getOkrMetric } from "../domain/metricCatalog";
 
 const UNIT_OPTIONS: { value: OkrKeyResult["unit"]; label: string; display: string }[] = [
@@ -31,15 +30,7 @@ interface Props {
 }
 
 export function krProgress(kr: OkrKeyResult): number {
-  if (kr.calculated_progress != null) return Math.round(kr.calculated_progress);
-  return Math.round(calculateKrProgress({
-    baseline: kr.baseline_value ?? null,
-    current: kr.current_value ?? kr.current,
-    target: kr.target_value ?? kr.target,
-    targetMin: kr.target_min,
-    targetMax: kr.target_max,
-    direction: kr.direction ?? "increase",
-  }).progress ?? 0);
+  return Math.round(kr.calculated_progress ?? 0);
 }
 
 export function krProgressColor(pct: number): string {

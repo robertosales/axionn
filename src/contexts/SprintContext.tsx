@@ -12,6 +12,7 @@ import {
   ImpedimentCriticality,
   ActivityType,
   Epic,
+  BacklogFeature,
   CustomFieldDefinition,
   AutomationRule,
   WorkflowColumn,
@@ -57,6 +58,7 @@ export interface LoadingSlices {
   activities: boolean;
   sprints: boolean;
   epics: boolean;
+  features: boolean;
   customFields: boolean;
   automationRules: boolean;
   workflowColumns: boolean;
@@ -69,6 +71,7 @@ const INITIAL_LOADING_SLICES: LoadingSlices = {
   activities: false,
   sprints: false,
   epics: false,
+  features: false,
   customFields: false,
   automationRules: false,
   workflowColumns: false,
@@ -81,6 +84,7 @@ const ALL_LOADING_SLICES: LoadingSlices = {
   activities: true,
   sprints: true,
   epics: true,
+  features: true,
   customFields: true,
   automationRules: true,
   workflowColumns: true,
@@ -93,6 +97,7 @@ interface SprintContextType {
   activities: Activity[];
   sprints: Sprint[];
   epics: Epic[];
+  features: BacklogFeature[];
   customFields: CustomFieldDefinition[];
   automationRules: AutomationRule[];
   workflowColumns: WorkflowColumn[];
@@ -125,6 +130,9 @@ interface SprintContextType {
   addEpic: (epic: Omit<Epic, "id" | "createdAt">) => Promise<void>;
   updateEpic: (id: string, epic: Partial<Omit<Epic, "id" | "createdAt">>) => Promise<void>;
   removeEpic: (id: string) => Promise<void>;
+  addFeature: (feature: Omit<BacklogFeature, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  updateFeature: (id: string, feature: Partial<Omit<BacklogFeature, "id" | "createdAt" | "updatedAt">>) => Promise<void>;
+  removeFeature: (id: string) => Promise<void>;
   addCustomField: (field: Omit<CustomFieldDefinition, "id">) => Promise<void>;
   updateCustomField: (id: string, field: Partial<Omit<CustomFieldDefinition, "id">>) => Promise<void>;
   removeCustomField: (id: string) => Promise<void>;
@@ -163,7 +171,7 @@ const mapUserStory = (h: any, impData: any[]): UserStory => ({
   id: h.id, code: h.code, title: h.title, description: h.description || "",
   acceptanceCriteria: h.acceptance_criteria || null,
   storyPoints: h.story_points, priority: h.priority, status: h.status,
-  sprintId: h.sprint_id, epicId: h.epic_id,
+  sprintId: h.sprint_id, epicId: h.epic_id, featureId: h.feature_id,
   startDate: h.start_date || undefined, endDate: h.end_date || undefined,
   sizeReference: h.size_reference || null,
   estimatedHours: h.estimated_hours != null ? Number(h.estimated_hours) : null,
@@ -190,6 +198,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [epics, setEpics] = useState<Epic[]>([]);
+  const [features, setFeatures] = useState<BacklogFeature[]>([]);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
   const [workflowColumns, setWorkflowColumnsState] = useState<WorkflowColumn[]>(DEFAULT_KANBAN_COLUMNS);
@@ -220,7 +229,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   const refreshAll = useCallback(async () => {
     if (!teamId) {
       setDevelopers([]); setUserStories([]); setActivities([]); setSprints([]);
-      setEpics([]); setCustomFields([]); setAutomationRules([]);
+      setEpics([]); setFeatures([]); setCustomFields([]); setAutomationRules([]);
       setWorkflowColumnsState(DEFAULT_KANBAN_COLUMNS); setImpediments([]);
       setLoadingSlices(INITIAL_LOADING_SLICES);
       return;
@@ -232,10 +241,11 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setLoadingSlices(ALL_LOADING_SLICES);
 
     try {
-      const [devRes, sprintRes, epicRes, huRes, actRes, impRes, cfRes, arRes, wcRes] = await Promise.all([
+      const [devRes, sprintRes, epicRes, featureRes, huRes, actRes, impRes, cfRes, arRes, wcRes] = await Promise.all([
         supabase.from("developers").select("*").eq("team_id", teamId).limit(200),
         supabase.from("sprints").select("*").eq("team_id", teamId).limit(100),
         supabase.from("epics").select("*").eq("team_id", teamId).limit(100),
+        supabase.from("backlog_features").select("*").eq("team_id", teamId).limit(200),
         supabase.from("user_stories").select("*").eq("team_id", teamId).order("position", { ascending: true }).limit(500),
         supabase.from("activities").select("*").eq("team_id", teamId).limit(500),
         supabase.from("impediments").select("*").eq("team_id", teamId).limit(200),
@@ -260,6 +270,12 @@ export function SprintProvider({ children }: { children: ReactNode }) {
         id: e.id, name: e.name, description: e.description || "", color: e.color, createdAt: e.created_at,
       })));
       setSlice({ epics: false });
+
+      setFeatures((featureRes.data || []).map((f: any) => ({
+        id: f.id, epicId: f.epic_id, name: f.name, description: f.description || "",
+        color: f.color, createdAt: f.created_at, updatedAt: f.updated_at,
+      })));
+      setSlice({ features: false });
 
       const impData = (impRes.data || []) as any[];
       setImpediments(impData.map(mapImpediment));
@@ -356,6 +372,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
                     position: row.position ?? h.position,
                     sprintId: row.sprint_id,
                     epicId: row.epic_id,
+                    featureId: row.feature_id,
                     assigneeId: row.assignee_id || null,
                     estimatedHours: row.estimated_hours != null ? Number(row.estimated_hours) : null,
                     functionPoints: row.function_points != null ? Number(row.function_points) : null,
@@ -371,6 +388,24 @@ export function SprintProvider({ children }: { children: ReactNode }) {
                 : h,
             );
           });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "backlog_features", filter: `team_id=eq.${teamId}` },
+        (payload) => {
+          const row = ((payload.eventType === "DELETE" ? payload.old : payload.new) || {}) as any;
+          if (payload.eventType === "DELETE") {
+            setFeatures((prev) => prev.filter((feature) => feature.id !== row.id));
+            return;
+          }
+          const feature: BacklogFeature = {
+            id: row.id, epicId: row.epic_id, name: row.name, description: row.description || "",
+            color: row.color, createdAt: row.created_at, updatedAt: row.updated_at,
+          };
+          setFeatures((prev) => prev.some((item) => item.id === feature.id)
+            ? prev.map((item) => item.id === feature.id ? feature : item)
+            : [...prev, feature]);
         },
       )
       .on(
@@ -616,7 +651,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       .reduce((max, h) => Math.max(max, h.position ?? 0), -1) + 1;
 
     const { data, error } = await supabase.from("user_stories").insert({
-      team_id: teamId, sprint_id: hu.sprintId, epic_id: hu.epicId || null,
+      team_id: teamId, sprint_id: hu.sprintId, epic_id: hu.epicId || null, feature_id: hu.featureId || null,
       code: `HU-${String(count).padStart(3, "0")}`, title: hu.title,
       description: hu.description, acceptance_criteria: hu.acceptanceCriteria || null,
       story_points: hu.storyPoints, priority: hu.priority,
@@ -647,6 +682,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if (hu.status !== undefined) updateData.status = hu.status;
     if ("sprintId" in hu) updateData.sprint_id = hu.sprintId ?? null;
     if ("epicId" in hu) updateData.epic_id = hu.epicId ?? null;
+    if ("featureId" in hu) updateData.feature_id = hu.featureId ?? null;
     if (hu.customFields !== undefined) updateData.custom_fields = hu.customFields;
     if ("startDate" in hu) updateData.start_date = hu.startDate || null;
     if ("endDate" in hu) updateData.end_date = hu.endDate || null;
@@ -966,6 +1002,40 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     setEpics((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
+  // Backlog features (nao confundir com product_features do catalogo comercial)
+  const addFeature = useCallback(async (feature: Omit<BacklogFeature, "id" | "createdAt" | "updatedAt">) => {
+    if (!teamId) return;
+    const { data, error } = await supabase.from("backlog_features").insert({
+      team_id: teamId, epic_id: feature.epicId, name: feature.name,
+      description: feature.description || "", color: feature.color,
+    }).select().single();
+    if (error) throw error;
+    if (data) setFeatures((prev) => prev.some((item) => item.id === data.id) ? prev : [...prev, {
+      id: data.id, epicId: data.epic_id, name: data.name, description: data.description,
+      color: data.color, createdAt: data.created_at, updatedAt: data.updated_at,
+    }]);
+  }, [teamId]);
+
+  const updateFeature = useCallback(async (id: string, feature: Partial<Omit<BacklogFeature, "id" | "createdAt" | "updatedAt">>) => {
+    const updateData: any = {};
+    if (feature.epicId !== undefined) updateData.epic_id = feature.epicId;
+    if (feature.name !== undefined) updateData.name = feature.name;
+    if (feature.description !== undefined) updateData.description = feature.description;
+    if (feature.color !== undefined) updateData.color = feature.color;
+    const { error } = await supabase.from("backlog_features").update(updateData).eq("id", id);
+    if (error) throw error;
+    setFeatures((prev) => prev.map((item) => item.id === id ? { ...item, ...feature } : item));
+  }, []);
+
+  const removeFeature = useCallback(async (id: string) => {
+    if (userStories.some((story) => story.featureId === id)) {
+      throw new Error("A feature possui historias vinculadas");
+    }
+    const { error } = await supabase.from("backlog_features").delete().eq("id", id);
+    if (error) throw error;
+    setFeatures((prev) => prev.filter((feature) => feature.id !== id));
+  }, [userStories]);
+
   // ── CUSTOM FIELDS ─────────────────────────────────────────────────────────────
   const addCustomField = useCallback(async (field: Omit<CustomFieldDefinition, "id">) => {
     if (!teamId) return;
@@ -1126,7 +1196,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
 
   return (
     <SprintContext.Provider value={{
-      developers, userStories, activities, sprints, epics, customFields, automationRules,
+      developers, userStories, activities, sprints, epics, features, customFields, automationRules,
       workflowColumns, activeSprint, loading, loadingSlices, impediments,
       addDeveloper, updateDeveloper, removeDeveloper,
       addUserStory, updateUserStory, removeUserStory, updateUserStoryStatus, reorderUserStories,
@@ -1134,6 +1204,7 @@ export function SprintProvider({ children }: { children: ReactNode }) {
       addImpediment, addSprintImpediment, resolveImpediment,
       addSprint, updateSprint, removeSprint, closeSprint, setActiveSprint: setActiveSprintFn,
       addEpic, updateEpic, removeEpic,
+      addFeature, updateFeature, removeFeature,
       addCustomField, updateCustomField, removeCustomField,
       addAutomationRule, updateAutomationRule, removeAutomationRule,
       setWorkflowColumns, addWorkflowColumn, removeWorkflowColumn, updateWorkflowColumn, reorderWorkflowColumns,

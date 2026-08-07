@@ -6,23 +6,23 @@ import {
 } from "@/lib/circuit-breaker";
 import { retryQuery } from "@/lib/query-retry";
 
-const FALLBACK_SUPABASE_URL = "https://rgikyyazotqapaxijwui.supabase.co";
-const FALLBACK_SUPABASE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnaWt5eWF6b3RxYXBheGlqd3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjM5NTIsImV4cCI6MjA4OTgzOTk1Mn0.ADQ3VDenVwNL3fgyNc2Fgu-Si66T7SHdG5se4Hvf5eg";
-
-const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const isTestEnvironment = import.meta.env.MODE === "test";
+const configuredUrl =
+  import.meta.env.VITE_SUPABASE_URL?.trim() ||
+  (isTestEnvironment ? "http://127.0.0.1:54321" : undefined);
 const configuredKey =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ||
-  import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
-
-const SUPABASE_URL = configuredUrl || FALLBACK_SUPABASE_URL;
-const SUPABASE_ANON_KEY = configuredKey || FALLBACK_SUPABASE_KEY;
+  import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ||
+  (isTestEnvironment ? "test-anon-key" : undefined);
 
 if (!configuredUrl || !configuredKey) {
-  console.warn(
-    "[Supabase] Variáveis de ambiente ausentes. Usando a configuração legada apenas para compatibilidade de transição.",
+  throw new Error(
+    "[Supabase] VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY devem estar configuradas.",
   );
 }
+
+const SUPABASE_URL = configuredUrl;
+const SUPABASE_ANON_KEY = configuredKey;
 
 const instrumentedFetch: typeof fetch = (url, options) => {
   const start = performance.now();

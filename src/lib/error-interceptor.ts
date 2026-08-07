@@ -4,8 +4,17 @@
  * Integra com o cliente Supabase existente via wrapper.
  */
 
-import * as Sentry from '@sentry/react';
 import { supabase } from '@/integrations/supabase/client';
+
+type SentryModule = typeof import('@sentry/react');
+
+function withSentry(report: (sentry: SentryModule) => void): void {
+  void import('@sentry/react')
+    .then(report)
+    .catch((error: unknown) => {
+      console.warn('[Monitoring] Falha ao carregar o reporter de erros.', error);
+    });
+}
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 export interface SupabaseErrorLog {
@@ -93,7 +102,7 @@ export function handleSupabaseError(
 
   // Sentry — apenas erros e críticos (warnings só vão pro buffer)
   if (severity !== 'warning') {
-    Sentry.captureException(new Error(`[Supabase] ${error.message}`), {
+    withSentry((Sentry) => Sentry.captureException(new Error(`[Supabase] ${error.message}`), {
       level: severity === 'critical' ? 'fatal' : 'error',
       tags: {
         supabase_table: context.table,
@@ -107,7 +116,7 @@ export function handleSupabaseError(
         hint: error.hint,
         timestamp: log.timestamp,
       },
-    });
+    }));
   }
 }
 
@@ -134,10 +143,10 @@ export function initConnectionMonitor(): () => void {
 
   const handleOffline = () => {
     wasOffline = true;
-    Sentry.captureMessage('[Network] Conexão perdida — usuário offline', {
+    withSentry((Sentry) => Sentry.captureMessage('[Network] Conexão perdida — usuário offline', {
       level: 'warning',
       tags: { type: 'network', event: 'offline' },
-    });
+    }));
     console.warn('🔌 [Network] Conexão perdida.');
   };
 
@@ -163,11 +172,11 @@ export function initGlobalErrorHandlers(): () => void {
     // Ignora erros de extensões de browser
     if (event.filename?.includes('extension://')) return;
 
-    Sentry.captureException(event.error ?? new Error(event.message), {
+    withSentry((Sentry) => Sentry.captureException(event.error ?? new Error(event.message), {
       level: 'error',
       tags: { type: 'uncaught-error' },
       extra: { filename: event.filename, lineno: event.lineno, colno: event.colno },
-    });
+    }));
   };
 
   const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
@@ -175,10 +184,10 @@ export function initGlobalErrorHandlers(): () => void {
     // Ignora AbortError (gerado intencionalmente pelo AbortController)
     if (reason?.name === 'AbortError') return;
 
-    Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)), {
+    withSentry((Sentry) => Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)), {
       level: 'error',
       tags: { type: 'unhandled-rejection' },
-    });
+    }));
   };
 
   window.addEventListener('error',               handleUncaught);

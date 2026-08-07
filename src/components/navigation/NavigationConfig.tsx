@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   BarChart3,
+  Boxes,
   Building2,
   Calendar,
   CheckSquare,
@@ -27,6 +28,7 @@ import {
   Users,
   Upload,
 } from "lucide-react";
+import { OKR_V2_ENABLED } from "@/lib/featureFlags";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavigationItem {
@@ -156,6 +158,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
       { id: "board", label: "Board Kanban", icon: Kanban, route: "/sala-agil/board" },
       { id: "backlog", label: "Backlog", icon: ListTodo, route: "/sala-agil/backlog" },
       { id: "epicos", label: "Épicos", icon: Layers, route: "/sala-agil/epicos" },
+      { id: "features", label: "Features", icon: Boxes, route: "/sala-agil/features" },
     ],
   },
   {
@@ -184,7 +187,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
       { id: "metricas", label: "Métricas", icon: BarChart3, route: "/sala-agil/metricas" },
       { id: "relatorios", label: "Relatórios", icon: FileText, route: "/sala-agil/relatorios" },
       { id: "historico", label: "Histórico", icon: History, route: "/sala-agil/historico" },
-      { id: "okr", label: "OKR", icon: Target, route: "/okr" },
+      { id: "okr", label: "OKR", icon: Target, route: OKR_V2_ENABLED ? "/okr/dashboard" : "/okr" },
     ],
   },
   {

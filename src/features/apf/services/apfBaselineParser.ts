@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import type { WorkBook } from "xlsx";
 
 export interface ParsedBaselineItem {
   item_ref: string;
@@ -96,14 +96,18 @@ function percentage(value: CellValue): number | null {
   return parsed > 0 && parsed <= 1 ? parsed * 100 : parsed;
 }
 
-function matrix(workbook: XLSX.WorkBook, sheetName: string): SheetMatrix {
+function matrix(
+  workbook: WorkBook,
+  sheetName: string,
+  sheetToJson: <T>(sheet: WorkBook["Sheets"][string], options: object) => T[],
+): SheetMatrix {
   const sheet = workbook.Sheets[sheetName];
   return sheet
-    ? XLSX.utils.sheet_to_json<CellValue[]>(sheet, { header: 1, raw: true, defval: null })
+    ? sheetToJson<CellValue[]>(sheet, { header: 1, raw: true, defval: null })
     : [];
 }
 
-function findSheet(workbook: XLSX.WorkBook, aliases: string[]): string | null {
+function findSheet(workbook: WorkBook, aliases: string[]): string | null {
   const desired = aliases.map(normalized);
   return workbook.SheetNames.find((name) => desired.includes(normalized(name))) ?? null;
 }
@@ -386,21 +390,23 @@ function findLabeledText(rows: SheetMatrix, aliases: string[]): string | null {
   return null;
 }
 
-export function parseApfBaselineArrayBuffer(buffer: ArrayBuffer): ParsedApfBaselineWorkbook {
+export async function parseApfBaselineArrayBuffer(buffer: ArrayBuffer): Promise<ParsedApfBaselineWorkbook> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  const sheetToJson = XLSX.utils.sheet_to_json;
   const itemsSheet = findSheet(workbook, ["Itens"]);
   if (!itemsSheet) throw new Error("A planilha não possui a aba obrigatória 'Itens'.");
 
   const warnings: string[] = [];
-  const itemRows = matrix(workbook, itemsSheet);
+  const itemRows = matrix(workbook, itemsSheet, sheetToJson);
   const items = parseItems(itemRows, warnings);
   if (!items.length) throw new Error("Nenhum item APF foi encontrado na aba Itens.");
 
   const factorSheet = findSheet(workbook, ["Fator Impacto", "Fator de Impacto"]);
   const measurementSheet = findSheet(workbook, ["Medição", "Medicao"]);
   const summarySheet = findSheet(workbook, ["Sumário", "Sumario"]);
-  const measurementRows = measurementSheet ? matrix(workbook, measurementSheet) : [];
-  const summaryRows = summarySheet ? matrix(workbook, summarySheet) : [];
+  const measurementRows = measurementSheet ? matrix(workbook, measurementSheet, sheetToJson) : [];
+  const summaryRows = summarySheet ? matrix(workbook, summarySheet, sheetToJson) : [];
 
   const expectedPfBruto = findLabeledNumber(measurementRows, ["PF Bruto"])
     ?? findLabeledNumber(summaryRows, ["PF Bruto"]);
@@ -426,7 +432,7 @@ export function parseApfBaselineArrayBuffer(buffer: ArrayBuffer): ParsedApfBasel
     processCount: new Set(items.map((item) => item.process_ref)).size,
     items,
     functionTypes: deriveFunctionTypes(items),
-    impactFactors: parseImpactFactors(factorSheet ? matrix(workbook, factorSheet) : [], items),
+    impactFactors: parseImpactFactors(factorSheet ? matrix(workbook, factorSheet, sheetToJson) : [], items),
     warnings,
   };
 }

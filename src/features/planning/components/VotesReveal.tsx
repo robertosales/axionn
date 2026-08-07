@@ -25,7 +25,7 @@ export function VotesReveal({ round, participants, isFacilitator, onReveal, onSa
   const stats = useMemo(() => {
     if (!revealed || round.votes.length === 0) return null;
     const numeric = round.votes
-      .map(v => parseFloat(v.vote_value))
+      .map(v => parseFloat(v.vote_value ?? ""))
       .filter(n => !isNaN(n));
     if (numeric.length === 0) return null;
     const avg = numeric.reduce((a, b) => a + b, 0) / numeric.length;
@@ -56,7 +56,7 @@ export function VotesReveal({ round, participants, isFacilitator, onReveal, onSa
                     : "border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
                   : "border-dashed border-muted-foreground/30 bg-muted/30 text-muted-foreground"
               }`}>
-                {vote ? (revealed ? vote.vote_value : "✔") : "⋯"}
+                {vote ? (revealed ? (vote.vote_value ?? "—") : "✔") : "⋯"}
               </div>
               <span className="text-[9px] text-muted-foreground max-w-[40px] truncate text-center">{p.user_name.split(" ")[0]}</span>
             </div>

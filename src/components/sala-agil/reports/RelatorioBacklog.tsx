@@ -15,6 +15,7 @@ import {
 } from "@/shared/components/reports";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useSprint } from "@/contexts/SprintContext";
 
 interface Props {
   sprints: { id: string; name: string; isActive?: boolean }[];
@@ -237,6 +238,7 @@ function exportBacklogPDF({
 
 // ─── Componente principal
 export function RelatorioBacklog({ sprints, developers, rawData, teamName, currentUserName, onBack }: Props) {
+  const { epics, features } = useSprint();
   const [filters, setFilters] = useState<Record<string, string>>({ sprintId: "all", memberId: "all" });
 
   const sprintOptions = [{ value: "all", label: "Todas" }, ...sprints.map((s) => ({ value: s.id, label: s.name }))];
@@ -290,12 +292,16 @@ export function RelatorioBacklog({ sprints, developers, rawData, teamName, curre
     let data = hus.map((h: any) => {
       const dev = resolveHuDev(h, rawData.activities, developers);
       const sprint = rawData.sprints.find((s: any) => s.id === h.sprint_id);
+      const epic = epics.find((item) => item.id === h.epic_id);
+      const feature = features.find((item) => item.id === h.feature_id);
       return {
         code: h.code || "—",
         title: h.title,
         status: h.status,
         priority: h.priority || "—",
         sprint: sprint?.name || "—",
+        epic: epic?.name || "—",
+        feature: feature?.name || "—",
         member: dev?.name || "—",
         memberId: dev?.id || "",
         points: h.story_points || 0,
@@ -309,14 +315,14 @@ export function RelatorioBacklog({ sprints, developers, rawData, teamName, curre
     }
 
     return data;
-  }, [hus, rawData.activities, rawData.sprints, developers, filters.memberId]);
+  }, [hus, rawData.activities, rawData.sprints, developers, filters.memberId, epics, features]);
 
   function handleExportCSV() {
     exportToCSV(
       tableData.map((r) => ({
         Código: r.code, Título: r.title,
         Status: getStatusLabel(r.status),
-        Prioridade: r.priority, Sprint: r.sprint,
+        Prioridade: r.priority, Sprint: r.sprint, Épico: r.epic, Feature: r.feature,
         Responsável: r.member, Pontos: r.points, "Data Fim": r.endDate,
       })),
       `backlog_${teamName}`,
@@ -408,6 +414,8 @@ export function RelatorioBacklog({ sprints, developers, rawData, teamName, curre
           },
           { key: "priority", header: "Prioridade", align: "center" },
           { key: "sprint", header: "Sprint", sortable: true },
+          { key: "epic", header: "Épico", sortable: true },
+          { key: "feature", header: "Feature", sortable: true },
           { key: "member", header: "Responsável", sortable: true },
           { key: "points", header: "Pontos", align: "center", sortable: true },
           { key: "endDate", header: "Data Fim", align: "center", render: (v) => v ? new Date(v).toLocaleDateString("pt-BR") : "—" },

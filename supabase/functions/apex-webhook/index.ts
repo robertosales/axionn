@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { readTextBody } from '../_shared/request-body.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,10 +46,19 @@ serve(async (req: Request) => {
 
     // Verify webhook signature
     const signature = req.headers.get('x-apex-signature');
-    const rawBody = await req.text();
+    const rawBody = await readTextBody(req, 1_000_000);
 
     // Find integration by webhook URL or application ID
     const payload: ApexWebhookPayload = JSON.parse(rawBody);
+    if (!Number.isSafeInteger(payload.application_id) || payload.application_id <= 0
+      || typeof payload.event_type !== 'string' || payload.event_type.length > 64
+      || typeof payload.session_id !== 'string' || payload.session_id.length > 256
+      || typeof payload.user !== 'string' || payload.user.length > 256
+      || !payload.request_data || typeof payload.request_data !== 'object' || Array.isArray(payload.request_data)) {
+      return new Response(JSON.stringify({ error: 'Invalid webhook payload' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const appId = payload.application_id;
 
     const { data: integration, error: intError } = await supabase
@@ -95,8 +105,21 @@ serve(async (req: Request) => {
       integrationId: integration.id,
     };
 
-    // Verify signature if configured
-    if (integration.webhook_secret_encrypted && signature) {
+    // Webhooks fail closed: an integration without a configured secret is not
+    // allowed to process privileged writes.
+    if (!integration.webhook_secret_encrypted) {
+      return new Response(JSON.stringify({ error: 'Webhook authentication is not configured' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    {
+      if (!signature) {
+        return new Response(JSON.stringify({ error: 'Missing signature' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const isValid = await verifyApexSignature(rawBody, signature, integration.webhook_secret_encrypted);
       if (!isValid) {
         console.warn('[APEX Webhook] Invalid signature');
@@ -168,7 +191,6 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({
       error: 'Internal server error',
       correlation_id: correlationId,
-      message: error instanceof Error ? error.message : String(error),
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -224,14 +246,13 @@ async function verifyApexSignature(payload: string, signature: string, secret: s
     ['sign', 'verify']
   );
 
-  const expectedSignature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-  const expectedHex = Array.from(new Uint8Array(expectedSignature))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  // APEX may send signature as hex or base64
   const providedHex = signature.startsWith('sha256=') ? signature.slice(7) : signature;
-  return expectedHex === providedHex;
+  if (!/^[0-9a-fA-F]{64}$/.test(providedHex)) return false;
+  const provided = new Uint8Array(32);
+  for (let index = 0; index < provided.length; index++) {
+    provided[index] = Number.parseInt(providedHex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return crypto.subtle.verify('HMAC', key, provided, encoder.encode(payload));
 }
 
 function mapEventType(apexEvent: string): string {
@@ -280,8 +301,7 @@ async function handlePageSubmit(
 
   if (!action) return;
 
-  try {
-    switch (action) {
+  switch (action) {
       case 'create_hu':
         await createHUFromApex(supabase, integration, requestData);
         break;
@@ -294,12 +314,28 @@ async function handlePageSubmit(
       case 'update_impediment':
         await updateImpedimentFromApex(supabase, integration, requestData);
         break;
-      default:
-        console.log('[APEX Webhook] Unknown action:', action);
-    }
-  } catch (error) {
-    console.error('[APEX Webhook] Page submit error:', error);
+    default:
+      throw new Error(`APEX_ACTION_NOT_SUPPORTED: ${String(action).slice(0, 64)}`);
   }
+}
+
+async function resolveApexScope(supabase: any, integration: any): Promise<{ projectId: string; teamId: string }> {
+  if (!integration.project_id) throw new Error('APEX_INTEGRATION_PROJECT_REQUIRED');
+  const { data: project, error } = await supabase
+    .from('projects')
+    .select('id, org_id, team_id')
+    .eq('id', integration.project_id)
+    .eq('org_id', integration.organization_id)
+    .single();
+  if (error || !project?.team_id) throw new Error('APEX_PROJECT_SCOPE_INVALID');
+  return { projectId: project.id, teamId: project.team_id };
+}
+
+async function assertSprintScope(supabase: any, sprintId: unknown, teamId: string): Promise<string | null> {
+  if (!sprintId) return null;
+  const { data, error } = await supabase.from('sprints').select('id').eq('id', sprintId).eq('team_id', teamId).single();
+  if (error || !data) throw new Error('APEX_SPRINT_SCOPE_INVALID');
+  return data.id;
 }
 
 async function createHUFromApex(
@@ -307,20 +343,18 @@ async function createHUFromApex(
   integration: any,
   data: any
 ): Promise<void> {
+  const scope = await resolveApexScope(supabase, integration);
+  if (typeof data.title !== 'string' || !data.title.trim() || data.title.length > 500) {
+    throw new Error('APEX_HU_TITLE_REQUIRED');
+  }
   const huData = {
-    organization_id: integration.organization_id,
-    project_id: data.project_id,
+    team_id: scope.teamId,
     code: data.code || `APEX-${Date.now()}`,
     title: data.title,
     description: data.description,
     story_points: data.story_points,
     status: data.status || 'backlog',
     priority: data.priority || 'medium',
-    assignee_id: data.assignee_id,
-    created_by: data.apex_user_id,
-    external_source: 'apex',
-    external_id: data.apex_item_id,
-    metadata: { apex_application_id: integration.config_json?.apex_app_id },
   };
 
   const { data: hu, error } = await supabase
@@ -334,8 +368,8 @@ async function createHUFromApex(
   // Log telemetry
   await supabase.rpc('log_user_usage_event', {
     p_tenant_id: integration.organization_id,
-    p_project_id: data.project_id,
-    p_user_id: data.apex_user_id,
+    p_project_id: scope.projectId,
+    p_user_id: null,
     p_event_type: 'hu_created',
     p_entity_type: 'user_story',
     p_entity_id: hu.id,
@@ -350,24 +384,27 @@ async function updateHUFromApex(
   integration: any,
   data: any
 ): Promise<void> {
+  const scope = await resolveApexScope(supabase, integration);
   const updates: any = {};
 
   if (data.title) updates.title = data.title;
   if (data.description) updates.description = data.description;
-  if (data.story_points) updates.story_points = data.story_points;
+  if (data.story_points != null) updates.story_points = data.story_points;
   if (data.status) updates.status = data.status;
   if (data.priority) updates.priority = data.priority;
-  if (data.assignee_id) updates.assignee_id = data.assignee_id;
 
   updates.updated_at = new Date().toISOString();
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('user_stories')
     .update(updates)
     .eq('id', data.hu_id)
-    .eq('organization_id', integration.organization_id);
+    .eq('team_id', scope.teamId)
+    .select('id')
+    .maybeSingle();
 
   if (error) throw error;
+  if (!updated) throw new Error('APEX_HU_NOT_FOUND_IN_SCOPE');
 }
 
 async function createImpedimentFromApex(
@@ -375,20 +412,16 @@ async function createImpedimentFromApex(
   integration: any,
   data: any
 ): Promise<void> {
+  const scope = await resolveApexScope(supabase, integration);
+  const sprintId = await assertSprintScope(supabase, data.sprint_id, scope.teamId);
   const impedimentData = {
-    organization_id: integration.organization_id,
-    project_id: data.project_id,
-    sprint_id: data.sprint_id,
-    title: data.title,
-    description: data.description,
-    severity: data.severity || 'medium',
-    status: data.status || 'open',
-    assignee_id: data.assignee_id,
-    reported_by: data.apex_user_id,
-    external_source: 'apex',
-    external_id: data.apex_item_id,
-    metadata: { apex_application_id: integration.config_json?.apex_app_id },
+    team_id: scope.teamId,
+    sprint_id: sprintId,
+    reason: data.title || data.description,
+    criticality: data.severity || 'medium',
+    type: data.type || 'other',
   };
+  if (!impedimentData.reason) throw new Error('APEX_IMPEDIMENT_REASON_REQUIRED');
 
   const { error } = await supabase
     .from('impediments')
@@ -402,23 +435,26 @@ async function updateImpedimentFromApex(
   integration: any,
   data: any
 ): Promise<void> {
-  const updates: any = { updated_at: new Date().toISOString() };
+  const scope = await resolveApexScope(supabase, integration);
+  const updates: any = {};
 
-  if (data.title) updates.title = data.title;
-  if (data.description) updates.description = data.description;
-  if (data.severity) updates.severity = data.severity;
-  if (data.status) updates.status = data.status;
-  if (data.assignee_id) updates.assignee_id = data.assignee_id;
+  if (data.title || data.description) updates.reason = data.title || data.description;
+  if (data.severity) updates.criticality = data.severity;
+  if (data.type) updates.type = data.type;
   if (data.resolution) updates.resolution = data.resolution;
   if (data.status === 'resolved') updates.resolved_at = new Date().toISOString();
 
-  const { error } = await supabase
+  if (Object.keys(updates).length === 0) throw new Error('APEX_IMPEDIMENT_UPDATE_EMPTY');
+  const { data: updated, error } = await supabase
     .from('impediments')
     .update(updates)
     .eq('id', data.impediment_id)
-    .eq('organization_id', integration.organization_id);
+    .eq('team_id', scope.teamId)
+    .select('id')
+    .maybeSingle();
 
   if (error) throw error;
+  if (!updated) throw new Error('APEX_IMPEDIMENT_NOT_FOUND_IN_SCOPE');
 }
 
 async function handleReportQuery(

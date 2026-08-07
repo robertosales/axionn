@@ -46,7 +46,7 @@ export interface PlanningVote {
   id:         string;
   user_id:    string;
   user_name:  string;
-  vote_value: string;
+  vote_value: string | null;
   revealed:   boolean;
 }
 
@@ -148,7 +148,7 @@ export function usePlanningPoker() {
     if (rounds && rounds.length > 0) {
       const r = rounds[0] as any;
       const huRes = await supabase.from("user_stories").select("code, title").eq("id", r.hu_id).single();
-      const votesRes = await supabase.from("planning_votes").select("*").eq("session_id", sessionId).eq("hu_id", r.hu_id);
+      const votesRes = await supabase.rpc("get_planning_round_votes", { p_session_id: sessionId, p_hu_id: r.hu_id });
 
       // Enriquece votos com nomes
       const userIds = [...new Set((votesRes.data ?? []).map((v: any) => v.user_id))];
@@ -158,8 +158,8 @@ export function usePlanningPoker() {
       const nameMap: Record<string, string> = {};
       (profilesRes.data ?? []).forEach((p: any) => { nameMap[p.user_id] = p.display_name; });
 
-      const myVoteRecord = (votesRes.data ?? []).find((v: any) => v.user_id === ""); // placeholder
-      setMyVote(null);
+      const myVoteRecord = (votesRes.data ?? []).find((v: any) => v.user_id === userId);
+      setMyVote(myVoteRecord?.vote_value ?? null);
 
       setRound({
         ...r,
@@ -176,7 +176,7 @@ export function usePlanningPoker() {
     } else {
       setRound(null);
     }
-  }, []);
+  }, [userId]);
 
   const loadParticipants = useCallback(async (sessionId: string) => {
     const { data: parts } = await supabase
@@ -206,7 +206,6 @@ export function usePlanningPoker() {
   useEffect(() => {
     if (!session?.id) return;
     const ch = supabase.channel(`planning-${session.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "planning_votes",    filter: `session_id=eq.${session.id}` }, () => loadActiveRound(session.id))
       .on("postgres_changes", { event: "*", schema: "public", table: "planning_rounds",   filter: `session_id=eq.${session.id}` }, () => loadActiveRound(session.id))
       .on("postgres_changes", { event: "*", schema: "public", table: "planning_participants", filter: `session_id=eq.${session.id}` }, () => loadParticipants(session.id))
       .subscribe();
@@ -223,59 +222,54 @@ export function usePlanningPoker() {
 
   // ─ CRUD ────────────────────────────────────────────────────────────────────────
   const createSession = useCallback(async (sprintId: string, deckMode: DeckMode = "fibonacci") => {
-    const { error } = await supabase.from("planning_sessions").insert({
-      team_id: teamId, sprint_id: sprintId, created_by: userId, status: "open", deck_mode: deckMode,
+    if (!teamId || !userId) return;
+    const { error } = await supabase.rpc("create_planning_session", {
+      p_team_id: teamId, p_sprint_id: sprintId, p_deck_mode: deckMode,
     });
-    if (error) { toast.error("Erro ao criar sessão"); return; }
-    const { data } = await supabase.from("planning_sessions")
-      .select("id").eq("team_id", teamId).eq("status", "open").order("created_at", { ascending: false }).limit(1).single();
-    if (data) await supabase.from("planning_participants").insert({ session_id: data.id, user_id: userId, is_facilitator: true });
+    if (error) { toast.error("Erro ao criar sessão", { description: error.message }); return; }
     toast.success("Sessão de Planning Poker iniciada!");
     await load();
   }, [teamId, userId, load]);
 
   const joinSession = useCallback(async () => {
     if (!session) return;
-    const { data: ex } = await supabase.from("planning_participants").select("id").eq("session_id", session.id).eq("user_id", userId).maybeSingle();
-    if (!ex) await supabase.from("planning_participants").insert({ session_id: session.id, user_id: userId });
-    else await supabase.from("planning_participants").update({ is_online: true, last_seen_at: new Date().toISOString() }).eq("session_id", session.id).eq("user_id", userId);
+    const { error } = await supabase.rpc("join_planning_session", { p_session_id: session.id });
+    if (error) { toast.error("Não foi possível entrar na sessão", { description: error.message }); return; }
     await loadParticipants(session.id);
-  }, [session, userId, loadParticipants]);
+  }, [session, loadParticipants]);
 
   const startRound = useCallback(async (huId: string) => {
     if (!session) return;
-    const roundNum = (round?.round_number ?? 0) + 1;
-    const { error } = await supabase.from("planning_rounds").insert({
-      session_id: session.id, hu_id: huId, round_number: roundNum, status: "voting",
+    const { error } = await supabase.rpc("start_planning_round", {
+      p_session_id: session.id, p_hu_id: huId,
     });
-    if (error) { toast.error("Erro ao iniciar rodada"); return; }
+    if (error) { toast.error("Erro ao iniciar rodada", { description: error.message }); return; }
     await loadActiveRound(session.id);
-  }, [session, round, loadActiveRound]);
+  }, [session, loadActiveRound]);
 
   const castVote = useCallback(async (value: string) => {
     if (!session || !round) return;
-    // Upsert voto
-    const { data: existing } = await supabase.from("planning_votes")
-      .select("id").eq("session_id", session.id).eq("hu_id", round.hu_id).eq("user_id", userId).maybeSingle();
-    if (existing) {
-      await supabase.from("planning_votes").update({ vote_value: value }).eq("id", existing.id);
-    } else {
-      await supabase.from("planning_votes").insert({ session_id: session.id, hu_id: round.hu_id, user_id: userId, vote_value: value });
-    }
+    const { error } = await supabase.rpc("cast_planning_vote", {
+      p_session_id: session.id, p_hu_id: round.hu_id, p_vote_value: value,
+    });
+    if (error) { toast.error("Não foi possível registrar o voto", { description: error.message }); return; }
     setMyVote(value);
-  }, [session, round, userId]);
+    await loadActiveRound(session.id);
+  }, [session, round, loadActiveRound]);
 
   const revealVotes = useCallback(async () => {
     if (!round) return;
-    await supabase.from("planning_rounds").update({ status: "revealed", revealed_at: new Date().toISOString() }).eq("id", round.id);
-    await supabase.from("planning_votes").update({ revealed: true }).eq("session_id", session!.id).eq("hu_id", round.hu_id);
+    const { error } = await supabase.rpc("reveal_planning_votes", { p_round_id: round.id });
+    if (error) { toast.error("Não foi possível revelar os votos", { description: error.message }); return; }
     await loadActiveRound(session!.id);
   }, [round, session, loadActiveRound]);
 
   const saveResult = useCallback(async (value: string, hours: number | null) => {
     if (!round || !session) return;
-    await supabase.from("planning_rounds").update({ status: "saved", result_value: value, result_hours: hours, saved_at: new Date().toISOString() }).eq("id", round.id);
-    if (hours !== null) await supabase.from("user_stories").update({ estimated_hours: hours, story_points: parseFloat(value) || 0 }).eq("id", round.hu_id);
+    const { error } = await supabase.rpc("save_planning_result", {
+      p_round_id: round.id, p_value: value, p_hours: hours,
+    });
+    if (error) { toast.error("Não foi possível salvar a estimativa", { description: error.message }); return; }
     toast.success(`HU estimada: ${value}${hours ? ` = ${hours}h` : ""}`);
     setMyVote(null);
     await loadActiveRound(session.id);
@@ -283,13 +277,8 @@ export function usePlanningPoker() {
 
   const closeSession = useCallback(async () => {
     if (!session) return;
-    // Calcula totais
-    const { data: savedRounds } = await supabase.from("planning_rounds").select("result_hours").eq("session_id", session.id).eq("status", "saved");
-    const totalHoras = (savedRounds ?? []).reduce((acc: number, r: any) => acc + (r.result_hours ?? 0), 0);
-    await supabase.from("planning_sessions").update({
-      status: "closed", finished_at: new Date().toISOString(),
-      total_hus: savedRounds?.length ?? 0, total_horas: totalHoras,
-    }).eq("id", session.id);
+    const { error } = await supabase.rpc("close_planning_session", { p_session_id: session.id });
+    if (error) { toast.error("Não foi possível encerrar a sessão", { description: error.message }); return; }
     toast.success("Sessão de planning encerrada!");
     await load();
   }, [session, load]);

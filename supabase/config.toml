@@ -9,6 +9,9 @@ verify_jwt = true
 [functions.process-ai-briefing]
 verify_jwt = true
 
+[functions.teams-meeting-connector]
+verify_jwt = true
+
 [functions.gitlab-webhook-register]
 verify_jwt = true
 
@@ -19,4 +22,31 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.okr-recalculation]
+verify_jwt = false
+
+[functions.teams-bot]
+verify_jwt = false
+
+[functions.redmine-sync]
+verify_jwt = false
+
+[functions.apex-webhook]
+verify_jwt = false
+
+[functions.auth-rate-limiter]
+verify_jwt = false
+
+[functions.oracle-sync]
+verify_jwt = true
+
+[functions.apf-embeddings]
+verify_jwt = true
+
+[functions.telemetry-ingest]
+verify_jwt = true
+
+[functions.complete-password-change]
+verify_jwt = true
+
+[functions.copilot-plugin]
 verify_jwt = false

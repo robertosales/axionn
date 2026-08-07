@@ -30,9 +30,15 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/contexts/AuthContext";
 import { useOkrCycles } from "../hooks/useOkrCycles";
 import { useOkrAlignments, useOkrObjectivesV2 } from "../hooks/useOkrObjectivesV2";
 import { OkrKeyResultsDialog } from "../components/OkrKeyResultsDialog";
+import { OkrInitiativesDialog } from "../components/OkrInitiativesDialog";
+import { OkrAlertsPanel } from "../components/OkrAlertsPanel";
+import { OkrObjectiveReviewDialog } from "../components/OkrObjectiveReviewDialog";
+import { OkrCycleReviewPanel } from "../components/OkrCycleReviewPanel";
+import { OkrSectionNav } from "../components/OkrSectionNav";
 import {
   OKR_ALIGNMENT_TYPE_LABEL,
   OKR_OBJECTIVE_LEVEL_LABEL,
@@ -69,6 +75,7 @@ function errorMessage(err: unknown): string {
 }
 
 export function OkrObjectivesPage() {
+  const { currentTeamId } = useAuth();
   const cycles = useOkrCycles();
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -77,6 +84,8 @@ export function OkrObjectivesPage() {
   const [form, setForm] = useState<OkrObjectiveV2Input>(EMPTY_FORM);
   const [alignmentTarget, setAlignmentTarget] = useState<OkrObjectiveV2 | null>(null);
   const [krTarget, setKrTarget] = useState<OkrObjectiveV2 | null>(null);
+  const [initiativeTarget, setInitiativeTarget] = useState<OkrObjectiveV2 | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<OkrObjectiveV2 | null>(null);
 
   const openCycles = useMemo(
     () => cycles.cycles.filter((c) => c.status === "planning" || c.status === "active"),
@@ -88,9 +97,18 @@ export function OkrObjectivesPage() {
       toast.error("Ciclo e título são obrigatórios.");
       return;
     }
+    const isTeamObjective = (form.objective_level ?? "team") === "team";
+    if (isTeamObjective && !currentTeamId) {
+      toast.error("Selecione um time ativo para criar um objetivo de time.");
+      return;
+    }
     try {
-      await objectives.create.mutateAsync(form);
-      toast.success("Objective criado.");
+      await objectives.create.mutateAsync({
+        ...form,
+        team_id: isTeamObjective ? currentTeamId : null,
+        scope_type: form.objective_level ?? "team",
+      });
+      toast.success("Objetivo criado.");
       setFormOpen(false);
       setForm(EMPTY_FORM);
     } catch (err) {
@@ -101,7 +119,7 @@ export function OkrObjectivesPage() {
   const handlePublish = async (obj: OkrObjectiveV2) => {
     try {
       await objectives.publish.mutateAsync(obj.id);
-      toast.success("Objective publicado.");
+      toast.success("Objetivo publicado.");
     } catch (err) {
       toast.error(errorMessage(err));
     }
@@ -111,24 +129,24 @@ export function OkrObjectivesPage() {
     const reason = window.prompt("Motivo do arquivamento (opcional):") ?? undefined;
     try {
       await objectives.archive.mutateAsync({ id: obj.id, reason });
-      toast.success("Objective arquivado.");
+      toast.success("Objetivo arquivado.");
     } catch (err) {
       toast.error(errorMessage(err));
     }
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Objectives (OKR v2)</h1>
+          <h1 className="text-2xl font-semibold">Objetivos de OKR</h1>
           <p className="text-sm text-muted-foreground">
             Gestão de objetivos e alinhamentos por ciclo. Todas as mutações passam por RPC transacional.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3 xl:w-auto xl:justify-end">
           <Select value={selectedCycleId ?? "all"} onValueChange={(v) => setSelectedCycleId(v === "all" ? null : v)}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="h-11 w-full sm:w-[220px]">
               <SelectValue placeholder="Todos os ciclos" />
             </SelectTrigger>
             <SelectContent>
@@ -140,28 +158,30 @@ export function OkrObjectivesPage() {
               ))}
             </SelectContent>
           </Select>
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-2 text-sm">
             <Checkbox
               checked={includeArchived}
               onCheckedChange={(v) => setIncludeArchived(v === true)}
             />
             Incluir arquivados
           </label>
-          <Button onClick={() => setFormOpen(true)} disabled={openCycles.length === 0}>
-            + Novo objective
+          <Button className="h-11" onClick={() => setFormOpen(true)} disabled={openCycles.length === 0}>
+            + Novo objetivo
           </Button>
         </div>
       </div>
 
+      <OkrSectionNav />
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Lista de objectives</CardTitle>
+          <CardTitle className="text-base">Lista de objetivos</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {objectives.isLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Carregando…</p>
           ) : objectives.objectives.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">Nenhum objective encontrado.</p>
+            <p className="p-6 text-sm text-muted-foreground">Nenhum objetivo encontrado.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -198,6 +218,12 @@ export function OkrObjectivesPage() {
                       <Button size="sm" variant="outline" onClick={() => setKrTarget(obj)}>
                         Key Results
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => setInitiativeTarget(obj)}>
+                        Iniciativas
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setReviewTarget(obj)}>
+                        Review
+                      </Button>
                       {obj.lifecycle_status !== "archived" && (
                         <Button size="sm" variant="ghost" onClick={() => handleArchive(obj)}>
                           Arquivar
@@ -212,23 +238,35 @@ export function OkrObjectivesPage() {
         </CardContent>
       </Card>
 
+      <OkrCycleReviewPanel cycleId={selectedCycleId} />
+
+      <OkrAlertsPanel />
+
+      <OkrObjectiveReviewDialog objective={reviewTarget} onClose={() => setReviewTarget(null)} />
+
+      <OkrInitiativesDialog
+        objectiveId={initiativeTarget?.id ?? null}
+        objectiveTitle={initiativeTarget?.title}
+        onClose={() => setInitiativeTarget(null)}
+      />
+
       {/* Create dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Novo objective</DialogTitle>
+            <DialogTitle>Novo objetivo</DialogTitle>
             <DialogDescription>
-              O objective começa em rascunho. Publique quando estiver pronto.
+              O objetivo começa em rascunho. Publique quando estiver pronto.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Ciclo</Label>
+              <Label htmlFor="okr-objective-cycle">Ciclo</Label>
               <Select
                 value={form.cycle_id}
                 onValueChange={(v) => setForm((f) => ({ ...f, cycle_id: v }))}
               >
-                <SelectTrigger>
+                <SelectTrigger id="okr-objective-cycle">
                   <SelectValue placeholder="Selecione um ciclo aberto" />
                 </SelectTrigger>
                 <SelectContent>
@@ -241,30 +279,32 @@ export function OkrObjectivesPage() {
               </Select>
             </div>
             <div>
-              <Label>Título</Label>
+              <Label htmlFor="okr-objective-title">Título</Label>
               <Input
+                id="okr-objective-title"
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 placeholder="Ex.: Reduzir tempo de resposta em 30%"
               />
             </div>
             <div>
-              <Label>Descrição</Label>
+              <Label htmlFor="okr-objective-description">Descrição</Label>
               <Textarea
+                id="okr-objective-description"
                 value={form.description ?? ""}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={3}
               />
             </div>
             <div>
-              <Label>Nível</Label>
+              <Label htmlFor="okr-objective-level">Nível</Label>
               <Select
                 value={form.objective_level ?? "team"}
                 onValueChange={(v) =>
                   setForm((f) => ({ ...f, objective_level: v as OkrObjectiveLevel }))
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="okr-objective-level">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -322,7 +362,7 @@ function AlignmentDialog({
 
   const handleCreate = async () => {
     if (!targetId) {
-      toast.error("Selecione o objective alvo.");
+      toast.error("Selecione o objetivo alvo.");
       return;
     }
     try {
@@ -357,14 +397,14 @@ function AlignmentDialog({
         <DialogHeader>
           <DialogTitle>Alinhamentos — {objective.title}</DialogTitle>
           <DialogDescription>
-            Relacione este objective a outros da mesma organização.
+            Relacione este objetivo a outros da mesma organização.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Objective alvo</Label>
+              <Label>Objetivo alvo</Label>
               <Select value={targetId} onValueChange={setTargetId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />

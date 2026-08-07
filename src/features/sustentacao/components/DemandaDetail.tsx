@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { getInitials, formatPersonName } from "@/lib/personName";
+import { safeExternalUrl } from "@/lib/security";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -361,7 +362,9 @@ export function DemandaDetail({
     setEvidLoading(true);
     try {
       setEvidencias(await evidSvc.fetchEvidencias(demanda.id));
-    } catch {}
+    } catch {
+      setEvidencias([]);
+    }
     setEvidLoading(false);
   }, [demanda?.id]);
 
@@ -370,7 +373,9 @@ export function DemandaDetail({
     setRespLoading(true);
     try {
       setResponsaveis(await respSvc.fetchResponsaveis(demanda.id));
-    } catch {}
+    } catch {
+      setResponsaveis([]);
+    }
     setRespLoading(false);
   }, [demanda?.id]);
 
@@ -404,7 +409,7 @@ export function DemandaDetail({
         return next;
       });
     });
-  }, [hours]);
+  }, [hours, profilesMap]);
 
   // ─── Carrega membros do time atual para o combo de Analista ───
   useEffect(() => {
@@ -449,30 +454,41 @@ export function DemandaDetail({
     }
   }, [canFilterAllAnalysts, user?.id]);
 
-  if (!demanda) return null;
-
-  const isCancelada = demanda.situacao === "cancelada";
-  const isRejeitada = demanda.situacao === "rejeitada";
-  const isTerminal = TERMINAL_WORKFLOW.includes(demanda.situacao);
-  const isBloqueada = demanda.situacao === "bloqueada";
-
-  const currentStepIdx = STEPPER_STEPS.indexOf(demanda.situacao);
-
-  // Fluxo dinâmico: lê a tabela sustentacao_workflow_steps (com fallback estático).
-  // "Mover para" passa a espelhar exatamente as etapas configuradas em
-  // Sustentação → Fluxo de Trabalho.
+  // Preserve a ordem dos Hooks durante a transição sem demanda selecionada.
   const workflowSteps = useWorkflowSteps();
   const dynamicFlow = useMemo(
-    () => workflowSteps.map((s) => s.key),
+    () => workflowSteps.map((step) => step.key),
+    [workflowSteps],
+  );
+  const currentStatus = demanda?.situacao ?? "";
+  const isCancelada = currentStatus === "cancelada";
+  const isRejeitada = currentStatus === "rejeitada";
+  const isTerminal = TERMINAL_WORKFLOW.includes(currentStatus);
+  const isBloqueada = currentStatus === "bloqueada";
+  const allowedNextStatuses = useMemo<string[]>(() => {
+    if (!currentStatus || isCancelada) return [];
+    if (isRejeitada) return ["em_execucao"];
+    return dynamicFlow.filter((key) => key !== currentStatus);
+  }, [currentStatus, dynamicFlow, isCancelada, isRejeitada]);
+
+  const effectiveAnalyst = canFilterAllAnalysts ? analystFilter : (user?.id ?? "all");
+  const filteredHours = useMemo(() => {
+    if (effectiveAnalyst === "all") return hours;
+    return hours.filter((hour) => hour.user_id === effectiveAnalyst);
+  }, [hours, effectiveAnalyst]);
+
+  useEffect(() => {
+    setHoursPage(1);
+  }, [effectiveAnalyst, filteredHours.length]);
+
+  const dynamicLabelMap = useMemo(
+    () => Object.fromEntries(workflowSteps.map((step) => [step.key, step.label])),
     [workflowSteps],
   );
 
-  const allowedNextStatuses = useMemo<string[]>(() => {
-    if (isCancelada) return [];
-    if (isRejeitada) return ["em_execucao"];
-    // Permite mover para qualquer etapa configurada no fluxo, igual ao Kanban.
-    return dynamicFlow.filter((k) => k !== demanda.situacao);
-  }, [dynamicFlow, demanda.situacao, isCancelada, isRejeitada]);
+  if (!demanda) return null;
+
+  const currentStepIdx = STEPPER_STEPS.indexOf(demanda.situacao);
 
   const canBlock = !isTerminal && !isBloqueada && demanda.situacao !== "ag_aceite_final";
   const canCancel = !isTerminal && demanda.situacao !== "ag_aceite_final";
@@ -481,21 +497,12 @@ export function DemandaDetail({
   const slaStatus = getSLAStatusDemanda(demanda.created_at, demanda.prazo_solucao || null, demanda.situacao);
 
   // ─── Filtragem + paginação da aba Atividades ───
-  const effectiveAnalyst = canFilterAllAnalysts ? analystFilter : (user?.id ?? "all");
-  const filteredHours = useMemo(() => {
-    if (effectiveAnalyst === "all") return hours;
-    return hours.filter((h) => h.user_id === effectiveAnalyst);
-  }, [hours, effectiveAnalyst]);
   const hoursTotalPages = Math.max(1, Math.ceil(filteredHours.length / HOURS_PAGE_SIZE));
   const currentHoursPage = Math.min(hoursPage, hoursTotalPages);
   const paginatedHours = filteredHours.slice(
     (currentHoursPage - 1) * HOURS_PAGE_SIZE,
     currentHoursPage * HOURS_PAGE_SIZE,
   );
-
-  useEffect(() => {
-    setHoursPage(1);
-  }, [effectiveAnalyst, filteredHours.length]);
 
   const currentFaseIdx = EVIDENCIA_FASES.indexOf(demanda.situacao);
   const allowedEvidFases = currentFaseIdx >= 0 ? EVIDENCIA_FASES.slice(0, currentFaseIdx + 1) : EVIDENCIA_FASES;
@@ -594,7 +601,9 @@ export function DemandaDetail({
         incidencia: "limitada",
         user_id: user.id,
       });
-    } catch {}
+    } catch {
+      // A atualização principal continua válida se o vínculo auxiliar falhar.
+    }
     await onUpdate(demanda.id, { data_previsao_encerramento: novaPrevisao } as any);
     const ok = await onMoveTo(demanda, newStatus, just);
     if (ok) {
@@ -653,7 +662,9 @@ export function DemandaDetail({
           incidencia: ev.incidencia,
           user_id: user.id,
         });
-      } catch {}
+      } catch {
+        // A notificação é best-effort e não bloqueia a atualização da demanda.
+      }
     }
 
     const ok = await onMoveTo(demanda, "ag_aceite_final");
@@ -727,7 +738,9 @@ export function DemandaDetail({
       const results = await respSvc.searchProfiles(q, currentTeamId);
       const existing = new Set(responsaveis.map((r) => r.user_id));
       setSearchResults(results.filter((r) => !existing.has(r.user_id)));
-    } catch {}
+    } catch {
+      setSearchResults([]);
+    }
   };
 
   const handleAddResp = async (userId: string) => {
@@ -826,10 +839,6 @@ export function DemandaDetail({
   };
 
   const isCorretiva = ["manutencao_corretiva", "corretiva"].includes(demanda.tipo);
-  const dynamicLabelMap = useMemo(
-    () => Object.fromEntries(workflowSteps.map((s) => [s.key, s.label])),
-    [workflowSteps],
-  );
   const resolveLabel = (s: string) => dynamicLabelMap[s] || WORKFLOW_LABELS[s] || SITUACAO_LABELS[s] || s;
   const resolveColor = (s: string) => WORKFLOW_COLORS[s] || SITUACAO_COLORS[s] || "";
 
@@ -1848,7 +1857,7 @@ export function DemandaDetail({
                             {ev.descricao && <p className="text-xs text-muted-foreground truncate">{ev.descricao}</p>}
                             <p className="text-xs text-muted-foreground">
                               {ev.tipo === "link" && ev.url_externa ? (
-                                <a href={ev.url_externa} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: TEAL }}>
+                                <a href={safeExternalUrl(ev.url_externa)} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: TEAL }}>
                                   {ev.url_externa}
                                 </a>
                               ) : ev.file_name ? (

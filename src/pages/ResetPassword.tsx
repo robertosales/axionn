@@ -11,6 +11,7 @@ import {
   Mail,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { passwordPolicyError } from "@/lib/passwordPolicy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -163,8 +164,9 @@ const ResetPassword = () => {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (password.length < 6) {
-      toast.error("A senha deve ter ao menos 6 caracteres");
+    const policyError = passwordPolicyError(password);
+    if (policyError) {
+      toast.error(policyError);
       return;
     }
     if (password !== confirm) {
@@ -173,10 +175,12 @@ const ResetPassword = () => {
     }
 
     setLoading(true);
-    const { allowed, retryAfter } = await checkAuthRateLimit("reset_password");
+    const { allowed, retryAfter, unavailable } = await checkAuthRateLimit("reset_password");
     if (!allowed) {
       toast.error(
-        retryAfter
+        unavailable
+          ? "A proteção de acesso está temporariamente indisponível. Tente novamente em instantes."
+          : retryAfter
           ? `Muitas tentativas de redefinição. Aguarde ${retryAfter}s.`
           : "Muitas tentativas. Tente novamente em instantes.",
       );
@@ -231,10 +235,12 @@ const ResetPassword = () => {
     }
 
     setLoading(true);
-    const { allowed, retryAfter } = await checkAuthRateLimit("reset_password");
+    const { allowed, retryAfter, unavailable } = await checkAuthRateLimit("reset_password", normalizedEmail);
     if (!allowed) {
       toast.error(
-        retryAfter
+        unavailable
+          ? "A proteção de acesso está temporariamente indisponível. Tente novamente em instantes."
+          : retryAfter
           ? `Muitas solicitações. Aguarde ${retryAfter}s para tentar novamente.`
           : "Muitas solicitações. Tente novamente em instantes.",
       );

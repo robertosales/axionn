@@ -30,3 +30,10 @@ dist-ssr
 .env.development
 .env.production
 .env.staging
+
+# Credenciais de E2E
+.env.e2e
+
+# Artefatos gerados pelos testes Playwright
+test-results/
+playwright-report/

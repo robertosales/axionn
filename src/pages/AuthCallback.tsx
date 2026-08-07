@@ -56,9 +56,9 @@ export default function AuthCallback() {
           return;
         }
 
-        console.warn("[AuthCallback] nenhum token encontrado na URL de callback");
-        console.warn("hash:", window.location.hash);
-        console.warn("search:", window.location.search);
+        // Nunca registre hash ou query string aqui: callbacks OAuth podem conter
+        // access_token, refresh_token, code e outros dados de autenticação.
+        console.warn("[AuthCallback] callback sem credenciais utilizáveis");
         navigate("/auth?error=no_token", { replace: true });
       } catch (err) {
         console.error("[AuthCallback] erro inesperado:", err);

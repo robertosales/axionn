@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-apf-job-secret",
 };
 
 const BATCH_SIZE = 20;
@@ -45,9 +45,28 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const jobSecret = Deno.env.get("APF_EMBEDDINGS_JOB_SECRET") ?? "";
+  const trustedService = req.headers.get("authorization") === `Bearer ${serviceRoleKey}`;
+  const trustedScheduler = Boolean(jobSecret)
+    && req.headers.get("x-apf-job-secret") === jobSecret;
+  if (!trustedService && !trustedScheduler) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    serviceRoleKey,
   );
 
   // Recupera a API key da OpenAI do Vault

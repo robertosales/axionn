@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { readTextBody } from '../_shared/request-body.ts';
 import { parseUserStoryContent } from '../_shared/user-story-content.ts';
 import { resolveGitlabBacklogPlacement } from '../_shared/gitlab-backlog-placement.ts';
 
@@ -43,11 +44,10 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const provider = req.headers.get('x-git-provider') || 'gitlab';
     const eventType = normalizeEventType(req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown');
     const signature = req.headers.get('x-gitlab-token') || req.headers.get('x-hub-signature-256');
 
-    const rawBody = await req.text();
+    const rawBody = await readTextBody(req, 2_000_000);
     let payload: Record<string, unknown>;
     try {
       payload = JSON.parse(rawBody);
@@ -102,16 +102,36 @@ serve(async (req: Request) => {
       });
     }
 
-    // Verify webhook signature if configured
-    if (integration.webhook_secret_encrypted) {
-      if (!signature) {
-        return new Response(JSON.stringify({ error: 'Missing webhook signature' }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const isValid = await verifyWebhookSignature(provider, rawBody, signature, integration.webhook_secret_encrypted);
-      if (!isValid) {
+    const provider = String(integration.provider || '').toLowerCase();
+    if (!['gitlab', 'github'].includes(provider)) {
+      return new Response(JSON.stringify({ error: 'Unsupported integration provider' }), {
+        status: 422,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const claimedProvider = req.headers.get('x-git-provider');
+    if (claimedProvider && claimedProvider.toLowerCase() !== provider) {
+      return new Response(JSON.stringify({ error: 'Provider does not match integration' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Authentication is mandatory because all writes below use service_role.
+    if (!integration.webhook_secret_encrypted) {
+      return new Response(JSON.stringify({ error: 'Webhook authentication is not configured' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (!signature) {
+      return new Response(JSON.stringify({ error: 'Missing webhook signature' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const isValid = await verifyWebhookSignature(provider, rawBody, signature, integration.webhook_secret_encrypted);
+    if (!isValid) {
         console.warn('[Git Webhook] Invalid signature for integration:', integrationId);
         await logIntegrationEvent(supabase, organizationId, integrationId, 'webhook_received', 'error', {
           error_code: 'INVALID_SIGNATURE',
@@ -128,14 +148,13 @@ serve(async (req: Request) => {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
-      }
     }
 
     // Capturar headers relevantes para auditoria
     const relevantHeaders: Record<string, string> = {};
     [
       'x-integration-id', 'x-git-provider', 'x-gitlab-event', 'x-github-event',
-      'x-gitlab-token', 'x-hub-signature-256', 'content-type', 'user-agent',
+      'content-type', 'user-agent',
       'x-forwarded-for', 'x-real-ip',
     ].forEach(k => {
       const v = req.headers.get(k);
@@ -300,25 +319,22 @@ async function verifyWebhookSignature(
   secret: string
 ): Promise<boolean> {
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify']
-  );
-
   if (provider === 'gitlab') {
-    // GitLab uses X-Gitlab-Token header with the secret token
-    return signature === secret;
+    const key = await crypto.subtle.importKey(
+      'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'],
+    );
+    const comparison = await crypto.subtle.sign('HMAC', key, encoder.encode(signature));
+    return crypto.subtle.verify('HMAC', key, comparison, encoder.encode(secret));
   } else if (provider === 'github') {
     // GitHub uses X-Hub-Signature-256: sha256=...
-    const expectedSignature = signature.replace('sha256=', '');
-    const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-    const actualSignature = Array.from(new Uint8Array(signatureBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    return actualSignature === expectedSignature;
+    if (!signature.startsWith('sha256=')) return false;
+    const supplied = signature.slice(7);
+    if (!/^[a-fA-F0-9]{64}$/.test(supplied)) return false;
+    const key = await crypto.subtle.importKey(
+      'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'],
+    );
+    const bytes = new Uint8Array(supplied.match(/.{2}/g)!.map((part) => Number.parseInt(part, 16)));
+    return crypto.subtle.verify('HMAC', key, bytes, encoder.encode(payload));
   }
   return false;
 }
@@ -362,7 +378,7 @@ async function processGitEvent(
         await processIssueEvent(supabase, integration, gitEvent, payload, correlationId);
         break;
       default:
-        console.log('[Git Webhook] Unhandled event type:', eventType);
+        throw new Error('UNSUPPORTED_GIT_EVENT_TYPE');
     }
 
     // Mark as processed
@@ -372,7 +388,7 @@ async function processGitEvent(
       .eq('id', gitEvent.id);
   } catch (error) {
     console.error('[Git Webhook] Error processing event:', error);
-    await supabase
+    const { error: markError } = await supabase
       .from('git_events')
       .update({
         processed: true,
@@ -380,6 +396,8 @@ async function processGitEvent(
         processing_error: error instanceof Error ? error.message : String(error),
       })
       .eq('id', gitEvent.id);
+    if (markError) console.error('[Git Webhook] Failed to mark event error:', markError);
+    throw error;
   }
 }
 

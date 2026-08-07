@@ -63,13 +63,26 @@ import {
   legacyToModuleRoles,
   MODULES,
   PROFILES_BY_MODULE,
+  normalizeModuleRoleName,
   type ModuleKey,
   type ModuleAccess,
+  type ProfileOptionsByModule,
   type UserRow,
   type PendingModules,
 } from "./UserProfileSheet";
 
 const CONTRACT_ID = "d59ab6dc-421f-41b4-b415-ae0bc072ebd4";
+
+function toLocalDateTimeInput(value: Date) {
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function normalizeIso(value: unknown) {
+  if (!value) return "permanent";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+}
 
 // ─── AuditLog exportado para uso no Sheet ────────────────────────────────────
 
@@ -224,8 +237,10 @@ export function UserRolesManager() {
   const { currentOrganizationId, isOrganizationAdmin } = useOrganization();
   const [users,         setUsers]         = useState<UserRow[]>([]);
   const [loading,       setLoading]       = useState(false);
-  const [organizationAuthorityLocked, setOrganizationAuthorityLocked] =
-    useState(false);
+  const [profileOptionsByModule, setProfileOptionsByModule] =
+    useState<ProfileOptionsByModule>(PROFILES_BY_MODULE);
+  const useOrganizationAuthority =
+    ORGANIZATION_TENANCY_ENABLED && Boolean(currentOrganizationId);
   const [searchFilter,  setSearchFilter]  = useState("");
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
   const debouncedSearch = useDebounce(searchFilter);
@@ -252,31 +267,21 @@ export function UserRolesManager() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      if (ORGANIZATION_TENANCY_ENABLED) {
-        const { data: fallbackEnabled, error: fallbackError } =
-          await (supabase as any).rpc(
-            "is_organization_legacy_permission_fallback_enabled",
-          );
-
+      if (useOrganizationAuthority) {
         if (currentOrganizationId && isOrganizationAdmin) {
-          // O fallback controla a autoridade de escrita, não o escopo de
-          // leitura. Admins da organização sempre listam pelo RPC tenant-scoped.
-          setOrganizationAuthorityLocked(
-            !fallbackError && fallbackEnabled !== true,
-          );
+          // Leitura e escrita usam a mesma autoridade tenant-scoped.
           setIsCurrentUserAdmin(isOrganizationAdmin);
 
-          if (!currentOrganizationId || !isOrganizationAdmin) {
-            setUsers([]);
-            return;
-          }
-
-          const [membersRes, contractRolesRes, profileStatusRes] = await Promise.all([
+          const [membersRes, moduleRolesRes, contractRolesRes, rbacProfilesRes] = await Promise.all([
             (supabase as any).rpc("get_organization_members_v2", {
               p_org_id: currentOrganizationId,
             }),
+            (supabase as any).rpc(
+              "get_organization_member_module_roles_v1",
+              { p_org_id: currentOrganizationId },
+            ),
             supabase.from("user_contracts").select("user_id, role"),
-            (supabase as any).rpc("get_organization_account_statuses", {
+            (supabase as any).rpc("list_rbac_profiles_v1", {
               p_org_id: currentOrganizationId,
             }),
           ]);
@@ -284,6 +289,34 @@ export function UserRolesManager() {
           if (membersRes.error) {
             throw membersRes.error;
           }
+          if (moduleRolesRes.error) {
+            throw moduleRolesRes.error;
+          }
+
+          const dynamicProfileOptions: ProfileOptionsByModule = {
+            sala_agil: [],
+            sustentacao: [],
+            rdm: [],
+          };
+          const profileLabels = new Map<string, string>();
+          if (!rbacProfilesRes.error) {
+            (rbacProfilesRes.data || []).forEach((profile: any) => {
+              const value = String(profile.profile_key || "");
+              const label = String(profile.display_name || value);
+              if (!value) return;
+              profileLabels.set(value, label);
+              ((profile.module_keys || []) as string[]).forEach((moduleKey) => {
+                if (!["sala_agil", "sustentacao", "rdm"].includes(moduleKey)) return;
+                dynamicProfileOptions[moduleKey as ModuleKey].push({ value, label });
+              });
+            });
+          }
+          (Object.keys(dynamicProfileOptions) as ModuleKey[]).forEach((moduleKey) => {
+            if (dynamicProfileOptions[moduleKey].length === 0) {
+              dynamicProfileOptions[moduleKey] = PROFILES_BY_MODULE[moduleKey];
+            }
+          });
+          setProfileOptionsByModule(dynamicProfileOptions);
 
           const contractRoleMap: Record<string, "admin_contrato" | "member"> = {};
           (contractRolesRes.error ? [] : contractRolesRes.data || []).forEach(
@@ -294,14 +327,32 @@ export function UserRolesManager() {
             },
           );
 
-          if (profileStatusRes.error) {
-            throw profileStatusRes.error;
-          }
-          const profileStatusMap = new Map<string, boolean>(
-            (profileStatusRes.data ?? []).map((profile: any) => [
-              String(profile.user_id),
-              (profile.is_active ?? true) as boolean,
-            ]),
+          const tenantModuleRoles: Record<string, ModuleAccess[]> = {};
+          (moduleRolesRes.data || []).forEach(
+            (moduleRole: any) => {
+              if (
+                !moduleRole.user_id ||
+                !["sala_agil", "sustentacao", "rdm"].includes(
+                  moduleRole.module_key,
+                )
+              ) {
+                return;
+              }
+              if (!tenantModuleRoles[moduleRole.user_id]) {
+                tenantModuleRoles[moduleRole.user_id] = [];
+              }
+              tenantModuleRoles[moduleRole.user_id].push({
+                module: moduleRole.module_key as ModuleKey,
+                role: normalizeModuleRoleName(
+                  String(moduleRole.role_name || "member"),
+                ),
+                roleLabel: profileLabels.get(String(moduleRole.role_name || "member")),
+                expiresAt: moduleRole.expires_at ? String(moduleRole.expires_at) : null,
+                justification: moduleRole.assignment_justification
+                  ? String(moduleRole.assignment_justification)
+                  : null,
+              });
+            },
           );
 
           setUsers(
@@ -315,29 +366,40 @@ export function UserRolesManager() {
                 member.membership_role === "admin"
                   ? "admin"
                   : "member";
+              const persistedModuleRoles =
+                tenantModuleRoles[String(member.user_id)] || [];
+              const resolvedModuleRoles =
+                persistedModuleRoles.length > 0
+                  ? persistedModuleRoles
+                  : moduleKeys.map((moduleKey) => ({
+                      module: moduleKey,
+                      role: roleName,
+                    }));
 
               return {
                 user_id:              String(member.user_id),
                 display_name:         String(member.display_name || "—"),
                 email:                String(member.email || ""),
-                module_access:        moduleKeys[0] || "sala_agil",
-                // Status da conta (RBAC/Auth), não o status da associação à organização.
-                is_active:            profileStatusMap.get(String(member.user_id)) ?? Boolean(member.is_active),
+                module_access:
+                  resolvedModuleRoles[0]?.module ||
+                  moduleKeys[0] ||
+                  "sala_agil",
+                // Nesta visão tenant-scoped, status representa a associação à organização.
+                is_active:            Boolean(member.is_active),
                 must_change_password: false,
                 teams:                [],
-                moduleRoles:          moduleKeys.map((moduleKey) => ({
-                  module: moduleKey,
-                  role: roleName,
-                })),
+                moduleRoles:          resolvedModuleRoles,
                 contract_role:        contractRoleMap[member.user_id] ?? null,
               };
             }),
           );
           return;
         }
-      }
 
-      setOrganizationAuthorityLocked(false);
+        setUsers([]);
+        setIsCurrentUserAdmin(false);
+        return;
+      }
 
       // Verifica se o usuário atual é admin_master
       const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -398,7 +460,7 @@ export function UserRolesManager() {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganizationId, isOrganizationAdmin]);
+  }, [currentOrganizationId, isOrganizationAdmin, useOrganizationAuthority]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -427,7 +489,19 @@ export function UserRolesManager() {
     const init = {} as PendingModules;
     MODULES.forEach(({ key }) => {
       const found = effective.find(mr => mr.module === key);
-      init[key] = { enabled: !!found, role: found?.role || PROFILES_BY_MODULE[key][0].value };
+      init[key] = {
+        enabled: !!found,
+        role: found
+          ? found.role === "qa_analyst"
+            ? "qa"
+            : found.role
+          : profileOptionsByModule[key][0]?.value ?? PROFILES_BY_MODULE[key][0].value,
+        assignmentMode: found?.expiresAt ? "temporary" : "permanent",
+        expiresAt: found?.expiresAt
+          ? toLocalDateTimeInput(new Date(found.expiresAt))
+          : toLocalDateTimeInput(new Date(Date.now() + 7 * 86_400_000)),
+        justification: found?.justification ?? "",
+      };
     });
     setPendingName(user.display_name === "—" ? "" : user.display_name);
     setPendingModules(init);
@@ -449,6 +523,18 @@ export function UserRolesManager() {
     setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], role } }));
   }
 
+  function setAssignmentMode(key: ModuleKey, assignmentMode: "permanent" | "temporary") {
+    setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], assignmentMode } }));
+  }
+
+  function setExpiration(key: ModuleKey, expiresAt: string) {
+    setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], expiresAt } }));
+  }
+
+  function setJustification(key: ModuleKey, justification: string) {
+    setPendingModules(prev => ({ ...prev, [key]: { ...prev[key], justification } }));
+  }
+
   // ── Salvar ──────────────────────────────────────────────────────────────────
   async function saveUser() {
     const user = sheetUser;
@@ -457,13 +543,85 @@ export function UserRolesManager() {
     if (!trimmed) { toast.error("O nome não pode estar vazio"); return; }
     const enabled = MODULES.filter(m => pendingModules[m.key]?.enabled);
     if (enabled.length === 0) { toast.error("Selecione pelo menos um módulo"); return; }
-    if (organizationAuthorityLocked) {
-      toast.error("Use a administracao de membros da organizacao para alterar acessos.");
+    const invalidTemporary = enabled.find(({ key }) => {
+      const pending = pendingModules[key];
+      if (pending.assignmentMode !== "temporary") return false;
+      const expiration = new Date(pending.expiresAt);
+      return !pending.expiresAt
+        || Number.isNaN(expiration.getTime())
+        || expiration.getTime() <= Date.now() + 5 * 60_000
+        || pending.justification.trim().length < 10;
+    });
+    if (invalidTemporary) {
+      toast.error("Revise o prazo e informe uma justificativa com pelo menos 10 caracteres.");
       return;
     }
-
     setSaving(true);
     try {
+      if (useOrganizationAuthority) {
+        if (!currentOrganizationId) {
+          throw new Error("Organização não selecionada.");
+        }
+        const expectedModuleRoles = enabled.map((module) => ({
+          module_key: module.key,
+          role_name: normalizeModuleRoleName(
+            pendingModules[module.key].role,
+          ),
+          expires_at: pendingModules[module.key].assignmentMode === "temporary"
+            ? new Date(pendingModules[module.key].expiresAt).toISOString()
+            : null,
+          justification: pendingModules[module.key].assignmentMode === "temporary"
+            ? pendingModules[module.key].justification.trim()
+            : null,
+        }));
+        const { data, error } = await (supabase as any).rpc(
+          "manage_organization_member_profile_v2",
+          {
+            p_org_id: currentOrganizationId,
+            p_user_id: user.user_id,
+            p_display_name: trimmed,
+            // Papel organizacional é gerenciado na tela de membros; editar
+            // módulos aqui nunca deve promover privilégios.
+            p_role: null,
+            p_is_active: null,
+            p_module_roles: expectedModuleRoles,
+          },
+        );
+        if (error) throw error;
+        if (data !== true) {
+          throw new Error("O servidor não confirmou a atualização do perfil.");
+        }
+
+        const { data: persistedRoles, error: verificationError } =
+          await (supabase as any).rpc(
+            "get_organization_member_module_roles_v1",
+            { p_org_id: currentOrganizationId },
+          );
+        if (verificationError) throw verificationError;
+
+        const expectedSignature = expectedModuleRoles
+          .map((item) => `${item.module_key}:${item.role_name}:${normalizeIso(item.expires_at)}`)
+          .sort()
+          .join("|");
+        const persistedSignature = (persistedRoles || [])
+          .filter((item: any) => String(item.user_id) === user.user_id)
+          .map((item: any) =>
+            `${String(item.module_key)}:${normalizeModuleRoleName(String(item.role_name))}:${normalizeIso(item.expires_at)}`,
+          )
+          .sort()
+          .join("|");
+        if (persistedSignature !== expectedSignature) {
+          throw new Error(
+            "A alteração não foi persistida. Atualize a página e tente novamente.",
+          );
+        }
+
+        await fetchUsers();
+        closeSheet();
+        toast.success("Perfil atualizado e confirmado.");
+        return;
+      }
+
       // Salva module_roles
       const { error: delErr } = await supabase.from("user_module_roles").delete().eq("user_id", user.user_id);
       if (delErr) throw delErr;
@@ -518,11 +676,33 @@ export function UserRolesManager() {
     setToggleState(p => ({ ...p, saving: true }));
     const newActive = !user.is_active;
     try {
-      const { data, error } = await supabase.functions.invoke("admin-user-management", {
-        body: { action: "toggle_active", user_id: user.user_id, is_active: newActive },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (useOrganizationAuthority) {
+        if (!currentOrganizationId) {
+          throw new Error("Organização não selecionada.");
+        }
+        const { error } = await (supabase as any).rpc(
+          "manage_organization_member_v1",
+          {
+            p_org_id: currentOrganizationId,
+            p_user_id: user.user_id,
+            p_display_name: null,
+            p_role: null,
+            p_is_active: newActive,
+            p_module_keys: null,
+          },
+        );
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.functions.invoke("admin-user-management", {
+          body: {
+            action: "toggle_active",
+            user_id: user.user_id,
+            is_active: newActive,
+          },
+        });
+        if (error) throw error;
+        if ((data as any)?.error) throw new Error((data as any).error);
+      }
       setUsers((current) =>
         current.map((row) =>
           row.user_id === user.user_id ? { ...row, is_active: newActive } : row,
@@ -561,15 +741,39 @@ export function UserRolesManager() {
     if (targets.length === 0) { setBulkOpen(false); return; }
     setBulkRunning(true);
     const results = await Promise.allSettled(
-      targets.map(u =>
-        supabase.functions.invoke("admin-user-management", {
-          body: { action: "toggle_active", user_id: u.user_id, is_active: false },
-        }).then(res => {
-          if (res.error) throw res.error;
-          if ((res.data as any)?.error) throw new Error((res.data as any).error);
-          return res;
-        })
-      )
+      targets.map(async (user) => {
+        if (useOrganizationAuthority) {
+          if (!currentOrganizationId) {
+            throw new Error("Organização não selecionada.");
+          }
+          const result = await (supabase as any).rpc(
+            "manage_organization_member_v1",
+            {
+              p_org_id: currentOrganizationId,
+              p_user_id: user.user_id,
+              p_display_name: null,
+              p_role: null,
+              p_is_active: false,
+              p_module_keys: null,
+            },
+          );
+          if (result.error) throw result.error;
+          return result;
+        }
+
+        const result = await supabase.functions.invoke("admin-user-management", {
+          body: {
+            action: "toggle_active",
+            user_id: user.user_id,
+            is_active: false,
+          },
+        });
+        if (result.error) throw result.error;
+        if ((result.data as any)?.error) {
+          throw new Error((result.data as any).error);
+        }
+        return result;
+      }),
     );
     const ok = results.filter(r => r.status === "fulfilled").length;
     const fail = results.length - ok;
@@ -816,7 +1020,11 @@ export function UserRolesManager() {
 
                   {/* Módulo */}
                   <TableCell className="py-2.5">
-                    <ModuleTags moduleRoles={user.moduleRoles} module_access={user.module_access} />
+                    <ModuleTags
+                      moduleRoles={user.moduleRoles}
+                      module_access={user.module_access}
+                      profileOptionsByModule={profileOptionsByModule}
+                    />
                   </TableCell>
 
                   {/* Times */}
@@ -904,11 +1112,15 @@ export function UserRolesManager() {
         pendingContractRole={pendingContractRole}
         isCurrentUserAdmin={isCurrentUserAdmin}
         saving={saving}
+        profileOptionsByModule={profileOptionsByModule}
         onClose={closeSheet}
         onSave={saveUser}
         onNameChange={setPendingName}
         onToggleModule={toggleModule}
         onRoleChange={setModuleRole}
+        onAssignmentModeChange={setAssignmentMode}
+        onExpirationChange={setExpiration}
+        onJustificationChange={setJustification}
         onContractRoleChange={setPendingContractRole}
         onEmail={() => {
           if (!sheetUser) return;

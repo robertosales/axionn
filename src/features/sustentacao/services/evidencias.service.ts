@@ -61,8 +61,10 @@ export async function removeEvidencia(id: string) {
 }
 
 export async function uploadEvidenciaFile(file: File, demandaId: string): Promise<{ path: string }> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) throw new Error("Usuário não autenticado");
   const ext = file.name.split('.').pop();
-  const path = `evidencias/${demandaId}/${Date.now()}.${ext}`;
+  const path = `${authData.user.id}/evidencias/${demandaId}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from("attachments").upload(path, file);
   if (error) throw error;
   return { path };

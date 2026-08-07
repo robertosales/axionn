@@ -55,6 +55,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     updateUserStory,
     sprints,
     epics,
+    features,
     workflowColumns,
     customFields,
     developers,
@@ -68,6 +69,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [priority, setPriority]       = useState<string>("media");
   const [epicId, setEpicId]           = useState("");
+  const [featureId, setFeatureId]     = useState("");
   const [startDate, setStartDate]     = useState("");
   const [endDate, setEndDate]         = useState("");
   const [functionPoints, setFP]       = useState("");
@@ -143,6 +145,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     setSelectedSize(hu.sizeReference ?? null);
     setPriority(hu.priority);
     setEpicId(hu.epicId || "");
+    setFeatureId(hu.featureId || "");
     setStartDate(hu.startDate || "");
     setEndDate(hu.endDate || "");
     setSprintId(hu.sprintId || "");
@@ -188,6 +191,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
         status: statusField || workflowColumns[0]?.key || "",
         sprintId: sprintId || null,
         epicId: epicId || null,
+        featureId: featureId || null,
         customFields: customFieldValues,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
@@ -205,7 +209,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   }, [
     validate, huId, selectedSize, functionPoints, content,
     title, priority, statusField, workflowColumns,
-    sprintId, epicId, customFieldValues, startDate, endDate,
+    sprintId, epicId, featureId, customFieldValues, startDate, endDate,
     assigneeId, updateUserStory, onClose,
   ]);
 
@@ -357,7 +361,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
                   <Label className="text-sm font-medium">Épico</Label>
                   <Select
                     value={epicId || "none"}
-                    onValueChange={(v) => setEpicId(v === "none" ? "" : v)}
+                    onValueChange={(v) => { const next = v === "none" ? "" : v; setEpicId(next); if (!(features ?? []).some((f: any) => f.id === featureId && f.epicId === next)) setFeatureId(""); }}
                   >
                     <SelectTrigger className="text-sm h-9 w-full">
                       <SelectValue placeholder="Sem épico" />
@@ -372,6 +376,17 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
                           </div>
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Feature</Label>
+                  <Select value={featureId || "none"} onValueChange={(v) => setFeatureId(v === "none" ? "" : v)} disabled={!epicId}>
+                    <SelectTrigger className="text-sm h-9 w-full"><SelectValue placeholder={epicId ? "Sem feature" : "Selecione um épico"} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem feature</SelectItem>
+                      {(features ?? []).filter((feature: any) => feature.epicId === epicId).map((feature: any) => <SelectItem key={feature.id} value={feature.id}>{feature.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

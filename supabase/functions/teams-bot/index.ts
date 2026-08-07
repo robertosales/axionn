@@ -1,5 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyBotFrameworkRequest } from '../_shared/bot-framework-auth.ts';
+import { assertSafeOutboundUrl, hostsFromEnv } from '../_shared/outbound-url.ts';
+import { readJsonBody } from '../_shared/request-body.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,11 +57,26 @@ serve(async (req: Request) => {
   const startTime = Date.now();
 
   try {
+    try {
+      await verifyBotFrameworkRequest(req);
+    } catch (authError) {
+      console.warn('[Teams Bot] Rejected unauthenticated activity', correlationId,
+        authError instanceof Error ? authError.message : 'BOT_AUTHENTICATION_FAILED');
+      return new Response(JSON.stringify({
+        error: 'Unauthorized',
+        error_code: 'BOT_AUTHENTICATION_FAILED',
+        correlation_id: correlationId,
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const activity: TeamsActivity = await req.json();
+    const activity = await readJsonBody<TeamsActivity>(req, 1_000_000);
     console.log('[Teams Bot] Activity received:', activity.type, correlationId);
 
     // Guard against malformed payloads: Teams activities must include type/from/conversation
@@ -369,7 +387,10 @@ async function handleCustomCommand(
     response = data || { type: 'message', text: error?.message || 'Erro ao executar comando' };
   } else if (customCommand.handler_type === 'webhook') {
     // Call external webhook
-    const webhookResponse = await fetch(customCommand.handler_config.url, {
+    const webhookUrl = assertSafeOutboundUrl(customCommand.handler_config.url, {
+      allowedHosts: hostsFromEnv('TEAMS_COMMAND_WEBHOOK_ALLOWED_HOSTS'),
+    });
+    const webhookResponse = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ activity, args: parseCommandArgs(text) }),
@@ -638,7 +659,14 @@ async function sendAdaptiveCard(
   const token = await getBotToken(supabase, integration);
   if (!token) throw new Error('Failed to get bot token');
 
-  const response = await fetch(`${serviceUrl}v3/conversations/${conversationId}/activities`, {
+  const trustedServiceUrl = assertSafeOutboundUrl(serviceUrl, {
+    allowedHostSuffixes: ['trafficmanager.net', 'botframework.com'],
+  });
+  const activityUrl = new URL(
+    `v3/conversations/${encodeURIComponent(conversationId)}/activities`,
+    trustedServiceUrl,
+  );
+  const response = await fetch(activityUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,

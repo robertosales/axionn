@@ -2,6 +2,7 @@ import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
   Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
 } from "docx";
+import { triggerDownload } from "./fileDownload";
 
 const HEADER_FILL = "1F4E78";
 const KEY_FILL = "D9D9D9";
@@ -80,18 +81,6 @@ export async function markdownToDocxBlob(markdown: string): Promise<Blob> {
   return await Packer.toBlob(doc);
 }
 
-export function downloadMarkdownAsFile(content: string, filename: string) {
-  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
-  triggerDownload(blob, filename);
-}
-
-export function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 export async function downloadDocxFromMarkdown(markdown: string, filename: string) {
   const blob = await markdownToDocxBlob(markdown);
   triggerDownload(blob, filename);

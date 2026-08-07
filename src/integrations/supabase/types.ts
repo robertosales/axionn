@@ -962,6 +962,56 @@ export type Database = {
           },
         ]
       }
+      apf_automation_settings: {
+        Row: {
+          auto_approve_enabled: boolean
+          created_at: string
+          created_by: string | null
+          drift_alert_enabled: boolean
+          drift_threshold_pp: number
+          id: string
+          max_correction_rate: number
+          min_occurrences: number
+          team_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auto_approve_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          drift_alert_enabled?: boolean
+          drift_threshold_pp?: number
+          id?: string
+          max_correction_rate?: number
+          min_occurrences?: number
+          team_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auto_approve_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          drift_alert_enabled?: boolean
+          drift_threshold_pp?: number
+          id?: string
+          max_correction_rate?: number
+          min_occurrences?: number
+          team_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_automation_settings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: true
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_baseline_items: {
         Row: {
           baseline_id: string
@@ -1913,6 +1963,56 @@ export type Database = {
             foreignKeyName: "apf_jobs_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_automation_settings: {
+        Row: {
+          auto_approve_enabled: boolean
+          created_at: string
+          created_by: string | null
+          drift_alert_enabled: boolean
+          drift_threshold_pp: number
+          id: string
+          max_correction_rate: number
+          min_occurrences: number
+          team_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auto_approve_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          drift_alert_enabled?: boolean
+          drift_threshold_pp?: number
+          id?: string
+          max_correction_rate?: number
+          min_occurrences?: number
+          team_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auto_approve_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          drift_alert_enabled?: boolean
+          drift_threshold_pp?: number
+          id?: string
+          max_correction_rate?: number
+          min_occurrences?: number
+          team_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_automation_settings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: true
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
@@ -3402,16 +3502,19 @@ export type Database = {
       }
       app_permissions: {
         Row: {
+          description: string | null
           group_key: string
           key: string
           label: string
         }
         Insert: {
+          description?: string | null
           group_key: string
           key: string
           label: string
         }
         Update: {
+          description?: string | null
           group_key?: string
           key?: string
           label?: string
@@ -3420,21 +3523,62 @@ export type Database = {
       }
       app_roles: {
         Row: {
+          category: string
+          color_token: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon_name: string
+          is_active: boolean
+          is_system: boolean
           label: string
+          module_keys: string[]
           name: string
+          organization_id: string | null
           sort_order: number
+          updated_at: string
         }
         Insert: {
+          category?: string
+          color_token?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon_name?: string
+          is_active?: boolean
+          is_system?: boolean
           label: string
+          module_keys?: string[]
           name: string
+          organization_id?: string | null
           sort_order?: number
+          updated_at?: string
         }
         Update: {
+          category?: string
+          color_token?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon_name?: string
+          is_active?: boolean
+          is_system?: boolean
           label?: string
+          module_keys?: string[]
           name?: string
+          organization_id?: string | null
           sort_order?: number
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "app_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       attachments: {
         Row: {
@@ -3689,6 +3833,54 @@ export type Database = {
           },
         ]
       }
+      backlog_features: {
+        Row: {
+          color: string
+          created_at: string
+          description: string
+          epic_id: string
+          id: string
+          name: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string
+          epic_id: string
+          id?: string
+          name: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string
+          epic_id?: string
+          id?: string
+          name?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backlog_features_epic_id_fkey"
+            columns: ["epic_id"]
+            isOneToOne: false
+            referencedRelation: "epics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backlog_features_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backoffice_audit_log: {
         Row: {
           action: string
@@ -3805,6 +3997,68 @@ export type Database = {
           {
             foreignKeyName: "billing_records_tenant_id_fkey"
             columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      briefing_source_links: {
+        Row: {
+          artifact_id: string
+          briefing_id: string
+          created_at: string
+          id: string
+          meeting_id: string
+          normalized_hash: string
+          org_id: string
+          source_version: string
+        }
+        Insert: {
+          artifact_id: string
+          briefing_id: string
+          created_at?: string
+          id?: string
+          meeting_id: string
+          normalized_hash: string
+          org_id: string
+          source_version: string
+        }
+        Update: {
+          artifact_id?: string
+          briefing_id?: string
+          created_at?: string
+          id?: string
+          meeting_id?: string
+          normalized_hash?: string
+          org_id?: string
+          source_version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "briefing_source_links_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "briefing_source_links_briefing_id_fkey"
+            columns: ["briefing_id"]
+            isOneToOne: true
+            referencedRelation: "ai_briefings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "briefing_source_links_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "external_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "briefing_source_links_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
@@ -5619,6 +5873,121 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_meetings: {
+        Row: {
+          connection_id: string
+          created_at: string
+          discovered_at: string
+          ends_at: string | null
+          external_meeting_id: string
+          external_tenant_id: string | null
+          has_recording: boolean
+          has_transcript: boolean
+          id: string
+          imported_at: string | null
+          org_id: string
+          organizer_display_name: string | null
+          organizer_external_id: string | null
+          project_id: string | null
+          source_version: string
+          sprint_id: string | null
+          starts_at: string
+          state: string
+          subject: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          discovered_at?: string
+          ends_at?: string | null
+          external_meeting_id: string
+          external_tenant_id?: string | null
+          has_recording?: boolean
+          has_transcript?: boolean
+          id?: string
+          imported_at?: string | null
+          org_id: string
+          organizer_display_name?: string | null
+          organizer_external_id?: string | null
+          project_id?: string | null
+          source_version: string
+          sprint_id?: string | null
+          starts_at: string
+          state?: string
+          subject: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          discovered_at?: string
+          ends_at?: string | null
+          external_meeting_id?: string
+          external_tenant_id?: string | null
+          has_recording?: boolean
+          has_transcript?: boolean
+          id?: string
+          imported_at?: string | null
+          org_id?: string
+          organizer_display_name?: string | null
+          organizer_external_id?: string | null
+          project_id?: string | null
+          source_version?: string
+          sprint_id?: string | null
+          starts_at?: string
+          state?: string
+          subject?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_meetings_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_meetings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_meetings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_meetings_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_meetings_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
+            foreignKeyName: "external_meetings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -7471,6 +7840,556 @@ export type Database = {
           },
         ]
       }
+      meeting_artifacts: {
+        Row: {
+          available_at: string | null
+          content_hash: string | null
+          created_at: string
+          expires_at: string | null
+          external_artifact_id: string
+          id: string
+          kind: string
+          language: string | null
+          meeting_id: string
+          org_id: string
+          provider_reference: string | null
+          source_version: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          available_at?: string | null
+          content_hash?: string | null
+          created_at?: string
+          expires_at?: string | null
+          external_artifact_id: string
+          id?: string
+          kind: string
+          language?: string | null
+          meeting_id: string
+          org_id: string
+          provider_reference?: string | null
+          source_version: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          available_at?: string | null
+          content_hash?: string | null
+          created_at?: string
+          expires_at?: string | null
+          external_artifact_id?: string
+          id?: string
+          kind?: string
+          language?: string | null
+          meeting_id?: string
+          org_id?: string
+          provider_reference?: string | null
+          source_version?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_artifacts_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "external_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_artifacts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_audit_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          correlation_id: string
+          created_at: string
+          details: Json
+          id: string
+          org_id: string
+          resource_id: string | null
+          resource_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          correlation_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+          org_id: string
+          resource_id?: string | null
+          resource_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          correlation_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          org_id?: string
+          resource_id?: string | null
+          resource_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_audit_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_connections: {
+        Row: {
+          connection_mode: string
+          created_at: string
+          created_by: string
+          display_name: string
+          external_account_id: string
+          external_tenant_id: string | null
+          granted_scopes: string[]
+          health_checked_at: string | null
+          id: string
+          initial_days_back: number
+          last_synced_at: string | null
+          org_id: string
+          provider: string
+          retention_days: number
+          safe_error_code: string | null
+          safe_error_message: string | null
+          secret_ref: string
+          status: string
+          sync_policy: string
+          updated_at: string
+        }
+        Insert: {
+          connection_mode?: string
+          created_at?: string
+          created_by: string
+          display_name: string
+          external_account_id: string
+          external_tenant_id?: string | null
+          granted_scopes?: string[]
+          health_checked_at?: string | null
+          id?: string
+          initial_days_back?: number
+          last_synced_at?: string | null
+          org_id: string
+          provider: string
+          retention_days?: number
+          safe_error_code?: string | null
+          safe_error_message?: string | null
+          secret_ref: string
+          status?: string
+          sync_policy?: string
+          updated_at?: string
+        }
+        Update: {
+          connection_mode?: string
+          created_at?: string
+          created_by?: string
+          display_name?: string
+          external_account_id?: string
+          external_tenant_id?: string | null
+          granted_scopes?: string[]
+          health_checked_at?: string | null
+          id?: string
+          initial_days_back?: number
+          last_synced_at?: string | null
+          org_id?: string
+          provider?: string
+          retention_days?: number
+          safe_error_code?: string | null
+          safe_error_message?: string | null
+          secret_ref?: string
+          status?: string
+          sync_policy?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_connections_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_oauth_states: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          org_id: string
+          provider: string
+          redirect_uri: string
+          state_hash: string
+          user_id: string
+          verifier_secret_id: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          org_id: string
+          provider: string
+          redirect_uri: string
+          state_hash: string
+          user_id: string
+          verifier_secret_id: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          org_id?: string
+          provider?: string
+          redirect_uri?: string
+          state_hash?: string
+          user_id?: string
+          verifier_secret_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_oauth_states_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_participants: {
+        Row: {
+          attended_intervals: Json
+          created_at: string
+          display_name: string
+          email_ciphertext: string | null
+          external_participant_id: string
+          id: string
+          meeting_id: string
+          org_id: string
+          role: string
+        }
+        Insert: {
+          attended_intervals?: Json
+          created_at?: string
+          display_name: string
+          email_ciphertext?: string | null
+          external_participant_id: string
+          id?: string
+          meeting_id: string
+          org_id: string
+          role?: string
+        }
+        Update: {
+          attended_intervals?: Json
+          created_at?: string
+          display_name?: string
+          email_ciphertext?: string | null
+          external_participant_id?: string
+          id?: string
+          meeting_id?: string
+          org_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_participants_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "external_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_participants_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_processing_jobs: {
+        Row: {
+          artifact_id: string | null
+          attempt_count: number
+          correlation_id: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          job_type: string
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          meeting_id: string
+          next_attempt_at: string | null
+          org_id: string
+          safe_error_code: string | null
+          safe_error_message: string | null
+          stage: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          artifact_id?: string | null
+          attempt_count?: number
+          correlation_id?: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          job_type: string
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          meeting_id: string
+          next_attempt_at?: string | null
+          org_id: string
+          safe_error_code?: string | null
+          safe_error_message?: string | null
+          stage?: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          artifact_id?: string | null
+          attempt_count?: number
+          correlation_id?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          job_type?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          meeting_id?: string
+          next_attempt_at?: string | null
+          org_id?: string
+          safe_error_code?: string | null
+          safe_error_message?: string | null
+          stage?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_processing_jobs_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_processing_jobs_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "external_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_processing_jobs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_sync_cursors: {
+        Row: {
+          connection_id: string
+          cursor_type: string
+          cursor_value: string | null
+          id: string
+          updated_at: string
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          connection_id: string
+          cursor_type: string
+          cursor_value?: string | null
+          id?: string
+          updated_at?: string
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          connection_id?: string
+          cursor_type?: string
+          cursor_value?: string | null
+          id?: string
+          updated_at?: string
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_sync_cursors_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_transcript_segments: {
+        Row: {
+          artifact_id: string
+          created_at: string
+          end_ms: number
+          external_segment_id: string
+          id: string
+          ordinal: number
+          org_id: string
+          participant_id: string | null
+          quote_hash: string
+          speaker_label: string
+          start_ms: number
+          text_content: string
+          text_end: number | null
+          text_start: number | null
+        }
+        Insert: {
+          artifact_id: string
+          created_at?: string
+          end_ms: number
+          external_segment_id: string
+          id?: string
+          ordinal: number
+          org_id: string
+          participant_id?: string | null
+          quote_hash: string
+          speaker_label: string
+          start_ms: number
+          text_content: string
+          text_end?: number | null
+          text_start?: number | null
+        }
+        Update: {
+          artifact_id?: string
+          created_at?: string
+          end_ms?: number
+          external_segment_id?: string
+          id?: string
+          ordinal?: number
+          org_id?: string
+          participant_id?: string | null
+          quote_hash?: string
+          speaker_label?: string
+          start_ms?: number
+          text_content?: string
+          text_end?: number | null
+          text_start?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_transcript_segments_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_transcript_segments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_transcript_segments_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_webhook_events: {
+        Row: {
+          attempt_count: number
+          connection_id: string
+          correlation_id: string
+          event_type: string
+          id: string
+          next_attempt_at: string | null
+          occurred_at: string | null
+          org_id: string
+          payload_hash: string
+          payload_ref: string | null
+          provider_event_id: string
+          received_at: string
+          safe_error_code: string | null
+          safe_error_message: string | null
+          state: string
+        }
+        Insert: {
+          attempt_count?: number
+          connection_id: string
+          correlation_id?: string
+          event_type: string
+          id?: string
+          next_attempt_at?: string | null
+          occurred_at?: string | null
+          org_id: string
+          payload_hash: string
+          payload_ref?: string | null
+          provider_event_id: string
+          received_at?: string
+          safe_error_code?: string | null
+          safe_error_message?: string | null
+          state?: string
+        }
+        Update: {
+          attempt_count?: number
+          connection_id?: string
+          correlation_id?: string
+          event_type?: string
+          id?: string
+          next_attempt_at?: string | null
+          occurred_at?: string | null
+          org_id?: string
+          payload_hash?: string
+          payload_ref?: string | null
+          provider_event_id?: string
+          received_at?: string
+          safe_error_code?: string | null
+          safe_error_message?: string | null
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_webhook_events_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_webhook_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       migration_demanda_hours_log: {
         Row: {
           demanda_id: string
@@ -7559,45 +8478,92 @@ export type Database = {
       }
       okr_alerts: {
         Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
           alert_type: string
+          correlation_id: string
+          cycle_id: string | null
           deduplication_key: string
           detected_at: string
+          first_detected_at: string
           id: string
+          initiative_id: string | null
           key_result_id: string | null
+          last_detected_at: string
           message: string
           metadata: Json
           objective_id: string
+          occurrence_count: number
+          organization_id: string | null
+          resolution_note: string | null
           resolved_at: string | null
+          rule_code: string | null
           severity: string
           status: string
         }
         Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           alert_type: string
+          correlation_id?: string
+          cycle_id?: string | null
           deduplication_key: string
           detected_at?: string
+          first_detected_at?: string
           id?: string
+          initiative_id?: string | null
           key_result_id?: string | null
+          last_detected_at?: string
           message: string
           metadata?: Json
           objective_id: string
+          occurrence_count?: number
+          organization_id?: string | null
+          resolution_note?: string | null
           resolved_at?: string | null
+          rule_code?: string | null
           severity?: string
           status?: string
         }
         Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           alert_type?: string
+          correlation_id?: string
+          cycle_id?: string | null
           deduplication_key?: string
           detected_at?: string
+          first_detected_at?: string
           id?: string
+          initiative_id?: string | null
           key_result_id?: string | null
+          last_detected_at?: string
           message?: string
           metadata?: Json
           objective_id?: string
+          occurrence_count?: number
+          organization_id?: string | null
+          resolution_note?: string | null
           resolved_at?: string | null
+          rule_code?: string | null
           severity?: string
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "okr_alerts_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "okr_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_alerts_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "okr_initiatives"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "okr_alerts_key_result_id_fkey"
             columns: ["key_result_id"]
@@ -7610,6 +8576,13 @@ export type Database = {
             columns: ["objective_id"]
             isOneToOne: false
             referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_alerts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -7669,6 +8642,60 @@ export type Database = {
           {
             foreignKeyName: "okr_audit_log_objective_id_fkey"
             columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_carry_forward_links: {
+        Row: {
+          carry_forward_type: string
+          created_at: string
+          created_by: string | null
+          id: string
+          organization_id: string
+          reason: string
+          source_cycle_id: string | null
+          source_objective_id: string
+          target_cycle_id: string | null
+          target_objective_id: string
+        }
+        Insert: {
+          carry_forward_type: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id: string
+          reason: string
+          source_cycle_id?: string | null
+          source_objective_id: string
+          target_cycle_id?: string | null
+          target_objective_id: string
+        }
+        Update: {
+          carry_forward_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          organization_id?: string
+          reason?: string
+          source_cycle_id?: string | null
+          source_objective_id?: string
+          target_cycle_id?: string | null
+          target_objective_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_carry_forward_links_source_objective_id_fkey"
+            columns: ["source_objective_id"]
+            isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_carry_forward_links_target_objective_id_fkey"
+            columns: ["target_objective_id"]
             isOneToOne: false
             referencedRelation: "okr_objectives"
             referencedColumns: ["id"]
@@ -7737,6 +8764,77 @@ export type Database = {
             columns: ["objective_id"]
             isOneToOne: false
             referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_cycle_reviews: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          check_in_compliance: number | null
+          created_at: string
+          cross_team_dependencies: string | null
+          cycle_id: string
+          final_score: number | null
+          id: string
+          lessons_learned: string | null
+          main_achievements: string | null
+          main_failures: string | null
+          objectives_cancelled: number
+          objectives_carried_forward: number
+          objectives_completed: number
+          objectives_total: number
+          organization_id: string
+          strategic_recommendations: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          check_in_compliance?: number | null
+          created_at?: string
+          cross_team_dependencies?: string | null
+          cycle_id: string
+          final_score?: number | null
+          id?: string
+          lessons_learned?: string | null
+          main_achievements?: string | null
+          main_failures?: string | null
+          objectives_cancelled?: number
+          objectives_carried_forward?: number
+          objectives_completed?: number
+          objectives_total?: number
+          organization_id: string
+          strategic_recommendations?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          check_in_compliance?: number | null
+          created_at?: string
+          cross_team_dependencies?: string | null
+          cycle_id?: string
+          final_score?: number | null
+          id?: string
+          lessons_learned?: string | null
+          main_achievements?: string | null
+          main_failures?: string | null
+          objectives_cancelled?: number
+          objectives_carried_forward?: number
+          objectives_completed?: number
+          objectives_total?: number
+          organization_id?: string
+          strategic_recommendations?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_cycle_reviews_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: true
+            referencedRelation: "okr_cycles"
             referencedColumns: ["id"]
           },
         ]
@@ -7860,54 +8958,177 @@ export type Database = {
           },
         ]
       }
+      okr_export_events: {
+        Row: {
+          created_at: string
+          cycle_ids: string[]
+          export_format: string
+          id: string
+          organization_id: string
+          requested_by: string
+          row_count: number
+        }
+        Insert: {
+          created_at?: string
+          cycle_ids?: string[]
+          export_format: string
+          id?: string
+          organization_id: string
+          requested_by: string
+          row_count?: number
+        }
+        Update: {
+          created_at?: string
+          cycle_ids?: string[]
+          export_format?: string
+          id?: string
+          organization_id?: string
+          requested_by?: string
+          row_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_export_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_initiative_dependencies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dependency_type: string
+          depends_on_initiative_id: string
+          id: string
+          initiative_id: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dependency_type?: string
+          depends_on_initiative_id: string
+          id?: string
+          initiative_id: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dependency_type?: string
+          depends_on_initiative_id?: string
+          id?: string
+          initiative_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_initiative_dependencies_depends_on_initiative_id_fkey"
+            columns: ["depends_on_initiative_id"]
+            isOneToOne: false
+            referencedRelation: "okr_initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_initiative_dependencies_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "okr_initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_initiative_dependencies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       okr_initiatives: {
         Row: {
+          archived_at: string | null
+          blocked_reason: string | null
+          cancelled_reason: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
+          dependency_metadata: Json
           description: string | null
           due_date: string | null
           id: string
           key_result_id: string | null
           linked_entity_id: string | null
+          linked_entity_module: string | null
           linked_entity_type: string | null
           objective_id: string
+          organization_id: string | null
           owner_id: string | null
+          priority: string
+          progress: number
+          start_date: string | null
           status: string
           title: string
           updated_at: string
+          updated_by: string | null
+          version: number
         }
         Insert: {
+          archived_at?: string | null
+          blocked_reason?: string | null
+          cancelled_reason?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          dependency_metadata?: Json
           description?: string | null
           due_date?: string | null
           id?: string
           key_result_id?: string | null
           linked_entity_id?: string | null
+          linked_entity_module?: string | null
           linked_entity_type?: string | null
           objective_id: string
+          organization_id?: string | null
           owner_id?: string | null
+          priority?: string
+          progress?: number
+          start_date?: string | null
           status?: string
           title: string
           updated_at?: string
+          updated_by?: string | null
+          version?: number
         }
         Update: {
+          archived_at?: string | null
+          blocked_reason?: string | null
+          cancelled_reason?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
+          dependency_metadata?: Json
           description?: string | null
           due_date?: string | null
           id?: string
           key_result_id?: string | null
           linked_entity_id?: string | null
+          linked_entity_module?: string | null
           linked_entity_type?: string | null
           objective_id?: string
+          organization_id?: string | null
           owner_id?: string | null
+          priority?: string
+          progress?: number
+          start_date?: string | null
           status?: string
           title?: string
           updated_at?: string
+          updated_by?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -7922,6 +9143,13 @@ export type Database = {
             columns: ["objective_id"]
             isOneToOne: false
             referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_initiatives_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -8372,6 +9600,96 @@ export type Database = {
             foreignKeyName: "okr_objective_alignments_target_objective_id_fkey"
             columns: ["target_objective_id"]
             isOneToOne: false
+            referencedRelation: "okr_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      okr_objective_reviews: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          carry_forward_decision: string | null
+          carry_forward_reason: string | null
+          created_at: string
+          cycle_id: string | null
+          final_health: string | null
+          final_score: number | null
+          id: string
+          impact_rating: string | null
+          lessons_learned: string | null
+          objective_id: string
+          organization_id: string
+          outcome_summary: string | null
+          recommendation: string | null
+          rejection_reason: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+          what_did_not_work: string | null
+          what_worked: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          carry_forward_decision?: string | null
+          carry_forward_reason?: string | null
+          created_at?: string
+          cycle_id?: string | null
+          final_health?: string | null
+          final_score?: number | null
+          id?: string
+          impact_rating?: string | null
+          lessons_learned?: string | null
+          objective_id: string
+          organization_id: string
+          outcome_summary?: string | null
+          recommendation?: string | null
+          rejection_reason?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          what_did_not_work?: string | null
+          what_worked?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          carry_forward_decision?: string | null
+          carry_forward_reason?: string | null
+          created_at?: string
+          cycle_id?: string | null
+          final_health?: string | null
+          final_score?: number | null
+          id?: string
+          impact_rating?: string | null
+          lessons_learned?: string | null
+          objective_id?: string
+          organization_id?: string
+          outcome_summary?: string | null
+          recommendation?: string | null
+          rejection_reason?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          what_did_not_work?: string | null
+          what_worked?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "okr_objective_reviews_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "okr_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_objective_reviews_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: true
             referencedRelation: "okr_objectives"
             referencedColumns: ["id"]
           },
@@ -9187,7 +10505,9 @@ export type Database = {
       organization_member_modules: {
         Row: {
           assigned_by: string | null
+          assignment_justification: string | null
           created_at: string
+          expires_at: string | null
           id: string
           module_key: string
           org_id: string
@@ -9197,7 +10517,9 @@ export type Database = {
         }
         Insert: {
           assigned_by?: string | null
+          assignment_justification?: string | null
           created_at?: string
+          expires_at?: string | null
           id?: string
           module_key: string
           org_id: string
@@ -9207,7 +10529,9 @@ export type Database = {
         }
         Update: {
           assigned_by?: string | null
+          assignment_justification?: string | null
           created_at?: string
+          expires_at?: string | null
           id?: string
           module_key?: string
           org_id?: string
@@ -9229,7 +10553,9 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          invited_by: string | null
           is_active: boolean
+          joined_at: string
           org_id: string
           role: Database["public"]["Enums"]["org_member_role"]
           updated_at: string
@@ -9239,7 +10565,9 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          invited_by?: string | null
           is_active?: boolean
+          joined_at?: string
           org_id: string
           role?: Database["public"]["Enums"]["org_member_role"]
           updated_at?: string
@@ -9249,7 +10577,9 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          invited_by?: string | null
           is_active?: boolean
+          joined_at?: string
           org_id?: string
           role?: Database["public"]["Enums"]["org_member_role"]
           updated_at?: string
@@ -9744,6 +11074,7 @@ export type Database = {
           saved_at: string | null
           session_id: string
           status: string
+          vote_revision: number
         }
         Insert: {
           created_at?: string
@@ -9757,6 +11088,7 @@ export type Database = {
           saved_at?: string | null
           session_id: string
           status?: string
+          vote_revision?: number
         }
         Update: {
           created_at?: string
@@ -9770,6 +11102,7 @@ export type Database = {
           saved_at?: string | null
           session_id?: string
           status?: string
+          vote_revision?: number
         }
         Relationships: [
           {
@@ -11438,6 +12771,100 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rbac_privileged_permissions: {
+        Row: {
+          created_at: string
+          permission_key: string
+          reason: string
+          risk_level: string
+        }
+        Insert: {
+          created_at?: string
+          permission_key: string
+          reason: string
+          risk_level: string
+        }
+        Update: {
+          created_at?: string
+          permission_key?: string
+          reason?: string
+          risk_level?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rbac_privileged_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: true
+            referencedRelation: "app_permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      rbac_profile_change_requests: {
+        Row: {
+          change_type: string
+          created_at: string
+          current_snapshot: Json | null
+          expires_at: string
+          id: string
+          org_id: string
+          profile_key: string
+          proposed_snapshot: Json
+          requested_by: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          risk_level: string
+          risk_reasons: string[]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          change_type: string
+          created_at?: string
+          current_snapshot?: Json | null
+          expires_at?: string
+          id?: string
+          org_id: string
+          profile_key: string
+          proposed_snapshot: Json
+          requested_by: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_level: string
+          risk_reasons?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          change_type?: string
+          created_at?: string
+          current_snapshot?: Json | null
+          expires_at?: string
+          id?: string
+          org_id?: string
+          profile_key?: string
+          proposed_snapshot?: Json
+          requested_by?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          risk_level?: string
+          risk_reasons?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rbac_profile_change_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -14576,6 +16003,7 @@ export type Database = {
           epic_id: string | null
           estimated_hours: number | null
           external_reference: string | null
+          feature_id: string | null
           function_points: number | null
           id: string
           planning_status: string | null
@@ -14616,6 +16044,7 @@ export type Database = {
           epic_id?: string | null
           estimated_hours?: number | null
           external_reference?: string | null
+          feature_id?: string | null
           function_points?: number | null
           id?: string
           planning_status?: string | null
@@ -14656,6 +16085,7 @@ export type Database = {
           epic_id?: string | null
           estimated_hours?: number | null
           external_reference?: string | null
+          feature_id?: string | null
           function_points?: number | null
           id?: string
           planning_status?: string | null
@@ -14694,6 +16124,13 @@ export type Database = {
             columns: ["epic_id"]
             isOneToOne: false
             referencedRelation: "epics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_stories_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "backlog_features"
             referencedColumns: ["id"]
           },
           {
@@ -15549,6 +16986,20 @@ export type Database = {
           starts_at: string
         }[]
       }
+      _okr_upsert_alert_v1: {
+        Args: {
+          p_cycle_id?: string
+          p_initiative_id?: string
+          p_key_result_id?: string
+          p_message: string
+          p_metadata?: Json
+          p_objective_id?: string
+          p_org_id: string
+          p_rule_code: string
+          p_severity: string
+        }
+        Returns: string
+      }
       _okr_v2_guard: {
         Args: { _entitlement?: string; _org_id: string; _permission: string }
         Returns: undefined
@@ -15562,6 +17013,19 @@ export type Database = {
           organization_name: string
           result_status: string
         }[]
+      }
+      acknowledge_okr_alert_v1: {
+        Args: { p_alert_id: string; p_note?: string; p_org_id: string }
+        Returns: undefined
+      }
+      add_okr_initiative_dependency_v1: {
+        Args: {
+          p_dependency_type?: string
+          p_depends_on_initiative_id: string
+          p_initiative_id: string
+          p_org_id: string
+        }
+        Returns: string
       }
       add_organization_team_member_v2: {
         Args: {
@@ -15600,6 +17064,24 @@ export type Database = {
       anonymize_ai_briefing: {
         Args: { p_briefing_id: string }
         Returns: undefined
+      }
+      apf_can_access_baseline: {
+        Args: { _baseline_id: string }
+        Returns: boolean
+      }
+      apf_can_access_model: { Args: { _model_id: string }; Returns: boolean }
+      apf_can_access_session: {
+        Args: { _session_id: string }
+        Returns: boolean
+      }
+      apf_can_manage_baseline: {
+        Args: { _baseline_id: string }
+        Returns: boolean
+      }
+      apf_can_manage_model: { Args: { _model_id: string }; Returns: boolean }
+      apf_can_manage_session: {
+        Args: { _session_id: string }
+        Returns: boolean
       }
       apf_create_dpf_globalweb_model: {
         Args: { p_contract_id: string }
@@ -15654,12 +17136,29 @@ export type Database = {
         }
         Returns: string
       }
+      approve_okr_cycle_review_v1: {
+        Args: { p_close_cycle?: boolean; p_cycle_id: string }
+        Returns: undefined
+      }
+      approve_okr_objective_review_v1: {
+        Args: {
+          p_approve?: boolean
+          p_org_id: string
+          p_reason?: string
+          p_review_id: string
+        }
+        Returns: undefined
+      }
       archive_expired_briefings: { Args: never; Returns: number }
       archive_okr_alignment_v1: {
         Args: { p_alignment_id: string; p_org_id: string }
         Returns: string
       }
       archive_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
+      archive_okr_initiative_v1: {
+        Args: { p_initiative_id: string; p_org_id: string; p_reason?: string }
+        Returns: undefined
+      }
       archive_okr_key_result_v2: {
         Args: { p_key_result_id: string; p_org_id: string; p_reason?: string }
         Returns: string
@@ -15691,6 +17190,10 @@ export type Database = {
       archive_quality_test_case_v1: {
         Args: { p_case_id: string; p_correlation_id?: string; p_org_id: string }
         Returns: undefined
+      }
+      archive_rbac_profile_v1: {
+        Args: { p_org_id: string; p_profile_key: string }
+        Returns: boolean
       }
       assert_backoffice_staff: {
         Args: { p_allowed_roles?: string[] }
@@ -15860,6 +17363,10 @@ export type Database = {
         Args: { p_org_id: string; p_team_id: string }
         Returns: boolean
       }
+      can_briefing_meeting_permission_v1: {
+        Args: { p_org_id: string; p_permission: string }
+        Returns: boolean
+      }
       can_manage_quality: {
         Args: { p_org_id: string; p_user_id?: string }
         Returns: boolean
@@ -15904,6 +17411,21 @@ export type Database = {
         Args: { p_cycle_id: string; p_reason: string }
         Returns: undefined
       }
+      carry_forward_okr_objective_v1: {
+        Args: {
+          p_carry_forward_type: string
+          p_key_result_ids?: string[]
+          p_objective_id: string
+          p_org_id: string
+          p_reason: string
+          p_target_cycle_id: string
+        }
+        Returns: string
+      }
+      cast_planning_vote: {
+        Args: { p_hu_id: string; p_session_id: string; p_vote_value: string }
+        Returns: undefined
+      }
       check_commercial_usage_v1: {
         Args: {
           p_correlation_id?: string
@@ -15925,6 +17447,35 @@ export type Database = {
       check_organization_has_quality_module: {
         Args: { p_org_id: string }
         Returns: boolean
+      }
+      claim_meeting_processing_jobs_v1: {
+        Args: { p_limit?: number; p_worker_id: string }
+        Returns: {
+          artifact_id: string | null
+          attempt_count: number
+          correlation_id: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          job_type: string
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          meeting_id: string
+          next_attempt_at: string | null
+          org_id: string
+          safe_error_code: string | null
+          safe_error_message: string | null
+          stage: string
+          state: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "meeting_processing_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       claim_next_apf_job: {
         Args: never
@@ -15948,6 +17499,43 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "apf_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_okr_recalculation_job_v2: {
+        Args: {
+          p_job_id: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          available_at: string
+          cancelled_at: string | null
+          completed_at: string | null
+          correlation_id: string
+          created_at: string
+          dead_lettered_at: string | null
+          id: string
+          idempotency_key: string
+          key_result_id: string | null
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          metric_binding_id: string | null
+          objective_id: string
+          organization_id: string | null
+          processed_at: string | null
+          reason: string
+          result: Json | null
+          status: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_recalculation_queue"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -15990,6 +17578,10 @@ export type Database = {
         }
       }
       close_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
+      close_planning_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       complete_ai_briefing_run: {
         Args: {
           p_duration_ms?: number
@@ -16009,6 +17601,10 @@ export type Database = {
           p_error_message?: string
           p_status?: string
         }
+        Returns: undefined
+      }
+      complete_meeting_processing_job_v1: {
+        Args: { p_job_id: string; p_worker_id: string }
         Returns: undefined
       }
       complete_quality_test_run_v1: {
@@ -16031,6 +17627,26 @@ export type Database = {
           p_team_id?: string
         }
         Returns: Json
+      }
+      consume_meeting_oauth_state_v1: {
+        Args: { p_state_hash: string; p_user_id: string }
+        Returns: {
+          code_verifier: string
+          org_id: string
+          redirect_uri: string
+        }[]
+      }
+      cast_planning_vote: {
+        Args: { p_hu_id: string; p_session_id: string; p_vote_value: string }
+        Returns: undefined
+      }
+      claim_okr_recalculation_job_v2: {
+        Args: { p_job_id: string; p_lease_seconds?: number; p_worker_id: string }
+        Returns: Database["public"]["Tables"]["okr_recalculation_queue"]["Row"][]
+      }
+      close_planning_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
       }
       create_ai_briefing: {
         Args: {
@@ -16081,6 +17697,10 @@ export type Database = {
       }
       create_okr_cycle_v1: {
         Args: { p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      create_okr_initiative_v1: {
+        Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
         Returns: string
       }
       create_okr_key_result_v2: {
@@ -16167,6 +17787,10 @@ export type Database = {
           p_name: string
           p_org_id: string
         }
+        Returns: string
+      }
+      create_planning_session: {
+        Args: { p_deck_mode?: string; p_sprint_id: string; p_team_id: string }
         Returns: string
       }
       create_platform_ai_provider_v2: {
@@ -16273,6 +17897,16 @@ export type Database = {
           p_run_id: string
         }
         Returns: undefined
+      }
+      fail_meeting_processing_job_v1: {
+        Args: {
+          p_error_code: string
+          p_job_id: string
+          p_recoverable?: boolean
+          p_safe_error_message: string
+          p_worker_id: string
+        }
+        Returns: string
       }
       finalize_ai_briefing_usage: {
         Args: {
@@ -16924,6 +18558,10 @@ export type Database = {
           provider: string
         }[]
       }
+      get_meeting_connection_secret_v1: {
+        Args: { p_connection_id: string }
+        Returns: string
+      }
       get_my_backoffice_staff_profile: {
         Args: never
         Returns: {
@@ -16995,6 +18633,15 @@ export type Database = {
           status: Database["public"]["Enums"]["org_status"]
         }[]
       }
+      get_okr_dashboard_v1: {
+        Args: {
+          p_compare_cycle_id?: string
+          p_cycle_id?: string
+          p_mode?: string
+          p_org_id: string
+        }
+        Returns: Json
+      }
       get_okr_entitlement_matrix_v1: {
         Args: { p_org_id: string }
         Returns: {
@@ -17045,6 +18692,16 @@ export type Database = {
           invited_by_name: string
           module_keys: string[]
           send_count: number
+        }[]
+      }
+      get_organization_member_module_roles_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          assignment_justification: string
+          expires_at: string
+          module_key: string
+          role_name: string
+          user_id: string
         }[]
       }
       get_organization_members_v2: {
@@ -17131,6 +18788,15 @@ export type Database = {
           subscription_status: string
           users_limit: number
           users_used: number
+        }[]
+      }
+      get_planning_round_votes: {
+        Args: { p_hu_id: string; p_session_id: string }
+        Returns: {
+          id: string
+          revealed: boolean
+          user_id: string
+          vote_value: string
         }[]
       }
       get_project_api_url: { Args: never; Returns: string }
@@ -17258,6 +18924,10 @@ export type Database = {
         Returns: boolean
       }
       is_platform_admin: { Args: { p_user_id?: string }; Returns: boolean }
+      is_rbac_profile_available_v1: {
+        Args: { p_module_key: string; p_org_id: string; p_profile_key: string }
+        Returns: boolean
+      }
       is_team_admin: {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
@@ -17275,6 +18945,10 @@ export type Database = {
         Returns: boolean
       }
       is_tenancy_enforced: { Args: never; Returns: boolean }
+      join_planning_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       link_quality_test_case_v1: {
         Args: {
           p_case_id: string
@@ -17379,6 +19053,57 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      list_meeting_connections_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          connection_mode: string
+          display_name: string
+          granted_scopes: string[]
+          health_checked_at: string
+          id: string
+          initial_days_back: number
+          last_synced_at: string
+          provider: string
+          retention_days: number
+          safe_error_code: string
+          safe_error_message: string
+          status: string
+          sync_policy: string
+        }[]
+      }
+      list_okr_alerts_v1: {
+        Args: { p_org_id: string; p_status?: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          alert_type: string
+          correlation_id: string
+          cycle_id: string | null
+          deduplication_key: string
+          detected_at: string
+          first_detected_at: string
+          id: string
+          initiative_id: string | null
+          key_result_id: string | null
+          last_detected_at: string
+          message: string
+          metadata: Json
+          objective_id: string
+          occurrence_count: number
+          organization_id: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          rule_code: string | null
+          severity: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_alerts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       list_okr_alignments_v1: {
         Args: { p_objective_id?: string; p_org_id: string }
         Returns: {
@@ -17414,6 +19139,46 @@ export type Database = {
           timezone: string
           updated_at: string
         }[]
+      }
+      list_okr_initiatives_v1: {
+        Args: {
+          p_include_archived?: boolean
+          p_objective_id?: string
+          p_org_id: string
+        }
+        Returns: {
+          archived_at: string | null
+          blocked_reason: string | null
+          cancelled_reason: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          dependency_metadata: Json
+          description: string | null
+          due_date: string | null
+          id: string
+          key_result_id: string | null
+          linked_entity_id: string | null
+          linked_entity_module: string | null
+          linked_entity_type: string | null
+          objective_id: string
+          organization_id: string | null
+          owner_id: string | null
+          priority: string
+          progress: number
+          start_date: string | null
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_initiatives"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       list_okr_key_results_v2: {
         Args: {
@@ -17453,6 +19218,39 @@ export type Database = {
           updated_at: string
           weight: number
         }[]
+      }
+      list_okr_objective_reviews_v1: {
+        Args: { p_cycle_id?: string; p_org_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          carry_forward_decision: string | null
+          carry_forward_reason: string | null
+          created_at: string
+          cycle_id: string | null
+          final_health: string | null
+          final_score: number | null
+          id: string
+          impact_rating: string | null
+          lessons_learned: string | null
+          objective_id: string
+          organization_id: string
+          outcome_summary: string | null
+          recommendation: string | null
+          rejection_reason: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+          what_did_not_work: string | null
+          what_worked: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_objective_reviews"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       list_okr_objectives_v2: {
         Args: {
@@ -17542,6 +19340,57 @@ export type Database = {
           name: string
           status: string
           updated_at: string
+        }[]
+      }
+      list_rbac_audit_events_v1: {
+        Args: { p_limit?: number; p_org_id: string; p_profile_key?: string }
+        Returns: {
+          action: string
+          actor_id: string
+          actor_name: string
+          audit_id: string
+          created_at: string
+          details: Json
+          profile_key: string
+          subject_name: string
+          subject_user_id: string
+        }[]
+      }
+      list_rbac_governance_v1: { Args: { p_org_id: string }; Returns: Json }
+      list_rbac_permissions_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          description: string
+          group_key: string
+          label: string
+          module_key: string
+          permission_key: string
+        }[]
+      }
+      list_rbac_privileged_permissions_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          permission_key: string
+          reason: string
+          risk_level: string
+        }[]
+      }
+      list_rbac_profiles_v1: {
+        Args: { p_org_id: string }
+        Returns: {
+          category: string
+          color_token: string
+          description: string
+          display_name: string
+          icon_name: string
+          is_active: boolean
+          is_system: boolean
+          module_keys: string[]
+          permission_count: number
+          permission_keys: string[]
+          profile_key: string
+          updated_at: string
+          user_count: number
         }[]
       }
       log_apex_usage_event: {
@@ -17852,6 +19701,28 @@ export type Database = {
         }
         Returns: string
       }
+      manage_organization_member_profile_v2: {
+        Args: {
+          p_display_name?: string
+          p_is_active?: boolean
+          p_module_roles?: Json
+          p_org_id: string
+          p_role?: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      manage_organization_member_v1: {
+        Args: {
+          p_display_name?: string
+          p_is_active?: boolean
+          p_module_keys?: string[]
+          p_org_id: string
+          p_role?: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       match_similar_apf_cases:
         | {
             Args: {
@@ -17970,6 +19841,14 @@ export type Database = {
         Returns: string
       }
       quality_case_snapshot: { Args: { p_case_id: string }; Returns: Json }
+      rbac_permission_module_v1: {
+        Args: { p_group_key: string }
+        Returns: string
+      }
+      rbac_profile_requires_approval_v1: {
+        Args: { p_permission_keys: string[]; p_profile_key: string }
+        Returns: boolean
+      }
       recalculate_apf_session_totals: {
         Args: { p_session_id: string }
         Returns: undefined
@@ -17985,6 +19864,18 @@ export type Database = {
       recalculate_session_totals: {
         Args: { p_session_id: string }
         Returns: undefined
+      }
+      receive_meeting_webhook_event_v1: {
+        Args: {
+          p_connection_id: string
+          p_correlation_id?: string
+          p_event_type: string
+          p_occurred_at?: string
+          p_payload_hash: string
+          p_payload_ref?: string
+          p_provider_event_id: string
+        }
+        Returns: string
       }
       record_okr_check_in_v2: {
         Args: { p_key_result_id: string; p_org_id: string; p_payload: Json }
@@ -18025,8 +19916,29 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_planning_round_votes: {
+        Args: { p_hu_id: string; p_session_id: string }
+        Returns: {
+          id: string
+          revealed: boolean
+          user_id: string
+          vote_value: string | null
+        }[]
+      }
+      create_planning_session: {
+        Args: { p_deck_mode?: string; p_sprint_id: string; p_team_id: string }
+        Returns: string
+      }
+      join_planning_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       refresh_organization_entitlement_cache: {
         Args: { p_org_id: string }
+        Returns: undefined
+      }
+      remove_okr_initiative_dependency_v1: {
+        Args: { p_dependency_id: string; p_org_id: string }
         Returns: undefined
       }
       remove_organization_team_member_v2: {
@@ -18055,6 +19967,20 @@ export type Database = {
         Returns: undefined
       }
       reorder_user_stories: { Args: { p_updates: Json }; Returns: undefined }
+      request_meeting_import_v1: {
+        Args: {
+          p_idempotency_key?: string
+          p_meeting_id: string
+          p_project_id?: string
+          p_sprint_id?: string
+          p_team_id: string
+        }
+        Returns: string
+      }
+      request_okr_export_v1: {
+        Args: { p_cycle_ids: string[]; p_format: string; p_org_id: string }
+        Returns: Json
+      }
       request_okr_measurement_v2: {
         Args: { p_key_result_id: string }
         Returns: string
@@ -18146,6 +20072,10 @@ export type Database = {
         Args: { p_contract_id: string }
         Returns: string
       }
+      resolve_okr_alert_v1: {
+        Args: { p_alert_id: string; p_note?: string; p_org_id: string }
+        Returns: undefined
+      }
       resolve_okr_entitlement_v1: {
         Args: { p_feature_key: string; p_org_id: string }
         Returns: {
@@ -18168,6 +20098,10 @@ export type Database = {
         Returns: string
       }
       resolve_team_org_id: { Args: { p_team_id: string }; Returns: string }
+      reveal_planning_votes: {
+        Args: { p_round_id: string }
+        Returns: undefined
+      }
       review_ai_briefing_suggestion: {
         Args: {
           p_review_status: string
@@ -18176,10 +20110,38 @@ export type Database = {
         }
         Returns: undefined
       }
+      review_rbac_profile_change_v1: {
+        Args: {
+          p_decision: string
+          p_note?: string
+          p_org_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       revoke_organization_invitation_v2: {
         Args: { p_invitation_id: string }
         Returns: boolean
       }
+      reveal_planning_votes: {
+        Args: { p_round_id: string }
+        Returns: undefined
+      }
+      save_planning_result: {
+        Args: { p_hours?: number | null; p_round_id: string; p_value: string }
+        Returns: undefined
+      }
+      start_planning_round: {
+        Args: { p_hu_id: string; p_session_id: string }
+        Returns: string
+      }
+      run_apf_auto_approve: {
+        Args: { p_team_id: string }
+        Returns: {
+          pattern_id: string
+        }[]
+      }
+      run_okr_alert_engine_v1: { Args: { p_org_id: string }; Returns: number }
       save_contractual_counting_items: {
         Args: {
           p_ai_model?: string
@@ -18208,6 +20170,24 @@ export type Database = {
           p_status?: string
           p_team_ids?: string[]
           p_value_per_pfus?: number
+        }
+        Returns: string
+      }
+      save_planning_result: {
+        Args: { p_hours?: number; p_round_id: string; p_value: string }
+        Returns: undefined
+      }
+      save_rbac_profile_v1: {
+        Args: {
+          p_category?: string
+          p_color_token?: string
+          p_description?: string
+          p_display_name?: string
+          p_icon_name?: string
+          p_module_keys?: string[]
+          p_org_id: string
+          p_permission_keys?: string[]
+          p_profile_key?: string
         }
         Returns: string
       }
@@ -18275,6 +20255,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      simulate_rbac_user_access_v1: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: Json
+      }
       start_ai_briefing_run: {
         Args: {
           p_briefing_id: string
@@ -18300,11 +20284,43 @@ export type Database = {
         Args: { p_cycle_id: string }
         Returns: undefined
       }
+      start_planning_round: {
+        Args: { p_hu_id: string; p_session_id: string }
+        Returns: string
+      }
       start_quality_test_run_v1: {
         Args: { p_correlation_id?: string; p_org_id: string; p_run_id: string }
         Returns: undefined
       }
       status_concluidos: { Args: never; Returns: string[] }
+      store_meeting_oauth_state_v1: {
+        Args: {
+          p_code_verifier: string
+          p_org_id: string
+          p_redirect_uri: string
+          p_state_hash: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      submit_okr_objective_review_v1: {
+        Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
+        Returns: string
+      }
+      submit_rbac_profile_change_v1: {
+        Args: {
+          p_category?: string
+          p_color_token?: string
+          p_description?: string
+          p_display_name?: string
+          p_icon_name?: string
+          p_module_keys?: string[]
+          p_org_id: string
+          p_permission_keys?: string[]
+          p_profile_key?: string
+        }
+        Returns: Json
+      }
       sync_keycloak_user: {
         Args: {
           p_axionn_user_id?: string
@@ -18372,8 +20388,20 @@ export type Database = {
         Args: { p_status: string; p_ticket_id: string }
         Returns: undefined
       }
+      update_meeting_connection_secret_v1: {
+        Args: {
+          p_connection_id: string
+          p_granted_scopes: string[]
+          p_token_payload: string
+        }
+        Returns: undefined
+      }
       update_okr_cycle_v1: {
         Args: { p_cycle_id: string; p_payload: Json }
+        Returns: undefined
+      }
+      update_okr_initiative_v1: {
+        Args: { p_initiative_id: string; p_org_id: string; p_payload: Json }
         Returns: undefined
       }
       update_okr_key_result_v2: {
@@ -18525,6 +20553,10 @@ export type Database = {
         Args: { p_rows: Json; p_team_id: string }
         Returns: Json
       }
+      upsert_okr_cycle_review_v1: {
+        Args: { p_cycle_id: string; p_payload?: Json }
+        Returns: string
+      }
       upsert_okr_key_result_v2: {
         Args: {
           p_key_result_id?: string
@@ -18565,6 +20597,18 @@ export type Database = {
           p_limit_value: number
           p_metadata: Json
           p_plan_id: string
+        }
+        Returns: string
+      }
+      upsert_teams_meeting_connection_v1: {
+        Args: {
+          p_display_name: string
+          p_external_account_id: string
+          p_external_tenant_id: string
+          p_granted_scopes: string[]
+          p_org_id: string
+          p_token_payload: string
+          p_user_id: string
         }
         Returns: string
       }

@@ -15,6 +15,7 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { QUALITY_MANAGEMENT_ENABLED } from "@/lib/featureFlags";
 import { QualityPageSkeleton } from "../components/QualityPageSkeleton";
+import { QualitySectionHeader } from "../components/QualitySectionHeader";
 import { useTestCases } from "../hooks/useTestCases";
 import { useQualityPermissions } from "../hooks/useQualityPermissions";
 import { qualityLabel, qualityStatusTone } from "../utils/qualityLabels";
@@ -88,7 +89,7 @@ export default function TestSuitesPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1500px] space-y-5 px-4 pb-8 pt-5 md:px-8 md:pt-6">
-      <header className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-end md:justify-between"><div><p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary"><FolderTree className="h-4 w-4" />Organização imutável</p><h1 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">Suítes de teste</h1><p className="mt-1 text-sm text-muted-foreground">Agrupe casos por fluxo ou objetivo sem alterar a identidade da suíte.</p></div>{can.manageTestSuites && <Button className="min-h-11" onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Nova suíte</Button>}</header>
+      <QualitySectionHeader icon={FolderTree} title="Suítes" count={suites.data?.length ?? 0} action={can.manageTestSuites ? <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />Nova suíte</Button> : undefined} />
 
       {suites.isLoading || items.isLoading || cases.isLoading ? <QualityPageSkeleton rows={5} /> : suites.isError || items.isError || cases.isError ? <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center text-destructive">Não foi possível carregar a estrutura de suítes.</div> : suites.data?.length ? (
         <div className="grid min-h-[560px] gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">

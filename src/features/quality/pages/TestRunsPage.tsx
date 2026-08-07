@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { QUALITY_MANAGEMENT_ENABLED } from "@/lib/featureFlags";
 import { QualityPageSkeleton } from "../components/QualityPageSkeleton";
+import { QualitySectionHeader } from "../components/QualitySectionHeader";
 import { useTestRuns } from "../hooks/useTestRuns";
 import { qualityLabel, qualityStatusTone } from "../utils/qualityLabels";
 
@@ -31,11 +32,7 @@ export default function TestRunsPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1500px] space-y-5 px-4 pb-8 pt-5 md:px-8 md:pt-6">
-      <header className="border-b pb-5">
-        <p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary"><PlayCircle className="h-4 w-4" /> Operação de qualidade</p>
-        <h1 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">Execuções</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Monitore sessões, avance testes manualmente e preserve evidências por etapa.</p>
-      </header>
+      <QualitySectionHeader icon={PlayCircle} title="Execuções" count={runs.data?.length ?? 0} />
 
       <section className="grid gap-3 sm:grid-cols-3" aria-label="Resumo das execuções">
         <Summary icon={Clock3} label="Em preparação ou andamento" value={active} />

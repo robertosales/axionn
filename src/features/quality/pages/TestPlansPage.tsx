@@ -148,13 +148,13 @@ export default function TestPlansPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-[1500px] space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 border-b pb-6 md:flex-row md:items-end md:justify-between">
+    <main className="mx-auto w-full max-w-[1500px] space-y-5 px-4 pb-8 pt-5 md:px-8 md:pt-6">
+      <header className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
+          <p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
             <ClipboardList className="h-4 w-4" /> Preparação e cobertura
           </p>
-          <h1 className="text-3xl font-bold tracking-tight">Planos de teste</h1>
+          <h1 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">Planos de teste</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Defina o objetivo, congele versões dos casos e envie um pacote reproduzível para execução.
           </p>

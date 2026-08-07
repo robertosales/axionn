@@ -30,10 +30,10 @@ export default function TestRunsPage() {
   const failed = runs.data?.reduce((total, run) => total + run.quality_test_run_items.filter((item) => item.status === "failed").length, 0) ?? 0;
 
   return (
-    <main className="mx-auto w-full max-w-[1500px] space-y-6 p-4 md:p-8">
-      <header className="border-b pb-6">
-        <p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><PlayCircle className="h-4 w-4" /> Operação de qualidade</p>
-        <h1 className="text-3xl font-bold tracking-tight">Execuções</h1>
+    <main className="mx-auto w-full max-w-[1500px] space-y-5 px-4 pb-8 pt-5 md:px-8 md:pt-6">
+      <header className="border-b pb-5">
+        <p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary"><PlayCircle className="h-4 w-4" /> Operação de qualidade</p>
+        <h1 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">Execuções</h1>
         <p className="mt-1 text-sm text-muted-foreground">Monitore sessões, avance testes manualmente e preserve evidências por etapa.</p>
       </header>
 

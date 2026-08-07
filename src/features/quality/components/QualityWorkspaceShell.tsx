@@ -17,8 +17,8 @@ export function QualityWorkspaceShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   return (
     <div className="min-w-0 bg-gradient-to-b from-primary/[0.035] via-background to-background">
-      <div className="mx-auto w-full max-w-[1500px] px-4 pt-4 md:px-8 md:pt-6">
-        <div className="overflow-x-auto rounded-2xl border bg-card/90 p-1.5 shadow-sm backdrop-blur" aria-label="Jornada de qualidade">
+      <div className="mx-auto w-full max-w-[1500px] px-4 pt-4 md:px-8 md:pt-5">
+        <div className="overflow-x-auto rounded-xl border bg-card/90 p-1.5 shadow-sm backdrop-blur" aria-label="Jornada de qualidade">
           <nav className="flex min-w-max items-center gap-1">
             {stages.map((stage, index) => {
               const active = stage.route === "/sala-agil/qualidade"
@@ -32,7 +32,7 @@ export function QualityWorkspaceShell({ children }: { children: ReactNode }) {
                     to={stage.route}
                     end={stage.route === "/sala-agil/qualidade"}
                     className={cn(
-                      "flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-11",
                       active ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                     aria-current={active ? "page" : undefined}

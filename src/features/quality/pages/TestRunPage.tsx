@@ -49,7 +49,7 @@ export default function TestRunPage() {
   useEffect(() => { if (!selectedItemId && items.length) setSelectedItemId(items[0].id); }, [items, selectedItemId]);
 
   if (!QUALITY_MANAGEMENT_ENABLED) return <Navigate to="/sala-agil/dashboard" replace />;
-  if (runQuery.isLoading) return <main className="mx-auto max-w-[1500px] p-4 md:p-8"><QualityPageSkeleton rows={6} /></main>;
+  if (runQuery.isLoading) return <main className="mx-auto max-w-[1500px] px-4 pb-8 pt-5 md:px-8 md:pt-6"><QualityPageSkeleton rows={6} /></main>;
   if (runQuery.isError || !run) return <main className="p-12 text-center"><p role="alert" className="text-destructive">Execução não encontrada ou sem acesso.</p><Button asChild className="mt-4" variant="outline"><Link to="/sala-agil/qualidade/execucoes">Voltar às execuções</Link></Button></main>;
 
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? items[0];
@@ -76,12 +76,12 @@ export default function TestRunPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-[1500px] space-y-5 p-4 md:p-8">
+    <main className="mx-auto w-full max-w-[1500px] space-y-5 px-4 pb-8 pt-5 md:px-8 md:pt-6">
       <header className="sticky top-2 z-10 rounded-xl border bg-background/95 p-4 shadow-sm backdrop-blur md:p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
             <Button asChild variant="link" className="mb-1 h-auto p-0 text-muted-foreground"><Link to="/sala-agil/qualidade/execucoes"><ArrowLeft className="mr-1 h-4 w-4" /> Execuções</Link></Button>
-            <div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-2xl font-bold">{run.name}</h1><Badge variant={qualityStatusTone(run.status)}>{qualityLabel(run.status)}</Badge></div>
+            <div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-xl font-bold leading-tight md:text-2xl">{run.name}</h1><Badge variant={qualityStatusTone(run.status)}>{qualityLabel(run.status)}</Badge></div>
             <p className="mt-1 text-sm text-muted-foreground">{run.environment_name || "Ambiente não informado"} · Build {run.build_reference || "não informada"}{run.commit_sha ? ` · ${run.commit_sha.slice(0, 8)}` : ""}</p>
           </div>
           <div className="flex flex-wrap gap-2">

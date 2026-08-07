@@ -87,8 +87,8 @@ export default function TestSuitesPage() {
   if (!currentOrganizationId) return <div className="p-8 text-center text-muted-foreground">Selecione uma organização.</div>;
 
   return (
-    <main className="mx-auto w-full max-w-[1500px] space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 border-b pb-6 md:flex-row md:items-end md:justify-between"><div><p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><FolderTree className="h-4 w-4" />Organização imutável</p><h1 className="text-2xl font-bold tracking-tight md:text-3xl">Suítes de teste</h1><p className="mt-1 text-sm text-muted-foreground">Agrupe casos por fluxo ou objetivo sem alterar a identidade da suíte.</p></div>{can.manageTestSuites && <Button className="min-h-11" onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Nova suíte</Button>}</header>
+    <main className="mx-auto w-full max-w-[1500px] space-y-5 px-4 pb-8 pt-5 md:px-8 md:pt-6">
+      <header className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-end md:justify-between"><div><p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary"><FolderTree className="h-4 w-4" />Organização imutável</p><h1 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">Suítes de teste</h1><p className="mt-1 text-sm text-muted-foreground">Agrupe casos por fluxo ou objetivo sem alterar a identidade da suíte.</p></div>{can.manageTestSuites && <Button className="min-h-11" onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" />Nova suíte</Button>}</header>
 
       {suites.isLoading || items.isLoading || cases.isLoading ? <QualityPageSkeleton rows={5} /> : suites.isError || items.isError || cases.isError ? <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center text-destructive">Não foi possível carregar a estrutura de suítes.</div> : suites.data?.length ? (
         <div className="grid min-h-[560px] gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">

@@ -56,9 +56,9 @@ export default function TestCasesPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-[1500px] space-y-6 p-4 md:p-8">
-      <header className="flex flex-col gap-4 border-b pb-6 md:flex-row md:items-end md:justify-between">
-        <div><p className="mb-2 flex items-center gap-2 text-sm font-medium text-primary"><ClipboardCheck className="h-4 w-4" />Biblioteca de qualidade</p><h1 className="text-2xl font-bold tracking-tight md:text-3xl">Casos de teste</h1><p className="mt-1 text-sm text-muted-foreground">Cenários versionados, pesquisáveis e orientados a risco.</p></div>
+    <main className="mx-auto w-full max-w-[1500px] space-y-5 px-4 pb-8 pt-5 md:px-8 md:pt-6">
+      <header className="flex flex-col gap-4 border-b pb-5 md:flex-row md:items-end md:justify-between">
+        <div><p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary"><ClipboardCheck className="h-4 w-4" />Biblioteca de qualidade</p><h1 className="text-2xl font-bold leading-tight tracking-tight md:text-3xl">Casos de teste</h1><p className="mt-1 text-sm text-muted-foreground">Cenários versionados, pesquisáveis e orientados a risco.</p></div>
         {canManage && <Button className="min-h-11" onClick={() => { setEditing(undefined); setOpen(true); }}><Plus className="mr-2 h-4 w-4" />Novo caso</Button>}
       </header>
 

@@ -17453,6 +17453,43 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_okr_recalculation_job_v2: {
+        Args: {
+          p_job_id: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          available_at: string
+          cancelled_at: string | null
+          completed_at: string | null
+          correlation_id: string
+          created_at: string
+          dead_lettered_at: string | null
+          id: string
+          idempotency_key: string
+          key_result_id: string | null
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          metric_binding_id: string | null
+          objective_id: string
+          organization_id: string | null
+          processed_at: string | null
+          reason: string
+          result: Json | null
+          status: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_recalculation_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_okr_recalculation_jobs_v1: {
         Args: {
           p_lease_seconds?: number

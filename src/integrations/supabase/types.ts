@@ -962,6 +962,56 @@ export type Database = {
           },
         ]
       }
+      apf_automation_settings: {
+        Row: {
+          auto_approve_enabled: boolean
+          created_at: string
+          created_by: string | null
+          drift_alert_enabled: boolean
+          drift_threshold_pp: number
+          id: string
+          max_correction_rate: number
+          min_occurrences: number
+          team_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auto_approve_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          drift_alert_enabled?: boolean
+          drift_threshold_pp?: number
+          id?: string
+          max_correction_rate?: number
+          min_occurrences?: number
+          team_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auto_approve_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          drift_alert_enabled?: boolean
+          drift_threshold_pp?: number
+          id?: string
+          max_correction_rate?: number
+          min_occurrences?: number
+          team_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_automation_settings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: true
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_baseline_items: {
         Row: {
           baseline_id: string
@@ -3783,6 +3833,54 @@ export type Database = {
           },
         ]
       }
+      backlog_features: {
+        Row: {
+          color: string
+          created_at: string
+          description: string
+          epic_id: string
+          id: string
+          name: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          description?: string
+          epic_id: string
+          id?: string
+          name: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          description?: string
+          epic_id?: string
+          id?: string
+          name?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backlog_features_epic_id_fkey"
+            columns: ["epic_id"]
+            isOneToOne: false
+            referencedRelation: "epics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backlog_features_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       backoffice_audit_log: {
         Row: {
           action: string
@@ -5710,54 +5808,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "epics_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      backlog_features: {
-        Row: {
-          color: string
-          created_at: string
-          description: string
-          epic_id: string
-          id: string
-          name: string
-          team_id: string
-          updated_at: string
-        }
-        Insert: {
-          color?: string
-          created_at?: string
-          description?: string
-          epic_id: string
-          id?: string
-          name: string
-          team_id: string
-          updated_at?: string
-        }
-        Update: {
-          color?: string
-          created_at?: string
-          description?: string
-          epic_id?: string
-          id?: string
-          name?: string
-          team_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "backlog_features_epic_id_fkey"
-            columns: ["epic_id"]
-            isOneToOne: false
-            referencedRelation: "epics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "backlog_features_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -15951,9 +16001,9 @@ export type Database = {
           description: string | null
           end_date: string | null
           epic_id: string | null
-          feature_id: string | null
           estimated_hours: number | null
           external_reference: string | null
+          feature_id: string | null
           function_points: number | null
           id: string
           planning_status: string | null
@@ -15992,9 +16042,9 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           epic_id?: string | null
-          feature_id?: string | null
           estimated_hours?: number | null
           external_reference?: string | null
+          feature_id?: string | null
           function_points?: number | null
           id?: string
           planning_status?: string | null
@@ -16033,9 +16083,9 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           epic_id?: string | null
-          feature_id?: string | null
           estimated_hours?: number | null
           external_reference?: string | null
+          feature_id?: string | null
           function_points?: number | null
           id?: string
           planning_status?: string | null
@@ -16074,6 +16124,13 @@ export type Database = {
             columns: ["epic_id"]
             isOneToOne: false
             referencedRelation: "epics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_stories_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "backlog_features"
             referencedColumns: ["id"]
           },
           {
@@ -17365,6 +17422,10 @@ export type Database = {
         }
         Returns: string
       }
+      cast_planning_vote: {
+        Args: { p_hu_id: string; p_session_id: string; p_vote_value: string }
+        Returns: undefined
+      }
       check_commercial_usage_v1: {
         Args: {
           p_correlation_id?: string
@@ -17442,6 +17503,43 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_okr_recalculation_job_v2: {
+        Args: {
+          p_job_id: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          available_at: string
+          cancelled_at: string | null
+          completed_at: string | null
+          correlation_id: string
+          created_at: string
+          dead_lettered_at: string | null
+          id: string
+          idempotency_key: string
+          key_result_id: string | null
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          metric_binding_id: string | null
+          objective_id: string
+          organization_id: string | null
+          processed_at: string | null
+          reason: string
+          result: Json | null
+          status: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "okr_recalculation_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_okr_recalculation_jobs_v1: {
         Args: {
           p_lease_seconds?: number
@@ -17480,6 +17578,10 @@ export type Database = {
         }
       }
       close_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
+      close_planning_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       complete_ai_briefing_run: {
         Args: {
           p_duration_ms?: number
@@ -17685,6 +17787,10 @@ export type Database = {
           p_name: string
           p_org_id: string
         }
+        Returns: string
+      }
+      create_planning_session: {
+        Args: { p_deck_mode?: string; p_sprint_id: string; p_team_id: string }
         Returns: string
       }
       create_platform_ai_provider_v2: {
@@ -18684,6 +18790,15 @@ export type Database = {
           users_used: number
         }[]
       }
+      get_planning_round_votes: {
+        Args: { p_hu_id: string; p_session_id: string }
+        Returns: {
+          id: string
+          revealed: boolean
+          user_id: string
+          vote_value: string
+        }[]
+      }
       get_project_api_url: { Args: never; Returns: string }
       get_service_role_key: { Args: never; Returns: string }
       get_sprint_history: {
@@ -18830,6 +18945,10 @@ export type Database = {
         Returns: boolean
       }
       is_tenancy_enforced: { Args: never; Returns: boolean }
+      join_planning_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       link_quality_test_case_v1: {
         Args: {
           p_case_id: string
@@ -19979,6 +20098,10 @@ export type Database = {
         Returns: string
       }
       resolve_team_org_id: { Args: { p_team_id: string }; Returns: string }
+      reveal_planning_votes: {
+        Args: { p_round_id: string }
+        Returns: undefined
+      }
       review_ai_briefing_suggestion: {
         Args: {
           p_review_status: string
@@ -20014,7 +20137,9 @@ export type Database = {
       }
       run_apf_auto_approve: {
         Args: { p_team_id: string }
-        Returns: { pattern_id: string }[]
+        Returns: {
+          pattern_id: string
+        }[]
       }
       run_okr_alert_engine_v1: { Args: { p_org_id: string }; Returns: number }
       save_contractual_counting_items: {
@@ -20047,6 +20172,10 @@ export type Database = {
           p_value_per_pfus?: number
         }
         Returns: string
+      }
+      save_planning_result: {
+        Args: { p_hours?: number; p_round_id: string; p_value: string }
+        Returns: undefined
       }
       save_rbac_profile_v1: {
         Args: {
@@ -20154,6 +20283,10 @@ export type Database = {
       start_okr_cycle_closing_v1: {
         Args: { p_cycle_id: string }
         Returns: undefined
+      }
+      start_planning_round: {
+        Args: { p_hu_id: string; p_session_id: string }
+        Returns: string
       }
       start_quality_test_run_v1: {
         Args: { p_correlation_id?: string; p_org_id: string; p_run_id: string }

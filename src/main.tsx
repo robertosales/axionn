@@ -7,26 +7,33 @@
     // CRÍTICO: precisa das duas linhas abaixo
     document.documentElement.classList.remove("dark", "light");
     if (theme === "dark") document.documentElement.classList.add("dark");
-  } catch {}
+  } catch {
+    // Falha de storage não deve impedir a inicialização da aplicação.
+  }
 })();
 
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { AppErrorBoundary } from "./components/system/AppErrorBoundary";
+import { installChunkRecovery } from "./lib/chunkRecovery";
 import "./index.css";
 
 // ── Pilar 1 & 3 ─ Monitoring bootstrap ───────────────────────────────────────
-import { initMonitoring } from "./lib/monitoring";
 import { initConnectionMonitor, initGlobalErrorHandlers } from "./lib/error-interceptor";
 
-const stopMonitoring    = initMonitoring();
+let stopMonitoring = () => {};
+let monitoringDisposed = false;
 const stopConnMonitor   = initConnectionMonitor();
 const stopErrorHandlers = initGlobalErrorHandlers();
+const stopChunkRecovery = installChunkRecovery();
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    monitoringDisposed = true;
     stopMonitoring();
     stopConnMonitor();
     stopErrorHandlers();
+    stopChunkRecovery();
   });
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +48,11 @@ if (import.meta.hot) {
  * Mantemos StrictMode ativo apenas em desenvolvimento (import.meta.env.DEV).
  * Em produção o render é direto, sem dupla montagem.
  */
-const app = <App />;
+const app = (
+  <AppErrorBoundary>
+    <App />
+  </AppErrorBoundary>
+);
 
 if (import.meta.env.DEV) {
   const { StrictMode } = await import("react");
@@ -51,3 +62,14 @@ if (import.meta.env.DEV) {
 } else {
   createRoot(document.getElementById("root")!).render(app);
 }
+
+// Observabilidade não bloqueia a primeira renderização. O chunk do Sentry,
+// tracing e replay é carregado em paralelo somente após o bootstrap visual.
+void import("./lib/monitoring")
+  .then(({ initMonitoring }) => {
+    if (monitoringDisposed) return;
+    stopMonitoring = initMonitoring();
+  })
+  .catch((error: unknown) => {
+    console.warn("[Monitoring] Não foi possível inicializar a observabilidade.", error);
+  });

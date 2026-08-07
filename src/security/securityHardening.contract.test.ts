@@ -90,7 +90,8 @@ describe("commercial security hardening", () => {
     expect(mfa).toContain('factorType: "totp"');
     expect(mfa).toContain("challengeAndVerify");
     expect(mfa).toContain('checkAuthRateLimit("otp")');
-    expect(settings).toContain("2FA obrigatório");
+    expect(settings).toContain("Proteção em duas etapas");
+    expect(settings).toContain('BACKOFFICE_MFA_REQUIRED ? "obrigatória"');
     expect(settings).not.toContain("obrigatoriedade planejada");
     expect(database).toContain("(auth.jwt() ->> 'aal') = 'aal2'");
     expect(database).toContain("backoffice_mfa_required");

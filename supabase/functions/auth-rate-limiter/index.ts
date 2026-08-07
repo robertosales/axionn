@@ -28,6 +28,11 @@ const LIMITS: Record<string, { max: number; windowSec: number }> = {
   default:        { max: 20, windowSec: 60 },
 };
 
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 // ─── Redis check via Upstash REST ────────────────────────────────────────────
 async function redisCheck(
   key: string,
@@ -51,6 +56,7 @@ async function redisCheck(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(["EVAL", script, "1", key, String(windowSec)]),
+    signal: AbortSignal.timeout(3_000),
   });
 
   if (!res.ok) throw new Error(`Redis rate-limit command failed: ${res.status}`);
@@ -78,7 +84,7 @@ serve(async (req: Request) => {
   const corsHeaders = {
     "Access-Control-Allow-Origin":  Deno.env.get("SITE_URL") ?? "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   };
 
   if (req.method === "OPTIONS") {
@@ -94,14 +100,23 @@ serve(async (req: Request) => {
 
   try {
     const contentLength = Number(req.headers.get("content-length") ?? "0");
-    if (contentLength > 1024) {
+    if (contentLength > 4_096) {
       return new Response(JSON.stringify({ allowed: false, error: "Payload too large" }), {
         status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const body = await req.json().catch(() => ({}));
+    const rawBody = await req.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 4_096) {
+      return new Response(JSON.stringify({ allowed: false, error: "Payload too large" }), {
+        status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const body = rawBody ? JSON.parse(rawBody) : {};
     const endpoint = (body?.endpoint ?? "default").toLowerCase().replace(/[^a-z_]/g, "");
     const config = LIMITS[endpoint] ?? LIMITS.default;
+    const identifier = typeof body?.identifier === "string"
+      ? body.identifier.trim().toLowerCase().slice(0, 254)
+      : "";
 
     const ip = (
       req.headers.get("cf-connecting-ip") ??
@@ -110,7 +125,8 @@ serve(async (req: Request) => {
       "unknown"
     ).replace(/[^0-9a-fA-F:.,]/g, "").slice(0, 64) || "unknown";
 
-    const rateLimitKey = `rl:${ip}:${endpoint}`;
+    const rateLimitKeys = [`rl:ip:${ip}:${endpoint}`];
+    if (identifier) rateLimitKeys.push(`rl:id:${await sha256(identifier)}:${endpoint}`);
 
     const redisUrl   = Deno.env.get("UPSTASH_REDIS_REST_URL");
     const redisToken = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
@@ -122,7 +138,14 @@ serve(async (req: Request) => {
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" } },
       );
     }
-    const result = await redisCheck(rateLimitKey, config.max, config.windowSec, redisUrl, redisToken);
+    const results = await Promise.all(
+      rateLimitKeys.map((key) => redisCheck(key, config.max, config.windowSec, redisUrl, redisToken)),
+    );
+    const result = {
+      allowed: results.every((item) => item.allowed),
+      remaining: Math.min(...results.map((item) => item.remaining)),
+      resetAt: Math.max(...results.map((item) => item.resetAt)),
+    };
 
     const rateLimitHeaders = {
       ...corsHeaders,

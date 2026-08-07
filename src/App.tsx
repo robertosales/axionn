@@ -11,33 +11,55 @@ import {
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { OrganizationSwitcher } from "@/components/OrganizationSwitcher";
-import { GlobalLogoutButton } from "@/components/GlobalLogoutButton";
-import { OrganizationOperationalGuard } from "@/components/OrganizationOperationalGuard";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import {
   OrganizationProvider,
   useOrganization,
 } from "@/contexts/OrganizationContext";
 import { SprintProvider } from "@/contexts/SprintContext";
-import { SessionTimeoutAlert } from "@/shared/components/common/SessionTimeoutAlert";
-import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useAppResilience } from "@/hooks/useAppResilience";
 import { supabase } from "@/integrations/supabase/client";
-import { BackofficeGuard } from "@/backoffice/guards/BackofficeGuard";
-import { BackofficeLayout } from "@/backoffice/components/BackofficeLayout";
 import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
-import { AppShell } from "@/components/layout/AppShell";
-import { QualityAccessGuard } from "@/features/quality/components/QualityAccessGuard";
-import { OkrV2AccessGuard } from "@/features/okr/components/OkrV2AccessGuard";
 import { OKR_V2_ENABLED } from "@/lib/featureFlags";
 
-import Auth from "./pages/Auth.tsx";
-import AuthCallback from "./pages/AuthCallback.tsx";
-import NotFound from "./pages/NotFound.tsx";
-import ResetPassword from "./pages/ResetPassword.tsx";
-
+const Auth = lazy(() => import("./pages/Auth.tsx"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback.tsx"));
+const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword.tsx"));
+const OrganizationSwitcher = lazy(() =>
+  import("@/components/OrganizationSwitcher").then((module) => ({ default: module.OrganizationSwitcher })),
+);
+const GlobalLogoutButton = lazy(() =>
+  import("@/components/GlobalLogoutButton").then((module) => ({ default: module.GlobalLogoutButton })),
+);
+const OrganizationOperationalGuard = lazy(() =>
+  import("@/components/OrganizationOperationalGuard").then((module) => ({ default: module.OrganizationOperationalGuard })),
+);
+const SessionTimeoutAlert = lazy(() =>
+  import("@/shared/components/common/SessionTimeoutAlert").then((module) => ({ default: module.SessionTimeoutAlert })),
+);
+const OnboardingWizard = lazy(() =>
+  import("@/components/OnboardingWizard").then((module) => ({ default: module.OnboardingWizard })),
+);
+const BackofficeGuard = lazy(() =>
+  import("@/backoffice/guards/BackofficeGuard").then((module) => ({ default: module.BackofficeGuard })),
+);
+const BackofficeLayout = lazy(() =>
+  import("@/backoffice/components/BackofficeLayout").then((module) => ({ default: module.BackofficeLayout })),
+);
+const BackofficeMfaGuard = lazy(() =>
+  import("@/features/security/components/BackofficeMfaGuard").then((module) => ({ default: module.BackofficeMfaGuard })),
+);
+const AppShell = lazy(() =>
+  import("@/components/layout/AppShell").then((module) => ({ default: module.AppShell })),
+);
+const QualityAccessGuard = lazy(() =>
+  import("@/features/quality/components/QualityAccessGuard").then((module) => ({ default: module.QualityAccessGuard })),
+);
+const OkrV2AccessGuard = lazy(() =>
+  import("@/features/okr/components/OkrV2AccessGuard").then((module) => ({ default: module.OkrV2AccessGuard })),
+);
 const Index = lazy(() => import("./pages/Index.tsx"));
 const QualityTestCasesPage = lazy(() => import("./features/quality/pages/TestCasesPage"));
 const QualityTestSuitesPage = lazy(() => import("./features/quality/pages/TestSuitesPage"));
@@ -45,6 +67,7 @@ const QualityTestPlansPage = lazy(() => import("./features/quality/pages/TestPla
 const QualityTestRunsPage = lazy(() => import("./features/quality/pages/TestRunsPage"));
 const QualityTestRunPage = lazy(() => import("./features/quality/pages/TestRunPage"));
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange.tsx"));
+const MfaSecurityPage = lazy(() => import("./features/security/pages/MfaSecurityPage"));
 const AcceptOrganizationInvitation = lazy(
   () => import("./pages/AcceptOrganizationInvitation.tsx"),
 );
@@ -449,9 +472,23 @@ function BackofficeRoute({
   return (
     <AuthenticatedRoute>
       <BackofficeGuard requiredRoles={requiredRoles}>
-        <BackofficeLayout>{children}</BackofficeLayout>
+        <BackofficeMfaGuard>
+          <BackofficeLayout>{children}</BackofficeLayout>
+        </BackofficeMfaGuard>
       </BackofficeGuard>
     </AuthenticatedRoute>
+  );
+}
+
+function AuthenticatedChrome() {
+  const { session, loading } = useAuth();
+  if (loading || !session) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <GlobalLogoutButton />
+      <OrganizationSwitcher />
+    </Suspense>
   );
 }
 
@@ -460,13 +497,13 @@ function AppRoutes() {
     <SprintProvider>
       <Toaster />
       <Sonner />
-      <GlobalLogoutButton />
-      <OrganizationSwitcher />
+      <AuthenticatedChrome />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/security/mfa" element={<AuthenticatedRoute><MfaSecurityPage /></AuthenticatedRoute>} />
           <Route path="/accept-invitation" element={<AcceptOrganizationInvitation />} />
           <Route path="/" element={<ProtectedRoute><ModuleRedirect /></ProtectedRoute>} />
           <Route path="/modulos" element={<ProtectedRoute><ModuleSelector /></ProtectedRoute>} />

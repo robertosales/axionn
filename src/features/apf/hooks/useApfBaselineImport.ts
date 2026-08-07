@@ -77,7 +77,7 @@ export function useApfBaselineImport() {
     if (!file) return;
     try {
       const buffer = await file.arrayBuffer();
-      const result = parseApfBaselineArrayBuffer(buffer);
+      const result = await parseApfBaselineArrayBuffer(buffer);
       const report = validateApfBaselineIntegrity(result);
       const checksum = await sha256(buffer);
 

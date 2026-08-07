@@ -277,7 +277,9 @@ function DarkModeToggle() {
     const root = document.documentElement;
     root.classList.toggle("dark", isDark);
     root.setAttribute("data-theme", isDark ? "dark" : "light");
-    try { sessionStorage.setItem("theme", isDark ? "dark" : "light"); } catch {}
+    try { sessionStorage.setItem("theme", isDark ? "dark" : "light"); } catch {
+      // O tema continua aplicado no DOM mesmo sem persistência.
+    }
   }, [isDark]);
 
   return (

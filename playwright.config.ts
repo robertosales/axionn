@@ -53,7 +53,7 @@ export default defineConfig({
   ],
   webServer: useLocalApp || !process.env.E2E_BASE_URL
     ? {
-        command: "npm.cmd run dev -- --host 127.0.0.1 --port 4173",
+        command: "npm.cmd run dev -- --mode production --host 127.0.0.1 --port 4173",
         url: localAppURL,
         reuseExistingServer: true,
         timeout: 120_000,

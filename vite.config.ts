@@ -15,6 +15,23 @@ const buildDate = new Date().toLocaleDateString("pt-BR", {
   timeZone: "America/Sao_Paulo",
 });
 
+function stableVendorChunk(moduleId: string): string | undefined {
+  const id = moduleId.replace(/\\/g, "/");
+  if (!id.includes("/node_modules/")) return undefined;
+
+  if (
+    id.includes("/node_modules/react/") ||
+    id.includes("/node_modules/react-dom/") ||
+    id.includes("/node_modules/react-router") ||
+    id.includes("/node_modules/@remix-run/") ||
+    id.includes("/node_modules/scheduler/")
+  ) return "vendor-react";
+
+  if (id.includes("/node_modules/@supabase/")) return "vendor-supabase";
+  if (id.includes("/node_modules/@tanstack/")) return "vendor-query";
+  return undefined;
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const isTest = mode === "test";
@@ -30,6 +47,11 @@ export default defineConfig(({ mode }) => {
       "VITE_SUPABASE_PUBLISHABLE_KEY para este ambiente.",
     );
   }
+
+  // Enforcement de MFA no Backoffice: em produção o padrão é obrigatório,
+  // salvo se a variável for explicitamente definida (rollback = "false").
+  const backofficeMfaRequired =
+    env.VITE_BACKOFFICE_MFA_REQUIRED ?? (mode === "production" ? "true" : "false");
 
   return {
   server: {
@@ -49,8 +71,15 @@ export default defineConfig(({ mode }) => {
     // Substitui literalmente no bundle — tree-shakeable e sem overhead de runtime
     "import.meta.env.VITE_APP_VERSION":    JSON.stringify(version),
     "import.meta.env.VITE_APP_BUILD_DATE": JSON.stringify(buildDate),
-    "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(supabaseUrl),
-    "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabaseKey),
+    "import.meta.env.VITE_BACKOFFICE_MFA_REQUIRED": JSON.stringify(backofficeMfaRequired),
+  },
+  build: {
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks: stableVendorChunk,
+      },
+    },
   },
   };
 });

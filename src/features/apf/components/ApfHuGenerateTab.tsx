@@ -19,7 +19,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
-import { downloadMarkdownAsFile } from "../utils/markdownToDocx";
+import { downloadMarkdownAsFile } from "../utils/fileDownload";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 

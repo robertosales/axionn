@@ -118,9 +118,11 @@ Edge Function: `supabase/functions/auth-rate-limiter/index.ts`
 ```ts
 import { checkAuthRateLimit } from "@/lib/authRateLimiter";
 
-const { allowed, retryAfter } = await checkAuthRateLimit("login");
+const { allowed, retryAfter, unavailable } = await checkAuthRateLimit("login", email);
 if (!allowed) {
-  toast.error(`Muitas tentativas. Aguarde ${retryAfter}s.`);
+  toast.error(unavailable
+    ? "Proteção temporariamente indisponível. Tente novamente."
+    : `Muitas tentativas. Aguarde ${retryAfter}s.`);
   return;
 }
 await supabase.auth.signInWithPassword({ email, password });
@@ -132,13 +134,16 @@ await supabase.auth.signInWithPassword({ email, password });
 # Via Supabase CLI
 supabase functions deploy auth-rate-limiter --project-ref SEU_PROJECT_REF
 
-# Variáveis de ambiente (opcional — ativa Redis para produção):
+# Segredos obrigatórios em produção:
 supabase secrets set UPSTASH_REDIS_REST_URL=https://...
 supabase secrets set UPSTASH_REDIS_REST_TOKEN=...
 supabase secrets set SITE_URL=https://seudominio.com
+supabase secrets set AUTH_RATE_LIMIT_ALLOW_MEMORY_FALLBACK=false
 ```
 
-> ⚠️ Sem as variáveis Redis, a função usa armazenamento in-memory (cada instância independente). Para produção com múltiplas instâncias, configure o Upstash Redis.
+> Em produção, a ausência ou indisponibilidade do Redis resulta em HTTP 503 e bloqueio seguro da operação. O armazenamento in-memory só pode ser habilitado explicitamente com `AUTH_RATE_LIMIT_ALLOW_MEMORY_FALLBACK=true` em desenvolvimento local.
+
+O limitador aplica buckets por IP e pelo hash do identificador (e-mail ou fator MFA), sem persistir o valor original. O frontend diferencia excesso de tentativas (HTTP 429) de indisponibilidade do serviço (HTTP 503).
 
 ---
 

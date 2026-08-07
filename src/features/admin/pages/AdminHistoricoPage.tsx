@@ -38,10 +38,10 @@ export function AdminHistoricoPage() {
     });
   }, [allTeams]);
 
-  const handleExport = (config: ReportConfig, format: "pdf" | "excel") => {
+  const handleExport = async (config: ReportConfig, format: "pdf" | "excel") => {
     try {
       const payload = buildPayload(config);
-      format === "pdf" ? exportToPDF(payload) : exportToExcel(payload);
+      await (format === "pdf" ? exportToPDF(payload) : exportToExcel(payload));
       toast.success(`Relatório ${format.toUpperCase()} gerado com sucesso!`);
       setReportOpen(false);
     } catch (e) { toast.error("Erro ao gerar relatório"); console.error(e); }

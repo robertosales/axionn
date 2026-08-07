@@ -53,14 +53,18 @@ function loadFiltros(): KanbanFiltros | null {
 }
 
 function saveFiltros(f: KanbanFiltros) {
-  try { sessionStorage.setItem(SS_FILTROS_KEY, JSON.stringify(f)); } catch {}
+  try { sessionStorage.setItem(SS_FILTROS_KEY, JSON.stringify(f)); } catch {
+    // Persistência é opcional (pode estar indisponível em modo privado).
+  }
 }
 
 function clearKanbanSession() {
   try {
     sessionStorage.removeItem(SS_FILTROS_KEY);
     sessionStorage.removeItem(SS_EXPANDED_KEY);
-  } catch {}
+  } catch {
+    // Limpeza best-effort; não deve bloquear o Kanban.
+  }
 }
 
 function hasSavedExpandedCols(): boolean {
@@ -100,7 +104,9 @@ function saveExpandedCols(expanded: Set<string>, allKeys: string[]) {
       ...allKeys.filter((k) => !expanded.has(k)).map((k) => `__hidden__${k}`),
     ];
     sessionStorage.setItem(SS_EXPANDED_KEY, JSON.stringify(payload));
-  } catch {}
+  } catch {
+    // Persistência é opcional (pode estar indisponível em modo privado).
+  }
 }
 
 function buildDefaultExpandedCols(allKeys: string[], colItemsMap: Record<string, any[]>): Set<string> {
@@ -253,7 +259,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
       }
       return prev;
     });
-  }, [activeSprint?.id]);
+  }, [activeSprint]);
 
   const canMove = true;
 
@@ -293,7 +299,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
     if (hasColumnPreference) {
       setExpandedCols(loadExpandedCols(allColKeys));
     }
-  }, [allColKeys.join(","), hasColumnPreference]);
+  }, [allColKeys, hasColumnPreference]);
 
   const toggleCol = useCallback((key: string) => {
     setHasColumnPreference(true);
@@ -379,7 +385,7 @@ export function KanbanBoard({ sprintId, currentUserId, onSelectHU }: Props) {
   useEffect(() => {
     if (hasColumnPreference || kanbanLoading || allColKeys.length === 0) return;
     setExpandedCols(buildDefaultExpandedCols(allColKeys, colItemsMap));
-  }, [allColKeys.join(","), colItemsMap, hasColumnPreference, kanbanLoading]);
+  }, [allColKeys, colItemsMap, hasColumnPreference, kanbanLoading]);
 
   const colHexMap = useMemo(() => {
     const map: Record<string, string> = {};

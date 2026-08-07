@@ -43,12 +43,14 @@ export interface KnowledgeStats {
 }
 
 export async function fetchKnowledgePatterns(
+  teamId: string,
   status?: PatternStatus,
   domain?: string,
 ): Promise<KnowledgePattern[]> {
   let query = supabase
     .from("apf_knowledge_patterns")
     .select("*")
+    .eq("team_id", teamId)
     .order("occurrence_count", { ascending: false });
 
   if (status) query = query.eq("status", status);
@@ -60,30 +62,33 @@ export async function fetchKnowledgePatterns(
 }
 
 export async function updatePatternStatus(
+  teamId: string,
   id: string,
   status: PatternStatus,
 ): Promise<void> {
   const { error } = await supabase
     .from("apf_knowledge_patterns")
     .update({ status, updated_at: new Date().toISOString() })
+    .eq("team_id", teamId)
     .eq("id", id);
   if (error) throw new Error(error.message);
 }
 
-export async function fetchLearningMetrics(limit = 12): Promise<LearningMetric[]> {
+export async function fetchLearningMetrics(teamId: string, limit = 12): Promise<LearningMetric[]> {
   const { data, error } = await supabase
     .from("apf_learning_metrics")
     .select("week_start, total_validations, corrected_count, accuracy_rate, rag_accuracy_with, rag_accuracy_without, avg_confidence_score")
+    .eq("team_id", teamId)
     .order("week_start", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
   return ((data ?? []) as LearningMetric[]).reverse(); // cronológico
 }
 
-export async function fetchKnowledgeStats(): Promise<KnowledgeStats> {
+export async function fetchKnowledgeStats(teamId: string): Promise<KnowledgeStats> {
   const [patterns, metrics] = await Promise.all([
-    fetchKnowledgePatterns(),
-    fetchLearningMetrics(1),
+    fetchKnowledgePatterns(teamId),
+    fetchLearningMetrics(teamId, 1),
   ]);
 
   const latest = metrics[0] ?? null;

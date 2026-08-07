@@ -8,8 +8,8 @@
  *   - Chave: IP + endpoint (ex: "1.2.3.4:login")
  *   - Janela deslizante de 60 segundos
  *   - Limites configuráveis por endpoint
- *   - Armazenamento: Upstash Redis via REST
- *     → Fallback para in-memory se UPSTASH_REDIS_REST_URL não configurado
+ *   - Armazenamento distribuído obrigatório: Upstash Redis via REST
+ *   - Falha fechada se Redis estiver ausente ou indisponível
  *
  * Headers retornados:
  *   X-RateLimit-Limit     — limite máximo
@@ -28,30 +28,6 @@ const LIMITS: Record<string, { max: number; windowSec: number }> = {
   default:        { max: 20, windowSec: 60 },
 };
 
-// ─── In-memory store (fallback sem Redis) ────────────────────────────────────
-const memStore = new Map<string, { count: number; resetAt: number }>();
-
-function memCheck(key: string, max: number, windowSec: number): {
-  allowed: boolean;
-  remaining: number;
-  resetAt: number;
-} {
-  const now = Math.floor(Date.now() / 1000);
-  const entry = memStore.get(key);
-
-  if (!entry || now >= entry.resetAt) {
-    memStore.set(key, { count: 1, resetAt: now + windowSec });
-    return { allowed: true, remaining: max - 1, resetAt: now + windowSec };
-  }
-
-  if (entry.count >= max) {
-    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
-  }
-
-  entry.count++;
-  return { allowed: true, remaining: max - entry.count, resetAt: entry.resetAt };
-}
-
 // ─── Redis check via Upstash REST ────────────────────────────────────────────
 async function redisCheck(
   key: string,
@@ -62,26 +38,27 @@ async function redisCheck(
 ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
   const now = Math.floor(Date.now() / 1000);
 
-  const pipeline = [
-    ["INCR", key],
-    ["EXPIRE", key, windowSec],
-    ["TTL", key],
-  ];
-
-  const res = await fetch(`${redisUrl}/pipeline`, {
+  const script = [
+    "local count = redis.call('INCR', KEYS[1])",
+    "if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end",
+    "local ttl = redis.call('TTL', KEYS[1])",
+    "return {count, ttl}",
+  ].join("\n");
+  const res = await fetch(redisUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${redisToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(pipeline),
+    body: JSON.stringify(["EVAL", script, "1", key, String(windowSec)]),
   });
 
-  if (!res.ok) throw new Error(`Redis pipeline failed: ${res.status}`);
-
-  const results = await res.json() as Array<{ result: number }>;
-  const count  = results[0].result;
-  const ttl    = results[2].result > 0 ? results[2].result : windowSec;
+  if (!res.ok) throw new Error(`Redis rate-limit command failed: ${res.status}`);
+  const payload = await res.json() as { result?: [number, number] };
+  if (!Array.isArray(payload.result) || payload.result.length !== 2) throw new Error("Invalid Redis rate-limit response");
+  const count = Number(payload.result[0]);
+  const ttl = Number(payload.result[1]) > 0 ? Number(payload.result[1]) : windowSec;
+  if (!Number.isFinite(count) || !Number.isFinite(ttl)) throw new Error("Invalid Redis counters");
   const resetAt = now + ttl;
 
   if (count > max) {
@@ -116,6 +93,12 @@ serve(async (req: Request) => {
   }
 
   try {
+    const contentLength = Number(req.headers.get("content-length") ?? "0");
+    if (contentLength > 1024) {
+      return new Response(JSON.stringify({ allowed: false, error: "Payload too large" }), {
+        status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const body = await req.json().catch(() => ({}));
     const endpoint = (body?.endpoint ?? "default").toLowerCase().replace(/[^a-z_]/g, "");
     const config = LIMITS[endpoint] ?? LIMITS.default;
@@ -132,18 +115,14 @@ serve(async (req: Request) => {
     const redisUrl   = Deno.env.get("UPSTASH_REDIS_REST_URL");
     const redisToken = Deno.env.get("UPSTASH_REDIS_REST_TOKEN");
 
-    let result: { allowed: boolean; remaining: number; resetAt: number };
-    if (redisUrl && redisToken) {
-      try {
-        result = await redisCheck(rateLimitKey, config.max, config.windowSec, redisUrl, redisToken);
-      } catch (redisError) {
-        console.error("[auth-rate-limiter] Redis unavailable; using local fallback",
-          redisError instanceof Error ? redisError.message : "REDIS_UNAVAILABLE");
-        result = memCheck(rateLimitKey, config.max, config.windowSec);
-      }
-    } else {
-      result = memCheck(rateLimitKey, config.max, config.windowSec);
+    if (!redisUrl || !redisToken) {
+      console.error("[auth-rate-limiter] distributed store is not configured");
+      return new Response(
+        JSON.stringify({ allowed: false, remaining: 0, error: "rate limiter unavailable", retryAfter: 60 }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" } },
+      );
     }
+    const result = await redisCheck(rateLimitKey, config.max, config.windowSec, redisUrl, redisToken);
 
     const rateLimitHeaders = {
       ...corsHeaders,

@@ -44,3 +44,9 @@ verify_jwt = true
 
 [functions.telemetry-ingest]
 verify_jwt = true
+
+[functions.complete-password-change]
+verify_jwt = true
+
+[functions.copilot-plugin]
+verify_jwt = false

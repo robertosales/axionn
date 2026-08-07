@@ -2,7 +2,8 @@
  * SEC-002 — Client wrapper para a Edge Function auth-rate-limiter
  *
  * Chama a Edge Function antes de cada operação de auth sensível.
- * Em caso de falha da Edge Function, fail-open (não bloqueia o usuário).
+ * Em caso de falha da Edge Function, falha fechado para impedir que uma
+ * indisponibilidade remova a proteção contra brute force.
  *
  * Uso:
  *   import { checkAuthRateLimit } from "@/lib/authRateLimiter";
@@ -25,6 +26,16 @@ interface RateLimitResult {
   retryAfter?: number;
 }
 
+const LIMITER_UNAVAILABLE_RETRY_SECONDS = 60;
+
+function unavailableResult(): RateLimitResult {
+  return {
+    allowed: false,
+    remaining: 0,
+    retryAfter: LIMITER_UNAVAILABLE_RETRY_SECONDS,
+  };
+}
+
 export async function checkAuthRateLimit(
   endpoint: AuthEndpoint,
 ): Promise<RateLimitResult> {
@@ -34,18 +45,22 @@ export async function checkAuthRateLimit(
     });
 
     if (error) {
-      console.warn("[authRateLimiter] Edge Function error — fail open:", error);
-      return { allowed: true, remaining: -1 };
+      console.warn("[authRateLimiter] Edge Function indisponível; acesso bloqueado temporariamente");
+      return unavailableResult();
+    }
+
+    if (typeof data?.allowed !== "boolean" || typeof data?.remaining !== "number") {
+      console.warn("[authRateLimiter] resposta inválida; acesso bloqueado temporariamente");
+      return unavailableResult();
     }
 
     return {
-      allowed:    data?.allowed ?? true,
-      remaining:  data?.remaining ?? -1,
+      allowed:    data.allowed,
+      remaining:  data.remaining,
       retryAfter: data?.retryAfter,
     };
-  } catch (err) {
-    // Fail open — não bloqueia o usuário por falha de rede
-    console.warn("[authRateLimiter] network error — fail open:", err);
-    return { allowed: true, remaining: -1 };
+  } catch {
+    console.warn("[authRateLimiter] falha de rede; acesso bloqueado temporariamente");
+    return unavailableResult();
   }
 }

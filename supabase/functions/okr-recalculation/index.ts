@@ -267,6 +267,7 @@ Deno.serve(async (req) => {
     const isScheduled = Boolean(JOB_SECRET)
       && req.headers.get("x-okr-job-secret") === JOB_SECRET;
 
+    let requestedJobId: string | null = null;
     if (!isScheduled) {
       const authorization = req.headers.get("authorization") ?? "";
       const userClient = createClient(URL, ANON, {
@@ -276,10 +277,11 @@ Deno.serve(async (req) => {
       if (!auth.user) return json({ error: "Não autenticado" }, 401);
       if (!body.keyResultId) return json({ error: "keyResultId obrigatório" }, 400);
 
-      const { error } = await userClient.rpc("request_okr_measurement_v2", {
+      const { data: jobId, error } = await userClient.rpc("request_okr_measurement_v2", {
         p_key_result_id: body.keyResultId,
       });
       if (error) return json({ error: error.message }, 403);
+      requestedJobId = String(jobId);
     } else {
       const { error } = await admin.rpc("enqueue_due_okr_metric_bindings_v1");
       if (error) throw error;
@@ -287,10 +289,14 @@ Deno.serve(async (req) => {
 
     const requestedKeyResultId = isScheduled ? null : String(body.keyResultId);
     const workerId = `okr-recalculation:${crypto.randomUUID()}`;
-    const { data: jobs, error: claimError } = await admin.rpc(
-      "claim_okr_recalculation_jobs_v1",
-      { p_worker_id: workerId, p_limit: 100, p_lease_seconds: 120 },
-    );
+    const claim = isScheduled
+      ? await admin.rpc("claim_okr_recalculation_jobs_v1", {
+          p_worker_id: workerId, p_limit: 100, p_lease_seconds: 120,
+        })
+      : await admin.rpc("claim_okr_recalculation_job_v2", {
+          p_job_id: requestedJobId, p_worker_id: workerId, p_lease_seconds: 120,
+        });
+    const { data: jobs, error: claimError } = claim;
     if (claimError) throw claimError;
 
     const results = [];

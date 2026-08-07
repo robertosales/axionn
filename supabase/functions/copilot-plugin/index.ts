@@ -1,373 +1,184 @@
-// Copilot Plugin — Edge Function (MVP scaffold)
-//
-// Variáveis de ambiente necessárias:
-//   COPILOT_PLUGIN_TOKEN  — token bearer usado para autenticar chamadas do Copilot
-//   SUPABASE_URL          — URL do projeto Supabase (injetada automaticamente)
-//   SUPABASE_ANON_KEY     — chave anon (injetada automaticamente)
-//
-// Rotas (relativas à raiz da function):
-//   GET  /health
-//   GET  /manifest
-//   POST /chat
-//   POST /actions/summarize-project
-//   POST /actions/query-metrics
-
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { readJsonBody, RequestBodyTooLargeError } from "../_shared/request-body.ts";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const FUNCTION_NAME = "copilot-plugin";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SITE_URL = Deno.env.get("SITE_URL") ?? "";
 
-const jsonHeaders = {
-  ...corsHeaders,
-  "Content-Type": "application/json",
+const corsHeaders = {
+  "Access-Control-Allow-Origin": SITE_URL,
+  "Access-Control-Allow-Headers": "authorization, content-type, x-plugin-id",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
-}
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...corsHeaders, "Content-Type": "application/json" },
+});
 
-function errorResponse(code: string, message: string, status: number, details?: Record<string, unknown>): Response {
-  return json({ error: { code, message, ...(details ? { details } : {}) } }, status);
-}
+const errorResponse = (code: string, message: string, status: number) =>
+  json({ error: { code, message } }, status);
 
 function normalizePath(url: URL): string {
-  // Remove o prefixo `/functions/v1/<name>` ao rodar em Supabase.
-  let p = url.pathname;
+  let path = url.pathname;
   const marker = `/${FUNCTION_NAME}`;
-  const idx = p.indexOf(marker);
-  if (idx >= 0) p = p.slice(idx + marker.length);
-  if (!p.startsWith("/")) p = "/" + p;
-  if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
-  return p || "/";
+  const index = path.indexOf(marker);
+  if (index >= 0) path = path.slice(index + marker.length);
+  if (!path.startsWith("/")) path = `/${path}`;
+  return path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
 }
 
-function authenticate(req: Request): { ok: true } | { ok: false; response: Response } {
-  const expected = Deno.env.get("COPILOT_PLUGIN_TOKEN");
-  if (!expected) {
-    return {
-      ok: false,
-      response: errorResponse(
-        "server_misconfigured",
-        "COPILOT_PLUGIN_TOKEN não configurado no ambiente.",
-        500,
-      ),
-    };
+async function tokenMatches(provided: string, expected: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [providedHash, expectedHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(provided)),
+    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
+  ]);
+  const left = new Uint8Array(providedHash);
+  const right = new Uint8Array(expectedHash);
+  let difference = left.length ^ right.length;
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
   }
-  const header = req.headers.get("authorization") ?? req.headers.get("Authorization");
-  if (!header || !header.toLowerCase().startsWith("bearer ")) {
-    return {
-      ok: false,
-      response: errorResponse("unauthorized", "Authorization Bearer token ausente.", 401),
-    };
-  }
-  const token = header.slice(7).trim();
-  if (token !== expected) {
-    return {
-      ok: false,
-      response: errorResponse("unauthorized", "Token inválido.", 401),
-    };
-  }
-  return { ok: true };
+  return difference === 0;
 }
 
-async function readJson(req: Request): Promise<Record<string, unknown> | null> {
-  try {
-    const raw = await req.text();
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return null;
+async function authenticate(req: Request): Promise<Response | null> {
+  const expected = Deno.env.get("COPILOT_PLUGIN_TOKEN")?.trim();
+  if (!expected) return errorResponse("server_misconfigured", "Autenticação do plugin não configurada.", 503);
+  const authorization = req.headers.get("authorization");
+  if (!authorization?.toLowerCase().startsWith("bearer ")) {
+    return errorResponse("unauthorized", "Authorization Bearer token ausente.", 401);
   }
+  const valid = await tokenMatches(authorization.slice(7).trim(), expected);
+  return valid ? null : errorResponse("unauthorized", "Token inválido.", 401);
 }
 
-async function recordPluginHealth(
-  context: {
-    supabase: any;
-    organizationId: string;
-    projectId: string | null;
-    integrationId: string | null;
-  },
-  event: {
-    status: "healthy" | "degraded" | "unhealthy" | "unknown";
-    correlationId: string;
-    latencyMs: number;
-    errorCode?: string;
-    errorMessage?: string;
-    details?: Record<string, unknown>;
-  },
-): Promise<void> {
-  const { error } = await context.supabase.from("integration_health_events").insert({
-    organization_id: context.organizationId,
-    project_id: context.projectId,
-    provider: "copilot-plugin",
-    integration_id: context.integrationId,
-    check_type: "plugin",
-    status: event.status,
-    latency_ms: event.latencyMs,
-    error_code: event.errorCode ?? null,
-    error_message: event.errorMessage ?? null,
-    details: event.details ?? {},
-    correlation_id: event.correlationId,
-  });
+type PluginContext = {
+  admin: ReturnType<typeof createClient>;
+  pluginId: string;
+  organizationId: string;
+  projectId: string | null;
+};
 
-  if (error) {
-    console.error("[copilot-plugin] failed to record integration health:", error);
-  }
-}
+async function resolvePluginContext(req: Request): Promise<PluginContext | Response> {
+  const pluginId = req.headers.get("x-plugin-id")?.trim() ?? "";
+  if (!UUID.test(pluginId)) return errorResponse("plugin_id_required", "x-plugin-id inválido ou ausente.", 400);
 
-function getSupabaseClient(req: Request): { client: any; organizationId: string; projectId: string | null; integrationId: string | null } | null {
-  const url = Deno.env.get("SUPABASE_URL");
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY");
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!url || !serviceKey) return errorResponse("server_misconfigured", "Persistência do plugin não configurada.", 503);
 
-  if (!url || !key) {
-    return null;
-  }
-
-  const client = createClient(url, key, {
+  const admin = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-
-  const organizationId = req.headers.get("x-organization-id") ?? "";
-  const projectId = req.headers.get("x-project-id") ?? null;
-  const integrationId = req.headers.get("x-integration-id") ?? null;
+  const { data: plugin, error } = await admin
+    .from("copilot_plugins")
+    .select("id, organization_id, project_id")
+    .eq("id", pluginId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) return errorResponse("plugin_lookup_failed", "Não foi possível validar o plugin.", 500);
+  if (!plugin) return errorResponse("plugin_not_found", "Plugin ativo não encontrado.", 404);
 
   return {
-    client,
-    organizationId,
-    projectId,
-    integrationId,
+    admin,
+    pluginId: plugin.id,
+    organizationId: plugin.organization_id,
+    projectId: plugin.project_id,
   };
 }
 
-// ── Handlers ────────────────────────────────────────────────────────────────
+async function recordHealth(context: PluginContext, status: "healthy" | "degraded" | "unhealthy", details: Record<string, unknown>) {
+  const { error } = await context.admin.from("integration_health_events").insert({
+    organization_id: context.organizationId,
+    project_id: context.projectId,
+    provider: "copilot-plugin",
+    integration_id: context.pluginId,
+    check_type: "plugin",
+    status,
+    details,
+    correlation_id: details.correlationId,
+  });
+  if (error) console.error("[copilot-plugin] health persistence failed");
+}
 
 function handleHealth(): Response {
   return json({
     status: "ok",
     function: FUNCTION_NAME,
     version: VERSION,
+    capabilities: [],
     timestamp: new Date().toISOString(),
-    capabilities: ["chat", "summarize-project", "query-metrics"],
-    authenticated: true,
   });
 }
 
 function handleManifest(): Response {
   return json({
     name: "Axionn Copilot Plugin",
-    description:
-      "Plugin backend do Axionn para integração com GitHub Copilot. Permite resumir contexto e consultar métricas do projeto.",
     version: VERSION,
     auth: { type: "bearer", header: "Authorization" },
-    security: {
-      required: true,
-      tokenEnv: "COPILOT_PLUGIN_TOKEN",
-    },
+    capabilities: [],
     endpoints: [
-      { method: "GET", path: "/health", description: "Status da function." },
-      { method: "GET", path: "/manifest", description: "Metadados do plugin." },
-      { method: "POST", path: "/chat", description: "Envia mensagem ao plugin e recebe resposta estruturada." },
-      { method: "POST", path: "/actions/summarize-project", description: "Resume o contexto do projeto Axionn." },
-      { method: "POST", path: "/actions/query-metrics", description: "Consulta métricas/indicadores do Axionn." },
+      { method: "GET", path: "/health", status: "available" },
+      { method: "GET", path: "/manifest", status: "available" },
+      { method: "POST", path: "/chat", status: "not_implemented" },
+      { method: "POST", path: "/actions/summarize-project", status: "not_implemented" },
+      { method: "POST", path: "/actions/query-metrics", status: "not_implemented" },
     ],
   });
 }
 
-async function handleChat(req: Request): Promise<Response> {
-  const body = await readJson(req);
-  if (!body) return errorResponse("invalid_json", "Corpo da requisição não é JSON válido.", 400);
-
-  const message = typeof body.message === "string" ? body.message.trim() : "";
-  if (!message) {
-    return errorResponse("invalid_input", "Campo 'message' é obrigatório (string).", 400);
+async function unavailableCapability(req: Request): Promise<Response> {
+  try {
+    await readJsonBody<Record<string, unknown>>(req, 64_000);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return errorResponse("request_too_large", "Payload excede 64 KB.", 413);
+    if (error instanceof SyntaxError) return errorResponse("invalid_json", "Corpo JSON inválido.", 400);
+    throw error;
   }
-
-  return json({
-    answer: `Recebi sua mensagem: "${message}". Este é um scaffold inicial do Axionn Copilot Plugin — respostas reais serão integradas em breve.`,
-    sources: [],
-    actions: [
-      { id: "summarize-project", label: "Resumir projeto", path: "/actions/summarize-project" },
-      { id: "query-metrics", label: "Consultar métricas", path: "/actions/query-metrics" },
-    ],
-    metadata: {
-      function: FUNCTION_NAME,
-      version: VERSION,
-      timestamp: new Date().toISOString(),
-    },
-  });
+  return errorResponse(
+    "capability_not_implemented",
+    "Esta capacidade ainda não está disponível; nenhum dado fictício foi retornado.",
+    501,
+  );
 }
 
-async function handleSummarizeProject(req: Request): Promise<Response> {
-  const body = (await readJson(req)) ?? {};
-  const projectId = typeof body.projectId === "string" ? body.projectId : null;
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
-  return json({
-    answer:
-      "Resumo mockado do projeto Axionn. Fase atual: SaaS Phase 2b. Módulos ativos: Sala Ágil, Sustentação, Backoffice. Integração real será conectada em iteração futura.",
-    sources: projectId ? [{ type: "project", id: projectId }] : [],
-    actions: [],
-    metadata: {
-      function: FUNCTION_NAME,
-      version: VERSION,
-      timestamp: new Date().toISOString(),
-    },
-  });
-}
+  const path = normalizePath(new URL(req.url));
+  const method = req.method.toUpperCase();
+  if (method === "GET" && path === "/health") return handleHealth();
 
-async function handleQueryMetrics(req: Request): Promise<Response> {
-  const body = (await readJson(req)) ?? {};
-  const metric = typeof body.metric === "string" ? body.metric : "overview";
+  const authError = await authenticate(req);
+  if (authError) return authError;
 
-  return json({
-    answer: `Consulta de métricas '${metric}' recebida. Camada de dados ainda mockada.`,
-    sources: [],
-    actions: [],
-    data: {
-      metric,
-      generatedAt: new Date().toISOString(),
-      values: [
-        { label: "Demandas abertas", value: 0 },
-        { label: "SLA médio", value: null },
-        { label: "Sprints ativas", value: 0 },
-      ],
-    },
-    metadata: {
-      function: FUNCTION_NAME,
-      version: VERSION,
-      timestamp: new Date().toISOString(),
-    },
-  });
-}
-
-// ── Router ──────────────────────────────────────────────────────────────────
-
-Deno.serve(async (req) => {
-  const startTime = Date.now();
+  const resolved = await resolvePluginContext(req);
+  if (resolved instanceof Response) return resolved;
+  const context = resolved;
   const correlationId = crypto.randomUUID();
-  const context = getSupabaseClient(req);
-
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
 
   try {
-    const url = new URL(req.url);
-    const path = normalizePath(url);
-    const method = req.method.toUpperCase();
-
-    if (method === "GET" && path === "/health") {
-      if (context) {
-        await recordPluginHealth(
-          {
-            supabase: context.client,
-            organizationId: context.organizationId,
-            projectId: context.projectId,
-            integrationId: context.integrationId,
-          },
-          {
-            status: "healthy",
-            correlationId,
-            latencyMs: Date.now() - startTime,
-            details: { route: "/health" },
-          },
-        );
-      }
-      return handleHealth();
-    }
-
-    const auth = authenticate(req);
-    if (!auth.ok) {
-      if (context) {
-        await recordPluginHealth(
-          {
-            supabase: context.client,
-            organizationId: context.organizationId,
-            projectId: context.projectId,
-            integrationId: context.integrationId,
-          },
-          {
-            status: "degraded",
-            correlationId,
-            latencyMs: Date.now() - startTime,
-            errorCode: "UNAUTHORIZED",
-            errorMessage: "Authorization Bearer token ausente ou inválido.",
-            details: { route: path, method },
-          },
-        );
-      }
-      return auth.response;
-    }
-
     let response: Response;
-    if (method === "GET" && path === "/manifest") {
-      response = handleManifest();
-    } else if (method === "POST" && path === "/chat") {
-      response = await handleChat(req);
-    } else if (method === "POST" && path === "/actions/summarize-project") {
-      response = await handleSummarizeProject(req);
-    } else if (method === "POST" && path === "/actions/query-metrics") {
-      response = await handleQueryMetrics(req);
-    } else {
-      response = errorResponse("not_found", `Rota não encontrada: ${method} ${path}`, 404);
-    }
+    if (method === "GET" && path === "/manifest") response = handleManifest();
+    else if (method === "POST" && [
+      "/chat",
+      "/actions/summarize-project",
+      "/actions/query-metrics",
+    ].includes(path)) response = await unavailableCapability(req);
+    else response = errorResponse("not_found", "Rota não encontrada.", 404);
 
-    if (context && response.status >= 400) {
-      await recordPluginHealth(
-        {
-          supabase: context.client,
-          organizationId: context.organizationId,
-          projectId: context.projectId,
-          integrationId: context.integrationId,
-        },
-        {
-          status: response.status >= 500 ? "unhealthy" : "degraded",
-          correlationId,
-          latencyMs: Date.now() - startTime,
-          errorCode: response.status === 404 ? "NOT_FOUND" : "REQUEST_ERROR",
-          errorMessage: response.statusText || "Erro na requisição do plugin.",
-          details: { route: path, method, status: response.status },
-        },
-      );
-    } else if (context) {
-      await recordPluginHealth(
-        {
-          supabase: context.client,
-          organizationId: context.organizationId,
-          projectId: context.projectId,
-          integrationId: context.integrationId,
-        },
-        {
-          status: "healthy",
-          correlationId,
-          latencyMs: Date.now() - startTime,
-          details: { route: path, method, status: response.status },
-        },
-      );
-    }
-
+    await recordHealth(context, response.status < 400 ? "healthy" : "degraded", {
+      correlationId,
+      route: path,
+      method,
+      status: response.status,
+    });
     return response;
-  } catch (err) {
-    console.error("[copilot-plugin] erro inesperado:", err);
-    const message = err instanceof Error ? err.message : "Erro interno.";
-    if (context) {
-      await recordPluginHealth(
-        {
-          supabase: context.client,
-          organizationId: context.organizationId,
-          projectId: context.projectId,
-          integrationId: context.integrationId,
-        },
-        {
-          status: "unhealthy",
-          correlationId,
-          latencyMs: Date.now() - startTime,
-          errorCode: "INTERNAL_ERROR",
-          errorMessage: message,
-          details: { route: "*", method: req.method.toUpperCase() },
-        },
-      );
-    }
-    return errorResponse("internal_error", message, 500);
+  } catch {
+    await recordHealth(context, "unhealthy", { correlationId, route: path, method });
+    return errorResponse("internal_error", "Erro interno.", 500);
   }
 });

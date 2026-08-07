@@ -15,20 +15,21 @@ const buildDate = new Date().toLocaleDateString("pt-BR", {
   timeZone: "America/Sao_Paulo",
 });
 
-// Fallback publico do Supabase (URL + publishable/anon key sao publicos por
-// design; a protecao dos dados e feita por RLS). Necessario porque o arquivo
-// .env e ignorado pelo git e nao existe no ambiente de build/publish.
-const FALLBACK_SUPABASE_URL = "https://rgikyyazotqapaxijwui.supabase.co";
-const FALLBACK_SUPABASE_PUBLISHABLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnaWt5eWF6b3RxYXBheGlqd3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNjM5NTIsImV4cCI6MjA4OTgzOTk1Mn0.ADQ3VDenVwNL3fgyNc2Fgu-Si66T7SHdG5se4Hvf5eg";
-
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const supabaseUrl = env.VITE_SUPABASE_URL || FALLBACK_SUPABASE_URL;
+  const isTest = mode === "test";
+  const supabaseUrl = env.VITE_SUPABASE_URL || (isTest ? "https://test.supabase.invalid" : "");
   const supabaseKey =
     env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     env.VITE_SUPABASE_ANON_KEY ||
-    FALLBACK_SUPABASE_PUBLISHABLE_KEY;
+    (isTest ? "test-publishable-key" : "");
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "Configuração Supabase ausente: defina VITE_SUPABASE_URL e " +
+      "VITE_SUPABASE_PUBLISHABLE_KEY para este ambiente.",
+    );
+  }
 
   return {
   server: {

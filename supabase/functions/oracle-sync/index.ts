@@ -101,6 +101,46 @@ serve(async (req: Request) => {
       });
     }
 
+    // There is no Oracle driver/connector in this Edge runtime. Fail explicitly
+    // before emitting "started", extracting, loading, or advancing a watermark.
+    // A placeholder must never be reported to callers as a successful sync.
+    const connectorError = 'Oracle connector is not implemented in this runtime';
+    const unavailableDuration = Date.now() - startTime;
+    await supabase.rpc('log_oracle_sync_event', {
+      p_job_id: job_id,
+      p_integration_id: integration.id,
+      p_organization_id: organizationId,
+      p_trigger_type: trigger_type,
+      p_status: 'failed',
+      p_total_duration_ms: unavailableDuration,
+      p_error_details: { code: 'ORACLE_CONNECTOR_NOT_IMPLEMENTED', error: connectorError },
+      p_correlation_id: correlationId,
+    });
+    await supabase.from('oracle_sync_jobs').update({
+      last_run_at: new Date().toISOString(),
+      last_run_status: 'failed',
+      last_run_rows: 0,
+      last_run_duration_ms: unavailableDuration,
+      last_run_error: connectorError,
+    }).eq('id', job_id);
+    await recordOracleHealth(healthContext, {
+      status: 'unhealthy',
+      latencyMs: unavailableDuration,
+      correlationId,
+      errorCode: 'ORACLE_CONNECTOR_NOT_IMPLEMENTED',
+      errorMessage: connectorError,
+      details: { job_id, trigger_type, capability_available: false },
+    });
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Oracle synchronization is not available',
+      error_code: 'ORACLE_CONNECTOR_NOT_IMPLEMENTED',
+      correlation_id: correlationId,
+    }), {
+      status: 501,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
     // Log start
     await supabase.rpc('log_oracle_sync_event', {
       p_job_id: job_id,

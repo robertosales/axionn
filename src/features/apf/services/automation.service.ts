@@ -1,143 +1,86 @@
-/**
- * automation.service.ts
- * ----------------------
- * Serviço de automação progressiva da Biblioteca APF (Stage 5).
- *
- * Responsabilidades:
- *  1. Auto-aprovação: padrões com alta ocorrência + baixa taxa de correção
- *     são aprovados automaticamente sem intervenção humana.
- *  2. Drift detection: compara acurácia das últimas 2 semanas e dispara
- *     alerta se a queda superar o threshold configurado.
- *  3. Persistência de config: salva threshold por team_id no localStorage
- *     (leve, sem nova tabela — migrar para DB quando necessário).
- */
 import { supabase } from "@/integrations/supabase/client";
-import type { KnowledgePattern } from "./knowledge.service";
 
-// ──────────────────────────────────────────────────────────────
-// Tipos
-// ──────────────────────────────────────────────────────────────
 export interface AutomationConfig {
-  autoApproveEnabled:    boolean;
-  minOccurrences:        number;  // mínimo de ocorrências para auto-aprovar
-  maxCorrectionRate:     number;  // máximo de taxa de correção (0-1) para auto-aprovar
-  driftAlertEnabled:     boolean;
-  driftThresholdPp:      number;  // queda em pp que dispara alerta (ex: 10 = -10pp)
+  autoApproveEnabled: boolean;
+  minOccurrences: number;
+  maxCorrectionRate: number;
+  driftAlertEnabled: boolean;
+  driftThresholdPp: number;
 }
 
 export interface DriftStatus {
-  hasDrift:      boolean;
-  currentAccuracy:  number | null;
+  hasDrift: boolean;
+  currentAccuracy: number | null;
   previousAccuracy: number | null;
-  deltaPp:       number | null;   // negativo = queda
+  deltaPp: number | null;
   weeksAnalyzed: number;
 }
 
-export interface AutoApproveResult {
-  approved: string[];  // ids aprovados
-  skipped:  string[];  // ids ignorados (critério não atingido)
-}
+export interface AutoApproveResult { approved: string[]; skipped: string[] }
 
-// ──────────────────────────────────────────────────────────────
-// Config (localStorage por ora)
-// ──────────────────────────────────────────────────────────────
-const CONFIG_KEY = "apf_automation_config";
-
-const DEFAULT_CONFIG: AutomationConfig = {
-  autoApproveEnabled:  false,   // OFF por padrão — especialista deve ativar
-  minOccurrences:      10,
-  maxCorrectionRate:   0.10,    // <= 10% de correção
-  driftAlertEnabled:   true,
-  driftThresholdPp:    10,      // alerta se cair >= 10 pp
+export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
+  autoApproveEnabled: false,
+  minOccurrences: 10,
+  maxCorrectionRate: 0.10,
+  driftAlertEnabled: true,
+  driftThresholdPp: 10,
 };
 
-export function loadAutomationConfig(): AutomationConfig {
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return { ...DEFAULT_CONFIG };
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-  } catch {
-    return { ...DEFAULT_CONFIG };
-  }
-}
-
-export function saveAutomationConfig(config: AutomationConfig): void {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-}
-
-// ──────────────────────────────────────────────────────────────
-// Auto-aprovação
-// ──────────────────────────────────────────────────────────────
-/**
- * Avalia quais padrões "auto" atendem os critérios e os aprova em lote.
- * Retorna ids aprovados e ignorados para feedback visual.
- */
-export async function runAutoApprove(
-  patterns: KnowledgePattern[],
-  config: AutomationConfig,
-): Promise<AutoApproveResult> {
-  const candidates = patterns.filter((p) => p.status === "auto");
-  const toApprove  = candidates.filter(
-    (p) =>
-      p.occurrence_count  >= config.minOccurrences &&
-      p.correction_rate   <= config.maxCorrectionRate,
-  );
-  const toSkip = candidates.filter(
-    (p) =>
-      p.occurrence_count  < config.minOccurrences ||
-      p.correction_rate   > config.maxCorrectionRate,
-  );
-
-  if (toApprove.length === 0) {
-    return { approved: [], skipped: toSkip.map((p) => p.id) };
-  }
-
-  const ids = toApprove.map((p) => p.id);
-  const { error } = await supabase
-    .from("apf_knowledge_patterns")
-    .update({ status: "validated", updated_at: new Date().toISOString() })
-    .in("id", ids);
-
+export async function loadAutomationConfig(teamId: string): Promise<AutomationConfig> {
+  const { data, error } = await supabase
+    .from("apf_automation_settings")
+    .select("auto_approve_enabled, min_occurrences, max_correction_rate, drift_alert_enabled, drift_threshold_pp")
+    .eq("team_id", teamId)
+    .maybeSingle();
   if (error) throw new Error(error.message);
-
-  return { approved: ids, skipped: toSkip.map((p) => p.id) };
+  if (!data) return { ...DEFAULT_AUTOMATION_CONFIG };
+  return {
+    autoApproveEnabled: data.auto_approve_enabled,
+    minOccurrences: data.min_occurrences,
+    maxCorrectionRate: Number(data.max_correction_rate),
+    driftAlertEnabled: data.drift_alert_enabled,
+    driftThresholdPp: Number(data.drift_threshold_pp),
+  };
 }
 
-// ──────────────────────────────────────────────────────────────
-// Drift Detection
-// ──────────────────────────────────────────────────────────────
-/**
- * Compara as últimas duas semanas de métricas.
- * Retorna DriftStatus com hasDrift=true se a queda superar o threshold.
- */
-export async function checkDriftStatus(
-  config: AutomationConfig,
-): Promise<DriftStatus> {
+export async function saveAutomationConfig(teamId: string, config: AutomationConfig): Promise<void> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) throw new Error("Sessão inválida");
+  const { error } = await supabase.from("apf_automation_settings").upsert({
+    team_id: teamId,
+    auto_approve_enabled: config.autoApproveEnabled,
+    min_occurrences: config.minOccurrences,
+    max_correction_rate: config.maxCorrectionRate,
+    drift_alert_enabled: config.driftAlertEnabled,
+    drift_threshold_pp: config.driftThresholdPp,
+    created_by: authData.user.id,
+    updated_by: authData.user.id,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "team_id" });
+  if (error) throw new Error(error.message);
+}
+
+export async function runAutoApprove(teamId: string, pendingIds: string[]): Promise<AutoApproveResult> {
+  const { data, error } = await supabase.rpc("run_apf_auto_approve", { p_team_id: teamId });
+  if (error) throw new Error(error.message);
+  const approved = (data ?? []).map((row: { pattern_id: string }) => row.pattern_id);
+  const approvedSet = new Set(approved);
+  return { approved, skipped: pendingIds.filter((id) => !approvedSet.has(id)) };
+}
+
+export async function checkDriftStatus(teamId: string, config: AutomationConfig): Promise<DriftStatus> {
   const { data, error } = await supabase
     .from("apf_learning_metrics")
     .select("week_start, accuracy_rate")
+    .eq("team_id", teamId)
     .order("week_start", { ascending: false })
     .limit(2);
-
-  if (error || !data || data.length < 2) {
-    return {
-      hasDrift:         false,
-      currentAccuracy:  data?.[0]?.accuracy_rate ?? null,
-      previousAccuracy: null,
-      deltaPp:          null,
-      weeksAnalyzed:    data?.length ?? 0,
-    };
+  if (error) throw new Error(error.message);
+  if (!data || data.length < 2) {
+    return { hasDrift: false, currentAccuracy: data?.[0]?.accuracy_rate ?? null, previousAccuracy: null, deltaPp: null, weeksAnalyzed: data?.length ?? 0 };
   }
-
-  const current  = data[0].accuracy_rate as number;
-  const previous = data[1].accuracy_rate as number;
-  const deltaPp  = current - previous;
-
-  return {
-    hasDrift:         config.driftAlertEnabled && deltaPp <= -(config.driftThresholdPp),
-    currentAccuracy:  current,
-    previousAccuracy: previous,
-    deltaPp,
-    weeksAnalyzed:    2,
-  };
+  const current = Number(data[0].accuracy_rate);
+  const previous = Number(data[1].accuracy_rate);
+  const deltaPp = current - previous;
+  return { hasDrift: config.driftAlertEnabled && deltaPp <= -config.driftThresholdPp, currentAccuracy: current, previousAccuracy: previous, deltaPp, weeksAnalyzed: 2 };
 }

@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useBackofficeAuth } from "@/backoffice/hooks/useBackofficeAuth";
 import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
+import { BackofficeMfaGate } from "@/backoffice/guards/BackofficeMfaGate";
 
 export function BackofficeGuard({
   children,
@@ -26,5 +27,5 @@ export function BackofficeGuard({
   if (!staffMember) return <Navigate to="/" replace />;
   if (!hasRole(requiredRoles)) return <Navigate to="/backoffice" replace />;
 
-  return <>{children}</>;
+  return <BackofficeMfaGate>{children}</BackofficeMfaGate>;
 }

@@ -6,6 +6,10 @@ const migration = readFileSync(
   "utf8",
 );
 const worker = readFileSync("supabase/functions/okr-recalculation/index.ts", "utf8");
+const manualScopeMigration = readFileSync(
+  "supabase/migrations/20260807130000_okr_manual_queue_scope.sql",
+  "utf8",
+);
 
 describe("OKR V2 automatic metrics boundary", () => {
   it("creates a versioned metric catalog and tenant bindings", () => {
@@ -50,5 +54,14 @@ describe("OKR V2 automatic metrics boundary", () => {
     expect(worker).toContain('"finish_okr_recalculation_job_v1"');
     expect(worker).not.toContain('.from("okr_key_results").update(');
     expect(worker).not.toContain('.from("okr_recalculation_queue").update(');
+  });
+
+  it("prevents a manual request from draining other organizations' jobs", () => {
+    expect(manualScopeMigration).toContain("claim_okr_recalculation_job_v2");
+    expect(manualScopeMigration).toContain("where queue.id = p_job_id");
+    expect(manualScopeMigration).toContain("from public, anon, authenticated");
+    expect(worker).toContain('requestedJobId = String(jobId)');
+    expect(worker).toContain('"claim_okr_recalculation_job_v2"');
+    expect(worker).toContain("const claim = isScheduled");
   });
 });

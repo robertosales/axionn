@@ -962,6 +962,56 @@ export type Database = {
           },
         ]
       }
+      apf_automation_settings: {
+        Row: {
+          auto_approve_enabled: boolean
+          created_at: string
+          created_by: string | null
+          drift_alert_enabled: boolean
+          drift_threshold_pp: number
+          id: string
+          max_correction_rate: number
+          min_occurrences: number
+          team_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auto_approve_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          drift_alert_enabled?: boolean
+          drift_threshold_pp?: number
+          id?: string
+          max_correction_rate?: number
+          min_occurrences?: number
+          team_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auto_approve_enabled?: boolean
+          created_at?: string
+          created_by?: string | null
+          drift_alert_enabled?: boolean
+          drift_threshold_pp?: number
+          id?: string
+          max_correction_rate?: number
+          min_occurrences?: number
+          team_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_automation_settings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: true
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_baseline_items: {
         Row: {
           baseline_id: string
@@ -10974,6 +11024,7 @@ export type Database = {
           saved_at: string | null
           session_id: string
           status: string
+          vote_revision: number
         }
         Insert: {
           created_at?: string
@@ -10987,6 +11038,7 @@ export type Database = {
           saved_at?: string | null
           session_id: string
           status?: string
+          vote_revision?: number
         }
         Update: {
           created_at?: string
@@ -11000,6 +11052,7 @@ export type Database = {
           saved_at?: string | null
           session_id?: string
           status?: string
+          vote_revision?: number
         }
         Relationships: [
           {
@@ -17319,6 +17372,10 @@ export type Database = {
         }
         Returns: string
       }
+      cast_planning_vote: {
+        Args: { p_hu_id: string; p_session_id: string; p_vote_value: string }
+        Returns: undefined
+      }
       check_commercial_usage_v1: {
         Args: {
           p_correlation_id?: string
@@ -17434,6 +17491,10 @@ export type Database = {
         }
       }
       close_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
+      close_planning_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       complete_ai_briefing_run: {
         Args: {
           p_duration_ms?: number
@@ -17627,6 +17688,10 @@ export type Database = {
           p_name: string
           p_org_id: string
         }
+        Returns: string
+      }
+      create_planning_session: {
+        Args: { p_deck_mode?: string; p_sprint_id: string; p_team_id: string }
         Returns: string
       }
       create_platform_ai_provider_v2: {
@@ -18626,6 +18691,15 @@ export type Database = {
           users_used: number
         }[]
       }
+      get_planning_round_votes: {
+        Args: { p_hu_id: string; p_session_id: string }
+        Returns: {
+          id: string
+          revealed: boolean
+          user_id: string
+          vote_value: string
+        }[]
+      }
       get_project_api_url: { Args: never; Returns: string }
       get_service_role_key: { Args: never; Returns: string }
       get_sprint_history: {
@@ -18772,6 +18846,10 @@ export type Database = {
         Returns: boolean
       }
       is_tenancy_enforced: { Args: never; Returns: boolean }
+      join_planning_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       link_quality_test_case_v1: {
         Args: {
           p_case_id: string
@@ -19904,6 +19982,10 @@ export type Database = {
         Returns: string
       }
       resolve_team_org_id: { Args: { p_team_id: string }; Returns: string }
+      reveal_planning_votes: {
+        Args: { p_round_id: string }
+        Returns: undefined
+      }
       review_ai_briefing_suggestion: {
         Args: {
           p_review_status: string
@@ -19924,6 +20006,12 @@ export type Database = {
       revoke_organization_invitation_v2: {
         Args: { p_invitation_id: string }
         Returns: boolean
+      }
+      run_apf_auto_approve: {
+        Args: { p_team_id: string }
+        Returns: {
+          pattern_id: string
+        }[]
       }
       run_okr_alert_engine_v1: { Args: { p_org_id: string }; Returns: number }
       save_contractual_counting_items: {
@@ -19956,6 +20044,10 @@ export type Database = {
           p_value_per_pfus?: number
         }
         Returns: string
+      }
+      save_planning_result: {
+        Args: { p_hours?: number; p_round_id: string; p_value: string }
+        Returns: undefined
       }
       save_rbac_profile_v1: {
         Args: {
@@ -20063,6 +20155,10 @@ export type Database = {
       start_okr_cycle_closing_v1: {
         Args: { p_cycle_id: string }
         Returns: undefined
+      }
+      start_planning_round: {
+        Args: { p_hu_id: string; p_session_id: string }
+        Returns: string
       }
       start_quality_test_run_v1: {
         Args: { p_correlation_id?: string; p_org_id: string; p_run_id: string }

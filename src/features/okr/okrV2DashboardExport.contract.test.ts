@@ -5,9 +5,9 @@ const migration = readFileSync(
   "supabase/migrations/20260730160000_okr_v2_dashboard_export_hardening.sql",
   "utf8",
 ).toLowerCase();
-const route = readFileSync("src/app.tsx", "utf8");
+const route = readFileSync("src/App.tsx", "utf8");
 const page = readFileSync(
-  "src/features/okr/pages/okrdashboardpage.tsx",
+  "src/features/okr/pages/OkrDashboardPage.tsx",
   "utf8",
 );
 

@@ -40,6 +40,7 @@ interface InviteMemberInput {
 
 interface UpdateMemberInput {
   userId: string;
+  displayName?: string;
   role?: "admin" | "member";
   isActive?: boolean;
   moduleKeys?: OrganizationModuleKey[];
@@ -251,7 +252,7 @@ export function useOrganizationMembers() {
           {
             p_org_id: currentOrganizationId,
             p_user_id: input.userId,
-            p_display_name: null,
+            p_display_name: input.displayName?.trim() || null,
             p_role: input.role ?? null,
             p_is_active: input.isActive ?? null,
             p_module_roles: moduleRoles,

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -284,11 +284,12 @@ function EditMemberDialog({
   currentUserId?: string;
   canTransferOwnership: boolean;
   onClose: () => void;
-  onSave: (input: { role: "admin" | "member"; isActive: boolean; moduleKeys: OrganizationModuleKey[]; newEmail?: string }) => Promise<void>;
+  onSave: (input: { displayName: string; role?: "admin" | "member"; isActive?: boolean; moduleKeys?: OrganizationModuleKey[]; newEmail?: string }) => Promise<void>;
   onDeactivate: () => Promise<void>;
   onTransferOwnership: () => Promise<void>;
 }) {
   const [role, setRole]               = useState<"admin" | "member">("member");
+  const [displayName, setDisplayName] = useState("");
   const [isActive, setIsActive]       = useState(true);
   const [moduleKeys, setModuleKeys]   = useState<OrganizationModuleKey[]>([]);
   const [newEmail, setNewEmail]       = useState("");
@@ -302,15 +303,15 @@ function EditMemberDialog({
   const [copied, setCopied]           = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
 
-  const memberKey = member?.userId;
-  useMemo(() => {
+  useEffect(() => {
     if (!member) return;
     setRole(member.membershipRole === "admin" ? "admin" : "member");
+    setDisplayName(member.displayName);
     setIsActive(member.isActive);
     setModuleKeys(member.moduleKeys);
     setNewEmail(""); setShowEmailField(false); setTransferConfirmOpen(false);
     setResetMode("idle"); setTempPwd(""); setShowTempPwd(false); setCopied(false); setSendingReset(false);
-  }, [memberKey]);
+  }, [member]);
 
   const isOwner    = member?.membershipRole === "owner";
   const isSelf     = member?.userId === currentUserId;
@@ -369,7 +370,9 @@ function EditMemberDialog({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const initials = member?.displayName
+  const normalizedDisplayName = displayName.trim();
+  const isNameValid = normalizedDisplayName.length > 0;
+  const initials = (normalizedDisplayName || member?.displayName)
     ?.split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -389,7 +392,7 @@ function EditMemberDialog({
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <h2 className="truncate text-base font-semibold leading-tight text-foreground">
-                  {member?.displayName}
+                  {normalizedDisplayName || member?.displayName}
                 </h2>
                 <p className="truncate mt-0.5 text-xs text-muted-foreground">{member?.email}</p>
               </div>
@@ -435,6 +438,29 @@ function EditMemberDialog({
           <div className="flex-1 overflow-y-auto px-6 py-6">
             {member && (
               <div className="space-y-6">
+
+                {/* SEÇÃO 1: IDENTIFICAÇÃO */}
+                <div className="space-y-3">
+                  <SectionDivider>Identificação</SectionDivider>
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="member-display-name">Nome</FieldLabel>
+                    <Input
+                      id="member-display-name"
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      maxLength={120}
+                      autoComplete="name"
+                      aria-invalid={!isNameValid}
+                      aria-describedby={!isNameValid ? "member-display-name-error" : undefined}
+                      className="h-10"
+                    />
+                    {!isNameValid && (
+                      <p id="member-display-name-error" className="text-[11px] font-medium text-destructive">
+                        Informe o nome do membro.
+                      </p>
+                    )}
+                  </div>
+                </div>
 
                 {/* SEÇÃO 1: PAPEL E FUNÇÃO */}
                 <div className="space-y-3">
@@ -717,10 +743,11 @@ function EditMemberDialog({
               </Button>
               <Button
                 className="h-11 gap-2 px-5 text-sm font-medium"
-                disabled={busy || isOwner || moduleKeys.length === 0}
+                disabled={busy || !isNameValid || (!isOwner && moduleKeys.length === 0)}
                 onClick={() =>
                   onSave({
-                    role, isActive, moduleKeys,
+                    displayName: normalizedDisplayName,
+                    ...(!isOwner ? { role, isActive, moduleKeys } : {}),
                     newEmail: showEmailField && newEmail.trim() ? newEmail.trim() : undefined,
                   })
                 }

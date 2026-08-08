@@ -86,10 +86,20 @@ describe("organization member module-role persistence", () => {
       '"update_organization_member_v2"',
     );
     expect(organizationMembersPage).toContain(
-      'busy || isOwner || moduleKeys.length === 0',
+      'busy || !isNameValid || (!isOwner && moduleKeys.length === 0)',
     );
     expect(organizationMembersPage).toContain(
       "Selecione pelo menos um módulo.",
+    );
+  });
+
+  it("edits the member name through the tenant-scoped profile mutation", () => {
+    expect(organizationMembersHook).toContain(
+      "p_display_name: input.displayName?.trim() || null",
+    );
+    expect(organizationMembersPage).toContain('id="member-display-name"');
+    expect(organizationMembersPage).toContain(
+      "displayName: normalizedDisplayName",
     );
   });
 

@@ -1968,56 +1968,6 @@ export type Database = {
           },
         ]
       }
-      apf_automation_settings: {
-        Row: {
-          auto_approve_enabled: boolean
-          created_at: string
-          created_by: string | null
-          drift_alert_enabled: boolean
-          drift_threshold_pp: number
-          id: string
-          max_correction_rate: number
-          min_occurrences: number
-          team_id: string
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          auto_approve_enabled?: boolean
-          created_at?: string
-          created_by?: string | null
-          drift_alert_enabled?: boolean
-          drift_threshold_pp?: number
-          id?: string
-          max_correction_rate?: number
-          min_occurrences?: number
-          team_id: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          auto_approve_enabled?: boolean
-          created_at?: string
-          created_by?: string | null
-          drift_alert_enabled?: boolean
-          drift_threshold_pp?: number
-          id?: string
-          max_correction_rate?: number
-          min_occurrences?: number
-          team_id?: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "apf_automation_settings_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: true
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       apf_knowledge_patterns: {
         Row: {
           canonical_complexity: string
@@ -17636,18 +17586,6 @@ export type Database = {
           redirect_uri: string
         }[]
       }
-      cast_planning_vote: {
-        Args: { p_hu_id: string; p_session_id: string; p_vote_value: string }
-        Returns: undefined
-      }
-      claim_okr_recalculation_job_v2: {
-        Args: { p_job_id: string; p_lease_seconds?: number; p_worker_id: string }
-        Returns: Database["public"]["Tables"]["okr_recalculation_queue"]["Row"][]
-      }
-      close_planning_session: {
-        Args: { p_session_id: string }
-        Returns: undefined
-      }
       create_ai_briefing: {
         Args: {
           p_briefing_type: string
@@ -19920,23 +19858,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      get_planning_round_votes: {
-        Args: { p_hu_id: string; p_session_id: string }
-        Returns: {
-          id: string
-          revealed: boolean
-          user_id: string
-          vote_value: string | null
-        }[]
-      }
-      create_planning_session: {
-        Args: { p_deck_mode?: string; p_sprint_id: string; p_team_id: string }
-        Returns: string
-      }
-      join_planning_session: {
-        Args: { p_session_id: string }
-        Returns: undefined
-      }
       refresh_organization_entitlement_cache: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -20126,18 +20047,6 @@ export type Database = {
       revoke_organization_invitation_v2: {
         Args: { p_invitation_id: string }
         Returns: boolean
-      }
-      reveal_planning_votes: {
-        Args: { p_round_id: string }
-        Returns: undefined
-      }
-      save_planning_result: {
-        Args: { p_hours?: number | null; p_round_id: string; p_value: string }
-        Returns: undefined
-      }
-      start_planning_round: {
-        Args: { p_hu_id: string; p_session_id: string }
-        Returns: string
       }
       run_apf_auto_approve: {
         Args: { p_team_id: string }

@@ -33,7 +33,7 @@ function stableVendorChunk(moduleId: string): string | undefined {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
+  const env = { ...process.env, ...loadEnv(mode, __dirname, "") } as Record<string, string | undefined>;
   const isTest = mode === "test";
   const supabaseUrl = env.VITE_SUPABASE_URL || (isTest ? "https://test.supabase.invalid" : "");
   const supabaseKey =
@@ -42,8 +42,8 @@ export default defineConfig(({ mode }) => {
     (isTest ? "test-publishable-key" : "");
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      "Configuração Supabase ausente: defina VITE_SUPABASE_URL e " +
+    console.warn(
+      "[vite] Configuração Supabase ausente: defina VITE_SUPABASE_URL e " +
       "VITE_SUPABASE_PUBLISHABLE_KEY para este ambiente.",
     );
   }

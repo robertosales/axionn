@@ -204,7 +204,7 @@ export function ActivityManager() {
     } else {
       const dec = durationToDecimal(duration);
       if (dec <= 0) e.hours = "Duração deve ser maior que zero";
-      else if (isLimitado && dec > 8) e.hours = "Máximo de 8:00 por atividade (task/bug)";
+      else if (isLimitado && dec > 8) e.hours = "Máximo de 8:00 por tarefa (task/bug)";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -227,7 +227,7 @@ export function ActivityManager() {
         toast.success("Alterações salvas com sucesso");
       } else {
         await addActivity({ title: title.trim(), description: description.trim(), activityType, huId, assigneeId, hours: numHours, startDate });
-        toast.success(isCloning ? "Atividade clonada com sucesso!" : "Registro criado com sucesso");
+        toast.success(isCloning ? "Tarefa clonada com sucesso!" : "Registro criado com sucesso");
       }
       resetForm(); setOpen(false);
     } catch {
@@ -278,7 +278,7 @@ export function ActivityManager() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           <ListTodo className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold tracking-tight">Atividades</h2>
+          <h2 className="text-lg font-bold tracking-tight">Tarefas</h2>
           <Badge variant="secondary">{totalItems}</Badge>
         </div>
 
@@ -286,7 +286,7 @@ export function ActivityManager() {
           <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-1.5" disabled={!canCreate}>
-                <Plus className="h-4 w-4" /> Nova Atividade
+                <Plus className="h-4 w-4" /> Nova Tarefa
               </Button>
             </DialogTrigger>
             <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[760px] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100dvh-3rem)] sm:p-0">
@@ -296,9 +296,9 @@ export function ActivityManager() {
                     {activityType === "bug" ? <Bug className="h-5 w-5" /> : <ListTodo className="h-5 w-5" />}
                   </div>
                   <div>
-                    <DialogTitle>{isCloning ? "Clonar atividade" : editId ? "Editar atividade" : "Nova atividade"}</DialogTitle>
+                    <DialogTitle>{isCloning ? "Clonar tarefa" : editId ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
                     <DialogDescription className="mt-1">
-                      {isCloning ? "Revise os dados da cópia antes de criar a nova atividade." : editId ? "Atualize as informações e salve suas alterações." : "Registre o trabalho, o responsável e o período planejado."}
+                      {isCloning ? "Revise os dados da cópia antes de criar a nova tarefa." : editId ? "Atualize as informações e salve suas alterações." : "Registre o trabalho, o responsável e o período planejado."}
                     </DialogDescription>
                   </div>
                 </div>
@@ -391,7 +391,7 @@ export function ActivityManager() {
                 {activityType === "bug" && (!editId || isCloning) && (
                   <div className="flex gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-xs leading-relaxed text-destructive">
                     <Info className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>Após salvar, edite a atividade para anexar evidências. A HU será movida para a coluna <b>Bug</b>.</span>
+                    <span>Após salvar, edite a tarefa para anexar evidências. A HU será movida para a coluna <b>Bug</b>.</span>
                   </div>
                 )}
                 </div>
@@ -401,7 +401,7 @@ export function ActivityManager() {
                   </DialogClose>
                   <Button type="submit" className="min-w-36 gap-2" disabled={submitting}>
                     {submitting ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" /> : isCloning ? <Copy className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    {submitting ? "Salvando..." : isCloning ? "Salvar como nova" : editId ? "Salvar alterações" : "Criar atividade"}
+                    {submitting ? "Salvando..." : isCloning ? "Salvar como nova" : editId ? "Salvar alterações" : "Criar tarefa"}
                   </Button>
                 </DialogFooter>
               </form>
@@ -417,7 +417,7 @@ export function ActivityManager() {
           <Input
             value={searchFilter}
             onChange={(e) => { setSearchFilter(e.target.value); setCurrentPage(1); }}
-            placeholder="Buscar atividade..."
+            placeholder="Buscar tarefa..."
             className="pl-8 h-8 text-xs"
           />
         </div>
@@ -478,15 +478,15 @@ export function ActivityManager() {
       {/* Empty States */}
       {noDevs && (
         <EmptyState icon={ListTodo} title="Cadastre membros do time primeiro"
-          description="Adicione desenvolvedores na aba Equipe para criar atividades." />
+          description="Adicione desenvolvedores na aba Equipe para criar tarefas." />
       )}
       {!noDevs && noHUs && (
         <EmptyState icon={ListTodo} title="Nenhuma User Story cadastrada"
-          description="Crie User Stories no Backlog para poder registrar atividades." />
+          description="Crie User Stories no Backlog para poder registrar tarefas." />
       )}
       {canCreate && totalItems === 0 && (
-        <EmptyState icon={ListTodo} title="Nenhuma atividade encontrada"
-          description={hasFilters ? "Tente ajustar os filtros ou limpe para ver todas as atividades." : "Clique em \"Nova Atividade\" para registrar a primeira atividade do time."} />
+        <EmptyState icon={ListTodo} title="Nenhuma tarefa encontrada"
+          description={hasFilters ? "Tente ajustar os filtros ou limpe para ver todas as tarefas." : "Clique em \"Nova Tarefa\" para registrar a primeira tarefa do time."} />
       )}
 
       {/* Lista */}
@@ -537,19 +537,19 @@ export function ActivityManager() {
                       <MessageCircle className="h-3.5 w-3.5" />
                     </Button>
                     {canUpdate && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500" title="Clonar atividade"
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500" title="Clonar tarefa"
                         onClick={() => handleClone(act.id)}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {!isClosed ? (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-success" title="Concluir atividade"
-                        onClick={() => { closeActivity(act.id); toast.success("Atividade concluída!"); }}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-success" title="Concluir tarefa"
+                        onClick={() => { closeActivity(act.id); toast.success("Tarefa concluída!"); }}>
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       </Button>
                     ) : (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Reabrir atividade"
-                        onClick={() => { reopenActivity(act.id); toast.info("Atividade reaberta"); }}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Reabrir tarefa"
+                        onClick={() => { reopenActivity(act.id); toast.info("Tarefa reaberta"); }}>
                         <RotateCcw className="h-3.5 w-3.5" />
                       </Button>
                     )}

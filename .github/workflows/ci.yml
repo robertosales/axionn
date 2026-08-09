@@ -141,7 +141,7 @@ jobs:
           feature_flags="src/lib/featureFlags.ts"
           org_context="src/contexts/OrganizationContext.tsx"
           auth_context="src/contexts/AuthContext.tsx"
-          org_switcher="src/components/OrganizationSwitcher.tsx"
+          org_switcher="src/components/OrganizationSwitcherImpl.tsx"
           org_guard="src/components/OrganizationOperationalGuard.tsx"
           admin_contracts="src/features/admin/hooks/useContracts.ts"
           admin_projects="src/features/admin/services/projects.service.ts"

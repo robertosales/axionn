@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { qualityTestCaseSchema } from "../schemas/testCase.schema";
 import { getTestCase } from "../services/qualityTestCases.service";
 import { useSaveTestCase } from "../hooks/useTestCases";
+import { qualityLabel } from "../utils/qualityLabels";
 
 type Step = { action: string; input_data: string; expected_result: string; reference_url: string };
 const emptyStep = (): Step => ({ action: "", input_data: "", expected_result: "", reference_url: "" });
@@ -78,8 +79,8 @@ export function TestCaseFormDialog({ organizationId, caseId, open, onOpenChange 
       testType,
       priority,
       severity,
-      status: caseId ? status : "draft",
-      executionMode: caseId ? executionMode : "manual",
+      status,
+      executionMode,
       estimatedMinutes: estimatedMinutes ? Number(estimatedMinutes) : null,
       tags: parsedTags,
       steps: steps.map(s => ({
@@ -138,7 +139,7 @@ export function TestCaseFormDialog({ organizationId, caseId, open, onOpenChange 
                 <Label htmlFor="quality-objective">Objetivo</Label>
                 <Textarea id="quality-objective" value={objective} onChange={e => setObjective(e.target.value)} />
               </div>
-              {caseId && (
+              {(
                 <>
                   <div className="space-y-2">
                     <Label>Pré-condições</Label>
@@ -164,19 +165,19 @@ export function TestCaseFormDialog({ organizationId, caseId, open, onOpenChange 
                   <Select value={value as string} onValueChange={setter as (v: string) => void}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {(options as string[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                      {(options as string[]).map(o => <SelectItem key={o} value={o}>{qualityLabel(o)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               ))}
-              {caseId && (
+              {(
                 <>
                   <div className="space-y-2">
                     <Label>Status</Label>
                     <Select value={status} onValueChange={setStatus}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {["draft", "ready", "approved", "deprecated"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                        {["draft", "ready", "approved", "deprecated"].map(o => <SelectItem key={o} value={o}>{qualityLabel(o)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -185,7 +186,7 @@ export function TestCaseFormDialog({ organizationId, caseId, open, onOpenChange 
                     <Select value={executionMode} onValueChange={setExecutionMode}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {["manual", "automated", "hybrid"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                        {["manual", "automated", "hybrid"].map(o => <SelectItem key={o} value={o}>{qualityLabel(o)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   Boxes,
+  Bug,
   Building2,
   Calendar,
   CheckSquare,
@@ -141,16 +142,6 @@ export function buildBreadcrumbs(pathname: string, config: NavigationSection[]):
 
 export const salaAgilNavigationConfig: NavigationSection[] = [
   {
-    id: "sala-agil-quality",
-    label: "Qualidade",
-    items: [
-      { id: "quality-cases", label: "Casos de Teste", icon: ClipboardCheck, route: "/sala-agil/qualidade/casos" },
-      { id: "quality-suites", label: "Suítes", icon: Layers, route: "/sala-agil/qualidade/suites" },
-      { id: "quality-plans", label: "Planos", icon: ClipboardList, route: "/sala-agil/qualidade/planos" },
-      { id: "quality-runs", label: "Execuções", icon: Play, route: "/sala-agil/qualidade/execucoes" },
-    ],
-  },
-  {
     id: "sala-agil-sprints",
     label: "Sprints",
     items: [
@@ -161,6 +152,19 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
       { id: "features", label: "Features", icon: Boxes, route: "/sala-agil/features" },
     ],
   },
+  {
+    id: "sala-agil-quality",
+    label: "Qualidade",
+    items: [
+      { id: "quality-overview", label: "Visão Geral", icon: LayoutDashboard, route: "/sala-agil/qualidade" },
+      { id: "quality-cases", label: "Casos de Teste", icon: ClipboardCheck, route: "/sala-agil/qualidade/casos" },
+      { id: "quality-suites", label: "Suítes", icon: Layers, route: "/sala-agil/qualidade/suites" },
+      { id: "quality-plans", label: "Planos", icon: ClipboardList, route: "/sala-agil/qualidade/planos" },
+      { id: "quality-runs", label: "Execuções", icon: Play, route: "/sala-agil/qualidade/execucoes" },
+        { id: "quality-findings", label: "Achados", icon: Bug, route: "/sala-agil/qualidade/achados" },
+        { id: "quality-coverage", label: "Cobertura", icon: GitBranch, route: "/sala-agil/qualidade/cobertura" },
+      ],
+    },
   {
     id: "sala-agil-cerimonias",
     label: "Cerimônias",
@@ -177,7 +181,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
     items: [
       { id: "calendario", label: "Calendário", icon: Calendar, route: "/sala-agil/calendario" },
       { id: "equipe", label: "Equipe", icon: Users, route: "/sala-agil/equipe" },
-      { id: "atividades", label: "Atividades", icon: Activity, route: "/sala-agil/atividades" },
+      { id: "atividades", label: "Tarefas", icon: Activity, route: "/sala-agil/atividades" },
     ],
   },
   {

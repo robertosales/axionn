@@ -57,15 +57,21 @@ const AppShell = lazy(() =>
 const QualityAccessGuard = lazy(() =>
   import("@/features/quality/components/QualityAccessGuard").then((module) => ({ default: module.QualityAccessGuard })),
 );
+const QualityWorkspaceShell = lazy(() =>
+  import("@/features/quality/components/QualityWorkspaceShell").then((module) => ({ default: module.QualityWorkspaceShell })),
+);
 const OkrV2AccessGuard = lazy(() =>
   import("@/features/okr/components/OkrV2AccessGuard").then((module) => ({ default: module.OkrV2AccessGuard })),
 );
 const Index = lazy(() => import("./pages/Index.tsx"));
 const QualityTestCasesPage = lazy(() => import("./features/quality/pages/TestCasesPage"));
+const QualityOverviewPage = lazy(() => import("./features/quality/pages/QualityOverviewPage"));
 const QualityTestSuitesPage = lazy(() => import("./features/quality/pages/TestSuitesPage"));
 const QualityTestPlansPage = lazy(() => import("./features/quality/pages/TestPlansPage"));
 const QualityTestRunsPage = lazy(() => import("./features/quality/pages/TestRunsPage"));
 const QualityTestRunPage = lazy(() => import("./features/quality/pages/TestRunPage"));
+const QualityFindingsPage = lazy(() => import("./features/quality/pages/QualityFindingsPage"));
+const QualityCoveragePage = lazy(() => import("./features/quality/pages/QualityCoveragePage"));
 const ForcePasswordChange = lazy(() => import("./pages/ForcePasswordChange.tsx"));
 const MfaSecurityPage = lazy(() => import("./features/security/pages/MfaSecurityPage"));
 const AcceptOrganizationInvitation = lazy(
@@ -598,12 +604,14 @@ function AppRoutes() {
           />
           <Route path="/sala-agil/planning-poker" element={<ProtectedRoute><ModuleGuard module="sala_agil"><PlanningPokerPage /></ModuleGuard></ProtectedRoute>} />
           <Route path="/sala-agil/retrospectiva" element={<ProtectedRoute><ModuleGuard module="sala_agil"><RetrospactivaPage /></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><Navigate to="/sala-agil/qualidade/casos" replace /></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/casos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestCasesPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/suites" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestSuitesPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/planos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestPlansPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/execucoes" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestRunsPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
-          <Route path="/sala-agil/qualidade/execucoes/:id" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityTestRunPage /></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityWorkspaceShell><QualityOverviewPage /></QualityWorkspaceShell></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/casos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityWorkspaceShell><QualityTestCasesPage /></QualityWorkspaceShell></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/suites" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityWorkspaceShell><QualityTestSuitesPage /></QualityWorkspaceShell></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/planos" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityWorkspaceShell><QualityTestPlansPage /></QualityWorkspaceShell></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/execucoes" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityWorkspaceShell><QualityTestRunsPage /></QualityWorkspaceShell></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/execucoes/:id" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityWorkspaceShell><QualityTestRunPage /></QualityWorkspaceShell></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/achados" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityWorkspaceShell><QualityFindingsPage /></QualityWorkspaceShell></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
+          <Route path="/sala-agil/qualidade/cobertura" element={<ProtectedRoute><ModuleGuard module="sala_agil"><QualityAccessGuard><AppShell module="sala_agil"><QualityWorkspaceShell><QualityCoveragePage /></QualityWorkspaceShell></AppShell></QualityAccessGuard></ModuleGuard></ProtectedRoute>} />
           <Route path="/sala-agil/metricas/relatorios" element={<Navigate to="/sala-agil/relatorios" replace />} />
           <Route path="/sala-agil/metricas/reports" element={<Navigate to="/sala-agil/relatorios" replace />} />
           <Route path="/sala-agil/metricas/release" element={<Navigate to="/sala-agil/releases" replace />} />

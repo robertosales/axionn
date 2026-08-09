@@ -29,14 +29,17 @@ interface KpiCardProps {
 
 const TONES = {
   teal: {
+    tone: "capacity",
     icon: "bg-teal-500/10 text-teal-600",
     value: "text-foreground",
   },
   orange: {
+    tone: "warning",
     icon: "bg-orange-500/10 text-orange-600",
     value: "text-foreground",
   },
   danger: {
+    tone: "danger",
     icon: "bg-destructive/10 text-destructive",
     value: "text-destructive",
   },
@@ -46,14 +49,14 @@ function KpiCard({ icon: Icon, label, value, sub, tone = "teal" }: KpiCardProps)
   const styles = TONES[tone];
 
   return (
-    <div className="flex min-h-[112px] items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
-      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${styles.icon}`}>
+    <div className="metric-panel flex min-h-[112px] items-center gap-3 p-4 pl-5 transition-shadow hover:shadow-md" data-tone={styles.tone}>
+      <div className={`metric-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${styles.icon}`}>
         <Icon className="h-5 w-5" />
       </div>
 
       <div className="min-w-0">
         <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
-        <p className={`mt-1 text-[26px] font-bold leading-none tracking-tight tabular-nums ${styles.value}`}>
+        <p className={`metric-value mt-1 text-[26px] font-bold leading-none tracking-tight tabular-nums ${styles.value}`}>
           {value}
         </p>
         {sub && (

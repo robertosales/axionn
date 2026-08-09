@@ -22,26 +22,27 @@ export function RdmDashboard({ rdms }: Props) {
   );
 
   const kpiCards = [
-    { label: "Total de RDMs",  value: stats.total,      icon: FileText,       color: "text-blue-400" },
-    { label: "Em Execução",    value: stats.execucao,   icon: Clock,          color: "text-yellow-400" },
-    { label: "Concluídas",     value: stats.concluidas, icon: CheckCircle2,   color: "text-emerald-400" },
-    { label: "Alto Risco",     value: stats.alto_risco, icon: AlertTriangle,  color: "text-red-400" },
+    { label: "Total de RDMs",  value: stats.total,      icon: FileText,      tone: "info" },
+    { label: "Em Execução",    value: stats.execucao,   icon: Clock,         tone: "warning" },
+    { label: "Concluídas",     value: stats.concluidas, icon: CheckCircle2,  tone: "success" },
+    { label: "Alto Risco",     value: stats.alto_risco, icon: AlertTriangle, tone: "danger" },
   ];
 
   return (
     <div className="space-y-6">
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpiCards.map(({ label, value, icon: Icon, color }) => (
+        {kpiCards.map(({ label, value, icon: Icon, tone }) => (
           <div
             key={label}
-            className="rounded-xl border border-border bg-card p-4 space-y-2 shadow-sm"
+            data-tone={tone}
+            className="metric-panel p-4 pl-5 space-y-3"
           >
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">{label}</p>
-              <Icon className={`h-4 w-4 ${color}`} />
+              <span className="metric-icon h-9 w-9 rounded-xl"><Icon className="h-4 w-4" /></span>
             </div>
-            <p className="text-3xl font-bold text-foreground">{value}</p>
+            <p className="metric-value text-3xl font-bold">{value}</p>
           </div>
         ))}
       </div>

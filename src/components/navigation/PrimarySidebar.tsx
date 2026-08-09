@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import type { NavigationSection, NavigationItem } from "./NavigationConfig";
 
@@ -23,6 +24,25 @@ export function NavigationList({ sections, activePath, onNavigate, collapsed = f
   const navigate = useNavigate();
   const location = useLocation();
   const activeRoute = activePath ?? location.pathname;
+  const activeItemId = useMemo(() => {
+    const matches = sections
+      .flatMap((section) => section.items)
+      .filter((item) => item.route === activeRoute || (item.route !== "/" && activeRoute.startsWith(`${item.route}/`)));
+    return matches.sort((a, b) => b.route.length - a.route.length)[0]?.id;
+  }, [activeRoute, sections]);
+  const activeSectionId = useMemo(
+    () => sections.find((section) => section.items.some((item) => item.id === activeItemId))?.id,
+    [activeItemId, sections],
+  );
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(sections.map((section, index) => [section.id, index === 0])),
+  );
+
+  useEffect(() => {
+    if (activeSectionId) {
+      setOpenSections((current) => ({ ...current, [activeSectionId]: true }));
+    }
+  }, [activeSectionId]);
 
   const handleNavigate = (item: NavigationItem) => {
     if (onNavigate) {
@@ -35,15 +55,22 @@ export function NavigationList({ sections, activePath, onNavigate, collapsed = f
   return (
     <div className="space-y-5">
       {sections.map((section) => (
-        <section key={section.id}>
+        <Collapsible
+          key={section.id}
+          asChild
+          open={collapsed || openSections[section.id] !== false}
+          onOpenChange={(open) => setOpenSections((current) => ({ ...current, [section.id]: open }))}
+        >
+          <section>
           {!collapsed ? (
-            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/80">
-              {section.label}
-            </p>
+            <CollapsibleTrigger className="group mb-2 flex min-h-8 w-full items-center justify-between rounded-lg px-2 text-left text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground/80 hover:bg-white/[0.04] hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-active">
+              <span>{section.label}</span>
+              <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=closed]:-rotate-90" aria-hidden="true" />
+            </CollapsibleTrigger>
           ) : null}
-          <div className="space-y-1.5">
+          <CollapsibleContent className="space-y-1.5 data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
             {section.items.map((item) => {
-              const isActive = activeRoute === item.route || activeRoute.startsWith(`${item.route}/`);
+              const isActive = activeItemId === item.id;
               const Icon = item.icon;
               return (
                 <button
@@ -63,8 +90,9 @@ export function NavigationList({ sections, activePath, onNavigate, collapsed = f
                 </button>
               );
             })}
-          </div>
-        </section>
+          </CollapsibleContent>
+          </section>
+        </Collapsible>
       ))}
     </div>
   );

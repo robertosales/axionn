@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { safeExternalUrl } from "@/lib/security";
 import { passwordPolicyError } from "@/lib/passwordPolicy";
 
-const source = (path: string) => readFileSync(path, "utf8");
+const source = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 
 describe("commercial security hardening", () => {
   it("blocks executable and credential-bearing external URLs", () => {

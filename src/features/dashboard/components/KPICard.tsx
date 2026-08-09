@@ -10,33 +10,25 @@ interface Props {
   variant?:  "default" | "success" | "warning" | "danger";
 }
 
-// Tokens exatos Opção A — borda superior fina por status
-const ACCENT_COLOR: Record<NonNullable<Props["variant"]>, string> = {
-  default: "#0bbcaf",  // --teal
-  success: "#16a34a",  // --green
-  warning: "#d97706",  // --amber
-  danger:  "#dc2626",  // --red
+const TONE: Record<NonNullable<Props["variant"]>, string> = {
+  default: "capacity",
+  success: "success",
+  warning: "warning",
+  danger:  "danger",
 };
 
 export function KPICard({ title, value, subtitle, icon, trend, variant = "default" }: Props) {
-  const accentColor = ACCENT_COLOR[variant];
-
   return (
     <div
-      className="rounded-xl bg-card p-4 space-y-2"
-      style={{
-        borderTop:    `3px solid ${accentColor}`,
-        border:       `1px solid hsl(var(--border))`,
-        borderTopColor: accentColor,          // garante prioridade
-        boxShadow:    "0 1px 4px rgba(0,0,0,0.06)",
-      }}
+      className="metric-panel p-4 pl-5 space-y-2"
+      data-tone={TONE[variant]}
     >
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground font-medium">{title}</p>
-        <span style={{ color: accentColor, opacity: 0.75 }}>{icon}</span>
+        <span className="metric-icon h-9 w-9 rounded-xl">{icon}</span>
       </div>
       <div className="flex items-end justify-between gap-2">
-        <p className="text-2xl font-bold leading-none" style={{ color: "hsl(var(--foreground))" }}>
+        <p className="metric-value text-2xl font-bold leading-none">
           {value}
         </p>
         {trend && (

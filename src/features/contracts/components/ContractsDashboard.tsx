@@ -57,21 +57,21 @@ export function ContractsDashboard() {
 
       {/* D — KPI cards com breakdown por modalidade */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-lg border bg-card px-4 py-3">
+        <div className="metric-panel px-4 py-3 pl-5" data-tone="success">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Contratos Ativos</p>
-          <p className="text-2xl font-bold mt-1">{ativos}</p>
+          <p className="metric-value text-2xl font-bold mt-1">{ativos}</p>
         </div>
-        <div className="rounded-lg border bg-card px-4 py-3">
+        <div className="metric-panel px-4 py-3 pl-5" data-tone="warning">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Pausados</p>
-          <p className="text-2xl font-bold mt-1 text-yellow-400">{pausados}</p>
+          <p className="metric-value text-2xl font-bold mt-1">{pausados}</p>
         </div>
-        <div className="rounded-lg border bg-card px-4 py-3">
+        <div className="metric-panel px-4 py-3 pl-5" data-tone="time">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Com SLA</p>
-          <p className="text-2xl font-bold mt-1 text-purple-400">{comSLA}</p>
+          <p className="metric-value text-2xl font-bold mt-1">{comSLA}</p>
         </div>
-        <div className="rounded-lg border bg-card px-4 py-3">
+        <div className="metric-panel px-4 py-3 pl-5" data-tone="info">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Total</p>
-          <p className="text-2xl font-bold mt-1">{total}</p>
+          <p className="metric-value text-2xl font-bold mt-1">{total}</p>
         </div>
       </div>
 

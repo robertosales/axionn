@@ -18,6 +18,7 @@ interface KpiCardProps {
 
 const accentConfig = {
   destructive: {
+    tone: "danger",
     bg: "bg-destructive/8 dark:bg-destructive/12",
     border: "border-destructive/25",
     icon: "text-destructive",
@@ -25,6 +26,7 @@ const accentConfig = {
     dot: "bg-destructive",
   },
   warning: {
+    tone: "warning",
     bg: "bg-[#eab308]/8 dark:bg-[#eab308]/12",
     border: "border-[#eab308]/25",
     icon: "text-[#eab308]",
@@ -32,6 +34,7 @@ const accentConfig = {
     dot: "bg-[#eab308]",
   },
   success: {
+    tone: "success",
     bg: "bg-emerald-500/8 dark:bg-emerald-500/12",
     border: "border-emerald-500/25",
     icon: "text-emerald-500",
@@ -63,8 +66,9 @@ export function KpiCard({
 
   return (
     <div
+      data-tone={cfg?.tone ?? "info"}
       className={cn(
-        "relative rounded-2xl border bg-card transition-shadow hover:shadow-md",
+        "metric-panel relative transition-shadow hover:shadow-md",
         "flex flex-col items-start gap-3 p-4",
         cfg ? [cfg.bg, cfg.border] : "border-border/60",
         size === "sm" && "p-3 gap-2",
@@ -73,7 +77,7 @@ export function KpiCard({
       {/* Ícone */}
       <div
         className={cn(
-          "h-9 w-9 rounded-xl flex items-center justify-center shrink-0",
+          "metric-icon h-9 w-9 rounded-xl flex items-center justify-center shrink-0",
           cfg ? cfg.bg : "bg-primary/10",
         )}
       >
@@ -90,7 +94,7 @@ export function KpiCard({
         <div className="flex items-end justify-between gap-1">
           <span
             className={cn(
-              "font-bold leading-none",
+              "metric-value font-bold leading-none tabular-nums",
               size === "md" ? "text-2xl" : "text-xl",
               cfg ? cfg.value : "text-foreground",
             )}

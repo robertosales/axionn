@@ -51,13 +51,14 @@ export function MetricCard({
 
   return (
     <div
+      data-tone={accent === "green" ? "success" : accent === "amber" ? "warning" : accent === "red" ? "danger" : accent === "violet" ? "time" : accent === "neutral" ? "neutral" : "info"}
       className={cn(
-        "rounded-xl border border-border/60 bg-card p-4 hover:shadow-md transition-shadow",
+        "metric-panel p-4 hover:shadow-md transition-shadow",
         className,
       )}
     >
       <div className="flex items-start justify-between mb-3">
-        <div className={cn("flex items-center justify-center h-10 w-10 rounded-full", colors.bg)}>
+        <div className={cn("metric-icon flex items-center justify-center h-10 w-10 rounded-xl", colors.bg)}>
           <Icon className={cn("h-5 w-5", colors.text)} />
         </div>
         {TrendIcon && trend && (
@@ -67,7 +68,7 @@ export function MetricCard({
           </span>
         )}
       </div>
-      <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">{value}</p>
+      <p className="metric-value text-2xl font-bold tabular-nums tracking-tight">{value}</p>
       <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
       {sublabel && (
         <p className={cn("text-[11px] font-medium mt-1.5", colors.text)}>{sublabel}</p>

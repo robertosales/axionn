@@ -61,8 +61,9 @@ export function ReportKPISummary({ items, columns, cols }: ReportKPISummaryProps
         return (
           <div
             key={i}
+            data-tone={st === "good" ? "success" : st}
             className={cn(
-              "rounded-xl border border-border border-l-4 p-4 flex flex-col gap-1",
+              "metric-panel p-4 pl-5 flex flex-col gap-1",
               STATUS_STYLES[st] ?? STATUS_STYLES.neutral
             )}
           >
@@ -72,7 +73,7 @@ export function ReportKPISummary({ items, columns, cols }: ReportKPISummaryProps
               </span>
               {iconNode && <span className="text-muted-foreground shrink-0">{iconNode}</span>}
             </div>
-            <p className={cn("text-2xl font-bold", VALUE_STYLES[st] ?? VALUE_STYLES.neutral)}>
+            <p className={cn("metric-value text-2xl font-bold tabular-nums", VALUE_STYLES[st] ?? VALUE_STYLES.neutral)}>
               {item.value}
             </p>
             {item.meta && <p className="text-[11px] text-muted-foreground">{item.meta}</p>}

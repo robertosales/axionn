@@ -9,7 +9,9 @@ describe("Backlog task management contract", () => {
   it("keeps tasks collapsed by default and exposes completed/total counts", () => {
     expect(managerSource).toContain("useState<Record<string, boolean>>({})");
     expect(managerSource).toContain("aria-expanded={!!expandedTaskHUs[hu.id]}");
-    expect(managerSource).toContain("{closedAct.length}/{huActivities.length} tarefas");
+    expect(managerSource).toContain('{closedAct.length}/{huActivities.length} {huActivities.length === 1 ? "tarefa" : "tarefas"}');
+    expect(managerSource).toContain("0 tarefas");
+    expect(managerSource).toContain("huActivities.length > 0 ? (");
   });
 
   it("shows task title, current status and assignee in the expanded HU layer", () => {

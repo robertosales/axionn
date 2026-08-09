@@ -7,7 +7,7 @@ import { SizeBadge } from "@/components/SizeBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   BookOpen, Plus, Trash2, Clock, Pencil, ShieldAlert,
@@ -504,16 +504,22 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
                         <ShieldAlert className="h-3 w-3" /> {activeImps} impedimento{activeImps > 1 ? "s" : ""}
                       </span>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setExpandedTaskHUs((current) => ({ ...current, [hu.id]: !current[hu.id] }))}
-                      className="flex shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-expanded={!!expandedTaskHUs[hu.id]}
-                      aria-controls={`hu-tasks-${hu.id}`}
-                    >
-                        {closedAct.length}/{huActivities.length} tarefas
-                      <ChevronDown className={`h-3 w-3 transition-transform ${expandedTaskHUs[hu.id] ? "rotate-180" : ""}`} aria-hidden="true" />
-                    </button>
+                    {huActivities.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedTaskHUs((current) => ({ ...current, [hu.id]: !current[hu.id] }))}
+                        className={`${badgeVariants({ variant: "outline" })} shrink-0 cursor-pointer gap-1 border-primary/25 bg-primary/10 text-primary hover:border-primary/45 hover:bg-primary/15 focus-visible:ring-ring/40`}
+                        aria-expanded={!!expandedTaskHUs[hu.id]}
+                        aria-controls={`hu-tasks-${hu.id}`}
+                      >
+                        {closedAct.length}/{huActivities.length} {huActivities.length === 1 ? "tarefa" : "tarefas"}
+                        <ChevronDown className={`h-3 w-3 transition-transform duration-150 ${expandedTaskHUs[hu.id] ? "rotate-180" : ""}`} aria-hidden="true" />
+                      </button>
+                    ) : (
+                      <Badge variant="outline" className="shrink-0 bg-muted/60 font-medium text-muted-foreground">
+                        0 tarefas
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     {canEdit && (
@@ -588,7 +594,7 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
                   teamId={activeSprint ? currentTeamId || "" : ""}
                 />
 
-                {expandedTaskHUs[hu.id] && (
+                {huActivities.length > 0 && expandedTaskHUs[hu.id] && (
                   <div id={`hu-tasks-${hu.id}`} className="mt-3 border-t border-border/60 pt-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Tarefas da HU</p>

@@ -25,4 +25,24 @@ describe("navigationConfig", () => {
     expect(featureItem?.label).toBe("Features");
     expect(featureItem?.route).toBe("/sala-agil/features");
   });
+
+  it("keeps Sprints first and preserves the remaining agile section order", () => {
+    expect(salaAgilNavigationConfig.map((section) => section.label)).toEqual([
+      "Sprints",
+      "Qualidade",
+      "Cerimônias",
+      "Operações",
+      "Relatórios",
+      "Configurações",
+    ]);
+  });
+
+  it("presents activities as Tasks without breaking the existing route", () => {
+    const tasksItem = salaAgilNavigationConfig
+      .flatMap((section) => section.items)
+      .find((item) => item.id === "atividades");
+
+    expect(tasksItem?.label).toBe("Tarefas");
+    expect(tasksItem?.route).toBe("/sala-agil/atividades");
+  });
 });

@@ -69,7 +69,7 @@ export function QuickActivityDialog({ open, onClose, huId, defaultType = "task" 
       return;
     }
     if (isLimitado && Number(hours) > 8) {
-      toast.error("Máximo de 8 horas por atividade");
+      toast.error("Máximo de 8 horas por tarefa");
       return;
     }
 

@@ -35,7 +35,7 @@ export function NavigationList({ sections, activePath, onNavigate, collapsed = f
     [activeItemId, sections],
   );
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(sections.map((section) => [section.id, true])),
+    Object.fromEntries(sections.map((section, index) => [section.id, index === 0])),
   );
 
   useEffect(() => {

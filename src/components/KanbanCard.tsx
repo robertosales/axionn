@@ -659,7 +659,7 @@ export const KanbanCard = memo(function KanbanCard({
   );
 
   // Se não há colunas configuradas ou sem handler de mover, mantém apenas
-  // o item "Nova Atividade" no menu de contexto.
+  // o item "Nova Tarefa" no menu de contexto.
   if (workflowColumns.length === 0 || !onMoveCard) {
     return (
       <>
@@ -675,7 +675,7 @@ export const KanbanCard = memo(function KanbanCard({
               className="gap-2"
             >
               <Plus className="w-3.5 h-3.5 text-primary" />
-              Nova Atividade
+              Nova Tarefa
             </ContextMenuItem>
             {canReportImpediment && (
               <ContextMenuItem
@@ -710,13 +710,13 @@ export const KanbanCard = memo(function KanbanCard({
 
         <ContextMenuSeparator />
 
-        {/* Nova Atividade */}
+        {/* Nova Tarefa */}
         <ContextMenuItem
           onSelect={() => setQuickActivityOpen(true)}
           className="gap-2"
         >
           <Plus className="w-3.5 h-3.5 text-primary" />
-          Nova Atividade
+          Nova Tarefa
         </ContextMenuItem>
 
         {canReportImpediment && (

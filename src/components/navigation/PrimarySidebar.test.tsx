@@ -23,11 +23,27 @@ describe("NavigationList", () => {
       </MemoryRouter>,
     );
 
-    const qualityTrigger = screen.getByRole("button", { name: "Qualidade" });
-    expect(qualityTrigger).toHaveAttribute("aria-expanded", "true");
-    fireEvent.click(qualityTrigger);
-    expect(qualityTrigger).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(qualityTrigger);
-    expect(qualityTrigger).toHaveAttribute("aria-expanded", "true");
+    const sprintTrigger = screen.getByRole("button", { name: "Sprints" });
+    expect(sprintTrigger).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(sprintTrigger);
+    expect(sprintTrigger).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(sprintTrigger);
+    expect(sprintTrigger).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("inicia somente o primeiro grupo expandido", () => {
+    render(
+      <MemoryRouter initialEntries={["/sala-agil/dashboard"]}>
+        <NavigationList sections={salaAgilNavigationConfig} />
+      </MemoryRouter>,
+    );
+
+    const sectionTriggers = screen.getAllByRole("button").filter((button) => button.hasAttribute("aria-expanded"));
+
+    expect(sectionTriggers[0]).toHaveTextContent("Sprints");
+    expect(sectionTriggers[0]).toHaveAttribute("aria-expanded", "true");
+    sectionTriggers.slice(1).forEach((trigger) => {
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+    });
   });
 });

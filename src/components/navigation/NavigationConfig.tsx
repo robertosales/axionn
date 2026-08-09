@@ -142,6 +142,17 @@ export function buildBreadcrumbs(pathname: string, config: NavigationSection[]):
 
 export const salaAgilNavigationConfig: NavigationSection[] = [
   {
+    id: "sala-agil-sprints",
+    label: "Sprints",
+    items: [
+      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, route: "/sala-agil/dashboard" },
+      { id: "board", label: "Board Kanban", icon: Kanban, route: "/sala-agil/board" },
+      { id: "backlog", label: "Backlog", icon: ListTodo, route: "/sala-agil/backlog" },
+      { id: "epicos", label: "Épicos", icon: Layers, route: "/sala-agil/epicos" },
+      { id: "features", label: "Features", icon: Boxes, route: "/sala-agil/features" },
+    ],
+  },
+  {
     id: "sala-agil-quality",
     label: "Qualidade",
     items: [
@@ -154,17 +165,6 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
         { id: "quality-coverage", label: "Cobertura", icon: GitBranch, route: "/sala-agil/qualidade/cobertura" },
       ],
     },
-    {
-      id: "sala-agil-sprints",
-    label: "Sprints",
-    items: [
-      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, route: "/sala-agil/dashboard" },
-      { id: "board", label: "Board Kanban", icon: Kanban, route: "/sala-agil/board" },
-      { id: "backlog", label: "Backlog", icon: ListTodo, route: "/sala-agil/backlog" },
-      { id: "epicos", label: "Épicos", icon: Layers, route: "/sala-agil/epicos" },
-      { id: "features", label: "Features", icon: Boxes, route: "/sala-agil/features" },
-    ],
-  },
   {
     id: "sala-agil-cerimonias",
     label: "Cerimônias",
@@ -181,7 +181,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
     items: [
       { id: "calendario", label: "Calendário", icon: Calendar, route: "/sala-agil/calendario" },
       { id: "equipe", label: "Equipe", icon: Users, route: "/sala-agil/equipe" },
-      { id: "atividades", label: "Atividades", icon: Activity, route: "/sala-agil/atividades" },
+      { id: "atividades", label: "Tarefas", icon: Activity, route: "/sala-agil/atividades" },
     ],
   },
   {

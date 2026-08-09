@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   BookOpen, Plus, Trash2, Clock, Pencil, ShieldAlert,
-  Search, X, ListFilter,
+  Search, X, ListFilter, ChevronDown,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -32,6 +32,7 @@ import { useDebounce } from "@/shared/hooks/useDebounce";
 import { SIZE_REFERENCES, getSizeByKey } from "@/lib/sizeReference";
 import { QuickActivityDialog } from "@/components/QuickActivityDialog";
 import { HUEditDrawer } from "@/components/HUEditDrawer";
+import { TaskDetailSheet } from "@/components/TaskDetailSheet";
 import { useTeamAssignees } from "@/hooks/useTeamAssignees";
 import { splitUserStoryContent } from "@/lib/userStoryContent";
 import { filterStoriesBySprint, resolveBacklogSprintId } from "@/lib/sprintStoryFilter";
@@ -80,6 +81,8 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
   const [editHuId, setEditHuId]             = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget]     = useState<string | null>(null);
   const [quickTaskHU, setQuickTaskHU]       = useState<string | null>(null);
+  const [expandedTaskHUs, setExpandedTaskHUs] = useState<Record<string, boolean>>({});
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const [searchFilter, setSearchFilter]     = useState("");
   const debouncedSearch                     = useDebounce(searchFilter);
@@ -168,7 +171,7 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
     if (!deleteTarget) return;
     const huActivities = activities.filter((a) => a.huId === deleteTarget);
     if (huActivities.length > 0) {
-      toast.error(`Não é possível excluir: esta HU possui ${huActivities.length} atividade(s) vinculada(s). Remova-as primeiro.`);
+      toast.error(`Não é possível excluir: esta HU possui ${huActivities.length} tarefa(s) vinculada(s). Remova-as primeiro.`);
       setDeleteTarget(null); return;
     }
     try { await removeUserStory(deleteTarget); toast.success("Registro excluído com sucesso"); }
@@ -501,11 +504,16 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
                         <ShieldAlert className="h-3 w-3" /> {activeImps} impedimento{activeImps > 1 ? "s" : ""}
                       </span>
                     )}
-                    {huActivities.length > 0 && (
-                      <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded border border-border bg-background shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedTaskHUs((current) => ({ ...current, [hu.id]: !current[hu.id] }))}
+                      className="flex shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-expanded={!!expandedTaskHUs[hu.id]}
+                      aria-controls={`hu-tasks-${hu.id}`}
+                    >
                         {closedAct.length}/{huActivities.length} tarefas
-                      </span>
-                    )}
+                      <ChevronDown className={`h-3 w-3 transition-transform ${expandedTaskHUs[hu.id] ? "rotate-180" : ""}`} aria-hidden="true" />
+                    </button>
                   </div>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     {canEdit && (
@@ -579,6 +587,55 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
                   entityId={hu.id}
                   teamId={activeSprint ? currentTeamId || "" : ""}
                 />
+
+                {expandedTaskHUs[hu.id] && (
+                  <div id={`hu-tasks-${hu.id}`} className="mt-3 border-t border-border/60 pt-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Tarefas da HU</p>
+                      {canEdit && huActivities.length > 0 && (
+                        <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => setQuickTaskHU(hu.id)}>
+                          <Plus className="h-3.5 w-3.5" /> Adicionar tarefa
+                        </Button>
+                      )}
+                    </div>
+
+                    {huActivities.length > 0 ? (
+                      <div className="overflow-hidden rounded-lg border border-border/70 bg-muted/15">
+                        {huActivities.map((task) => {
+                          const taskAssignee = developers.find((developer) => developer.id === task.assigneeId);
+                          return (
+                            <button
+                              key={task.id}
+                              type="button"
+                              onClick={() => setSelectedTaskId(task.id)}
+                              className="grid w-full gap-2 border-b border-border/60 px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[minmax(0,1fr)_auto_minmax(9rem,auto)] sm:items-center"
+                            >
+                              <span className={`truncate text-xs font-medium ${task.isClosed ? "text-muted-foreground line-through" : "text-foreground"}`}>{task.title}</span>
+                              <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-medium ${task.isClosed ? "bg-success/15 text-success" : "bg-info/15 text-info"}`}>
+                                {task.isClosed ? "Concluída" : "Aberta"}
+                              </span>
+                              <span className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground sm:justify-end">
+                                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold text-primary">
+                                  {taskAssignee?.name?.charAt(0).toUpperCase() ?? "—"}
+                                </span>
+                                <span className="truncate">{taskAssignee?.name ?? "Sem responsável"}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-muted/15 px-3 py-2.5">
+                        <p className="text-xs text-muted-foreground">Nenhuma tarefa cadastrada.</p>
+                        {canEdit && (
+                          <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => setQuickTaskHU(hu.id)}>
+                            <Plus className="h-3.5 w-3.5" /> Adicionar tarefa
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -610,6 +667,13 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
         huId={editHuId}
         open={editDrawerOpen}
         onClose={() => { setEditDrawerOpen(false); setEditHuId(null); }}
+      />
+
+      <TaskDetailSheet
+        taskId={selectedTaskId}
+        open={!!selectedTaskId}
+        onClose={() => setSelectedTaskId(null)}
+        canEdit={canEdit}
       />
     </div>
   );

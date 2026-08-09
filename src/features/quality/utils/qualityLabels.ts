@@ -42,7 +42,7 @@ const LABELS: Record<string, string> = {
 
 export function qualityLabel(value: string | null | undefined): string {
   if (!value) return "Não informado";
-  return LABELS[value] ?? value.replaceAll("_", " ");
+  return LABELS[value] ?? value.split("_").join(" ");
 }
 
 export function qualityStatusTone(value: string): "default" | "secondary" | "destructive" | "outline" {

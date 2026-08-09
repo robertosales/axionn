@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 describe("Backlog task management contract", () => {
   const managerSource = fs.readFileSync(path.resolve("src/components/UserStoryManager.tsx"), "utf8");
+  const huDetailSource = fs.readFileSync(path.resolve("src/components/HUEditDrawer.tsx"), "utf8");
+  const taskPanelSource = fs.readFileSync(path.resolve("src/components/TaskDetailSheet.tsx"), "utf8");
   const contextSource = fs.readFileSync(path.resolve("src/contexts/SprintContext.tsx"), "utf8");
 
   it("keeps tasks collapsed by default and exposes completed/total counts", () => {
@@ -25,5 +27,20 @@ describe("Backlog task management contract", () => {
     expect(managerSource).toContain("<TaskDetailSheet");
     expect(contextSource).toContain('supabase.from("activities").select("*").eq("team_id", teamId).limit(500)');
     expect(contextSource).toContain('team_id: teamId, hu_id: act.huId');
+  });
+
+  it("adds a task summary before Git activity without replacing the HU form", () => {
+    expect(huDetailSource).toContain("Tarefas da HU");
+    expect(huDetailSource.indexOf("Tarefas da HU")).toBeLessThan(huDetailSource.indexOf("<HUGitActivitySection"));
+    expect(huDetailSource).toContain("<Progress value={taskProgress}");
+    expect(huDetailSource).toContain("<TaskDetailSheet");
+  });
+
+  it("keeps list, detail and creation inside one contextual task panel", () => {
+    expect(taskPanelSource).toContain('type PanelView = "list" | "detail" | "create"');
+    expect(taskPanelSource).toContain("Tarefas da HU");
+    expect(taskPanelSource).toContain("returnToList");
+    expect(taskPanelSource).toContain("await addActivity({");
+    expect(taskPanelSource).not.toContain("QuickActivityDialog");
   });
 });

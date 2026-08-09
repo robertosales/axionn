@@ -18,7 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { BookOpen, Save, ShieldAlert } from "lucide-react";
+import { ArrowRight, BookOpen, ListTodo, Plus, Save, ShieldAlert } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { useSprint } from "@/contexts/SprintContext";
 import { UserStory } from "@/types/sprint";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ import { HUGitActivitySection } from "@/components/gitlab/HUGitActivitySection";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { buildUnifiedUserStoryContent, splitUserStoryContent } from "@/lib/userStoryContent";
 import { QUALITY_MANAGEMENT_ENABLED } from "@/lib/featureFlags";
+import { TaskDetailSheet } from "@/components/TaskDetailSheet";
 
 const HUQualitySection = lazy(() => import("@/features/quality/components/HUQualitySection").then((module) => ({ default: module.HUQualitySection })));
 
@@ -59,10 +61,12 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     workflowColumns,
     customFields,
     developers,
+    activities,
   } = useSprint() as any;
-  const { currentTeamId } = useAuth();
+  const { currentTeamId, hasPermission } = useAuth();
   const { currentOrganizationId: organizationId } = useOrganization();
   const canReportImpediment = useSalaAgilPermission("report_impediment");
+  const canEditTasks = hasPermission("update_tasks");
 
   const [title, setTitle]             = useState("");
   const [content, setContent]         = useState("");
@@ -80,6 +84,8 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   const [errors, setErrors]           = useState<Record<string, string>>({});
   const [submitting, setSubmitting]   = useState(false);
   const [impedimentOpen, setImpedimentOpen] = useState(false);
+  const [tasksPanelOpen, setTasksPanelOpen] = useState(false);
+  const [tasksPanelInitialView, setTasksPanelInitialView] = useState<"list" | "create">("list");
 
   const assigneeOptions = useTeamAssignees(currentTeamId, developers ?? [], assigneeId || null);
 
@@ -214,6 +220,14 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
   ]);
 
   const hu = huId ? userStories.find((h: UserStory) => h.id === huId) : null;
+  const huTasks = huId ? activities.filter((activity: any) => activity.huId === huId) : [];
+  const completedTasks = huTasks.filter((activity: any) => activity.isClosed).length;
+  const taskProgress = huTasks.length > 0 ? Math.round((completedTasks / huTasks.length) * 100) : 0;
+
+  const openTasksPanel = (initialView: "list" | "create") => {
+    setTasksPanelInitialView(initialView);
+    setTasksPanelOpen(true);
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -514,6 +528,44 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
                 </div>
               </div>
             </div>
+            {huId && (
+              <div className="border-t border-border px-5 py-4">
+                <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <ListTodo className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold">Tarefas da HU</h3>
+                        {huTasks.length > 0 ? (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {huTasks.length} {huTasks.length === 1 ? "tarefa vinculada" : "tarefas vinculadas"} · {completedTasks} concluída{completedTasks === 1 ? "" : "s"}
+                          </p>
+                        ) : (
+                          <p className="mt-0.5 text-xs text-muted-foreground">Nenhuma tarefa vinculada a esta HU.</p>
+                        )}
+                      </div>
+                    </div>
+                    {huTasks.length > 0 ? (
+                      <Button type="button" variant="ghost" size="sm" className="gap-1.5" onClick={() => openTasksPanel("list")}>
+                        Ver tarefas <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    ) : canEditTasks ? (
+                      <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => openTasksPanel("create")}>
+                        <Plus className="h-4 w-4" /> Adicionar tarefa
+                      </Button>
+                    ) : null}
+                  </div>
+                  {huTasks.length > 0 && (
+                    <div className="mt-4 flex items-center gap-3">
+                      <Progress value={taskProgress} className="h-1.5" aria-label={`${taskProgress}% das tarefas concluídas`} />
+                      <span className="text-xs font-semibold tabular-nums text-muted-foreground">{taskProgress}%</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {huId && organizationId && (
               <div className="px-5 py-4 border-t border-slate-100">
                 <HUGitActivitySection huId={huId} organizationId={organizationId} />
@@ -569,6 +621,13 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
         huId={huId}
         open={impedimentOpen}
         onClose={() => setImpedimentOpen(false)}
+      />
+      <TaskDetailSheet
+        huId={huId}
+        open={tasksPanelOpen}
+        initialView={tasksPanelInitialView}
+        onClose={() => setTasksPanelOpen(false)}
+        canEdit={canEditTasks}
       />
     </Dialog>
   );

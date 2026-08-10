@@ -13,7 +13,7 @@
 | DEC-005 | Modo de arredondamento | PRECISA DE DECISÃO | Ruleset/engine | Runtime contratual atual usa `round(..., 2)`; não generalizar sem aprovação |
 | DEC-006 | Escala decimal | PRECISA DE DECISÃO | Ruleset/engine | Atual materializa duas casas em vários pontos; contrato futuro precisa declarar escala |
 | DEC-007 | Etapa do arredondamento | PRECISA DE DECISÃO | Engine/totais | Por item, subtotal, total ou combinação; altera resultado |
-| DEC-008 | Segregação de aprovação/publicação | PRECISA DE DECISÃO | Lifecycle/RLS | Definir se `admin_contrato` pode aprovar/publicar ou apenas editar draft |
+| DEC-008 | Segregação de aprovação/publicação | PROPOSTO EM M4 / PRECISA DE APROVAÇÃO | Lifecycle/RLS | Implementação conservadora: `admin_contrato` edita/submete; owner/admin aprova/publica/retira |
 | DEC-009 | Histórico oficial versus TR vigente | PRECISA DE DECISÃO | Precedência/fator | Código atual prioriza histórico em determinados fluxos; arquitetura propõe snapshot/TR como autoridade |
 | DEC-010 | Reabertura/recontagem | PRECISA DE DECISÃO | Lifecycle da sessão | Recomendação técnica: nova sessão/revisão, nunca sobrescrever resultado validado |
 
@@ -27,4 +27,4 @@
 
 ## Decisão necessária para prosseguir
 
-O próximo gate (M1–M4) exige pelo menos DEC-005, DEC-006, DEC-007 e DEC-008 aprovadas. O contexto/snapshot/engine exige também DEC-001, DEC-002, DEC-009 e DEC-010. DEC-003/004 podem permanecer bloqueadas se PF faturável continuar explicitamente não implementado.
+M1–M4 foram implementadas sem defaults financeiros: versões não podem ser publicadas com política de arredondamento incompleta. Aplicação/rollout exige validação de DEC-005, DEC-006, DEC-007 e DEC-008. O contexto/snapshot/engine exige também DEC-001, DEC-002, DEC-009 e DEC-010. DEC-003/004 podem permanecer bloqueadas se PF faturável continuar explicitamente não implementado.

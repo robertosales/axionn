@@ -4,7 +4,7 @@
 >
 > Base: `develop` (`0c87dfe6`)
 >
-> Estado: PRIMEIRO GATE PARCIAL — MIGRATIONS NÃO INICIADAS
+> Estado: M1–M4 IMPLEMENTADAS NO REPOSITÓRIO — NÃO EXECUTADAS NO BANCO
 
 ## Escopo entregue neste gate
 
@@ -16,7 +16,20 @@
 | APF-ET3-004 | CONCLUÍDO NO TYPESCRIPT | Canonical JSON v1, SHA-256 e vetores fixos; implementação PostgreSQL depende de M1+ |
 | APF-ET3-005 | BLOQUEADO | Decisões financeiras e de governança precisam de aprovação |
 
-Nenhuma migration, RPC, policy, tabela ou dado foi criado/alterado neste gate. O plano aprovado permaneceu intacto.
+No primeiro gate, nenhuma migration, RPC, policy, tabela ou dado foi criado/alterado. O plano aprovado permaneceu intacto.
+
+## Fase M1–M4
+
+Após autorização explícita para avançar, foram criadas quatro migrations aditivas:
+
+- M1: `apf_profiles` e `apf_profile_versions`, com identidade contratual, estados, revisão otimista, vigência e campos de hash.
+- M2: `apf_profile_rulesets`, tipos, pesos, fatores, manutenção e precedência versionados. `apf_function_type_weights` permanece intacta como fonte Legacy v1.
+- M3: canonicalização compatível TS/PostgreSQL, SHA-256, proteção contra vigências sobrepostas, bloqueio de alteração/exclusão publicada e imutabilidade dos catálogos filhos.
+- M4: RLS hierárquica, grants mínimos, audit trail append-only e RPCs controladas de transição, publicação e retirada.
+
+O lifecycle implementado é conservador: `admin_contrato` pode manter draft e enviar/reabrir revisão; owner/admin da organização aprova, publica e retira. Publicação exige catálogo completo e política de arredondamento explicitamente preenchida. Nenhuma regra de PF faturável foi implementada.
+
+Compatibilidade: nenhuma das quatro migrations altera `apf_counting_sessions`, `apf_counting_items`, `apf_counting_models`, `function_point_analyses`, `project_fp_baselines` ou RPCs existentes.
 
 ## Golden Master
 
@@ -46,13 +59,13 @@ Contrato implementado:
 
 Esta restrição evita divergência entre IEEE-754 do JavaScript e `numeric` do PostgreSQL. Os mesmos vetores deverão ser implementados em testes SQL antes de snapshots serem publicados.
 
-## Gate para iniciar M1
+## Gate para aplicar M1–M4 em banco
 
-M1 não deve começar enquanto:
+As migrations não devem ser aplicadas fora de banco efêmero/clone enquanto:
 
 1. as decisões em `ETAPA_3_DECISOES.md` não forem aprovadas no mínimo para lifecycle e modelo financeiro;
 2. o Golden Master não for validado contra amostra anonimizada do ambiente relevante;
-3. a canonicalização PostgreSQL não possuir os mesmos vetores SHA-256;
+3. a suíte pgTAP, incluindo os mesmos vetores SHA-256 do TypeScript, não for executada;
 4. o inventário de schema/policies/grants implantados não for obtido ou formalmente dispensado com risco aceito.
 
 ## Princípios preservados

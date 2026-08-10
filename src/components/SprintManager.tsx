@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSprint } from "@/contexts/SprintContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useSalaAgilPermission } from "@/hooks/useSalaAgilPermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
-import { Zap, Plus, Calendar, Target, Trash2, Pencil, AlertTriangle, Info } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Zap, Plus, Calendar, Target, Trash2, Pencil, AlertTriangle, Info, BookOpen, Building2, ArrowRight, CircleDot } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem,
   ContextMenuSeparator, ContextMenuTrigger,
@@ -19,6 +20,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { SprintStatusBadge } from "@/features/admin/components/SprintStatusBadge";
+import { HUEditDrawer } from "@/components/HUEditDrawer";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getSprintStatus } from "@/utils/sprintStatus";
+import { formatSprintDate, formatSprintPeriod, formatSprintPoints, getSprintDisplayName } from "@/utils/sprintPresentation";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -30,7 +36,8 @@ interface SprintManagerProps {
 }
 
 export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManagerProps) {
-  const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, closeSprint, userStories, workflowColumns, addImpediment } = useSprint() as any;
+  const { sprints, addSprint, updateSprint, setActiveSprint, removeSprint, closeSprint, userStories, workflowColumns, addImpediment, developers, epics, features } = useSprint() as any;
+  const { currentTeamId, teams } = useAuth();
   const [open, setOpen] = useState(false);
   const canCreate = useSalaAgilPermission("create_sprint");
   const canEdit   = useSalaAgilPermission("edit_sprint");
@@ -49,6 +56,7 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
   const [impedimentReason, setImpedimentReason]       = useState("");
   const [impedimentStartedAt, setImpedimentStartedAt] = useState(todayISO);
   const [detailSprint, setDetailSprint]               = useState<any | null>(null);
+  const [detailHuId, setDetailHuId]                   = useState<string | null>(null);
 
   const resetForm = () => { setName(""); setStartDate(""); setEndDate(""); setGoal(""); setErrors({}); setEditId(null); };
 
@@ -200,6 +208,8 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
         {sprints.map((sprint: any) => {
           const progress  = getSprintProgress(sprint.id);
           const sprintHUs = userStories.filter((hu: any) => hu.sprintId === sprint.id);
+          const displayName = getSprintDisplayName(sprint.name);
+          const status = getSprintStatus(sprint);
           return (
             <ContextMenu key={sprint.id}>
               <ContextMenuTrigger asChild>
@@ -211,14 +221,19 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
                       ? "border-primary shadow-sm ring-1 ring-primary/40"
                       : "border-border opacity-80 hover:opacity-100",
                   ].join(" ")}
-                  onClick={() => onSelectSprint?.(sprint.id)}
+                  onClick={() => {
+                    onSelectSprint?.(sprint.id);
+                    setDetailSprint(sprint);
+                  }}
                   role="button"
                   tabIndex={0}
                   aria-pressed={selectedSprintId === sprint.id}
+                  aria-label={`Abrir detalhes de ${displayName.title}`}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       onSelectSprint?.(sprint.id);
+                      setDetailSprint(sprint);
                     }
                   }}
                 >
@@ -230,7 +245,10 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
                   <div className="p-4">
                     {/* Linha 1: nome + status + a\u00e7\u00f5es */}
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-semibold text-sm leading-snug flex-1">{sprint.name}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold leading-snug" title={sprint.name}>{displayName.title}</span>
+                        {displayName.reference && <span className="mt-0.5 block font-mono text-[10px] text-muted-foreground">{displayName.reference}</span>}
+                      </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <SprintStatusBadge sprint={sprint} />
                         {canEdit && !sprint.closedAt && (
@@ -254,10 +272,16 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
                       </div>
                     </div>
 
+                    {status.delayDays > 0 && (
+                      <p className="mt-1 text-[10px] font-medium text-destructive">
+                        {status.delayDays} {status.delayDays === 1 ? "dia" : "dias"} de atraso
+                      </p>
+                    )}
+
                     {/* Linha 2: datas */}
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-2">
                       <Calendar className="h-3 w-3 shrink-0" />
-                      {new Date(sprint.startDate).toLocaleDateString("pt-BR")} \u2014 {new Date(sprint.endDate).toLocaleDateString("pt-BR")}
+                      {formatSprintPeriod(sprint.startDate, sprint.endDate)}
                     </div>
 
                     {/* Linha 3: objetivo */}
@@ -269,18 +293,19 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
                     )}
 
                     {/* Linha 4: progress */}
-                    {sprintHUs.length > 0 && (
-                      <div className="mt-3 space-y-1.5 pt-3 border-t border-border/50">
+                    <div className="mt-3 space-y-1.5 border-t border-border/50 pt-3">
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                          <span>{progress.completedPoints}/{progress.totalPoints} pts</span>
+                          <span>{formatSprintPoints(progress.completedPoints, progress.totalPoints)}</span>
                           <span className="font-semibold">{progress.percent}%</span>
                         </div>
                         <Progress value={progress.percent} className="h-1.5" />
-                        <div className="text-[10px] text-muted-foreground">
-                          {sprintHUs.length} HU{sprintHUs.length !== 1 ? "s" : ""}
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>{sprintHUs.length} HU{sprintHUs.length !== 1 ? "s" : ""}</span>
+                          <span className="inline-flex items-center gap-1 font-medium text-primary">
+                            Ver detalhes <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                          </span>
                         </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </ContextMenuTrigger>
@@ -404,79 +429,131 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
 
       {/* Dialog: Detalhar Sprint */}
       <Dialog open={!!detailSprint} onOpenChange={(o) => { if (!o) setDetailSprint(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-primary" />
-              {detailSprint?.name}
-              <SprintStatusBadge sprint={detailSprint ?? {}} className="ml-1" />
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="flex h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:h-[min(860px,calc(100dvh-3rem))] sm:w-[calc(100%-3rem)]">
           {detailSprint && (() => {
             const progress  = getSprintProgress(detailSprint.id);
             const sprintHUs = userStories.filter((hu: any) => hu.sprintId === detailSprint.id);
             const lastCol   = workflowColumns[workflowColumns.length - 1]?.key;
             const done      = sprintHUs.filter((hu: any) => hu.status === lastCol).length;
+            const displayName = getSprintDisplayName(detailSprint.name);
+            const sprintStatus = getSprintStatus(detailSprint);
+            const teamName = teams.find((team) => team.id === currentTeamId)?.name;
             return (
-              <div className="space-y-4 pt-2">
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  {new Date(detailSprint.startDate).toLocaleDateString("pt-BR")} \u2014 {new Date(detailSprint.endDate).toLocaleDateString("pt-BR")}
-                  {detailSprint.closedAt && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      \u00b7 Encerrada em {new Date(detailSprint.closedAt).toLocaleDateString("pt-BR")}
-                      {detailSprint.delayDays > 0 && (
-                        <span className="text-red-500 font-semibold ml-1">(+{detailSprint.delayDays}d atraso)</span>
-                      )}
-                    </span>
-                  )}
-                </div>
-                {detailSprint.goal && (
-                  <div className="rounded-md border bg-muted/40 p-3 text-sm">
-                    <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Objetivo</p>
-                    <p>{detailSprint.goal}</p>
+              <>
+                <DialogHeader className="border-b px-5 py-4 pr-12 sm:px-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DialogTitle className="flex min-w-0 items-center gap-2 text-xl">
+                      <Zap className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                      <span className="truncate">{displayName.title}</span>
+                    </DialogTitle>
+                    {displayName.reference && <Badge variant="secondary">{displayName.reference}</Badge>}
+                    <SprintStatusBadge sprint={detailSprint} />
                   </div>
-                )}
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  {[
-                    { label: "HUs",        value: sprintHUs.length },
-                    { label: "Conclu\u00eddas", value: done },
-                    { label: "Progresso",  value: `${progress.percent}%` },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="rounded-md border bg-muted/30 p-3">
-                      <p className="text-xl font-bold">{value}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Progresso por pontos</p>
-                  <Progress value={progress.percent} className="h-2" />
-                  <p className="text-xs text-muted-foreground mt-1">{progress.completedPoints} / {progress.totalPoints} pts</p>
-                </div>
-                {sprintHUs.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">HUs por status</p>
-                    <div className="space-y-1">
-                      {workflowColumns.map((col: any) => {
-                        const count = sprintHUs.filter((hu: any) => hu.status === col.key).length;
-                        if (count === 0) return null;
-                        return (
-                          <div key={col.key} className="flex items-center gap-2 text-xs">
-                            <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: col.hex ?? "#6b7280" }} />
-                            <span className="flex-1 text-muted-foreground">{col.label}</span>
-                            <span className="font-semibold">{count}</span>
+                  <DialogDescription className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1">
+                    {teamName && <span className="inline-flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" aria-hidden="true" />{teamName}</span>}
+                    <span className="inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" aria-hidden="true" />{formatSprintPeriod(detailSprint.startDate, detailSprint.endDate)}</span>
+                  </DialogDescription>
+                </DialogHeader>
+
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="space-y-6 p-5 sm:p-6">
+                    <section aria-labelledby="sprint-indicators" className="space-y-3">
+                      <h3 id="sprint-indicators" className="text-sm font-semibold">Indicadores</h3>
+                      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        {[
+                          { label: "Histórias", value: sprintHUs.length },
+                          { label: "Concluídas", value: done },
+                          { label: "Progresso", value: `${progress.percent}%` },
+                          { label: "Pontos", value: formatSprintPoints(progress.completedPoints, progress.totalPoints) },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="rounded-lg border bg-card p-4">
+                            <p className="text-lg font-semibold leading-tight">{value}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{label}</p>
                           </div>
-                        );
-                      })}
+                        ))}
+                      </div>
+                      <Progress value={progress.percent} className="h-2" aria-label={`${progress.percent}% dos pontos concluídos`} />
+                    </section>
+
+                    <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+                      <section aria-labelledby="sprint-goal" className="rounded-lg border bg-muted/30 p-4">
+                        <div className="mb-2 flex items-center gap-2">
+                          <Target className="h-4 w-4 text-primary" aria-hidden="true" />
+                          <h3 id="sprint-goal" className="text-sm font-semibold">Objetivo</h3>
+                        </div>
+                        <p className={detailSprint.goal ? "text-sm leading-relaxed" : "text-sm text-muted-foreground"}>
+                          {detailSprint.goal || "Nenhum objetivo foi informado para esta Sprint."}
+                        </p>
+                      </section>
+
+                      <section aria-labelledby="sprint-period" className="rounded-lg border p-4">
+                        <div className="mb-3 flex items-center gap-2">
+                          <CircleDot className="h-4 w-4 text-primary" aria-hidden="true" />
+                          <h3 id="sprint-period" className="text-sm font-semibold">Período e situação</h3>
+                        </div>
+                        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
+                          <dt className="text-muted-foreground">Início</dt><dd>{formatSprintDate(detailSprint.startDate)}</dd>
+                          <dt className="text-muted-foreground">Término</dt><dd>{formatSprintDate(detailSprint.endDate)}</dd>
+                          {detailSprint.closedAt && <><dt className="text-muted-foreground">Encerrada</dt><dd>{formatSprintDate(detailSprint.closedAt)}</dd></>}
+                          <dt className="text-muted-foreground">Status</dt><dd>{sprintStatus.status === "ativa_atrasada" ? "Ativa" : sprintStatus.status === "encerrada" ? "Encerrada" : sprintStatus.label}</dd>
+                          {sprintStatus.delayDays > 0 && <><dt className="text-muted-foreground">Atraso</dt><dd className="font-medium text-destructive">{sprintStatus.delayDays} {sprintStatus.delayDays === 1 ? "dia" : "dias"}</dd></>}
+                        </dl>
+                      </section>
                     </div>
+
+                    <section aria-labelledby="sprint-stories" className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
+                          <h3 id="sprint-stories" className="text-sm font-semibold">HUs da Sprint</h3>
+                        </div>
+                        <Badge variant="secondary">{sprintHUs.length}</Badge>
+                      </div>
+                      {sprintHUs.length === 0 ? (
+                        <div className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                          Nenhuma história de usuário está vinculada a esta Sprint.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border">
+                          <Table>
+                            <TableHeader><TableRow>
+                              <TableHead>HU</TableHead><TableHead>Título</TableHead><TableHead>Relacionamento</TableHead><TableHead>Status</TableHead><TableHead>Pontos</TableHead><TableHead>Responsável</TableHead>
+                            </TableRow></TableHeader>
+                            <TableBody>
+                              {sprintHUs.map((hu) => {
+                                const column = workflowColumns.find((col) => col.key === hu.status);
+                                const epic = epics.find((item) => item.id === hu.epicId);
+                                const feature = features.find((item) => item.id === hu.featureId);
+                                const developer = developers.find((item) => item.id === hu.assigneeId);
+                                const relationship = [epic?.name ?? epic?.title, feature?.name ?? feature?.title].filter(Boolean).join(" · ");
+                                return (
+                                  <TableRow key={hu.id}>
+                                    <TableCell className="font-mono text-xs">{hu.code || "—"}</TableCell>
+                                    <TableCell className="min-w-56">
+                                      <button type="button" className="text-left font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onClick={() => { setDetailSprint(null); setDetailHuId(hu.id); }}>
+                                        {hu.title}
+                                      </button>
+                                    </TableCell>
+                                    <TableCell className="max-w-64 text-muted-foreground">{relationship || "Não informado"}</TableCell>
+                                    <TableCell><Badge variant="outline" className="gap-1.5 whitespace-nowrap"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: column?.hex ?? "#6b7280" }} aria-hidden="true" />{column?.label ?? hu.status}</Badge></TableCell>
+                                    <TableCell>{hu.storyPoints ?? "—"}</TableCell>
+                                    <TableCell>{developer?.name ?? "Não atribuído"}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </section>
                   </div>
-                )}
-              </div>
+                </ScrollArea>
+              </>
             );
           })()}
         </DialogContent>
       </Dialog>
+      <HUEditDrawer huId={detailHuId} open={!!detailHuId} onClose={() => setDetailHuId(null)} />
     </div>
   );
 }

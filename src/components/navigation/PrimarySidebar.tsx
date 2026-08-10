@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { matchesNavigationItem } from "./NavigationConfig";
 import type { NavigationSection, NavigationItem } from "./NavigationConfig";
 
 interface PrimarySidebarProps {
@@ -27,7 +28,7 @@ export function NavigationList({ sections, activePath, onNavigate, collapsed = f
   const activeItemId = useMemo(() => {
     const matches = sections
       .flatMap((section) => section.items)
-      .filter((item) => item.route === activeRoute || (item.route !== "/" && activeRoute.startsWith(`${item.route}/`)));
+      .filter((item) => matchesNavigationItem(item, activeRoute));
     return matches.sort((a, b) => b.route.length - a.route.length)[0]?.id;
   }, [activeRoute, sections]);
   const activeSectionId = useMemo(

@@ -33,6 +33,7 @@ describe("navigationConfig", () => {
       "Cerimônias",
       "Operações",
       "Relatórios",
+      "Estratégia",
       "Configurações",
     ]);
   });
@@ -69,6 +70,36 @@ describe("navigationConfig", () => {
       { label: "Sala Ágil", path: "/sala-agil/dashboard" },
       { label: "Operações", path: "/sala-agil/calendario" },
       { label: "Medição & Evidências", path: "/sala-agil/medicao-evidencias" },
+    ]);
+  });
+
+  it("moves History to Settings and OKR to Strategy without changing their routes", () => {
+    const reports = salaAgilNavigationConfig.find((section) => section.id === "sala-agil-relatorios");
+    const strategy = salaAgilNavigationConfig.find((section) => section.id === "sala-agil-estrategia");
+    const settings = salaAgilNavigationConfig.find((section) => section.id === "sala-agil-config");
+
+    expect(reports?.items.map((item) => item.id)).toEqual(["metricas", "relatorios"]);
+    expect(strategy?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "okr", activePathPrefixes: ["/okr"] }),
+    ]));
+    expect(settings?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "historico", route: "/sala-agil/historico" }),
+    ]));
+  });
+
+  it("keeps OKR selected and breadcrumbed across its deep routes", () => {
+    expect(buildBreadcrumbs("/okr/ciclos", salaAgilNavigationConfig)).toEqual([
+      { label: "Sala Ágil", path: "/sala-agil/dashboard" },
+      { label: "Estratégia", path: expect.stringMatching(/^\/okr/) },
+      { label: "OKR", path: "/okr/ciclos" },
+    ]);
+  });
+
+  it("builds the administrative breadcrumb for History", () => {
+    expect(buildBreadcrumbs("/sala-agil/historico", salaAgilNavigationConfig)).toEqual([
+      { label: "Sala Ágil", path: "/sala-agil/dashboard" },
+      { label: "Configurações", path: "/sala-agil/times" },
+      { label: "Histórico", path: "/sala-agil/historico" },
     ]);
   });
 });

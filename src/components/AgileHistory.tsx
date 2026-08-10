@@ -15,7 +15,7 @@ import {
   Spade,
   MessageSquare,
   Search,
-  BarChart3,
+  History,
   Eye,
   Filter,
   Clock,
@@ -730,9 +730,9 @@ export function AgileHistory() {
       {/* Header */}
       <div className="max-w-3xl">
         <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-          <BarChart3 className="h-5 w-5 text-primary" /> Relatórios operacionais
+          <History className="h-5 w-5 text-primary" /> Histórico Ágil
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">Sessões, estimativas, participação e resultados da operação ágil.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Rastreabilidade de sessões, estimativas, participação e resultados da operação ágil.</p>
       </div>
 
       {loadError && (

@@ -142,4 +142,3 @@ comment on table public.apf_profile_function_weights is
   'Version-owned copy of effective weights. Existing apf_function_type_weights remains the Legacy v1 source.';
 comment on table public.apf_profile_precedence_rules is
   'Explicit source precedence. AI proposal is evidence only and never financial authority.';
-

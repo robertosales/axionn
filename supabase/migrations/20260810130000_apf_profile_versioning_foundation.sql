@@ -88,4 +88,3 @@ comment on table public.apf_profile_versions is
   'Governed, temporal and append-only-after-publication APF/TR configuration version.';
 comment on column public.apf_profile_versions.configuration_hash is
   'SHA-256 of the canonical semantic version document. Populated only by the controlled publication flow.';
-

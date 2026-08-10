@@ -618,6 +618,8 @@ function AppRoutes() {
           <Route path="/sala-agil/metricas/releases" element={<Navigate to="/sala-agil/releases" replace />} />
           <Route path="/metricas/relatorios" element={<Navigate to="/sala-agil/relatorios" replace />} />
           <Route path="/metricas/releases" element={<Navigate to="/sala-agil/releases" replace />} />
+          <Route path="/sala-agil/gerador-apf" element={<Navigate to="/sala-agil/medicao-evidencias" replace />} />
+          <Route path="/sala-agil/relatorios/evidencias" element={<Navigate to="/sala-agil/medicao-evidencias" replace />} />
           <Route path="/sala-agil/:section" element={<ProtectedRoute><ModuleGuard module="sala_agil"><Index /></ModuleGuard></ProtectedRoute>} />
           <Route
             path="/sustentacao"

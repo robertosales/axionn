@@ -163,7 +163,7 @@ export function ApfPokerReference({
               <p className="text-sm font-medium text-muted-foreground">Nenhuma geração APF encontrada</p>
               <p className="text-xs text-muted-foreground/70">
                 Gere um documento APF para esta sprint em
-                <br />/sala-agil/gerador-apf
+                <br />/sala-agil/medicao-evidencias
               </p>
             </div>
           )}

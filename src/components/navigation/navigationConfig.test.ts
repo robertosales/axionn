@@ -45,4 +45,30 @@ describe("navigationConfig", () => {
     expect(tasksItem?.label).toBe("Tarefas");
     expect(tasksItem?.route).toBe("/sala-agil/atividades");
   });
+
+  it("places Measurement & Evidence in agile operations", () => {
+    const operations = salaAgilNavigationConfig.find(
+      (section) => section.id === "sala-agil-operacoes",
+    );
+    const reports = salaAgilNavigationConfig.find(
+      (section) => section.id === "sala-agil-relatorios",
+    );
+
+    expect(operations?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "medicao-evidencias",
+        label: "Medição & Evidências",
+        route: "/sala-agil/medicao-evidencias",
+      }),
+    ]));
+    expect(reports?.items.some((item) => item.id === "medicao-evidencias")).toBe(false);
+  });
+
+  it("builds the complete operational breadcrumb for Measurement & Evidence", () => {
+    expect(buildBreadcrumbs("/sala-agil/medicao-evidencias", salaAgilNavigationConfig)).toEqual([
+      { label: "Sala Ágil", path: "/sala-agil/dashboard" },
+      { label: "Operações", path: "/sala-agil/calendario" },
+      { label: "Medição & Evidências", path: "/sala-agil/medicao-evidencias" },
+    ]);
+  });
 });

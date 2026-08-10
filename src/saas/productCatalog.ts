@@ -126,7 +126,7 @@ export const PRODUCT_FEATURES: readonly ProductFeatureDefinition[] = [
   { code: "reports.advanced", moduleCode: "reports", name: "Relatórios avançados", type: "capability" },
   { code: "reports.export_csv", moduleCode: "reports", name: "Exportar CSV", type: "capability" },
   { code: "reports.export_pdf", moduleCode: "reports", name: "Exportar PDF", type: "capability" },
-  { code: "reports.evidence", moduleCode: "reports", name: "Relatório de evidências", type: "capability" },
+  { code: "reports.evidence", moduleCode: "reports", name: "Medição & Evidências", type: "capability" },
   { code: "reports.schedule", moduleCode: "reports", name: "Agendar relatórios", type: "capability" },
 
   // Histórico

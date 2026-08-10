@@ -127,7 +127,7 @@ const VALID_SECTIONS = [
   "releases",
   "relatorios",
   "notificacoes",
-  "gerador-apf",
+  "medicao-evidencias",
   "metricas",
   "historico",
   "calendario",
@@ -349,9 +349,9 @@ const Index = () => {
               </SectionGuard>
             )}
 
-            {active === "gerador-apf" && (
-              <SectionGuard permission="view_backlog">
-                <LazySection name="Gerador APF">
+            {active === "medicao-evidencias" && (
+              <SectionGuard permission="view_dashboard">
+                <LazySection name="Medição & Evidências">
                   <ApfGeneratorPage />
                 </LazySection>
               </SectionGuard>

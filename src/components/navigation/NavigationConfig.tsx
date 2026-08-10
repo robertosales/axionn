@@ -133,6 +133,14 @@ export function buildBreadcrumbs(pathname: string, config: NavigationSection[]):
     item.route.length > best.route.length ? item : best,
   );
 
+  if (match.id === "medicao-evidencias") {
+    return [
+      { label: "Sala Ágil", path: "/sala-agil/dashboard" },
+      { label: "Operações", path: "/sala-agil/calendario" },
+      { label: match.label, path: match.route },
+    ];
+  }
+
   const fallback = match.route === "/organization/gitlab-integrations"
     ? [{ label: "Organização", path: "/organization" }, { label: match.label, path: match.route }]
     : [{ label: match.label, path: match.route }];
@@ -182,6 +190,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
       { id: "calendario", label: "Calendário", icon: Calendar, route: "/sala-agil/calendario" },
       { id: "equipe", label: "Equipe", icon: Users, route: "/sala-agil/equipe" },
       { id: "atividades", label: "Tarefas", icon: Activity, route: "/sala-agil/atividades" },
+      { id: "medicao-evidencias", label: "Medição & Evidências", icon: ClipboardCheck, route: "/sala-agil/medicao-evidencias" },
     ],
   },
   {

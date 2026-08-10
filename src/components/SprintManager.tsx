@@ -428,7 +428,7 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
       </AlertDialog>
 
       {/* Dialog: Detalhar Sprint */}
-      <Dialog open={!!detailSprint} onOpenChange={(o) => { if (!o) setDetailSprint(null); }}>
+      <Dialog open={!!detailSprint} onOpenChange={(o) => { if (!o) { setDetailHuId(null); setDetailSprint(null); } }}>
         <DialogContent className="flex h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:h-[min(860px,calc(100dvh-3rem))] sm:w-[calc(100%-3rem)]">
           {detailSprint && (() => {
             const progress  = getSprintProgress(detailSprint.id);
@@ -530,7 +530,7 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
                                   <TableRow key={hu.id}>
                                     <TableCell className="font-mono text-xs">{hu.code || "—"}</TableCell>
                                     <TableCell className="min-w-56">
-                                      <button type="button" className="text-left font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onClick={() => { setDetailSprint(null); setDetailHuId(hu.id); }}>
+                                      <button type="button" className="text-left font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onClick={() => setDetailHuId(hu.id)}>
                                         {hu.title}
                                       </button>
                                     </TableCell>
@@ -552,8 +552,8 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
             );
           })()}
         </DialogContent>
+        <HUEditDrawer huId={detailHuId} open={!!detailHuId} onClose={() => setDetailHuId(null)} />
       </Dialog>
-      <HUEditDrawer huId={detailHuId} open={!!detailHuId} onClose={() => setDetailHuId(null)} />
     </div>
   );
 }

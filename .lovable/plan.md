@@ -1,35 +1,63 @@
-# OKR — Fechamento de Ciclo (Plano de Execução Fasado)
+# Ambiente de homologação APF por Contrato/TR
 
-Fonte-mestre: `docs/okr-plano-mestre.md` (2430 linhas).
-Execução por PRs 0–10 conforme seção 19 do plano.
-Cada PR = 1 iteração revisável/implantável. Só avanço para o próximo após o usuário validar.
+Objetivo: um backend Lovable Cloud separado, isolado de produção, pronto para receber as migrations APF M1–M4 e o teste pgTAP 21 — sem aplicá-los e sem tocar no banco atual.
 
-## Status
-- [x] PR 0 — Preflight & baseline (feature flag `okr_v2_enabled`, ADR, inventário)
-- [x] PR 1 — Entitlements canônicos OKR (features, limites por plano, guard)
-- [x] PR 2 — RBAC + esqueleto de RPCs (`has_okr_permission_v2`, guard, 6 RPCs stub)
-- [x] PR 3 — Tabela `okr_cycles` + lifecycle + UI de ciclos + backfill
-- [x] PR 4 — Objectives + alinhamento (`okr_objective_alignments`)
-- [x] PR 5 — KRs + motor canônico único (`calculate_okr_kr_progress_v2`, `recalculate_okr_objective_v2`, `resolve_okr_objective_health_v2`) + RPCs `create/update/archive/list_okr_key_result(s)_v2`
-- [x] PR 6 — Check-in transacional (`record_okr_check_in_v2` + snapshots + auditoria)
-- [ ] PR 7 — Métricas automáticas + fila (`okr_metric_definitions/bindings`, edge fn simplificada) — implementação local concluída; aplicação e validação remotas pendentes
-- [ ] PR 8 — Iniciativas + dependências + alertas
-- [x] PR 9 — Reviews (objective + cycle), encerramento, carry-forward
-- [ ] PR 10 — Dashboards, exportação, observabilidade, E2E, hardening
+## Limitação assumida
 
-## Princípios (seção 2 do plano)
-- Autoridade no backend: mutações críticas só via RPC transacional.
-- Preservação de histórico: nada de delete físico após publicação — só archive.
-- Motor único de cálculo (canônico no Postgres).
-- Ciclo como entidade de negócio com lifecycle próprio.
-- Todas as RPCs `SECURITY DEFINER` com `SET search_path = public`, RLS ativo em todas as novas tabelas, `GRANT` explícito.
+Eu não consigo criar projetos a partir daqui. O projeto Lovable de homologação precisa ser criado por você (Remix/duplicar este projeto). Ao ser criado, ele provisiona automaticamente um backend Cloud próprio, com URL, chaves e banco totalmente independentes deste. Nada neste plano executa comandos contra o banco atual.
 
-## Convenções técnicas
-- Migrations idempotentes, uma por PR (agrupando as sub-migrations da seção 6 do plano quando pertinente).
-- Novos tipos frontend em `src/features/okr/types.ts` — não quebrar `OkrObjective`/`OkrKeyResult` legados.
-- Feature flag `VITE_OKR_V2_ENABLED` controlando UI nova enquanto o legado coexiste.
-- Testes pgTAP em `supabase/tests/database/*_okr_*.test.sql` + vitest em `src/features/okr/**`.
+## Passo 1 — Você cria o projeto de homologação
 
-## Fora de escopo desta série
-- Mudanças em Sala Ágil/Sustentação que não sejam integrações listadas na seção 15.
-- Rewrite do módulo OKR legado — coexiste até PR 10.
+Remix deste projeto com um nome explícito, por exemplo `Axionn HML APF Contrato/TR`. Depois me diga que ele existe e trabalhe comigo dentro dele para os passos 2 em diante.
+
+## Passo 2 — Clone do schema (no projeto novo)
+
+O clone é feito por replay de migrations, não por dump de dados:
+
+- todas as migrations de `supabase/migrations/` são reaplicadas na ordem, recriando extensões, tabelas, views, sequences, funções, triggers, constraints, índices, RLS, grants e roles;
+- nenhuma linha de dados de produção é copiada;
+- validação pós-replay: contagem de tabelas, funções e políticas comparada com a estrutura esperada.
+
+## Passo 3 — Fixtures seguras em vez de dados reais
+
+Seed sintético mínimo para exercitar APF: 1 organização, 1 contrato, 1 time, 2 projetos, alguns itens de contagem APF e usuários de teste com e-mails `@hml.invalid`. Sem dados pessoais, sem tokens, sem chaves, sem credenciais de terceiros.
+
+## Passo 4 — Neutralização de efeitos externos
+
+No projeto novo:
+
+- nenhum secret de integração é copiado (GitLab, Redmine, Oracle, APEX, Teams, Upstash, provedores de IA ficam vazios);
+- Edge Functions com efeito externo não são publicadas; se alguma for necessária, sobe com `INTEGRATIONS_DISABLED=true` e guarda de saída;
+- webhooks e cron/GitHub Actions apontando para produção permanecem desligados;
+- e-mails transacionais desativados;
+- `SITE_URL` do ambiente aponta para a URL de preview do projeto de homologação, nunca `axionn.app`.
+
+## Passo 5 — Estado inicial confirmado (antes de M1–M4)
+
+Relatório com: identificador do projeto, versão do PostgreSQL, extensões instaladas, disponibilidade de pgTAP, confirmação de que as quatro migrations APF não constam no histórico, e confirmação de que webhooks/e-mails/integrações estão inativos.
+
+## Passo 6 — Aguardar a branch
+
+Nada de APF é gerado, reescrito ou aplicado. Quando `feature/apf-contrato-tr-etapa-3` estiver publicada e sincronizada, eu confirmo nomes e hashes SHA-256 de:
+
+```text
+supabase/migrations/20260810130000_apf_profile_versioning_foundation.sql
+supabase/migrations/20260810130100_apf_versioned_ruleset_catalogs.sql
+supabase/migrations/20260810130200_apf_profile_version_lifecycle.sql
+supabase/migrations/20260810130300_apf_profile_security_audit.sql
+supabase/tests/database/21_apf_profile_versioning.test.sql
+```
+
+e só aplico após autorização explícita sua.
+
+## Detalhes técnicos
+
+- Credenciais: cada projeto Lovable Cloud injeta as suas próprias (`VITE_SUPABASE_URL`, chave publicável) automaticamente; não há gravação de credencial em arquivo versionado. Service role key e senha do banco não são expostas em Lovable Cloud — não posso entregar connection string administrativa.
+- Execução de SQL e pgTAP no ambiente novo: pelas ferramentas de banco do Lovable dentro daquele projeto. Se você precisar de `supabase test db` via CLI, isso exige um projeto Supabase próprio seu, fora do Cloud gerenciado — posso preparar o runbook.
+- Descarte: o projeto de homologação pode ser deletado ao fim, sem efeito sobre produção.
+
+## Pendências conhecidas
+
+- Criação do projeto depende de você.
+- Branch APF ainda não publicada.
+- Connection string administrativa não disponível em Lovable Cloud.

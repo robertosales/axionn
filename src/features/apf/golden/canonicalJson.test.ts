@@ -5,8 +5,16 @@ import {
   canonicalJsonSha256,
   canonicalTimestamp,
 } from "./canonicalJson";
+import type { CanonicalJsonValue } from "./canonicalJson";
 
-const VECTORS = [
+interface CanonicalVector {
+  name: string;
+  input: CanonicalJsonValue;
+  canonical: string;
+  sha256: string;
+}
+
+const VECTORS: CanonicalVector[] = [
   {
     name: "ordena propriedades, preserva null e ignora metadados voláteis",
     input: {
@@ -24,7 +32,7 @@ const VECTORS = [
     canonical: '{"values":["ação","AÇÃO",null],"version":1}',
     sha256: "4e195783c6a29d6ce9a7cb70171a3a17aab144ccaaec435d0a6d3511020bed72",
   },
-] as const;
+];
 
 describe("APF canonical JSON v1", () => {
   it.each(VECTORS)("$name", async (vector) => {

@@ -207,8 +207,8 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
 
       toast.success("HU salva com sucesso");
       onClose();
-    } catch {
-      toast.error("Erro ao salvar. Tente novamente.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar. Tente novamente.");
     } finally {
       setSubmitting(false);
     }

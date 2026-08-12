@@ -166,35 +166,35 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label>Nome <span className="text-destructive">*</span></Label>
-                  <Input value={name}
+                  <Label htmlFor="sprint-name">Nome <span className="text-destructive">*</span></Label>
+                  <Input id="sprint-name" value={name}
                     onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: "" })); }}
                     placeholder="Sprint 1" className="mt-1" />
                   {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>In\u00edcio <span className="text-destructive">*</span></Label>
-                    <Input type="date" value={startDate}
+                    <Label htmlFor="sprint-start-date">Início <span className="text-destructive">*</span></Label>
+                    <Input id="sprint-start-date" type="date" value={startDate}
                       onChange={(e) => { setStartDate(e.target.value); setErrors((p) => ({ ...p, startDate: "" })); }}
                       className="mt-1" />
                     {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
                   </div>
                   <div>
-                    <Label>Fim <span className="text-destructive">*</span></Label>
-                    <Input type="date" value={endDate}
+                    <Label htmlFor="sprint-end-date">Fim <span className="text-destructive">*</span></Label>
+                    <Input id="sprint-end-date" type="date" value={endDate}
                       onChange={(e) => { setEndDate(e.target.value); setErrors((p) => ({ ...p, endDate: "" })); }}
                       className="mt-1" />
                     {errors.endDate && <p className="text-xs text-destructive mt-1">{errors.endDate}</p>}
                   </div>
                 </div>
                 <div>
-                  <Label>Objetivo da Sprint</Label>
-                  <Textarea value={goal} onChange={(e) => setGoal(e.target.value)}
+                  <Label htmlFor="sprint-goal-input">Objetivo da Sprint</Label>
+                  <Textarea id="sprint-goal-input" value={goal} onChange={(e) => setGoal(e.target.value)}
                     placeholder="O que esperamos entregar nessa sprint?" className="mt-1" />
                 </div>
                 <Button type="submit" className="w-full gap-2">
-                  <Zap className="h-4 w-4" /> {editId ? "Salvar Altera\u00e7\u00f5es" : "Criar Sprint"}
+                  <Zap className="h-4 w-4" /> {editId ? "Salvar Alterações" : "Criar Sprint"}
                 </Button>
               </form>
             </DialogContent>
@@ -351,7 +351,7 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
             <div className="py-10 text-center text-muted-foreground">
               <Zap className="h-10 w-10 mx-auto mb-2 opacity-30" />
               <p className="font-medium">Nenhuma Sprint criada</p>
-              <p className="text-sm mt-1">Crie sua primeira Sprint para come\u00e7ar a gerenciar o backlog</p>
+              <p className="text-sm mt-1">Crie sua primeira Sprint para começar a gerenciar o backlog</p>
             </div>
           </div>
         )}
@@ -365,9 +365,9 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
             <AlertDialogDescription>
               Tem certeza que deseja encerrar a sprint{" "}
               <strong>{sprints.find((s: any) => s.id === confirmCloseId)?.name}</strong>?
-              Esta a\u00e7\u00e3o registrar\u00e1 a data de encerramento e calcular\u00e1 os dias de atraso.
+              Esta ação registrará a data de encerramento e calculará os dias de atraso.
               <br /><br />
-              <span className="text-destructive font-medium">Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.</span>
+              <span className="text-destructive font-medium">Esta ação não pode ser desfeita.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -404,7 +404,7 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
             </div>
             <div>
               <Label htmlFor="sprint-impediment-started" className="text-sm mb-1.5 block">
-                Data de in\u00edcio do impedimento
+                Data de início do impedimento
               </Label>
               <Input
                 id="sprint-impediment-started"

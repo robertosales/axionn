@@ -694,8 +694,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints ?? null;
     if ("assigneeId" in hu) updateData.assignee_id = (hu as any).assigneeId ?? null;
     const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
-    if (error) { toast.error("Erro ao atualizar HU: " + error.message); return; }
-    if (!data || data.length === 0) { toast.error("Erro ao atualizar HU: nenhuma linha afetada"); return; }
+    if (error) throw new Error("Erro ao atualizar HU: " + error.message);
+    if (!data || data.length === 0) throw new Error("Erro ao atualizar HU: nenhuma linha afetada");
     setUserStories((prev) => prev.map((h) => h.id === id ? mapUserStory(data[0], impediments.filter((imp) => imp.huId === id)) : h));
   }, [impediments]);
 

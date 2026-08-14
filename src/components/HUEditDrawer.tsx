@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useEffect, useCallback } from "react";
+import React, { lazy, Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +62,7 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     customFields,
     developers,
     activities,
+    loadingSlices,
   } = useSprint() as any;
   const { currentTeamId, hasPermission } = useAuth();
   const { currentOrganizationId: organizationId } = useOrganization();
@@ -161,6 +162,47 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
     setCFV((hu as any).customFields || {});
     setErrors({});
   }, [open, huId, userStories, workflowColumns]);
+
+  // O card e o modal compartilham o contexto, mas a HU pode ter sido carregada
+  // antes da lista de features ou atualizada por outro fluxo. Ao abrir, reconcilia
+  // os vínculos com a linha autoritativa para não exibir "Sem feature" quando
+  // `user_stories.feature_id` está preenchido.
+  useEffect(() => {
+    if (!open || !huId) return;
+    let cancelled = false;
+
+    void supabase
+      .from("user_stories")
+      .select("epic_id, feature_id")
+      .eq("id", huId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn("[HUEditDrawer] não foi possível reconciliar a hierarquia da HU:", error);
+          return;
+        }
+        if (!data) return;
+        setEpicId(data.epic_id ?? "");
+        setFeatureId(data.feature_id ?? "");
+      });
+
+    return () => { cancelled = true; };
+  }, [open, huId]);
+
+  const featureOptions = useMemo(() => {
+    const allFeatures = features ?? [];
+    const compatible = allFeatures.filter((feature: any) => feature.epicId === epicId);
+    const selected = featureId
+      ? allFeatures.find((feature: any) => feature.id === featureId)
+      : null;
+
+    // Preserva visualmente o vínculo atual durante carregamento ou diante de
+    // dado legado inconsistente; uma troca de épico continua limpando a feature.
+    return selected && !compatible.some((feature: any) => feature.id === selected.id)
+      ? [selected, ...compatible]
+      : compatible;
+  }, [epicId, featureId, features]);
 
   const validate = useCallback(() => {
     const e: Record<string, string> = {};
@@ -396,11 +438,11 @@ export const HUEditDrawer = React.memo(function HUEditDrawer({ huId, open, onClo
 
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium">Feature</Label>
-                  <Select value={featureId || "none"} onValueChange={(v) => setFeatureId(v === "none" ? "" : v)} disabled={!epicId}>
-                    <SelectTrigger className="text-sm h-9 w-full"><SelectValue placeholder={epicId ? "Sem feature" : "Selecione um épico"} /></SelectTrigger>
+                  <Select value={featureId || "none"} onValueChange={(v) => setFeatureId(v === "none" ? "" : v)} disabled={!epicId || loadingSlices?.features}>
+                    <SelectTrigger className="text-sm h-9 w-full"><SelectValue placeholder={loadingSlices?.features ? "Carregando features..." : epicId ? "Sem feature" : "Selecione um épico"} /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Sem feature</SelectItem>
-                      {(features ?? []).filter((feature: any) => feature.epicId === epicId).map((feature: any) => <SelectItem key={feature.id} value={feature.id}>{feature.name}</SelectItem>)}
+                      {featureOptions.map((feature: any) => <SelectItem key={feature.id} value={feature.id}>{feature.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

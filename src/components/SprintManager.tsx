@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
-import { Zap, Plus, Calendar, Target, Trash2, Pencil, AlertTriangle, Info, BookOpen, Building2, ArrowRight, CircleDot } from "lucide-react";
+import { Zap, Plus, Calendar, Target, Trash2, Pencil, AlertTriangle, Info, BookOpen, Building2, ArrowRight, CircleDot, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem,
@@ -52,6 +52,8 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
   const [errors, setErrors]       = useState<Record<string, string>>({});
 
   const [confirmCloseId, setConfirmCloseId]           = useState<string | null>(null);
+  const [confirmActivateId, setConfirmActivateId]     = useState<string | null>(null);
+  const [activatingSprintId, setActivatingSprintId]   = useState<string | null>(null);
   const [impedimentSprintId, setImpedimentSprintId]   = useState<string | null>(null);
   const [impedimentReason, setImpedimentReason]       = useState("");
   const [impedimentStartedAt, setImpedimentStartedAt] = useState(todayISO);
@@ -104,6 +106,28 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
     if (!confirmCloseId) return;
     await closeSprint(confirmCloseId);
     setConfirmCloseId(null);
+  };
+
+  const requestSprintActivation = (sprintId: string) => {
+    const currentActive = sprints.find((s: any) => s.isActive);
+    if (currentActive && currentActive.id !== sprintId) {
+      setConfirmActivateId(sprintId);
+      return;
+    }
+    void handleActivateSprint(sprintId);
+  };
+
+  const handleActivateSprint = async (sprintId: string) => {
+    setActivatingSprintId(sprintId);
+    try {
+      await setActiveSprint(sprintId);
+      toast.success("Sprint ativada com sucesso!");
+      setConfirmActivateId(null);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Não foi possível ativar a sprint.");
+    } finally {
+      setActivatingSprintId(null);
+    }
   };
 
   const getSprintProgress = (sprintId: string) => {
@@ -305,6 +329,33 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
                             Ver detalhes <ArrowRight className="h-3 w-3" aria-hidden="true" />
                           </span>
                         </div>
+                        {canEdit && !sprint.closedAt && (
+                          sprint.isActive ? (
+                            <div className="mt-2 flex h-9 items-center justify-center gap-2 rounded-md bg-primary/10 text-xs font-semibold text-primary" aria-label="Esta é a sprint ativa">
+                              <CircleDot className="h-3.5 w-3.5" aria-hidden="true" />
+                              Sprint ativa
+                            </div>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-2 w-full gap-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground"
+                              disabled={activatingSprintId !== null}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                requestSprintActivation(sprint.id);
+                              }}
+                            >
+                              {activatingSprintId === sprint.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+                              )}
+                              {activatingSprintId === sprint.id ? "Ativando…" : "Ativar sprint"}
+                            </Button>
+                          )
+                        )}
                     </div>
                   </div>
                 </div>
@@ -312,7 +363,7 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
 
               <ContextMenuContent className="w-52">
                 {!sprint.closedAt && !sprint.isActive && canEdit && (
-                  <ContextMenuItem onClick={(e) => { e.stopPropagation(); setActiveSprint(sprint.id); }}>
+                  <ContextMenuItem onClick={(e) => { e.stopPropagation(); requestSprintActivation(sprint.id); }}>
                     <Zap className="h-3.5 w-3.5 mr-2 text-primary" />Definir como sprint ativa
                   </ContextMenuItem>
                 )}
@@ -358,6 +409,32 @@ export function SprintManager({ selectedSprintId, onSelectSprint }: SprintManage
       </div>
 
       {/* Confirm: Encerrar Sprint */}
+      <AlertDialog open={!!confirmActivateId} onOpenChange={(open) => { if (!open && !activatingSprintId) setConfirmActivateId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Trocar a sprint ativa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A sprint <strong>{sprints.find((s: any) => s.isActive)?.name}</strong> será desativada e a sprint{" "}
+              <strong>{sprints.find((s: any) => s.id === confirmActivateId)?.name}</strong> passará a ser a sprint ativa da equipe.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={activatingSprintId !== null}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={activatingSprintId !== null}
+              onClick={(event) => {
+                event.preventDefault();
+                if (confirmActivateId) void handleActivateSprint(confirmActivateId);
+              }}
+              className="gap-2"
+            >
+              {activatingSprintId ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Zap className="h-4 w-4" aria-hidden="true" />}
+              {activatingSprintId ? "Ativando…" : "Confirmar troca"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!confirmCloseId} onOpenChange={(o) => { if (!o) setConfirmCloseId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -16063,6 +16063,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "user_stories_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "developers"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "user_stories_contract_id_fkey"
             columns: ["contract_id"]
             isOneToOne: false

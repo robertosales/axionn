@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApfAcceptanceCriteria } from "../../hooks/useApfEvidenceDossiers";
 import { saveApfAcceptanceCriterion } from "../../services/apfEvidenceDossier.service";
 import type { ApfAcceptanceCriterion, ApfAcceptanceDecision, ApfEvidenceDossierSummary } from "../../types/apfEvidenceDossier.types";
@@ -16,6 +17,7 @@ import { ApfDossierEvidence } from "./ApfDossierEvidence";
 import { ApfDossierCounting } from "./ApfDossierCounting";
 import { ApfDossierAudit } from "./ApfDossierAudit";
 import { ApfDossierValidation } from "./ApfDossierValidation";
+import { ApfDossierTraceability } from "./ApfDossierTraceability";
 
 const decisions: Array<{ value: ApfAcceptanceDecision; label: string }> = [
   { value: "meets", label: "Atende" }, { value: "partially_meets", label: "Atende parcialmente" },
@@ -31,16 +33,25 @@ export function ApfDossierSpecification({ dossier, onBack, onSuccessorCreated }:
   return <section className="space-y-4" aria-labelledby="specification-title">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3"><Button variant="outline" size="icon" onClick={onBack} aria-label="Voltar para dossiês"><ArrowLeft className="h-4 w-4" /></Button><div className="min-w-0"><p className="font-mono text-xs text-muted-foreground">{dossier.dossierCode}</p><h2 id="specification-title" className="truncate text-xl font-semibold">Especificação · {dossier.title}</h2></div></div>
-      <Button onClick={() => setAdding(true)} disabled={adding}><Plus className="mr-2 h-4 w-4" />Adicionar critério</Button>
     </div>
+    <Tabs defaultValue="overview">
+      <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto p-1">
+        <TabsTrigger value="overview">Visão geral</TabsTrigger><TabsTrigger value="specification">Especificação</TabsTrigger><TabsTrigger value="evidence">Evidências</TabsTrigger><TabsTrigger value="traceability">Rastreabilidade</TabsTrigger><TabsTrigger value="counting">Contagem</TabsTrigger><TabsTrigger value="audit">Auditoria</TabsTrigger><TabsTrigger value="document">Documento</TabsTrigger>
+      </TabsList>
+      <TabsContent value="overview"><div className="grid gap-3 sm:grid-cols-3"><Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Critérios decididos</p><p className="text-xl font-semibold">{decided}/{criteria.length}</p></CardContent></Card><Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Tipo</p><p className="text-lg font-semibold">{dossier.countingType}</p></CardContent></Card><Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Status</p><p className="text-lg font-semibold">{dossier.status}</p></CardContent></Card></div></TabsContent>
+      <TabsContent value="specification" className="space-y-3">
+    <div className="flex justify-end"><Button onClick={() => setAdding(true)} disabled={adding}><Plus className="mr-2 h-4 w-4" />Adicionar critério</Button></div>
     <Card><CardContent className="grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div><div className="mb-2 flex justify-between text-xs font-medium"><span>Critérios com decisão</span><span>{decided}/{criteria.length}</span></div><Progress value={completeness} aria-label={`${completeness}% dos critérios possuem decisão`} /></div><Badge variant={completeness === 100 && criteria.length ? "default" : "secondary"}>{completeness}% completo</Badge></CardContent></Card>
     {isLoading ? <div className="flex min-h-40 items-center justify-center" role="status"><Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />Carregando critérios…</div>
       : isError ? <Card role="alert" className="border-destructive/30"><CardContent className="flex items-center justify-between p-4"><p className="text-sm text-destructive">Falha ao carregar os critérios.</p><Button variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button></CardContent></Card>
       : <div className="space-y-3">{adding && <CriterionEditor dossierId={dossier.id} criterion={null} nextOrder={criteria.length} onSaved={async () => { setAdding(false); await refetch(); }} onCancel={() => setAdding(false)} />}{criteria.map((criterion) => <CriterionEditor key={criterion.id} dossierId={dossier.id} criterion={criterion} nextOrder={criterion.sortOrder} onSaved={refetch} />)}{!adding && criteria.length === 0 && <Card className="border-dashed"><CardContent className="flex min-h-40 flex-col items-center justify-center text-center"><CircleDashed className="mb-3 h-8 w-8 text-muted-foreground" /><p className="font-medium">Nenhum critério de aceite</p><p className="text-sm text-muted-foreground">Cadastre o primeiro critério preservando o texto original da HU.</p></CardContent></Card>}</div>}
-    <ApfDossierEvidence dossierId={dossier.id} criteria={criteria} />
-    <ApfDossierCounting sessionId={dossier.countingSessionId} />
-    <ApfDossierAudit dossierId={dossier.id} />
-    <ApfDossierValidation dossier={dossier} onSuccessorCreated={onSuccessorCreated} />
+      </TabsContent>
+      <TabsContent value="evidence"><ApfDossierEvidence dossierId={dossier.id} criteria={criteria} /></TabsContent>
+      <TabsContent value="traceability"><ApfDossierTraceability dossierId={dossier.id} criteria={criteria} /></TabsContent>
+      <TabsContent value="counting"><ApfDossierCounting sessionId={dossier.countingSessionId} /></TabsContent>
+      <TabsContent value="audit"><ApfDossierAudit dossierId={dossier.id} /></TabsContent>
+      <TabsContent value="document"><ApfDossierValidation dossier={dossier} onSuccessorCreated={onSuccessorCreated} /></TabsContent>
+    </Tabs>
   </section>;
 }
 

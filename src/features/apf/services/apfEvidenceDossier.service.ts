@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { renderApfDossierMarkdown, sha256Hex, type ApfDossierDocumentData } from "../utils/apfDossierMarkdown";
 import type {
   ApfDossierCreationOptions,
   ApfAcceptanceCriterion,
@@ -36,6 +37,18 @@ export async function listApfEvidenceDossiers(organizationId: string): Promise<A
     totalHomologatedPf: row.total_homologated_pf === null ? null : Number(row.total_homologated_pf),
     updatedAt: row.updated_at, userStory: row.user_stories, countingSessionId: row.counting_session_id,
   }));
+}
+
+export async function validateAndSnapshotApfDossier(data: ApfDossierDocumentData): Promise<{ markdown: string; hash: string; version: number }> {
+  const markdown = renderApfDossierMarkdown(data);
+  const hash = await sha256Hex(markdown);
+  const snapshot = { generated_at: new Date().toISOString(), dossier: data.dossier, criteria: data.criteria, evidence: data.evidence, counting: data.counting, scenarios: data.scenarios };
+  const { data: rpcData, error } = await supabase.rpc("validate_apf_dossier_snapshot" as never, { p_dossier_id: data.dossier.id, p_snapshot: snapshot, p_rendered_markdown: markdown, p_content_hash: hash, p_total_impacted_pf: data.counting.calculatedTotalPf } as never);
+  if (error) throw error;
+  const row = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as { version_number: number } | null;
+  if (!row) throw new Error("O banco não retornou a versão validada.");
+  const version = Number(row.version_number);
+  return { markdown, hash, version };
 }
 
 export async function listApfAuditScenarios(dossierId: string): Promise<ApfAuditScenario[]> {

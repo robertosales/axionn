@@ -15,6 +15,7 @@ import type { ApfAcceptanceCriterion, ApfAcceptanceDecision, ApfEvidenceDossierS
 import { ApfDossierEvidence } from "./ApfDossierEvidence";
 import { ApfDossierCounting } from "./ApfDossierCounting";
 import { ApfDossierAudit } from "./ApfDossierAudit";
+import { ApfDossierValidation } from "./ApfDossierValidation";
 
 const decisions: Array<{ value: ApfAcceptanceDecision; label: string }> = [
   { value: "meets", label: "Atende" }, { value: "partially_meets", label: "Atende parcialmente" },
@@ -39,6 +40,7 @@ export function ApfDossierSpecification({ dossier, onBack }: { dossier: ApfEvide
     <ApfDossierEvidence dossierId={dossier.id} criteria={criteria} />
     <ApfDossierCounting sessionId={dossier.countingSessionId} />
     <ApfDossierAudit dossierId={dossier.id} />
+    <ApfDossierValidation dossier={dossier} />
   </section>;
 }
 

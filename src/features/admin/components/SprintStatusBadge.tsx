@@ -31,7 +31,8 @@ interface SprintStatusBadgeProps {
 export function SprintStatusBadge({ sprint, className }: SprintStatusBadgeProps) {
   if (!sprint) return null;
 
-  const { label, emoji, colorClass } = getSprintStatus(sprint);
+  const { label, status, colorClass } = getSprintStatus(sprint);
+  const conciseLabel = status === "ativa_atrasada" ? "Ativa" : status === "encerrada" ? "Encerrada" : label;
 
   return (
     <Badge
@@ -42,8 +43,8 @@ export function SprintStatusBadge({ sprint, className }: SprintStatusBadgeProps)
         className,
       )}
     >
-      <span>{emoji}</span>
-      <span>{label}</span>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+      <span>{conciseLabel}</span>
     </Badge>
   );
 }

@@ -38,6 +38,12 @@ export function ApfGeneratorPage() {
   return (
     <AiPipelineProvider>
       <div className="mx-auto flex max-w-screen-xl flex-col gap-4 p-4 md:p-6">
+        <header className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Medição &amp; Evidências</h1>
+          <p className="text-sm text-muted-foreground">
+            Contabilize pontos de função, gerencie evidências e gere os artefatos necessários para formalizar as entregas.
+          </p>
+        </header>
         <Tabs defaultValue="hub">
           <TabsList className="flex h-auto flex-wrap gap-1 p-1">
             {TABS.map((tab) => (

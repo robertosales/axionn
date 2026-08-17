@@ -694,8 +694,8 @@ export function SprintProvider({ children }: { children: ReactNode }) {
     if ((hu as any).functionPoints !== undefined) updateData.function_points = (hu as any).functionPoints ?? null;
     if ("assigneeId" in hu) updateData.assignee_id = (hu as any).assigneeId ?? null;
     const { data, error } = await supabase.from("user_stories").update(updateData).eq("id", id).select();
-    if (error) { toast.error("Erro ao atualizar HU: " + error.message); return; }
-    if (!data || data.length === 0) { toast.error("Erro ao atualizar HU: nenhuma linha afetada"); return; }
+    if (error) throw new Error("Erro ao atualizar HU: " + error.message);
+    if (!data || data.length === 0) throw new Error("Erro ao atualizar HU: nenhuma linha afetada");
     setUserStories((prev) => prev.map((h) => h.id === id ? mapUserStory(data[0], impediments.filter((imp) => imp.huId === id)) : h));
   }, [impediments]);
 
@@ -966,14 +966,46 @@ export function SprintProvider({ children }: { children: ReactNode }) {
   }, [sprints]);
 
   const setActiveSprintFn = useCallback(async (id: string) => {
-    if (!teamId) return;
+    if (!teamId) throw new Error("Selecione uma equipe antes de ativar a sprint.");
+    const targetSprint = sprints.find((s) => s.id === id);
+    if (!targetSprint) throw new Error("Sprint não encontrada.");
+    if (targetSprint.closedAt) throw new Error("Uma sprint encerrada não pode ser reativada.");
+
     const currentActive = sprints.find((s) => s.isActive);
-    const ops: PromiseLike<any>[] = [];
+    if (currentActive?.id === id) return;
+
     if (currentActive && currentActive.id !== id) {
-      ops.push(supabase.from("sprints").update({ is_active: false }).eq("id", currentActive.id));
+      const { error: deactivateError } = await supabase
+        .from("sprints")
+        .update({ is_active: false })
+        .eq("id", currentActive.id)
+        .eq("team_id", teamId)
+        .select("id")
+        .single();
+      if (deactivateError) {
+        throw new Error(`Não foi possível desativar a sprint atual: ${deactivateError.message}`);
+      }
     }
-    ops.push(supabase.from("sprints").update({ is_active: true }).eq("id", id));
-    await Promise.all(ops);
+
+    const { error: activateError } = await supabase
+      .from("sprints")
+      .update({ is_active: true })
+      .eq("id", id)
+      .eq("team_id", teamId)
+      .select("id")
+      .single();
+
+    if (activateError) {
+      if (currentActive && currentActive.id !== id) {
+        await supabase
+          .from("sprints")
+          .update({ is_active: true })
+          .eq("id", currentActive.id)
+          .eq("team_id", teamId);
+      }
+      throw new Error(`Não foi possível ativar a sprint: ${activateError.message}`);
+    }
+
     setSprints((prev) => prev.map((s) => ({ ...s, isActive: s.id === id })));
   }, [teamId, sprints]);
 

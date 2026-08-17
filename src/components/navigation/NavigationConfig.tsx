@@ -40,12 +40,21 @@ export interface NavigationItem {
   children?: NavigationItem[];
   permissions?: string[];
   contextualActions?: Array<{ id: string; label: string; route: string }>;
+  activePathPrefixes?: string[];
 }
 
 export interface NavigationSection {
   id: string;
   label: string;
   items: NavigationItem[];
+}
+
+export function matchesNavigationItem(item: NavigationItem, pathname: string): boolean {
+  return item.route === pathname
+    || (item.route !== "/" && pathname.startsWith(`${item.route}/`))
+    || item.activePathPrefixes?.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    ) === true;
 }
 
 export const navigationConfig: NavigationSection[] = [
@@ -123,7 +132,7 @@ export const navigationConfig: NavigationSection[] = [
 export function buildBreadcrumbs(pathname: string, config: NavigationSection[]): Array<{ label: string; path: string }> {
   const candidates = config
     .flatMap((section) => section.items)
-    .filter((item) => item.route === pathname || pathname.startsWith(`${item.route}/`));
+    .filter((item) => matchesNavigationItem(item, pathname));
 
   if (candidates.length === 0) {
     return [];
@@ -132,6 +141,31 @@ export function buildBreadcrumbs(pathname: string, config: NavigationSection[]):
   const match = candidates.reduce((best, item) =>
     item.route.length > best.route.length ? item : best,
   );
+
+  if (match.id === "medicao-evidencias") {
+    return [
+      { label: "Sala Ágil", path: "/sala-agil/dashboard" },
+      { label: "Operações", path: "/sala-agil/calendario" },
+      { label: match.label, path: match.route },
+    ];
+  }
+
+
+  if (match.id === "historico") {
+    return [
+      { label: "Sala Ágil", path: "/sala-agil/dashboard" },
+      { label: "Configurações", path: "/sala-agil/times" },
+      { label: match.label, path: match.route },
+    ];
+  }
+
+  if (match.id === "okr") {
+    return [
+      { label: "Sala Ágil", path: "/sala-agil/dashboard" },
+      { label: "Estratégia", path: match.route },
+      { label: match.label, path: pathname },
+    ];
+  }
 
   const fallback = match.route === "/organization/gitlab-integrations"
     ? [{ label: "Organização", path: "/organization" }, { label: match.label, path: match.route }]
@@ -182,6 +216,7 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
       { id: "calendario", label: "Calendário", icon: Calendar, route: "/sala-agil/calendario" },
       { id: "equipe", label: "Equipe", icon: Users, route: "/sala-agil/equipe" },
       { id: "atividades", label: "Tarefas", icon: Activity, route: "/sala-agil/atividades" },
+      { id: "medicao-evidencias", label: "Medição & Evidências", icon: ClipboardCheck, route: "/sala-agil/medicao-evidencias" },
     ],
   },
   {
@@ -190,14 +225,20 @@ export const salaAgilNavigationConfig: NavigationSection[] = [
     items: [
       { id: "metricas", label: "Métricas", icon: BarChart3, route: "/sala-agil/metricas" },
       { id: "relatorios", label: "Relatórios", icon: FileText, route: "/sala-agil/relatorios" },
-      { id: "historico", label: "Histórico", icon: History, route: "/sala-agil/historico" },
-      { id: "okr", label: "OKR", icon: Target, route: OKR_V2_ENABLED ? "/okr/dashboard" : "/okr" },
+    ],
+  },
+  {
+    id: "sala-agil-estrategia",
+    label: "Estratégia",
+    items: [
+      { id: "okr", label: "OKR", icon: Target, route: OKR_V2_ENABLED ? "/okr/dashboard" : "/okr", activePathPrefixes: ["/okr"] },
     ],
   },
   {
     id: "sala-agil-config",
     label: "Configurações",
     items: [
+      { id: "historico", label: "Histórico", icon: History, route: "/sala-agil/historico" },
       { id: "times", label: "Times", icon: Users, route: "/sala-agil/times" },
       { id: "membros", label: "Membros", icon: User, route: "/sala-agil/membros" },
       { id: "perfis", label: "Perfis (RBAC)", icon: ShieldCheck, route: "/sala-agil/perfis" },

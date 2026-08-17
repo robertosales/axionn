@@ -24,7 +24,7 @@ export function BreadcrumbsContextual({ items, className }: BreadcrumbsContextua
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
         return (
-          <div key={item.path} className="flex items-center gap-2">
+          <div key={`${item.path}-${index}`} className="flex items-center gap-2">
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/70" />
             {isLast ? (
               <span className="rounded-md px-2 py-1 font-medium text-foreground">{item.label}</span>

@@ -42,6 +42,33 @@ export interface ApfDossierCountingMemory {
   items: ApfDossierCountingItem[];
 }
 
+export type ApfAuditScenarioStatus = "open" | "accepted" | "rejected" | "mitigated";
+
+export interface ApfAuditScenario {
+  id: string;
+  dossierId: string;
+  title: string;
+  description: string;
+  alternativeClassification: string | null;
+  rationale: string;
+  pfDelta: number;
+  financialEffect: number | null;
+  status: ApfAuditScenarioStatus;
+  createdAt: string;
+}
+
+export interface SaveApfAuditScenarioInput {
+  id?: string;
+  dossierId: string;
+  title: string;
+  description: string;
+  alternativeClassification: string;
+  rationale: string;
+  pfDelta: number;
+  financialEffect: number | null;
+  status: ApfAuditScenarioStatus;
+}
+
 export interface ApfDossierCreationProject {
   id: string;
   name: string;

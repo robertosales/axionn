@@ -4,10 +4,12 @@ import type {
   ApfAcceptanceCriterion,
   ApfEvidenceSource,
   ApfDossierCountingMemory,
+  ApfAuditScenario,
   ApfEvidenceDossierSummary,
   CreateApfEvidenceDossierInput,
   CreateApfEvidenceSourceInput,
   SaveApfAcceptanceCriterionInput,
+  SaveApfAuditScenarioInput,
 } from "../types/apfEvidenceDossier.types";
 
 type DossierRow = {
@@ -34,6 +36,20 @@ export async function listApfEvidenceDossiers(organizationId: string): Promise<A
     totalHomologatedPf: row.total_homologated_pf === null ? null : Number(row.total_homologated_pf),
     updatedAt: row.updated_at, userStory: row.user_stories, countingSessionId: row.counting_session_id,
   }));
+}
+
+export async function listApfAuditScenarios(dossierId: string): Promise<ApfAuditScenario[]> {
+  const { data, error } = await supabase.from("apf_audit_scenarios" as never).select("id, dossier_id, title, description, alternative_classification, rationale, pf_delta, financial_effect, status, created_at").eq("dossier_id", dossierId).order("created_at", { ascending: false });
+  if (error) throw error;
+  type Row = { id: string; dossier_id: string; title: string; description: string; alternative_classification: string | null; rationale: string; pf_delta: number | string; financial_effect: number | string | null; status: ApfAuditScenario["status"]; created_at: string };
+  return ((data ?? []) as Row[]).map((row) => ({ id: row.id, dossierId: row.dossier_id, title: row.title, description: row.description, alternativeClassification: row.alternative_classification, rationale: row.rationale, pfDelta: Number(row.pf_delta), financialEffect: row.financial_effect === null ? null : Number(row.financial_effect), status: row.status, createdAt: row.created_at }));
+}
+
+export async function saveApfAuditScenario(input: SaveApfAuditScenarioInput): Promise<void> {
+  const payload = { dossier_id: input.dossierId, title: input.title.trim(), description: input.description.trim(), alternative_classification: input.alternativeClassification.trim() || null, rationale: input.rationale.trim(), pf_delta: input.pfDelta, financial_effect: input.financialEffect, status: input.status };
+  const query = input.id ? supabase.from("apf_audit_scenarios" as never).update(payload as never).eq("id", input.id) : supabase.from("apf_audit_scenarios" as never).insert(payload as never);
+  const { error } = await query;
+  if (error) throw error;
 }
 
 export async function getApfDossierCountingMemory(sessionId: string): Promise<ApfDossierCountingMemory> {

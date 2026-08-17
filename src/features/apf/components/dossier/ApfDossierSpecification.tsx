@@ -14,6 +14,7 @@ import { saveApfAcceptanceCriterion } from "../../services/apfEvidenceDossier.se
 import type { ApfAcceptanceCriterion, ApfAcceptanceDecision, ApfEvidenceDossierSummary } from "../../types/apfEvidenceDossier.types";
 import { ApfDossierEvidence } from "./ApfDossierEvidence";
 import { ApfDossierCounting } from "./ApfDossierCounting";
+import { ApfDossierAudit } from "./ApfDossierAudit";
 
 const decisions: Array<{ value: ApfAcceptanceDecision; label: string }> = [
   { value: "meets", label: "Atende" }, { value: "partially_meets", label: "Atende parcialmente" },
@@ -37,6 +38,7 @@ export function ApfDossierSpecification({ dossier, onBack }: { dossier: ApfEvide
       : <div className="space-y-3">{adding && <CriterionEditor dossierId={dossier.id} criterion={null} nextOrder={criteria.length} onSaved={async () => { setAdding(false); await refetch(); }} onCancel={() => setAdding(false)} />}{criteria.map((criterion) => <CriterionEditor key={criterion.id} dossierId={dossier.id} criterion={criterion} nextOrder={criterion.sortOrder} onSaved={refetch} />)}{!adding && criteria.length === 0 && <Card className="border-dashed"><CardContent className="flex min-h-40 flex-col items-center justify-center text-center"><CircleDashed className="mb-3 h-8 w-8 text-muted-foreground" /><p className="font-medium">Nenhum critério de aceite</p><p className="text-sm text-muted-foreground">Cadastre o primeiro critério preservando o texto original da HU.</p></CardContent></Card>}</div>}
     <ApfDossierEvidence dossierId={dossier.id} criteria={criteria} />
     <ApfDossierCounting sessionId={dossier.countingSessionId} />
+    <ApfDossierAudit dossierId={dossier.id} />
   </section>;
 }
 

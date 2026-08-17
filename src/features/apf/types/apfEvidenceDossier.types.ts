@@ -38,6 +38,8 @@ export interface ApfDossierCountingItem {
   impactedPf: number;
   isValidated: boolean;
   hasHumanOverride: boolean;
+  hasMetricReview: boolean;
+  metricReviewJustification: string | null;
 }
 
 export interface ApfDossierCountingMemory {

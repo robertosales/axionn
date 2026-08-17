@@ -129,15 +129,22 @@ export async function getApfDossierCountingMemory(sessionId: string): Promise<Ap
   type SessionRow = { id: string; status: string; total_pf_fs: number | string };
   type ItemRow = { id: string; hu_ref: string | null; ef_description: string; function_sigla: string; factor_sigla: string; complexity: string; counting_decision: string; source_payload: Record<string, unknown> | null; pf_bruto: number | string; contribution_pct: number | string; pf_fs: number | string; corrected_pf_bruto: number | string | null; corrected_pf_fs: number | string | null; is_validated: boolean };
   const sessionRow = session as SessionRow;
+  const itemIds = ((items ?? []) as ItemRow[]).map((item) => item.id);
+  const { data: metricReviews, error: metricError } = itemIds.length ? await supabase.from("apf_counting_metric_reviews" as never).select("counting_item_id, confirmed_det, confirmed_ftr, confirmed_ret, justification").in("counting_item_id", itemIds) : { data: [], error: null };
+  if (metricError) throw metricError;
+  type ReviewRow = { counting_item_id: string; confirmed_det: number | null; confirmed_ftr: number | null; confirmed_ret: number | null; justification: string };
+  const reviewMap = new Map(((metricReviews ?? []) as ReviewRow[]).map((review) => [review.counting_item_id, review]));
   const mappedItems = ((items ?? []) as ItemRow[]).map((item) => {
     const payload = item.source_payload ?? {};
     const metric = (key: string) => { const value = payload[key]; return typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : null; };
-    return { id: item.id, description: item.ef_description, huRef: item.hu_ref, functionType: item.function_sigla, impactFactor: item.factor_sigla, complexity: item.complexity, decision: item.counting_decision, det: metric("det") ?? metric("det_count"), ftr: metric("ftr") ?? metric("ftr_count"), ret: metric("ret") ?? metric("ret_count"), basePf: Number(item.corrected_pf_bruto ?? item.pf_bruto), contributionPercent: Number(item.contribution_pct), impactedPf: Number(item.corrected_pf_fs ?? item.pf_fs), isValidated: item.is_validated, hasHumanOverride: item.corrected_pf_fs !== null || item.corrected_pf_bruto !== null };
+    const review = reviewMap.get(item.id); return { id: item.id, description: item.ef_description, huRef: item.hu_ref, functionType: item.function_sigla, impactFactor: item.factor_sigla, complexity: item.complexity, decision: item.counting_decision, det: review?.confirmed_det ?? metric("det") ?? metric("det_count"), ftr: review?.confirmed_ftr ?? metric("ftr") ?? metric("ftr_count"), ret: review?.confirmed_ret ?? metric("ret") ?? metric("ret_count"), basePf: Number(item.corrected_pf_bruto ?? item.pf_bruto), contributionPercent: Number(item.contribution_pct), impactedPf: Number(item.corrected_pf_fs ?? item.pf_fs), isValidated: item.is_validated, hasHumanOverride: item.corrected_pf_fs !== null || item.corrected_pf_bruto !== null, hasMetricReview: Boolean(review), metricReviewJustification: review?.justification ?? null };
   });
   const calculatedTotalPf = Number(mappedItems.reduce((sum, item) => sum + item.impactedPf, 0).toFixed(2));
   const sessionTotalPf = Number(sessionRow.total_pf_fs);
   return { sessionId: sessionRow.id, sessionStatus: sessionRow.status, sessionTotalPf, calculatedTotalPf, closes: Math.abs(sessionTotalPf - calculatedTotalPf) <= 0.01, items: mappedItems };
 }
+
+export async function reviewApfCountingMetrics(dossierId: string, itemId: string, det: number | null, ftr: number | null, ret: number | null, justification: string): Promise<void> { const { error } = await supabase.rpc("review_apf_counting_metrics" as never, { p_dossier_id: dossierId, p_counting_item_id: itemId, p_det: det, p_ftr: ftr, p_ret: ret, p_justification: justification.trim() } as never); if (error) throw error; }
 
 export async function listApfEvidenceSources(dossierId: string): Promise<ApfEvidenceSource[]> {
   const [{ data: sources, error: sourceError }, { data: catalog, error: catalogError }, { data: links, error: linkError }] = await Promise.all([

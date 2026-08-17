@@ -22,7 +22,7 @@ const decisions: Array<{ value: ApfAcceptanceDecision; label: string }> = [
   { value: "does_not_meet", label: "Não atende" }, { value: "not_applicable", label: "Não aplicável" },
 ];
 
-export function ApfDossierSpecification({ dossier, onBack }: { dossier: ApfEvidenceDossierSummary; onBack: () => void }) {
+export function ApfDossierSpecification({ dossier, onBack, onSuccessorCreated }: { dossier: ApfEvidenceDossierSummary; onBack: () => void; onSuccessorCreated: () => Promise<unknown> }) {
   const { data: criteria = [], isLoading, isError, refetch } = useApfAcceptanceCriteria(dossier.id);
   const [adding, setAdding] = useState(false);
   const decided = criteria.filter((criterion) => criterion.decision).length;
@@ -40,7 +40,7 @@ export function ApfDossierSpecification({ dossier, onBack }: { dossier: ApfEvide
     <ApfDossierEvidence dossierId={dossier.id} criteria={criteria} />
     <ApfDossierCounting sessionId={dossier.countingSessionId} />
     <ApfDossierAudit dossierId={dossier.id} />
-    <ApfDossierValidation dossier={dossier} />
+    <ApfDossierValidation dossier={dossier} onSuccessorCreated={onSuccessorCreated} />
   </section>;
 }
 

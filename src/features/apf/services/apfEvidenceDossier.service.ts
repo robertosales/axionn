@@ -52,6 +52,12 @@ export async function homologateApfDossier(dossierId: string, versionNumber: num
   if (error) throw error;
 }
 
+export async function createApfDossierSuccessor(sourceDossierId: string, dossierCode: string, title: string): Promise<string> {
+  const { data, error } = await supabase.rpc("create_apf_dossier_successor" as never, { p_source_dossier_id: sourceDossierId, p_dossier_code: dossierCode.trim(), p_title: title.trim() } as never);
+  if (error) throw error;
+  return String(data);
+}
+
 export async function validateAndSnapshotApfDossier(data: ApfDossierDocumentData): Promise<{ markdown: string; hash: string; version: number }> {
   const markdown = renderApfDossierMarkdown(data);
   const hash = await sha256Hex(markdown);

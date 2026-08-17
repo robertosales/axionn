@@ -13,6 +13,7 @@ import type {
   SaveApfAcceptanceCriterionInput,
   SaveApfAuditScenarioInput,
   ApfGitEvidenceCandidates,
+  ApfTraceabilitySuggestion,
 } from "../types/apfEvidenceDossier.types";
 
 type DossierRow = {
@@ -166,6 +167,24 @@ export async function linkApfCriterionToEvidence(dossierId: string, criterionId:
   if (lookupError) throw lookupError;
   if (existing) return;
   const { error } = await supabase.from("apf_traceability_links" as never).insert({ dossier_id: dossierId, acceptance_criterion_id: criterionId, evidence_source_id: evidenceSourceId, functional_result: "pending" } as never);
+  if (error) throw error;
+}
+
+export async function listApfTraceabilitySuggestions(dossierId: string): Promise<ApfTraceabilitySuggestion[]> {
+  const { data, error } = await supabase.from("apf_traceability_suggestions" as never).select("id, acceptance_criterion_id, evidence_source_id, method, confidence, rationale").eq("dossier_id", dossierId).eq("status", "pending").order("confidence", { ascending: false });
+  if (error) throw error;
+  type Row = { id: string; acceptance_criterion_id: string; evidence_source_id: string; method: "lexical" | "ai"; confidence: number | string; rationale: string };
+  return ((data ?? []) as Row[]).map((row) => ({ id: row.id, criterionId: row.acceptance_criterion_id, evidenceSourceId: row.evidence_source_id, method: row.method, confidence: Number(row.confidence), rationale: row.rationale }));
+}
+
+export async function generateApfTraceabilitySuggestions(dossierId: string): Promise<number> {
+  const { data, error } = await supabase.rpc("generate_apf_traceability_suggestions" as never, { p_dossier_id: dossierId } as never);
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+export async function reviewApfTraceabilitySuggestion(suggestionId: string, accept: boolean): Promise<void> {
+  const { error } = await supabase.rpc("review_apf_traceability_suggestion" as never, { p_suggestion_id: suggestionId, p_accept: accept } as never);
   if (error) throw error;
 }
 

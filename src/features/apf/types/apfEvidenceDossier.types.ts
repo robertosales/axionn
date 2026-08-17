@@ -179,6 +179,15 @@ export interface CreateApfEvidenceSourceInput {
   verificationStatus: ApfEvidenceVerification;
 }
 
+export interface ApfTraceabilitySuggestion {
+  id: string;
+  criterionId: string;
+  evidenceSourceId: string;
+  method: "lexical" | "ai";
+  confidence: number;
+  rationale: string;
+}
+
 export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   draft: "Rascunho",
   collecting_evidence: "Coletando evidências",

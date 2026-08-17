@@ -48,7 +48,7 @@ export function ApfDossierSpecification({ dossier, onBack, onSuccessorCreated }:
       </TabsContent>
       <TabsContent value="evidence"><ApfDossierEvidence dossierId={dossier.id} organizationId={dossier.organizationId} userStoryId={dossier.userStoryId} criteria={criteria} /></TabsContent>
       <TabsContent value="traceability"><ApfDossierTraceability dossierId={dossier.id} criteria={criteria} /></TabsContent>
-      <TabsContent value="counting"><ApfDossierCounting sessionId={dossier.countingSessionId} /></TabsContent>
+      <TabsContent value="counting"><ApfDossierCounting dossierId={dossier.id} sessionId={dossier.countingSessionId} /></TabsContent>
       <TabsContent value="audit"><ApfDossierAudit dossierId={dossier.id} /></TabsContent>
       <TabsContent value="document"><ApfDossierValidation dossier={dossier} onSuccessorCreated={onSuccessorCreated} /></TabsContent>
     </Tabs>

@@ -10,8 +10,36 @@ export interface ApfEvidenceDossierSummary {
   status: ApfDossierStatus;
   totalImpactedPf: number;
   totalHomologatedPf: number | null;
+  countingSessionId: string | null;
   updatedAt: string;
   userStory: { code: string; title: string } | null;
+}
+
+export interface ApfDossierCountingItem {
+  id: string;
+  description: string;
+  huRef: string | null;
+  functionType: string;
+  impactFactor: string;
+  complexity: string;
+  decision: string;
+  det: number | null;
+  ftr: number | null;
+  ret: number | null;
+  basePf: number;
+  contributionPercent: number;
+  impactedPf: number;
+  isValidated: boolean;
+  hasHumanOverride: boolean;
+}
+
+export interface ApfDossierCountingMemory {
+  sessionId: string;
+  sessionStatus: string;
+  sessionTotalPf: number;
+  calculatedTotalPf: number;
+  closes: boolean;
+  items: ApfDossierCountingItem[];
 }
 
 export interface ApfDossierCreationProject {

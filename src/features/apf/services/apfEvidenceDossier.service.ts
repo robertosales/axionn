@@ -3,6 +3,7 @@ import type {
   ApfDossierCreationOptions,
   ApfAcceptanceCriterion,
   ApfEvidenceSource,
+  ApfDossierCountingMemory,
   ApfEvidenceDossierSummary,
   CreateApfEvidenceDossierInput,
   CreateApfEvidenceSourceInput,
@@ -15,13 +16,14 @@ type DossierRow = {
   status: ApfEvidenceDossierSummary["status"];
   total_impacted_pf: number | string; total_homologated_pf: number | string | null;
   updated_at: string; user_stories: { code: string; title: string } | null;
+  counting_session_id: string | null;
 };
 
 export async function listApfEvidenceDossiers(organizationId: string): Promise<ApfEvidenceDossierSummary[]> {
   // Remove this narrow compatibility cast after regenerating Supabase types.
   const { data, error } = await supabase
     .from("apf_evidence_dossiers" as never)
-    .select("id, organization_id, dossier_code, title, counting_type, status, total_impacted_pf, total_homologated_pf, updated_at, user_stories(code, title)")
+    .select("id, organization_id, dossier_code, title, counting_type, status, total_impacted_pf, total_homologated_pf, counting_session_id, updated_at, user_stories(code, title)")
     .eq("organization_id", organizationId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -30,8 +32,28 @@ export async function listApfEvidenceDossiers(organizationId: string): Promise<A
     title: row.title, countingType: row.counting_type, status: row.status,
     totalImpactedPf: Number(row.total_impacted_pf),
     totalHomologatedPf: row.total_homologated_pf === null ? null : Number(row.total_homologated_pf),
-    updatedAt: row.updated_at, userStory: row.user_stories,
+    updatedAt: row.updated_at, userStory: row.user_stories, countingSessionId: row.counting_session_id,
   }));
+}
+
+export async function getApfDossierCountingMemory(sessionId: string): Promise<ApfDossierCountingMemory> {
+  const [{ data: session, error: sessionError }, { data: items, error: itemsError }] = await Promise.all([
+    supabase.from("apf_counting_sessions" as never).select("id, status, total_pf_fs").eq("id", sessionId).single(),
+    supabase.from("apf_counting_items" as never).select("id, hu_ref, ef_description, function_sigla, factor_sigla, complexity, counting_decision, source_payload, pf_bruto, contribution_pct, pf_fs, corrected_pf_bruto, corrected_pf_fs, is_validated").eq("session_id", sessionId).order("sort_order"),
+  ]);
+  if (sessionError) throw sessionError;
+  if (itemsError) throw itemsError;
+  type SessionRow = { id: string; status: string; total_pf_fs: number | string };
+  type ItemRow = { id: string; hu_ref: string | null; ef_description: string; function_sigla: string; factor_sigla: string; complexity: string; counting_decision: string; source_payload: Record<string, unknown> | null; pf_bruto: number | string; contribution_pct: number | string; pf_fs: number | string; corrected_pf_bruto: number | string | null; corrected_pf_fs: number | string | null; is_validated: boolean };
+  const sessionRow = session as SessionRow;
+  const mappedItems = ((items ?? []) as ItemRow[]).map((item) => {
+    const payload = item.source_payload ?? {};
+    const metric = (key: string) => { const value = payload[key]; return typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : null; };
+    return { id: item.id, description: item.ef_description, huRef: item.hu_ref, functionType: item.function_sigla, impactFactor: item.factor_sigla, complexity: item.complexity, decision: item.counting_decision, det: metric("det") ?? metric("det_count"), ftr: metric("ftr") ?? metric("ftr_count"), ret: metric("ret") ?? metric("ret_count"), basePf: Number(item.corrected_pf_bruto ?? item.pf_bruto), contributionPercent: Number(item.contribution_pct), impactedPf: Number(item.corrected_pf_fs ?? item.pf_fs), isValidated: item.is_validated, hasHumanOverride: item.corrected_pf_fs !== null || item.corrected_pf_bruto !== null };
+  });
+  const calculatedTotalPf = Number(mappedItems.reduce((sum, item) => sum + item.impactedPf, 0).toFixed(2));
+  const sessionTotalPf = Number(sessionRow.total_pf_fs);
+  return { sessionId: sessionRow.id, sessionStatus: sessionRow.status, sessionTotalPf, calculatedTotalPf, closes: Math.abs(sessionTotalPf - calculatedTotalPf) <= 0.01, items: mappedItems };
 }
 
 export async function listApfEvidenceSources(dossierId: string): Promise<ApfEvidenceSource[]> {

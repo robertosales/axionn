@@ -12,6 +12,7 @@ import type {
   CreateApfEvidenceSourceInput,
   SaveApfAcceptanceCriterionInput,
   SaveApfAuditScenarioInput,
+  ApfGitEvidenceCandidates,
 } from "../types/apfEvidenceDossier.types";
 
 type DossierRow = {
@@ -19,7 +20,7 @@ type DossierRow = {
   counting_type: ApfEvidenceDossierSummary["countingType"];
   status: ApfEvidenceDossierSummary["status"];
   total_impacted_pf: number | string; total_homologated_pf: number | string | null;
-  updated_at: string; user_stories: { code: string; title: string } | null;
+  updated_at: string; user_story_id: string | null; user_stories: { code: string; title: string } | null;
   counting_session_id: string | null;
 };
 
@@ -27,7 +28,7 @@ export async function listApfEvidenceDossiers(organizationId: string): Promise<A
   // Remove this narrow compatibility cast after regenerating Supabase types.
   const { data, error } = await supabase
     .from("apf_evidence_dossiers" as never)
-    .select("id, organization_id, dossier_code, title, counting_type, status, total_impacted_pf, total_homologated_pf, counting_session_id, updated_at, user_stories(code, title)")
+    .select("id, organization_id, dossier_code, title, counting_type, status, total_impacted_pf, total_homologated_pf, counting_session_id, user_story_id, updated_at, user_stories(code, title)")
     .eq("organization_id", organizationId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
@@ -36,8 +37,38 @@ export async function listApfEvidenceDossiers(organizationId: string): Promise<A
     title: row.title, countingType: row.counting_type, status: row.status,
     totalImpactedPf: Number(row.total_impacted_pf),
     totalHomologatedPf: row.total_homologated_pf === null ? null : Number(row.total_homologated_pf),
-    updatedAt: row.updated_at, userStory: row.user_stories, countingSessionId: row.counting_session_id,
+    updatedAt: row.updated_at, userStory: row.user_stories, userStoryId: row.user_story_id, countingSessionId: row.counting_session_id,
   }));
+}
+
+export async function listApfGitEvidenceCandidates(userStoryId: string, organizationId: string): Promise<ApfGitEvidenceCandidates> {
+  const [{ count, error: integrationError }, { data: mergeRequests, error: mrError }, { data: commits, error: commitError }] = await Promise.all([
+    supabase.from("git_integrations").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("is_active", true),
+    supabase.rpc("get_hu_merge_requests", { p_hu_id: userStoryId }),
+    supabase.rpc("get_hu_commits", { p_hu_id: userStoryId, p_limit: 50 }),
+  ]);
+  if (integrationError) throw integrationError;
+  if (mrError) throw mrError;
+  if (commitError) throw commitError;
+  type MrRow = { id: string; mr_iid: number; title: string; state: string; source_branch: string; target_branch: string; web_url: string | null; merge_commit_sha: string | null; integration_id: string };
+  type CommitRow = { commit_sha: string; short_sha: string | null; message: string; author_name: string | null; web_url: string | null; committed_at: string; integration_id: string };
+  const integrationIds = [...new Set([...(mergeRequests ?? []).map((row) => (row as MrRow).integration_id), ...(commits ?? []).map((row) => (row as CommitRow).integration_id)])];
+  const { data: integrations, error: repositoriesError } = integrationIds.length
+    ? await supabase.from("git_integrations").select("id, repository_path").in("id", integrationIds)
+    : { data: [], error: null };
+  if (repositoriesError) throw repositoriesError;
+  const repositories = new Map((integrations ?? []).map((row) => [row.id, row.repository_path]));
+  return {
+    hasIntegration: (count ?? 0) > 0,
+    mergeRequests: (mergeRequests ?? []).map((row) => { const mr = row as MrRow; return { id: mr.id, iid: mr.mr_iid, title: mr.title, state: mr.state, sourceBranch: mr.source_branch, targetBranch: mr.target_branch, repository: repositories.get(mr.integration_id) ?? null, webUrl: mr.web_url, contentHash: mr.merge_commit_sha }; }),
+    commits: (commits ?? []).map((row) => { const commit = row as CommitRow; return { sha: commit.commit_sha, shortSha: commit.short_sha ?? commit.commit_sha.slice(0, 8), message: commit.message, authorName: commit.author_name, repository: repositories.get(commit.integration_id) ?? null, webUrl: commit.web_url, committedAt: commit.committed_at }; }),
+  };
+}
+
+export async function importApfGitEvidence(dossierId: string, mergeRequestIds: string[], commitShas: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc("import_apf_git_evidence" as never, { p_dossier_id: dossierId, p_merge_request_ids: mergeRequestIds, p_commit_shas: commitShas } as never);
+  if (error) throw error;
+  return Number(data ?? 0);
 }
 
 export async function listApfDossierVersions(dossierId: string): Promise<ApfDossierVersion[]> {

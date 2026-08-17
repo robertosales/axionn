@@ -11,8 +11,15 @@ export interface ApfEvidenceDossierSummary {
   totalImpactedPf: number;
   totalHomologatedPf: number | null;
   countingSessionId: string | null;
+  userStoryId: string | null;
   updatedAt: string;
   userStory: { code: string; title: string } | null;
+}
+
+export interface ApfGitEvidenceCandidates {
+  hasIntegration: boolean;
+  mergeRequests: Array<{ id: string; iid: number; title: string; state: string; sourceBranch: string; targetBranch: string; repository: string | null; webUrl: string | null; contentHash: string | null }>;
+  commits: Array<{ sha: string; shortSha: string; message: string; authorName: string | null; repository: string | null; webUrl: string | null; committedAt: string }>;
 }
 
 export interface ApfDossierCountingItem {

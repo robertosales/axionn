@@ -1,34 +1,63 @@
 import { useMemo, useState } from "react";
-import { ExternalLink, FilePlus2, Link2, Loader2, ShieldCheck } from "lucide-react";
+import { ExternalLink, FilePlus2, GitCommitHorizontal, GitMerge, Link2, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useApfEvidenceSources } from "../../hooks/useApfEvidenceDossiers";
-import { createApfEvidenceSource, linkApfCriterionToEvidence } from "../../services/apfEvidenceDossier.service";
-import type { ApfAcceptanceCriterion, ApfEvidenceCategory, ApfEvidenceSource, ApfEvidenceVerification } from "../../types/apfEvidenceDossier.types";
+import { createApfEvidenceSource, importApfGitEvidence, linkApfCriterionToEvidence, listApfGitEvidenceCandidates } from "../../services/apfEvidenceDossier.service";
+import type { ApfAcceptanceCriterion, ApfEvidenceCategory, ApfEvidenceSource, ApfEvidenceVerification, ApfGitEvidenceCandidates } from "../../types/apfEvidenceDossier.types";
 
 const categoryPrefix: Record<ApfEvidenceCategory, string> = { api: "API", code: "CODE", interface: "UI", database: "DB", integration: "INT", test: "TEST", document: "DOC" };
 
-export function ApfDossierEvidence({ dossierId, criteria }: { dossierId: string; criteria: ApfAcceptanceCriterion[] }) {
+export function ApfDossierEvidence({ dossierId, organizationId, userStoryId, criteria }: { dossierId: string; organizationId: string; userStoryId: string | null; criteria: ApfAcceptanceCriterion[] }) {
   const { data: evidence = [], isLoading, isError, refetch } = useApfEvidenceSources(dossierId);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [gitDialogOpen, setGitDialogOpen] = useState(false);
   const [linkingEvidenceId, setLinkingEvidenceId] = useState<string | null>(null);
   const [criterionId, setCriterionId] = useState("");
   const linkedCount = evidence.filter((item) => item.criterionIds.length > 0).length;
   const link = async () => { if (!linkingEvidenceId || !criterionId) return; try { await linkApfCriterionToEvidence(dossierId, criterionId, linkingEvidenceId); toast.success("Critério vinculado à evidência."); setLinkingEvidenceId(null); setCriterionId(""); await refetch(); } catch (error) { toast.error(error instanceof Error ? error.message : "Falha ao criar vínculo."); } };
 
   return <section className="space-y-3" aria-labelledby="evidence-title">
-    <div className="flex items-center justify-between gap-3"><div><h3 id="evidence-title" className="font-semibold">Catálogo de evidências</h3><p className="text-sm text-muted-foreground">{evidence.length} evidências · {linkedCount} vinculadas a critérios</p></div><Button onClick={() => setDialogOpen(true)}><FilePlus2 className="mr-2 h-4 w-4" />Adicionar evidência</Button></div>
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 id="evidence-title" className="font-semibold">Catálogo de evidências</h3><p className="text-sm text-muted-foreground">{evidence.length} evidências · {linkedCount} vinculadas a critérios</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setGitDialogOpen(true)} disabled={!userStoryId}><GitMerge className="mr-2 h-4 w-4" />Importar do GitLab</Button><Button onClick={() => setDialogOpen(true)}><FilePlus2 className="mr-2 h-4 w-4" />Adicionar evidência</Button></div></div>
     {isLoading ? <div className="flex min-h-28 items-center justify-center" role="status"><Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />Carregando evidências…</div> : isError ? <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">Falha ao carregar evidências.</p> : evidence.length === 0 ? <Card className="border-dashed"><CardContent className="py-10 text-center text-sm text-muted-foreground">Nenhuma evidência cadastrada.</CardContent></Card> : <div className="grid gap-3 lg:grid-cols-2">{evidence.map((item) => <Card key={item.id}><CardHeader className="pb-3"><div className="flex items-start justify-between gap-2"><div><CardTitle className="font-mono text-sm">{item.stableId}</CardTitle><CardDescription>{item.category} · {item.sourceType}</CardDescription></div><VerificationBadge status={item.verificationStatus} /></div></CardHeader><CardContent className="space-y-3"><p className="text-sm">{item.summary}</p><div className="flex flex-wrap gap-1">{item.criterionIds.map((id) => <Badge key={id} variant="outline">{criteria.find((criterion) => criterion.id === id)?.stableId ?? id.slice(0, 8)}</Badge>)}</div><div className="flex justify-end gap-2">{item.permanentUrl && <Button variant="ghost" size="sm" asChild><a href={item.permanentUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-2 h-3.5 w-3.5" />Abrir fonte</a></Button>}<Button variant="outline" size="sm" onClick={() => setLinkingEvidenceId(item.id)} disabled={criteria.length === 0}><Link2 className="mr-2 h-3.5 w-3.5" />Vincular CA</Button></div></CardContent></Card>)}</div>}
     <CreateEvidenceDialog open={dialogOpen} onOpenChange={setDialogOpen} dossierId={dossierId} evidence={evidence} onCreated={refetch} />
+    {userStoryId && <GitEvidenceDialog open={gitDialogOpen} onOpenChange={setGitDialogOpen} dossierId={dossierId} organizationId={organizationId} userStoryId={userStoryId} onImported={refetch} />}
     <Dialog open={Boolean(linkingEvidenceId)} onOpenChange={(open) => !open && setLinkingEvidenceId(null)}><DialogContent><DialogHeader><DialogTitle>Vincular critério de aceite</DialogTitle><DialogDescription>Crie uma relação rastreável entre o critério e a evidência selecionada.</DialogDescription></DialogHeader><div className="py-2"><Label htmlFor="trace-criterion">Critério</Label><Select value={criterionId} onValueChange={setCriterionId}><SelectTrigger id="trace-criterion" className="mt-1.5"><SelectValue placeholder="Selecione o critério" /></SelectTrigger><SelectContent>{criteria.map((criterion) => <SelectItem key={criterion.id} value={criterion.id}>{criterion.stableId} · {criterion.originalText}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setLinkingEvidenceId(null)}>Cancelar</Button><Button disabled={!criterionId} onClick={() => void link()}>Vincular</Button></DialogFooter></DialogContent></Dialog>
   </section>;
+}
+
+function GitEvidenceDialog({ open, onOpenChange, dossierId, organizationId, userStoryId, onImported }: { open: boolean; onOpenChange: (open: boolean) => void; dossierId: string; organizationId: string; userStoryId: string; onImported: () => Promise<unknown> }) {
+  const [candidates, setCandidates] = useState<ApfGitEvidenceCandidates | null>(null);
+  const [selectedMrs, setSelectedMrs] = useState<string[]>([]);
+  const [selectedCommits, setSelectedCommits] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true); setSelectedMrs([]); setSelectedCommits([]);
+    void listApfGitEvidenceCandidates(userStoryId, organizationId).then(setCandidates).catch((error) => toast.error(error instanceof Error ? error.message : "Falha ao consultar o GitLab.")).finally(() => setLoading(false));
+  }, [open, organizationId, userStoryId]);
+  const toggle = (values: string[], value: string, checked: boolean) => checked ? [...values, value] : values.filter((item) => item !== value);
+  const save = async () => { setSaving(true); try { const count = await importApfGitEvidence(dossierId, selectedMrs, selectedCommits); toast.success(count ? `${count} evidência(s) importada(s) do GitLab.` : "As evidências selecionadas já estavam no catálogo."); onOpenChange(false); await onImported(); } catch (error) { toast.error(error instanceof Error ? error.message : "Falha ao importar evidências."); } finally { setSaving(false); } };
+  const total = (candidates?.mergeRequests.length ?? 0) + (candidates?.commits.length ?? 0);
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Importar evidências do GitLab</DialogTitle><DialogDescription>Selecione atividades já sincronizadas e vinculadas à história de usuário. A origem, URL e hash serão preservados.</DialogDescription></DialogHeader>
+    {loading ? <div className="flex min-h-32 items-center justify-center" role="status"><Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />Consultando atividade Git…</div>
+      : !candidates?.hasIntegration ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Não há integração Git ativa nesta organização.</p>
+      : total === 0 ? <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Nenhum MR ou commit sincronizado está vinculado a esta história.</p>
+      : <div className="space-y-5 py-2">
+        {candidates.mergeRequests.length > 0 && <fieldset className="space-y-2"><legend className="mb-2 text-sm font-semibold">Merge requests</legend>{candidates.mergeRequests.map((mr) => <label key={mr.id} className="flex cursor-pointer items-start gap-3 rounded-md border p-3"><Checkbox className="mt-0.5" checked={selectedMrs.includes(mr.id)} onCheckedChange={(checked) => setSelectedMrs(toggle(selectedMrs, mr.id, checked === true))} /><span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-sm font-medium"><GitMerge className="h-4 w-4" />!{mr.iid} · {mr.title}</span><span className="mt-1 block text-xs text-muted-foreground">{mr.repository ?? "Repositório"} · {mr.sourceBranch} → {mr.targetBranch} · {mr.state}</span></span></label>)}</fieldset>}
+        {candidates.commits.length > 0 && <fieldset className="space-y-2"><legend className="mb-2 text-sm font-semibold">Commits</legend>{candidates.commits.map((commit) => <label key={commit.sha} className="flex cursor-pointer items-start gap-3 rounded-md border p-3"><Checkbox className="mt-0.5" checked={selectedCommits.includes(commit.sha)} onCheckedChange={(checked) => setSelectedCommits(toggle(selectedCommits, commit.sha, checked === true))} /><span className="min-w-0 flex-1"><span className="flex items-center gap-2 text-sm font-medium"><GitCommitHorizontal className="h-4 w-4" /><span className="font-mono">{commit.shortSha}</span> · {commit.message.split("\n")[0]}</span><span className="mt-1 block text-xs text-muted-foreground">{commit.repository ?? "Repositório"}{commit.authorName ? ` · ${commit.authorName}` : ""}</span></span></label>)}</fieldset>}
+      </div>}
+    <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => void save()} disabled={saving || selectedMrs.length + selectedCommits.length === 0}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}Importar selecionadas</Button></DialogFooter>
+  </DialogContent></Dialog>;
 }
 
 function CreateEvidenceDialog({ open, onOpenChange, dossierId, evidence, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; dossierId: string; evidence: ApfEvidenceSource[]; onCreated: () => Promise<unknown> }) {

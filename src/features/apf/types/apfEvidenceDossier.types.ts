@@ -69,6 +69,16 @@ export interface SaveApfAuditScenarioInput {
   status: ApfAuditScenarioStatus;
 }
 
+export interface ApfDossierVersion {
+  id: string;
+  dossierId: string;
+  versionNumber: number;
+  renderedMarkdown: string;
+  contentHash: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface ApfDossierCreationProject {
   id: string;
   name: string;

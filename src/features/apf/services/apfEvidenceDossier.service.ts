@@ -6,6 +6,7 @@ import type {
   ApfEvidenceSource,
   ApfDossierCountingMemory,
   ApfAuditScenario,
+  ApfDossierVersion,
   ApfEvidenceDossierSummary,
   CreateApfEvidenceDossierInput,
   CreateApfEvidenceSourceInput,
@@ -37,6 +38,18 @@ export async function listApfEvidenceDossiers(organizationId: string): Promise<A
     totalHomologatedPf: row.total_homologated_pf === null ? null : Number(row.total_homologated_pf),
     updatedAt: row.updated_at, userStory: row.user_stories, countingSessionId: row.counting_session_id,
   }));
+}
+
+export async function listApfDossierVersions(dossierId: string): Promise<ApfDossierVersion[]> {
+  const { data, error } = await supabase.from("apf_dossier_versions" as never).select("id, dossier_id, version_number, rendered_markdown, content_hash, created_by, created_at").eq("dossier_id", dossierId).order("version_number", { ascending: false });
+  if (error) throw error;
+  type Row = { id: string; dossier_id: string; version_number: number; rendered_markdown: string; content_hash: string; created_by: string; created_at: string };
+  return ((data ?? []) as Row[]).map((row) => ({ id: row.id, dossierId: row.dossier_id, versionNumber: row.version_number, renderedMarkdown: row.rendered_markdown, contentHash: row.content_hash, createdBy: row.created_by, createdAt: row.created_at }));
+}
+
+export async function homologateApfDossier(dossierId: string, versionNumber: number): Promise<void> {
+  const { error } = await supabase.rpc("homologate_apf_dossier" as never, { p_dossier_id: dossierId, p_version_number: versionNumber } as never);
+  if (error) throw error;
 }
 
 export async function validateAndSnapshotApfDossier(data: ApfDossierDocumentData): Promise<{ markdown: string; hash: string; version: number }> {

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getApfDossierCountingMemory, getApfDossierCreationOptions, listApfAcceptanceCriteria, listApfAuditScenarios, listApfEvidenceDossiers, listApfEvidenceSources } from "../services/apfEvidenceDossier.service";
+import { getApfDossierCountingMemory, getApfDossierCreationOptions, listApfAcceptanceCriteria, listApfAuditScenarios, listApfDossierVersions, listApfEvidenceDossiers, listApfEvidenceSources } from "../services/apfEvidenceDossier.service";
 
 export function useApfEvidenceDossiers(organizationId: string | null) {
   return useQuery({
@@ -7,6 +7,10 @@ export function useApfEvidenceDossiers(organizationId: string | null) {
     queryFn: () => listApfEvidenceDossiers(organizationId!),
     enabled: Boolean(organizationId),
   });
+}
+
+export function useApfDossierVersions(dossierId: string | null) {
+  return useQuery({ queryKey: ["apf-dossier-versions", dossierId], queryFn: () => listApfDossierVersions(dossierId!), enabled: Boolean(dossierId) });
 }
 
 export function useApfAuditScenarios(dossierId: string | null) {

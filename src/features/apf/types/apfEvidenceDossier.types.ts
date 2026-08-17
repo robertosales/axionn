@@ -79,6 +79,34 @@ export interface SaveApfAcceptanceCriterionInput {
   decision: ApfAcceptanceDecision | null;
 }
 
+export type ApfEvidenceCategory = "api" | "code" | "interface" | "database" | "integration" | "test" | "document";
+export type ApfEvidenceVerification = "unverified" | "verified" | "failed" | "stale";
+
+export interface ApfEvidenceSource {
+  id: string;
+  dossierId: string;
+  stableId: string;
+  sourceType: "merge_request" | "commit" | "file" | "endpoint" | "database" | "test" | "attachment" | "link";
+  category: ApfEvidenceCategory;
+  summary: string;
+  permanentUrl: string | null;
+  contentHash: string | null;
+  verificationStatus: ApfEvidenceVerification;
+  collectedAt: string;
+  criterionIds: string[];
+}
+
+export interface CreateApfEvidenceSourceInput {
+  dossierId: string;
+  stableId: string;
+  category: ApfEvidenceCategory;
+  sourceType: ApfEvidenceSource["sourceType"];
+  summary: string;
+  permanentUrl: string;
+  contentHash: string;
+  verificationStatus: ApfEvidenceVerification;
+}
+
 export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   draft: "Rascunho",
   collecting_evidence: "Coletando evidências",

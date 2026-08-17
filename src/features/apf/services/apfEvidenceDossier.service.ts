@@ -2,8 +2,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type {
   ApfDossierCreationOptions,
   ApfAcceptanceCriterion,
+  ApfEvidenceSource,
   ApfEvidenceDossierSummary,
   CreateApfEvidenceDossierInput,
+  CreateApfEvidenceSourceInput,
   SaveApfAcceptanceCriterionInput,
 } from "../types/apfEvidenceDossier.types";
 
@@ -30,6 +32,38 @@ export async function listApfEvidenceDossiers(organizationId: string): Promise<A
     totalHomologatedPf: row.total_homologated_pf === null ? null : Number(row.total_homologated_pf),
     updatedAt: row.updated_at, userStory: row.user_stories,
   }));
+}
+
+export async function listApfEvidenceSources(dossierId: string): Promise<ApfEvidenceSource[]> {
+  const [{ data: sources, error: sourceError }, { data: catalog, error: catalogError }, { data: links, error: linkError }] = await Promise.all([
+    supabase.from("apf_evidence_sources" as never).select("id, dossier_id, source_type, category, summary, permanent_url, content_hash, verification_status, collected_at").eq("dossier_id", dossierId).order("collected_at", { ascending: false }),
+    supabase.from("apf_evidence_catalog_entries" as never).select("evidence_source_id, stable_id").eq("dossier_id", dossierId),
+    supabase.from("apf_traceability_links" as never).select("evidence_source_id, acceptance_criterion_id").eq("dossier_id", dossierId),
+  ]);
+  if (sourceError) throw sourceError;
+  if (catalogError) throw catalogError;
+  if (linkError) throw linkError;
+  type SourceRow = Omit<ApfEvidenceSource, "dossierId" | "stableId" | "criterionIds" | "sourceType" | "permanentUrl" | "contentHash" | "verificationStatus" | "collectedAt"> & { dossier_id: string; source_type: ApfEvidenceSource["sourceType"]; permanent_url: string | null; content_hash: string | null; verification_status: ApfEvidenceSource["verificationStatus"]; collected_at: string };
+  const stableIds = new Map(((catalog ?? []) as Array<{ evidence_source_id: string; stable_id: string }>).map((row) => [row.evidence_source_id, row.stable_id]));
+  const criterionIds = new Map<string, string[]>();
+  for (const link of (links ?? []) as Array<{ evidence_source_id: string; acceptance_criterion_id: string }>) criterionIds.set(link.evidence_source_id, [...(criterionIds.get(link.evidence_source_id) ?? []), link.acceptance_criterion_id]);
+  return ((sources ?? []) as SourceRow[]).map((row) => ({ id: row.id, dossierId: row.dossier_id, stableId: stableIds.get(row.id) ?? "EV-PENDENTE", sourceType: row.source_type, category: row.category, summary: row.summary, permanentUrl: row.permanent_url, contentHash: row.content_hash, verificationStatus: row.verification_status, collectedAt: row.collected_at, criterionIds: criterionIds.get(row.id) ?? [] }));
+}
+
+export async function createApfEvidenceSource(input: CreateApfEvidenceSourceInput): Promise<void> {
+  const { data: source, error: sourceError } = await supabase.from("apf_evidence_sources" as never).insert({ dossier_id: input.dossierId, source_type: input.sourceType, category: input.category, summary: input.summary.trim(), permanent_url: input.permanentUrl.trim() || null, content_hash: input.contentHash.trim() || null, verification_status: input.verificationStatus } as never).select("id").single();
+  if (sourceError) throw sourceError;
+  const sourceId = (source as { id: string }).id;
+  const { error: catalogError } = await supabase.from("apf_evidence_catalog_entries" as never).insert({ dossier_id: input.dossierId, evidence_source_id: sourceId, stable_id: input.stableId.trim(), display_title: input.summary.trim(), display_summary: input.summary.trim() } as never);
+  if (catalogError) throw catalogError;
+}
+
+export async function linkApfCriterionToEvidence(dossierId: string, criterionId: string, evidenceSourceId: string): Promise<void> {
+  const { data: existing, error: lookupError } = await supabase.from("apf_traceability_links" as never).select("id").eq("dossier_id", dossierId).eq("acceptance_criterion_id", criterionId).eq("evidence_source_id", evidenceSourceId).is("counting_item_id", null).maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existing) return;
+  const { error } = await supabase.from("apf_traceability_links" as never).insert({ dossier_id: dossierId, acceptance_criterion_id: criterionId, evidence_source_id: evidenceSourceId, functional_result: "pending" } as never);
+  if (error) throw error;
 }
 
 export async function listApfAcceptanceCriteria(dossierId: string): Promise<ApfAcceptanceCriterion[]> {

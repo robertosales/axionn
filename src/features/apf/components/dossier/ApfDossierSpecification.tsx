@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useApfAcceptanceCriteria } from "../../hooks/useApfEvidenceDossiers";
 import { saveApfAcceptanceCriterion } from "../../services/apfEvidenceDossier.service";
 import type { ApfAcceptanceCriterion, ApfAcceptanceDecision, ApfEvidenceDossierSummary } from "../../types/apfEvidenceDossier.types";
+import { ApfDossierEvidence } from "./ApfDossierEvidence";
 
 const decisions: Array<{ value: ApfAcceptanceDecision; label: string }> = [
   { value: "meets", label: "Atende" }, { value: "partially_meets", label: "Atende parcialmente" },
@@ -33,6 +34,7 @@ export function ApfDossierSpecification({ dossier, onBack }: { dossier: ApfEvide
     {isLoading ? <div className="flex min-h-40 items-center justify-center" role="status"><Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />Carregando critérios…</div>
       : isError ? <Card role="alert" className="border-destructive/30"><CardContent className="flex items-center justify-between p-4"><p className="text-sm text-destructive">Falha ao carregar os critérios.</p><Button variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button></CardContent></Card>
       : <div className="space-y-3">{adding && <CriterionEditor dossierId={dossier.id} criterion={null} nextOrder={criteria.length} onSaved={async () => { setAdding(false); await refetch(); }} onCancel={() => setAdding(false)} />}{criteria.map((criterion) => <CriterionEditor key={criterion.id} dossierId={dossier.id} criterion={criterion} nextOrder={criterion.sortOrder} onSaved={refetch} />)}{!adding && criteria.length === 0 && <Card className="border-dashed"><CardContent className="flex min-h-40 flex-col items-center justify-center text-center"><CircleDashed className="mb-3 h-8 w-8 text-muted-foreground" /><p className="font-medium">Nenhum critério de aceite</p><p className="text-sm text-muted-foreground">Cadastre o primeiro critério preservando o texto original da HU.</p></CardContent></Card>}</div>}
+    <ApfDossierEvidence dossierId={dossier.id} criteria={criteria} />
   </section>;
 }
 

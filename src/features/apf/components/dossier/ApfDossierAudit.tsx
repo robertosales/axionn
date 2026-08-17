@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, Loader2, Plus, Scale } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { AlertTriangle, Loader2, Plus, RefreshCw, Scale, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,23 +10,38 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useApfAuditScenarios } from "../../hooks/useApfEvidenceDossiers";
-import { saveApfAuditScenario } from "../../services/apfEvidenceDossier.service";
-import type { ApfAuditScenario, ApfAuditScenarioStatus } from "../../types/apfEvidenceDossier.types";
+import { listApfAuditFindings, reviewApfAuditFinding, saveApfAuditScenario, scanApfDossierAudit } from "../../services/apfEvidenceDossier.service";
+import type { ApfAuditFinding, ApfAuditScenario, ApfAuditScenarioStatus } from "../../types/apfEvidenceDossier.types";
 
 const statusLabels: Record<ApfAuditScenarioStatus, string> = { open: "Em aberto", accepted: "Aceito", rejected: "Rejeitado", mitigated: "Mitigado" };
 
 export function ApfDossierAudit({ dossierId }: { dossierId: string }) {
   const { data: scenarios = [], isLoading, isError, refetch } = useApfAuditScenarios(dossierId);
   const [editing, setEditing] = useState<ApfAuditScenario | "new" | null>(null);
+  const [findings, setFindings] = useState<ApfAuditFinding[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [reviewingFinding, setReviewingFinding] = useState<ApfAuditFinding | null>(null);
+  const loadFindings = useCallback(async () => setFindings(await listApfAuditFindings(dossierId)), [dossierId]);
+  useEffect(() => { void loadFindings().catch(() => undefined); }, [loadFindings]);
+  const scan = async () => { setScanning(true); try { const count = await scanApfDossierAudit(dossierId); await loadFindings(); toast.success(`Varredura concluída: ${count} achado(s) detectado(s).`); } catch (error) { toast.error(error instanceof Error ? error.message : "Falha na varredura."); } finally { setScanning(false); } };
   const exposure = useMemo(() => scenarios.filter((scenario) => scenario.status === "open").reduce((total, scenario) => total + scenario.pfDelta, 0), [scenarios]);
   const financialExposure = useMemo(() => scenarios.filter((scenario) => scenario.status === "open").reduce((total, scenario) => total + (scenario.financialEffect ?? 0), 0), [scenarios]);
 
   return <section className="space-y-3" aria-labelledby="audit-title">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="audit-title" className="font-semibold">Riscos e cenários de auditoria</h3><p className="text-sm text-muted-foreground">Interpretações alternativas sem alterar a contagem homologada.</p></div><Button onClick={() => setEditing("new")}><Plus className="mr-2 h-4 w-4" />Novo cenário</Button></div>
+    <Card><CardContent className="space-y-3 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="text-sm font-semibold">Conferência automatizada</h4><p className="text-xs text-muted-foreground">Lacunas objetivas que podem impedir validação ou homologação.</p></div><Button variant="outline" size="sm" onClick={() => void scan()} disabled={scanning}>{scanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="mr-2 h-4 w-4" />}Executar varredura</Button></div>{findings.filter((item) => item.status === "open").length === 0 ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="h-4 w-4" />Nenhum achado aberto. Execute a varredura após alterações no dossiê.</p> : <div className="space-y-2">{findings.filter((item) => item.status === "open").map((finding) => <div key={finding.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><Badge variant={finding.severity === "critical" ? "destructive" : "secondary"}>{finding.severity === "critical" ? "Crítico" : "Alerta"}</Badge><span className="text-sm font-medium">{finding.title}</span></div><p className="mt-1 text-xs text-muted-foreground">{finding.detail}</p></div><Button size="sm" variant="outline" onClick={() => setReviewingFinding(finding)}>Revisar</Button></div>)}</div>}</CardContent></Card>
     <div className="grid gap-3 sm:grid-cols-3"><Metric label="Cenários em aberto" value={String(scenarios.filter((scenario) => scenario.status === "open").length)} /><Metric label="Exposição em PF" value={`${signed(exposure)} PF`} warning={exposure !== 0} /><Metric label="Efeito financeiro" value={formatCurrency(financialExposure)} warning={financialExposure !== 0} /></div>
     {isLoading ? <div className="flex min-h-28 items-center justify-center" role="status"><Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />Carregando cenários…</div> : isError ? <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">Falha ao carregar os cenários de auditoria.</p> : scenarios.length === 0 ? <Card className="border-dashed"><CardContent className="flex min-h-32 flex-col items-center justify-center text-center"><Scale className="mb-2 h-7 w-7 text-muted-foreground" /><p className="text-sm text-muted-foreground">Nenhum cenário alternativo registrado.</p></CardContent></Card> : <div className="grid gap-3 lg:grid-cols-2">{scenarios.map((scenario) => <Card key={scenario.id}><CardHeader className="pb-3"><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-sm">{scenario.title}</CardTitle><CardDescription>{scenario.alternativeClassification || "Classificação alternativa não informada"}</CardDescription></div><Badge variant={scenario.status === "open" ? "destructive" : scenario.status === "accepted" ? "default" : "secondary"}>{statusLabels[scenario.status]}</Badge></div></CardHeader><CardContent className="space-y-3"><p className="text-sm">{scenario.description}</p><p className="text-xs text-muted-foreground">{scenario.rationale}</p><div className="flex items-end justify-between gap-3 border-t pt-3"><div className="flex gap-5"><Metric label="Δ PF" value={signed(scenario.pfDelta)} compact /><Metric label="Efeito" value={scenario.financialEffect === null ? "—" : formatCurrency(scenario.financialEffect)} compact /></div><Button variant="outline" size="sm" onClick={() => setEditing(scenario)}>Revisar</Button></div></CardContent></Card>)}</div>}
     <AuditScenarioDialog key={editing === "new" ? "new" : editing?.id ?? "closed"} open={editing !== null} onOpenChange={(open) => !open && setEditing(null)} dossierId={dossierId} scenario={editing === "new" ? null : editing} onSaved={async () => { setEditing(null); await refetch(); }} />
+    <FindingReviewDialog finding={reviewingFinding} onOpenChange={(open) => !open && setReviewingFinding(null)} onSaved={async () => { setReviewingFinding(null); await loadFindings(); }} />
   </section>;
+}
+
+function FindingReviewDialog({ finding, onOpenChange, onSaved }: { finding: ApfAuditFinding | null; onOpenChange: (open: boolean) => void; onSaved: () => Promise<unknown> }) {
+  const [status, setStatus] = useState<"resolved" | "accepted_risk">("resolved"); const [note, setNote] = useState(""); const [saving, setSaving] = useState(false);
+  useEffect(() => { setStatus("resolved"); setNote(""); }, [finding?.id]);
+  const save = async () => { if (!finding || !note.trim()) return; setSaving(true); try { await reviewApfAuditFinding(finding.id, status, note); toast.success("Achado revisado com justificativa."); await onSaved(); } catch (error) { toast.error(error instanceof Error ? error.message : "Falha ao revisar achado."); } finally { setSaving(false); } };
+  return <Dialog open={Boolean(finding)} onOpenChange={onOpenChange}><DialogContent><DialogHeader><DialogTitle>Revisar achado</DialogTitle><DialogDescription>{finding?.title} · {finding?.detail}</DialogDescription></DialogHeader><div className="space-y-4 py-2"><Field id="finding-status" label="Decisão"><Select value={status} onValueChange={(value) => setStatus(value as typeof status)}><SelectTrigger id="finding-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="resolved">Resolvido</SelectItem><SelectItem value="accepted_risk">Risco aceito</SelectItem></SelectContent></Select></Field><Field id="finding-note" label="Justificativa obrigatória"><Textarea id="finding-note" value={note} onChange={(event) => setNote(event.target.value)} rows={3} /></Field></div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => void save()} disabled={saving || !note.trim()}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}Salvar decisão</Button></DialogFooter></DialogContent></Dialog>;
 }
 
 function AuditScenarioDialog({ open, onOpenChange, dossierId, scenario, onSaved }: { open: boolean; onOpenChange: (open: boolean) => void; dossierId: string; scenario: ApfAuditScenario | null; onSaved: () => Promise<unknown> }) {

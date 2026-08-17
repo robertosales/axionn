@@ -14,6 +14,7 @@ import type {
   SaveApfAuditScenarioInput,
   ApfGitEvidenceCandidates,
   ApfTraceabilitySuggestion,
+  ApfAuditFinding,
 } from "../types/apfEvidenceDossier.types";
 
 type DossierRow = {
@@ -187,6 +188,15 @@ export async function reviewApfTraceabilitySuggestion(suggestionId: string, acce
   const { error } = await supabase.rpc("review_apf_traceability_suggestion" as never, { p_suggestion_id: suggestionId, p_accept: accept } as never);
   if (error) throw error;
 }
+
+export async function listApfAuditFindings(dossierId: string): Promise<ApfAuditFinding[]> {
+  const { data, error } = await supabase.from("apf_audit_findings" as never).select("id, finding_type, severity, title, detail, entity_type, status, resolution_note, detected_at").eq("dossier_id", dossierId).order("detected_at", { ascending: false });
+  if (error) throw error;
+  type Row = { id: string; finding_type: string; severity: ApfAuditFinding["severity"]; title: string; detail: string; entity_type: string | null; status: ApfAuditFinding["status"]; resolution_note: string | null; detected_at: string };
+  return ((data ?? []) as Row[]).map((row) => ({ id: row.id, findingType: row.finding_type, severity: row.severity, title: row.title, detail: row.detail, entityType: row.entity_type, status: row.status, resolutionNote: row.resolution_note, detectedAt: row.detected_at }));
+}
+export async function scanApfDossierAudit(dossierId: string): Promise<number> { const { data, error } = await supabase.rpc("scan_apf_dossier_audit" as never, { p_dossier_id: dossierId } as never); if (error) throw error; return Number(data ?? 0); }
+export async function reviewApfAuditFinding(findingId: string, status: "resolved" | "accepted_risk", note: string): Promise<void> { const { error } = await supabase.rpc("review_apf_audit_finding" as never, { p_finding_id: findingId, p_status: status, p_note: note.trim() } as never); if (error) throw error; }
 
 export async function listApfAcceptanceCriteria(dossierId: string): Promise<ApfAcceptanceCriterion[]> {
   const { data, error } = await supabase.from("apf_acceptance_criteria" as never)

@@ -188,6 +188,11 @@ export interface ApfTraceabilitySuggestion {
   rationale: string;
 }
 
+export interface ApfAuditFinding {
+  id: string; findingType: string; severity: "critical" | "warning" | "info"; title: string; detail: string;
+  entityType: string | null; status: "open" | "resolved" | "accepted_risk"; resolutionNote: string | null; detectedAt: string;
+}
+
 export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   draft: "Rascunho",
   collecting_evidence: "Coletando evidências",

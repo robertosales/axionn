@@ -1,11 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
-import { getApfDossierCreationOptions, listApfEvidenceDossiers } from "../services/apfEvidenceDossier.service";
+import { getApfDossierCreationOptions, listApfAcceptanceCriteria, listApfEvidenceDossiers } from "../services/apfEvidenceDossier.service";
 
 export function useApfEvidenceDossiers(organizationId: string | null) {
   return useQuery({
     queryKey: ["apf-evidence-dossiers", organizationId],
     queryFn: () => listApfEvidenceDossiers(organizationId!),
     enabled: Boolean(organizationId),
+  });
+}
+
+export function useApfAcceptanceCriteria(dossierId: string | null) {
+  return useQuery({
+    queryKey: ["apf-acceptance-criteria", dossierId],
+    queryFn: () => listApfAcceptanceCriteria(dossierId!),
+    enabled: Boolean(dossierId),
   });
 }
 

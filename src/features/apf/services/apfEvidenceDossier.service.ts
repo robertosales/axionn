@@ -1,8 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import type {
   ApfDossierCreationOptions,
+  ApfAcceptanceCriterion,
   ApfEvidenceDossierSummary,
   CreateApfEvidenceDossierInput,
+  SaveApfAcceptanceCriterionInput,
 } from "../types/apfEvidenceDossier.types";
 
 type DossierRow = {
@@ -28,6 +30,32 @@ export async function listApfEvidenceDossiers(organizationId: string): Promise<A
     totalHomologatedPf: row.total_homologated_pf === null ? null : Number(row.total_homologated_pf),
     updatedAt: row.updated_at, userStory: row.user_stories,
   }));
+}
+
+export async function listApfAcceptanceCriteria(dossierId: string): Promise<ApfAcceptanceCriterion[]> {
+  const { data, error } = await supabase.from("apf_acceptance_criteria" as never)
+    .select("id, dossier_id, stable_id, sort_order, original_text, expected_behavior, decision, source_type, reviewed_at")
+    .eq("dossier_id", dossierId).order("sort_order");
+  if (error) throw error;
+  type Row = { id: string; dossier_id: string; stable_id: string; sort_order: number; original_text: string; expected_behavior: string | null; decision: ApfAcceptanceCriterion["decision"]; source_type: ApfAcceptanceCriterion["sourceType"]; reviewed_at: string | null };
+  return ((data ?? []) as Row[]).map((row) => ({ id: row.id, dossierId: row.dossier_id, stableId: row.stable_id, sortOrder: row.sort_order, originalText: row.original_text, expectedBehavior: row.expected_behavior, decision: row.decision, sourceType: row.source_type, reviewedAt: row.reviewed_at }));
+}
+
+export async function saveApfAcceptanceCriterion(input: SaveApfAcceptanceCriterionInput): Promise<void> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) throw authError ?? new Error("Sessão inválida.");
+  const payload = {
+    dossier_id: input.dossierId, stable_id: input.stableId.trim(), sort_order: input.sortOrder,
+    original_text: input.originalText.trim(), expected_behavior: input.expectedBehavior.trim() || null,
+    decision: input.decision, source_type: "manual",
+    reviewed_by: input.decision ? authData.user.id : null,
+    reviewed_at: input.decision ? new Date().toISOString() : null,
+  };
+  const query = input.id
+    ? supabase.from("apf_acceptance_criteria" as never).update(payload as never).eq("id", input.id)
+    : supabase.from("apf_acceptance_criteria" as never).insert(payload as never);
+  const { error } = await query;
+  if (error) throw error;
 }
 
 export async function getApfDossierCreationOptions(organizationId: string): Promise<ApfDossierCreationOptions> {

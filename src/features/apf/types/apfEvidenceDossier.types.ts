@@ -55,6 +55,30 @@ export interface CreateApfEvidenceDossierInput {
   session: ApfDossierCreationSession | null;
 }
 
+export type ApfAcceptanceDecision = "meets" | "partially_meets" | "does_not_meet" | "not_applicable";
+
+export interface ApfAcceptanceCriterion {
+  id: string;
+  dossierId: string;
+  stableId: string;
+  sortOrder: number;
+  originalText: string;
+  expectedBehavior: string | null;
+  decision: ApfAcceptanceDecision | null;
+  sourceType: "user_story" | "gitlab_issue" | "file" | "manual";
+  reviewedAt: string | null;
+}
+
+export interface SaveApfAcceptanceCriterionInput {
+  id?: string;
+  dossierId: string;
+  stableId: string;
+  sortOrder: number;
+  originalText: string;
+  expectedBehavior: string;
+  decision: ApfAcceptanceDecision | null;
+}
+
 export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   draft: "Rascunho",
   collecting_evidence: "Coletando evidências",

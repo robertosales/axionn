@@ -16,6 +16,7 @@ import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar,
 import { getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { getInitials } from "@/lib/nameUtils";
 import { groupTeamMembershipsByUser } from "@/lib/teamMemberships";
+import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
 
 const PREDEFINED_ROLES = [
   "Analista de Requisitos",
@@ -66,6 +67,7 @@ export function TeamMembersManager() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"name" | "recent" | "oldest">("name");
+  const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
 
   const fetchMembers = async () => {
     if (!currentTeamId) return;
@@ -268,8 +270,6 @@ export function TeamMembersManager() {
       );
       return;
     }
-    if (!confirm("Remover este membro do time?")) return;
-
     if (orgEnabled && currentOrganizationId) {
       const { error: rpcError } = await (supabase as any).rpc(
         "remove_organization_team_member_v2",
@@ -290,6 +290,7 @@ export function TeamMembersManager() {
     }
 
     toast.success("Membro removido");
+    setMemberToRemove(null);
     await fetchMembers();
   };
 
@@ -297,6 +298,8 @@ export function TeamMembersManager() {
     (p) => !members.find((m) => m.user_id === p.user_id)
   );
   const selectedProfile = availableProfiles.find((profile) => profile.user_id === selectedUserId);
+  const activeTeam = teams.find((team) => team.id === currentTeamId);
+  const activeModuleLabel = activeTeam ? MODULE_LABELS[activeTeam.module] || activeTeam.module : "Módulo";
 
   const filteredMembers = members.filter((m) => {
     const term = search.toLowerCase();
@@ -350,20 +353,21 @@ export function TeamMembersManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="space-y-1">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">
-            Membros do Time
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Membros do Time</h2>
+            {activeTeam && <Badge variant="secondary">{activeTeam.name} · {activeModuleLabel}</Badge>}
+          </div>
           <p className="text-sm text-muted-foreground">
-            Gerencie os membros e perfis de acesso associados a este time
+            Gerencie as participações neste time. A identidade e os outros vínculos da pessoa são preservados.
           </p>
         </div>
 
         {canManage && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="min-h-11 sm:min-h-9">
                 <UserPlus className="h-4 w-4 mr-2" /> Adicionar Membro
               </Button>
             </DialogTrigger>
@@ -541,8 +545,9 @@ export function TeamMembersManager() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 -mr-1 -mt-1"
-                          onClick={() => handleRemoveMember(member.id)}
+                          className="-mr-1 -mt-1 min-h-11 min-w-11"
+                          onClick={() => setMemberToRemove(member)}
+                          aria-label={`Remover ${name} do time ${activeTeam?.name || "atual"}`}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -581,8 +586,17 @@ export function TeamMembersManager() {
                         <span className="h-2 w-2 rounded-full bg-emerald-500" />
                         Ativo
                       </span>
-                    </div>
-                  </div>
+      </div>
+
+      <ConfirmDialog
+        open={Boolean(memberToRemove)}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setMemberToRemove(null); }}
+        title="Remover participação do time?"
+        description={`O vínculo de ${memberToRemove?.profile?.display_name || "esta pessoa"} será removido apenas de ${activeTeam?.name || "este time"} (${activeModuleLabel}). A identidade, os perfis RBAC e as participações em outros times serão preservados.`}
+        confirmLabel="Remover deste time"
+        onConfirm={() => { if (memberToRemove) void handleRemoveMember(memberToRemove.id); }}
+      />
+    </div>
                 </div>
               </CardContent>
             </Card>

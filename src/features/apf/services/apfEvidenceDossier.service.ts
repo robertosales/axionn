@@ -4,7 +4,10 @@ import {
   sha256Hex,
   type ApfDossierDocumentData,
 } from "../utils/apfDossierMarkdown";
-import type { ExtractedApfCriterion } from "../utils/apfSpecificationExtraction";
+import type {
+  ExtractedApfCriterion,
+  ExtractedApfSpecification,
+} from "../utils/apfSpecificationExtraction";
 import type {
   ApfDossierCreationOptions,
   ApfAcceptanceCriterion,
@@ -1322,10 +1325,11 @@ export async function importApfFunctionalSpecification(
   fileName: string,
   content: string,
   criteria: ExtractedApfCriterion[],
+  extraction?: ExtractedApfSpecification,
 ): Promise<number> {
   const contentHash = await sha256Hex(content);
   const { data, error } = await supabase.rpc(
-    "import_apf_functional_specification" as never,
+    "import_apf_functional_specification_v2" as never,
     {
       p_dossier_id: dossierId,
       p_file_name: fileName,
@@ -1337,6 +1341,7 @@ export async function importApfFunctionalSpecification(
         original_text: item.originalText,
         expected_behavior: item.expectedBehavior,
       })),
+      p_extraction: extraction ?? { criteria },
     } as never,
   );
   if (error) throw error;

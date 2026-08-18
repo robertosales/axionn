@@ -73,7 +73,7 @@ export async function listApfGitEvidenceCandidates(userStoryId: string, organiza
 }
 
 export async function importApfGitEvidence(dossierId: string, mergeRequestIds: string[], commitShas: string[]): Promise<number> {
-  const { data, error } = await supabase.rpc("import_apf_git_evidence" as never, { p_dossier_id: dossierId, p_merge_request_ids: mergeRequestIds, p_commit_shas: commitShas } as never);
+  const { data, error } = await supabase.rpc("import_apf_git_provider_evidence" as never, { p_dossier_id: dossierId, p_merge_request_ids: mergeRequestIds, p_commit_shas: commitShas } as never);
   if (error) throw error;
   const { data: indexed, error: indexError } = await supabase.rpc("index_apf_git_artifacts" as never, { p_dossier_id: dossierId, p_commit_shas: commitShas } as never);
   if (indexError) throw indexError;

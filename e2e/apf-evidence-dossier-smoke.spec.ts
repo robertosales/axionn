@@ -42,15 +42,12 @@ test.describe("Dossiê APF por Impacto", () => {
       )
         failures.push(`${response.status()} ${response.url()}`);
     });
-    await page.addInitScript(
-      (org) => localStorage.setItem("selectedOrganizationId", org),
-      organizationId!,
-    );
-    await page.goto("/auth");
-    await page.getByLabel(/e-mail/i).fill(legacyEmail!);
-    await page.getByRole("textbox", { name: /^senha/i }).fill(legacyPassword!);
-    await page.getByRole("button", { name: /entrar/i }).click();
-    await page.waitForURL((url) => !url.pathname.startsWith("/auth"));
+    await seedOrganization(page, organizationId!);
+    await signIn(page, {
+      role: "homologator",
+      email: legacyEmail!,
+      password: legacyPassword!,
+    });
     await page.goto("/sala-agil/medicao-evidencias", {
       waitUntil: "domcontentloaded",
     });
@@ -70,10 +67,31 @@ test.describe("Dossiê APF por Impacto", () => {
       "Auditoria",
       "Documento",
     ])
-      await expect(page.getByText(step, { exact: true })).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /novo dossiê/i }),
-    ).toBeVisible();
+      await expect(
+        page.getByText(new RegExp(`^\\d+\\.\\s*${step}$`, "i")),
+      ).toBeVisible();
+
+    await page.getByRole("button", { name: /novo dossiê/i }).click();
+    const dialog = page.getByRole("dialog", { name: /novo dossiê apf/i });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByLabel("Projeto").click();
+    const projectOptions = page.getByRole("option");
+    await expect.poll(() => projectOptions.count()).toBeGreaterThan(0);
+    await projectOptions.first().click();
+
+    await dialog.getByLabel("História de usuário").click();
+    const storyOptions = page.getByRole("option");
+    await expect.poll(() => storyOptions.count()).toBeGreaterThan(0);
+    await storyOptions.first().click();
+
+    await dialog.getByLabel("Sessão de contagem").click();
+    const sessionOptions = page.getByRole("option");
+    await expect.poll(() => sessionOptions.count()).toBeGreaterThan(0);
+    const sessionLabels = await sessionOptions.allTextContents();
+    expect(sessionLabels.join("\n")).not.toMatch(/\bin_progress\b/i);
+    expect(sessionLabels.join("\n")).not.toMatch(/\b[0-9a-f]{8}-[0-9a-f]{4}-/i);
+
     expect(failures).toEqual([]);
   });
 });

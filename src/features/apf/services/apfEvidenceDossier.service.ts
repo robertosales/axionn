@@ -1360,10 +1360,11 @@ export async function getApfDossierCreationOptions(
   const [
     { data: projects, error: projectsError },
     { data: teams, error: teamsError },
+    { data: projectTeams, error: projectTeamsError },
   ] = await Promise.all([
     supabase
       .from("projects" as never)
-      .select("id, name, code, contract_id, contracts!inner(id, name, org_id)")
+      .select("id, name, code, contract_id, team_id, contracts!inner(id, name, org_id)")
       .eq("contracts.org_id", organizationId)
       .eq("status", "active")
       .order("name"),
@@ -1371,20 +1372,29 @@ export async function getApfDossierCreationOptions(
       .from("teams" as never)
       .select("id, project_id")
       .not("project_id", "is", null),
+    supabase
+      .from("project_teams" as never)
+      .select("project_id, team_id"),
   ]);
   if (projectsError) throw projectsError;
   if (teamsError) throw teamsError;
+  if (projectTeamsError) throw projectTeamsError;
 
   type ProjectRow = {
     id: string;
     name: string;
     code: string | null;
     contract_id: string;
+    team_id: string | null;
     contracts: { name: string };
   };
   type TeamRow = {
     id: string;
+    project_id: string | null;
+  };
+  type ProjectTeamRow = {
     project_id: string;
+    team_id: string;
   };
   type StoryRow = {
     id: string;
@@ -1408,20 +1418,28 @@ export async function getApfDossierCreationOptions(
   const allowedProjects = new Set(
     ((projects ?? []) as ProjectRow[]).map((project) => project.id),
   );
-  const allowedTeams = ((teams ?? []) as TeamRow[]).filter((team) =>
-    allowedProjects.has(team.project_id),
-  );
-  const teamProjects = new Map(
-    allowedTeams.map((team) => [team.id, team.project_id]),
-  );
-  const storyQuery = allowedTeams.length
+  const projectsByTeam = new Map<string, Set<string>>();
+  const linkTeamToProject = (teamId: string | null, projectId: string | null) => {
+    if (!teamId || !projectId || !allowedProjects.has(projectId)) return;
+    const projectIds = projectsByTeam.get(teamId) ?? new Set<string>();
+    projectIds.add(projectId);
+    projectsByTeam.set(teamId, projectIds);
+  };
+  for (const project of (projects ?? []) as ProjectRow[]) {
+    linkTeamToProject(project.team_id, project.id);
+  }
+  for (const link of (projectTeams ?? []) as ProjectTeamRow[]) {
+    linkTeamToProject(link.team_id, link.project_id);
+  }
+  for (const team of (teams ?? []) as TeamRow[]) {
+    linkTeamToProject(team.id, team.project_id);
+  }
+  const allowedTeamIds = [...projectsByTeam.keys()];
+  const storyQuery = allowedTeamIds.length
     ? supabase
         .from("user_stories" as never)
         .select("id, code, title, status, sprint_id, team_id")
-        .in(
-          "team_id",
-          allowedTeams.map((team) => team.id),
-        )
+        .in("team_id", allowedTeamIds)
         .order("code")
     : Promise.resolve({ data: [], error: null });
   const [
@@ -1447,16 +1465,16 @@ export async function getApfDossierCreationOptions(
       contractId: project.contract_id,
       contractName: project.contracts.name,
     })),
-    userStories: ((userStories ?? []) as StoryRow[])
-      .map((story) => ({
+    userStories: ((userStories ?? []) as StoryRow[]).flatMap((story) =>
+      [...(projectsByTeam.get(story.team_id) ?? [])].map((projectId) => ({
         id: story.id,
         code: story.code,
         title: story.title,
         status: story.status,
-        projectId: teamProjects.get(story.team_id) ?? "",
+        projectId,
         sprintId: story.sprint_id,
-      }))
-      .filter((story) => Boolean(story.projectId)),
+      })),
+    ),
     sessions: ((sessions ?? []) as SessionRow[])
       .filter((session) => allowedProjects.has(session.project_id))
       .map((session) => ({

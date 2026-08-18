@@ -103,6 +103,7 @@ export interface ApfDossierCreationUserStory {
   id: string;
   code: string;
   title: string;
+  status: string;
   sprintId: string | null;
   projectId: string;
 }
@@ -112,7 +113,11 @@ export interface ApfDossierCreationSession {
   projectId: string;
   baselineId: string | null;
   modelId: string;
+  modelName: string;
+  baselineLabel: string | null;
+  baselineVersion: string | null;
   sprintRef: string | null;
+  releaseRef: string | null;
   status: string;
 }
 

@@ -1360,7 +1360,6 @@ export async function getApfDossierCreationOptions(
   const [
     { data: projects, error: projectsError },
     { data: teams, error: teamsError },
-    { data: sessions, error: sessionsError },
   ] = await Promise.all([
     supabase
       .from("projects" as never)
@@ -1370,16 +1369,11 @@ export async function getApfDossierCreationOptions(
       .order("name"),
     supabase
       .from("teams" as never)
-      .select("id, project_id, user_stories(id, code, title, sprint_id)")
+      .select("id, project_id")
       .not("project_id", "is", null),
-    supabase
-      .from("apf_counting_sessions" as never)
-      .select("id, project_id, baseline_id, model_id, sprint_ref, status")
-      .order("updated_at", { ascending: false }),
   ]);
   if (projectsError) throw projectsError;
   if (teamsError) throw teamsError;
-  if (sessionsError) throw sessionsError;
 
   type ProjectRow = {
     id: string;
@@ -1389,13 +1383,16 @@ export async function getApfDossierCreationOptions(
     contracts: { name: string };
   };
   type TeamRow = {
+    id: string;
     project_id: string;
-    user_stories: Array<{
-      id: string;
-      code: string;
-      title: string;
-      sprint_id: string | null;
-    }>;
+  };
+  type StoryRow = {
+    id: string;
+    code: string;
+    title: string;
+    status: string;
+    sprint_id: string | null;
+    team_id: string;
   };
   type SessionRow = {
     id: string;
@@ -1403,11 +1400,44 @@ export async function getApfDossierCreationOptions(
     baseline_id: string | null;
     model_id: string;
     sprint_ref: string | null;
+    release_ref: string | null;
     status: string;
+    apf_counting_models: { name: string } | null;
+    apf_project_baselines: { label: string | null; version: string } | null;
   };
   const allowedProjects = new Set(
     ((projects ?? []) as ProjectRow[]).map((project) => project.id),
   );
+  const allowedTeams = ((teams ?? []) as TeamRow[]).filter((team) =>
+    allowedProjects.has(team.project_id),
+  );
+  const teamProjects = new Map(
+    allowedTeams.map((team) => [team.id, team.project_id]),
+  );
+  const storyQuery = allowedTeams.length
+    ? supabase
+        .from("user_stories" as never)
+        .select("id, code, title, status, sprint_id, team_id")
+        .in(
+          "team_id",
+          allowedTeams.map((team) => team.id),
+        )
+        .order("code")
+    : Promise.resolve({ data: [], error: null });
+  const [
+    { data: userStories, error: storiesError },
+    { data: sessions, error: sessionsError },
+  ] = await Promise.all([
+    storyQuery,
+    supabase
+      .from("apf_counting_sessions" as never)
+      .select(
+        "id, project_id, baseline_id, model_id, sprint_ref, release_ref, status, apf_counting_models(name), apf_project_baselines(label, version)",
+      )
+      .order("updated_at", { ascending: false }),
+  ]);
+  if (storiesError) throw storiesError;
+  if (sessionsError) throw sessionsError;
 
   return {
     projects: ((projects ?? []) as ProjectRow[]).map((project) => ({
@@ -1417,15 +1447,16 @@ export async function getApfDossierCreationOptions(
       contractId: project.contract_id,
       contractName: project.contracts.name,
     })),
-    userStories: ((teams ?? []) as TeamRow[]).flatMap((team) =>
-      allowedProjects.has(team.project_id)
-        ? (team.user_stories ?? []).map((story) => ({
-            ...story,
-            projectId: team.project_id,
-            sprintId: story.sprint_id,
-          }))
-        : [],
-    ),
+    userStories: ((userStories ?? []) as StoryRow[])
+      .map((story) => ({
+        id: story.id,
+        code: story.code,
+        title: story.title,
+        status: story.status,
+        projectId: teamProjects.get(story.team_id) ?? "",
+        sprintId: story.sprint_id,
+      }))
+      .filter((story) => Boolean(story.projectId)),
     sessions: ((sessions ?? []) as SessionRow[])
       .filter((session) => allowedProjects.has(session.project_id))
       .map((session) => ({
@@ -1433,7 +1464,11 @@ export async function getApfDossierCreationOptions(
         projectId: session.project_id,
         baselineId: session.baseline_id,
         modelId: session.model_id,
+        modelName: session.apf_counting_models?.name ?? "Modelo APF",
+        baselineLabel: session.apf_project_baselines?.label ?? null,
+        baselineVersion: session.apf_project_baselines?.version ?? null,
         sprintRef: session.sprint_ref,
+        releaseRef: session.release_ref,
         status: session.status,
       })),
   };

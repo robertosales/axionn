@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar, Code2 } from "lucide-react";
+import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar, Code2, Pencil } from "lucide-react";
 import { getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { getInitials } from "@/lib/nameUtils";
 import { groupTeamMembershipsByUser } from "@/lib/teamMemberships";
@@ -68,6 +68,11 @@ export function TeamMembersManager() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"name" | "recent" | "oldest">("name");
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
+  const [memberToEdit, setMemberToEdit] = useState<TeamMember | null>(null);
+  const [editRole, setEditRole] = useState("");
+  const [editCustomRole, setEditCustomRole] = useState("");
+  const [editUsesCustomRole, setEditUsesCustomRole] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
 
   const fetchMembers = async () => {
     if (!currentTeamId) return;
@@ -292,6 +297,80 @@ export function TeamMembersManager() {
     toast.success("Membro removido");
     setMemberToRemove(null);
     await fetchMembers();
+  };
+
+  const openRoleEditor = (member: TeamMember) => {
+    const predefined = PREDEFINED_ROLES.includes(member.role);
+    setMemberToEdit(member);
+    setEditRole(predefined ? member.role : "");
+    setEditCustomRole(predefined ? "" : member.role);
+    setEditUsesCustomRole(!predefined);
+  };
+
+  const closeRoleEditor = () => {
+    if (savingRole) return;
+    setMemberToEdit(null);
+    setEditRole("");
+    setEditCustomRole("");
+    setEditUsesCustomRole(false);
+  };
+
+  const handleUpdateMemberRole = async () => {
+    if (!memberToEdit || !currentTeamId) return;
+    if (!canManage) {
+      toast.error(
+        permissions.writeBlockedReason ??
+          "Você não tem permissão para gerenciar membros deste time.",
+      );
+      return;
+    }
+
+    const nextRole = (editUsesCustomRole ? editCustomRole : editRole).trim();
+    if (!nextRole) {
+      toast.error("Informe a função do membro");
+      return;
+    }
+    if (nextRole === memberToEdit.role) {
+      closeRoleEditor();
+      return;
+    }
+
+    setSavingRole(true);
+    try {
+      if (orgEnabled && currentOrganizationId) {
+        const { error: rpcError } = await supabase.rpc(
+          "update_organization_team_member_role_v2",
+          {
+            p_org_id: currentOrganizationId,
+            p_team_member_id: memberToEdit.id,
+            p_role: nextRole,
+          },
+        );
+        if (rpcError) {
+          console.error("[TeamMembersManager] update_organization_team_member_role_v2:", rpcError);
+          toast.error(
+            resolveOrganizationOperationalError(rpcError, "Erro ao atualizar função"),
+          );
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from("team_members")
+          .update({ role: nextRole })
+          .eq("id", memberToEdit.id)
+          .eq("team_id", currentTeamId);
+        if (error) {
+          toast.error("Erro ao atualizar função");
+          return;
+        }
+      }
+
+      toast.success("Função no time atualizada");
+      setMemberToEdit(null);
+      await fetchMembers();
+    } finally {
+      setSavingRole(false);
+    }
   };
 
   const availableProfiles = allProfiles.filter(
@@ -542,15 +621,26 @@ export function TeamMembersManager() {
                         </p>
                       </div>
                       {canManage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="-mr-1 -mt-1 min-h-11 min-w-11"
-                          onClick={() => setMemberToRemove(member)}
-                          aria-label={`Remover ${name} do time ${activeTeam?.name || "atual"}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="-mr-1 -mt-1 flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="min-h-11 min-w-11"
+                            onClick={() => openRoleEditor(member)}
+                            aria-label={`Editar função de ${name} no time ${activeTeam?.name || "atual"}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="min-h-11 min-w-11"
+                            onClick={() => setMemberToRemove(member)}
+                            aria-label={`Remover ${name} do time ${activeTeam?.name || "atual"}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       )}
                     </div>
 
@@ -596,6 +686,75 @@ export function TeamMembersManager() {
         confirmLabel="Remover deste time"
         onConfirm={() => { if (memberToRemove) void handleRemoveMember(memberToRemove.id); }}
       />
+
+      <Dialog open={Boolean(memberToEdit)} onOpenChange={(nextOpen) => { if (!nextOpen) closeRoleEditor(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar função no time</DialogTitle>
+            <DialogDescription>
+              Altere apenas a função de {memberToEdit?.profile?.display_name || "esta pessoa"} em {activeTeam?.name || "este time"} ({activeModuleLabel}). A identidade, os perfis RBAC e os outros vínculos não serão modificados.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-team-member-role">Função no time *</Label>
+            {!editUsesCustomRole ? (
+              <Select
+                value={editRole}
+                onValueChange={(value) => {
+                  if (value === "__custom__") {
+                    setEditUsesCustomRole(true);
+                    setEditCustomRole("");
+                  } else {
+                    setEditRole(value);
+                  }
+                }}
+              >
+                <SelectTrigger id="edit-team-member-role" className="min-h-11">
+                  <SelectValue placeholder="Selecione uma função" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PREDEFINED_ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                  ))}
+                  <SelectItem value="__custom__">Outra função...</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  id="edit-team-member-role"
+                  className="min-h-11"
+                  value={editCustomRole}
+                  onChange={(event) => setEditCustomRole(event.target.value)}
+                  placeholder="Digite a função personalizada"
+                  autoFocus
+                />
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0"
+                  onClick={() => {
+                    setEditUsesCustomRole(false);
+                    setEditRole(PREDEFINED_ROLES[0]);
+                  }}
+                >
+                  Escolher uma função predefinida
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeRoleEditor} disabled={savingRole}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={() => void handleUpdateMemberRole()} disabled={savingRole}>
+              {savingRole ? "Salvando..." : "Salvar função"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
                 </div>
               </CardContent>

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { renderApfDossierMarkdown, sha256Hex, type ApfDossierDocumentData } from "../utils/apfDossierMarkdown";
+import type { ExtractedApfCriterion } from "../utils/apfSpecificationExtraction";
 import type {
   ApfDossierCreationOptions,
   ApfAcceptanceCriterion,
@@ -262,6 +263,8 @@ export async function saveApfAcceptanceCriterion(input: SaveApfAcceptanceCriteri
   const { error } = await query;
   if (error) throw error;
 }
+
+export async function importApfFunctionalSpecification(dossierId:string,fileName:string,content:string,criteria:ExtractedApfCriterion[]):Promise<number>{const contentHash=await sha256Hex(content);const{data,error}=await supabase.rpc("import_apf_functional_specification"as never,{p_dossier_id:dossierId,p_file_name:fileName,p_content:content,p_content_hash:contentHash,p_criteria:criteria.map(item=>({stable_id:item.stableId,sort_order:item.sortOrder,original_text:item.originalText,expected_behavior:item.expectedBehavior}))}as never);if(error)throw error;return Number(data??0);}
 
 export async function getApfDossierCreationOptions(organizationId: string): Promise<ApfDossierCreationOptions> {
   const [{ data: projects, error: projectsError }, { data: teams, error: teamsError }, { data: sessions, error: sessionsError }] = await Promise.all([

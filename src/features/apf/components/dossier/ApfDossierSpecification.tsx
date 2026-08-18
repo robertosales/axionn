@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, CircleDashed, Loader2, Plus, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleDashed, FileUp, Loader2, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { ApfDossierValidation } from "./ApfDossierValidation";
 import { ApfDossierTraceability } from "./ApfDossierTraceability";
 import { ApfLogicalFileMatrix } from "./ApfLogicalFileMatrix";
 import { ApfExceptionReviews } from "./ApfExceptionReviews";
+import { ApfSpecificationImportDialog } from "./ApfSpecificationImportDialog";
 
 const decisions: Array<{ value: ApfAcceptanceDecision; label: string }> = [
   { value: "meets", label: "Atende" }, { value: "partially_meets", label: "Atende parcialmente" },
@@ -29,6 +30,7 @@ const decisions: Array<{ value: ApfAcceptanceDecision; label: string }> = [
 export function ApfDossierSpecification({ dossier, onBack, onSuccessorCreated }: { dossier: ApfEvidenceDossierSummary; onBack: () => void; onSuccessorCreated: () => Promise<unknown> }) {
   const { data: criteria = [], isLoading, isError, refetch } = useApfAcceptanceCriteria(dossier.id);
   const [adding, setAdding] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const decided = criteria.filter((criterion) => criterion.decision).length;
   const completeness = criteria.length ? Math.round((decided / criteria.length) * 100) : 0;
 
@@ -42,7 +44,7 @@ export function ApfDossierSpecification({ dossier, onBack, onSuccessorCreated }:
       </TabsList>
       <TabsContent value="overview"><div className="grid gap-3 sm:grid-cols-3"><Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Critérios decididos</p><p className="text-xl font-semibold">{decided}/{criteria.length}</p></CardContent></Card><Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Tipo</p><p className="text-lg font-semibold">{dossier.countingType}</p></CardContent></Card><Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Status</p><p className="text-lg font-semibold">{dossier.status}</p></CardContent></Card></div></TabsContent>
       <TabsContent value="specification" className="space-y-3">
-    <div className="flex justify-end"><Button onClick={() => setAdding(true)} disabled={adding}><Plus className="mr-2 h-4 w-4" />Adicionar critério</Button></div>
+    <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => setImportOpen(true)}><FileUp className="mr-2 h-4 w-4" />Importar especificação</Button><Button onClick={() => setAdding(true)} disabled={adding}><Plus className="mr-2 h-4 w-4" />Adicionar critério</Button></div>
     <Card><CardContent className="grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div><div className="mb-2 flex justify-between text-xs font-medium"><span>Critérios com decisão</span><span>{decided}/{criteria.length}</span></div><Progress value={completeness} aria-label={`${completeness}% dos critérios possuem decisão`} /></div><Badge variant={completeness === 100 && criteria.length ? "default" : "secondary"}>{completeness}% completo</Badge></CardContent></Card>
     {isLoading ? <div className="flex min-h-40 items-center justify-center" role="status"><Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />Carregando critérios…</div>
       : isError ? <Card role="alert" className="border-destructive/30"><CardContent className="flex items-center justify-between p-4"><p className="text-sm text-destructive">Falha ao carregar os critérios.</p><Button variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button></CardContent></Card>
@@ -53,7 +55,7 @@ export function ApfDossierSpecification({ dossier, onBack, onSuccessorCreated }:
       <TabsContent value="counting" className="space-y-5"><ApfDossierCounting dossierId={dossier.id} sessionId={dossier.countingSessionId} /><ApfLogicalFileMatrix dossierId={dossier.id} sessionId={dossier.countingSessionId} /><ApfExceptionReviews dossierId={dossier.id} sessionId={dossier.countingSessionId} /></TabsContent>
       <TabsContent value="audit"><ApfDossierAudit dossierId={dossier.id} /></TabsContent>
       <TabsContent value="document"><ApfDossierValidation dossier={dossier} onSuccessorCreated={onSuccessorCreated} /></TabsContent>
-    </Tabs>
+    </Tabs><ApfSpecificationImportDialog open={importOpen} onOpenChange={setImportOpen} dossierId={dossier.id} onImported={refetch} />
   </section>;
 }
 

@@ -15,6 +15,7 @@ import type {
   ApfGitEvidenceCandidates,
   ApfTraceabilitySuggestion,
   ApfAuditFinding,
+  ApfLogicalFileReview,
 } from "../types/apfEvidenceDossier.types";
 
 type DossierRow = {
@@ -145,6 +146,17 @@ export async function getApfDossierCountingMemory(sessionId: string): Promise<Ap
 }
 
 export async function reviewApfCountingMetrics(dossierId: string, itemId: string, det: number | null, ftr: number | null, ret: number | null, justification: string): Promise<void> { const { error } = await supabase.rpc("review_apf_counting_metrics" as never, { p_dossier_id: dossierId, p_counting_item_id: itemId, p_det: det, p_ftr: ftr, p_ret: ret, p_justification: justification.trim() } as never); if (error) throw error; }
+
+export async function listApfLogicalFileReviews(dossierId: string, sessionId: string): Promise<ApfLogicalFileReview[]> {
+  const [{ data: items, error: itemError }, { data: reviews, error: reviewError }] = await Promise.all([
+    supabase.from("apf_counting_items" as never).select("id, ef_description, function_sigla").eq("session_id", sessionId).in("function_sigla", ["ARQ","ALI","AIE","ILF","EIF"]),
+    supabase.from("apf_logical_file_reviews" as never).select("id, counting_item_id, recognizable, maintained_by_application, independent_lifecycle, inside_boundary, used_by_transaction, decision, justification").eq("dossier_id", dossierId),
+  ]); if (itemError) throw itemError; if (reviewError) throw reviewError;
+  type Item = { id:string; ef_description:string }; type Review = { id:string; counting_item_id:string; recognizable:boolean; maintained_by_application:boolean; independent_lifecycle:boolean; inside_boundary:boolean; used_by_transaction:boolean; decision:ApfLogicalFileReview["decision"]; justification:string };
+  const map=new Map(((reviews??[]) as Review[]).map((r)=>[r.counting_item_id,r]));
+  return ((items??[]) as Item[]).map((item)=>{const r=map.get(item.id);return {id:r?.id??null,countingItemId:item.id,description:item.ef_description,recognizable:r?.recognizable??false,maintained:r?.maintained_by_application??false,independentLifecycle:r?.independent_lifecycle??false,insideBoundary:r?.inside_boundary??false,usedByTransaction:r?.used_by_transaction??false,decision:r?.decision??"pending",justification:r?.justification??""};});
+}
+export async function reviewApfLogicalFile(dossierId:string, review:ApfLogicalFileReview):Promise<void>{const {error}=await supabase.rpc("review_apf_logical_file" as never,{p_dossier_id:dossierId,p_counting_item_id:review.countingItemId,p_recognizable:review.recognizable,p_maintained:review.maintained,p_independent_lifecycle:review.independentLifecycle,p_inside_boundary:review.insideBoundary,p_used_by_transaction:review.usedByTransaction,p_decision:review.decision,p_justification:review.justification.trim()} as never);if(error)throw error;}
 
 export async function listApfEvidenceSources(dossierId: string): Promise<ApfEvidenceSource[]> {
   const [{ data: sources, error: sourceError }, { data: catalog, error: catalogError }, { data: links, error: linkError }] = await Promise.all([

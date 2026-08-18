@@ -195,6 +195,12 @@ export interface ApfAuditFinding {
   entityType: string | null; status: "open" | "resolved" | "accepted_risk"; resolutionNote: string | null; detectedAt: string;
 }
 
+export interface ApfLogicalFileReview {
+  id: string | null; countingItemId: string; description: string; recognizable: boolean; maintained: boolean;
+  independentLifecycle: boolean; insideBoundary: boolean; usedByTransaction: boolean;
+  decision: "ALI" | "AIE" | "not_logical_file" | "pending"; justification: string;
+}
+
 export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   draft: "Rascunho",
   collecting_evidence: "Coletando evidências",

@@ -113,6 +113,7 @@ export function renderApfDossierMarkdown(data: ApfDossierDocumentData): string {
           })),
       );
   const complementary = evidence.filter((e) => e.criterionIds.length === 0);
+  const specification = evidence.find((item) => item.metadata?.structured_extraction)?.metadata?.structured_extraction as Record<string, unknown> | undefined;
   const total =
     c?.totalHomologatedPf ??
     dossier.totalHomologatedPf ??
@@ -130,6 +131,10 @@ export function renderApfDossierMarkdown(data: ApfDossierDocumentData): string {
     `- **Tipo:** ${dossier.countingType}`,
     `- **Sessão:** ${counting.sessionId}`,
     `- **Status:** ${dossier.status}`,
+    `- **Objetivo funcional:** ${cell(specification?.objective)}`,
+    `- **Atores:** ${cell(Array.isArray(specification?.actors) ? specification.actors.join(", ") : null)}`,
+    `- **Fronteiras:** ${cell(Array.isArray(specification?.boundaries) ? specification.boundaries.join(", ") : null)}`,
+    `- **Requisitos não funcionais:** ${cell(Array.isArray(specification?.nonFunctionalRequirements) ? specification.nonFunctionalRequirements.join(", ") : null)}`,
     "",
     `## 2. Resumo executivo`,
     "",
@@ -176,14 +181,14 @@ export function renderApfDossierMarkdown(data: ApfDossierDocumentData): string {
     "",
     `## 6. Catálogo de evidências`,
     "",
-    "| ID | Categoria | Fonte | Verificação | Resumo | URL |",
-    "|---|---|---|---|---|---|",
+    "| ID | Categoria | Fonte | Verificação | Resumo | Autor/data | Justificativa | URL |",
+    "|---|---|---|---|---|---|---|---|",
     ...empty(
       evidence.map(
         (e) =>
-          `| ${cell(e.stableId)} | ${cell(e.category)} | ${cell(e.sourceType)} | ${cell(e.verificationStatus)} | ${cell(e.summary)} | ${cell(e.permanentUrl)} |`,
+          `| ${cell(e.stableId)} | ${cell(e.category)} | ${cell(e.sourceType)} | ${cell(e.verificationStatus)} | ${cell(e.summary)} | ${cell(`${e.collectedBy ?? "—"} / ${e.collectedAt}`)} | ${cell(e.metadata?.justification)} | ${cell(e.permanentUrl)} |`,
       ),
-      6,
+      8,
     ),
     "",
     `## 7. Contagem transacional`,

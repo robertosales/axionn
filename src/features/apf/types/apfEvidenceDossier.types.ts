@@ -170,6 +170,8 @@ export interface ApfEvidenceSource {
   contentHash: string | null;
   verificationStatus: ApfEvidenceVerification;
   collectedAt: string;
+  collectedBy?: string | null;
+  metadata?: Record<string, unknown>;
   criterionIds: string[];
   repository?: string | null;
   commitSha?: string | null;
@@ -187,6 +189,7 @@ export interface CreateApfEvidenceSourceInput {
   permanentUrl: string;
   contentHash: string;
   verificationStatus: ApfEvidenceVerification;
+  justification: string;
 }
 
 export interface ApfTraceabilitySuggestion {

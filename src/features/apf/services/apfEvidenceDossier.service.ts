@@ -1001,7 +1001,7 @@ export async function listApfEvidenceSources(
     supabase
       .from("apf_evidence_sources" as never)
       .select(
-        "id, dossier_id, source_type, category, summary, permanent_url, content_hash, verification_status, collected_at, repository, commit_sha, merge_request_ref, file_path, symbol_ref",
+      "id, dossier_id, source_type, category, summary, permanent_url, content_hash, verification_status, collected_at, collected_by, metadata, repository, commit_sha, merge_request_ref, file_path, symbol_ref",
       )
       .eq("dossier_id", dossierId)
       .order("collected_at", { ascending: false }),
@@ -1034,6 +1034,8 @@ export async function listApfEvidenceSources(
     content_hash: string | null;
     verification_status: ApfEvidenceSource["verificationStatus"];
     collected_at: string;
+    collected_by: string | null;
+    metadata: Record<string, unknown>;
     repository: string | null;
     commit_sha: string | null;
     merge_request_ref: string | null;
@@ -1068,6 +1070,8 @@ export async function listApfEvidenceSources(
     contentHash: row.content_hash,
     verificationStatus: row.verification_status,
     collectedAt: row.collected_at,
+    collectedBy: row.collected_by,
+    metadata: row.metadata,
     criterionIds: criterionIds.get(row.id) ?? [],
     repository: row.repository,
     commitSha: row.commit_sha,
@@ -1090,6 +1094,7 @@ export async function createApfEvidenceSource(
       permanent_url: input.permanentUrl.trim() || null,
       content_hash: input.contentHash.trim() || null,
       verification_status: input.verificationStatus,
+      metadata: { manual_evidence: true, justification: input.justification.trim() },
     } as never)
     .select("id")
     .single();

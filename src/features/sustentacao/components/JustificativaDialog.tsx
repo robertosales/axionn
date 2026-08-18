@@ -29,12 +29,12 @@ export function JustificativaDialog({ open, onClose, onConfirm }: Props) {
           <DialogTitle>Justificativa obrigatória</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
-          <Label>Informe a justificativa para esta mudança de status:</Label>
-          <Textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="Descreva o motivo..." />
+          <Label htmlFor="status-justification">Informe a justificativa para esta mudança de status:</Label>
+          <Textarea id="status-justification" value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="Descreva o motivo..." />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handle} disabled={!text.trim() || loading}>{loading ? 'Salvando...' : 'Confirmar'}</Button>
+          <Button variant="outline" onClick={onClose} className="min-h-11 sm:min-h-9">Cancelar</Button>
+          <Button onClick={handle} disabled={!text.trim() || loading} className="min-h-11 sm:min-h-9">{loading ? 'Salvando...' : 'Confirmar'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -49,10 +49,18 @@ export function DemandaCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <Card
-          className="p-3 cursor-pointer hover:shadow-md transition-shadow group border border-border/60 flex flex-col gap-2"
+          className="group flex cursor-pointer flex-col gap-2 border border-border/60 p-3 shadow-sm transition-[border-color,box-shadow] hover:border-border hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           draggable={draggable}
           onDragStart={(e) => onDragStart?.(e, demanda)}
           onClick={() => onOpen(demanda)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            onOpen(demanda);
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label={`Abrir demanda ${demanda.rhm}`}
         >
           {/* LINHA 1: RHM + SLA badge dinâmico + menu */}
           <div className="flex items-center justify-between gap-1">
@@ -77,7 +85,7 @@ export function DemandaCard({
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0 -mr-1">
+                <Button variant="ghost" size="icon" className="-mr-1 min-h-11 min-w-11 shrink-0 md:min-h-8 md:min-w-8 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100" aria-label={`Ações da demanda ${demanda.rhm}`}>
                   <MoreHorizontal className="h-3 w-3" />
                 </Button>
               </DropdownMenuTrigger>

@@ -21,9 +21,9 @@ export function ReportHeader({ tipoRelatorio, periodo, modulo = 'Sustentação' 
   const docId = `RPT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
   return (
-    <div className="border rounded-lg bg-card p-4 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <div className="space-y-2 rounded-lg border bg-card p-4 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
           <FileText className="h-4 w-4 text-info" />
           <span className="text-sm font-semibold">{tipoRelatorio}</span>
           <Badge variant="outline" className="text-[10px]">{modulo}</Badge>

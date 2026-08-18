@@ -42,14 +42,14 @@ import {
 import { toast } from 'sonner';
 
 const MODULE_OPTIONS = [
-  { value: 'sustenance', label: '🛠 Sustentação' },
-  { value: 'agile',      label: '⚡ Ágil'         },
-  { value: 'mixed',      label: '🔀 Misto'        },
+  { value: 'sustenance', label: 'Sustentação' },
+  { value: 'agile',      label: 'Ágil'         },
+  { value: 'mixed',      label: 'Misto'        },
 ];
 const MODULE_BADGE: Record<string, string> = {
-  sustenance: 'bg-purple-950 text-purple-300 border-purple-800',
-  agile:      'bg-blue-950   text-blue-300   border-blue-800',
-  mixed:      'bg-orange-950 text-orange-300 border-orange-800',
+  sustenance: 'bg-primary/10 text-primary border-primary/30',
+  agile:      'bg-info/10 text-info border-info/30',
+  mixed:      'bg-warning/10 text-warning border-warning/30',
 };
 
 type FormState = {
@@ -120,8 +120,8 @@ export function ProjetosManager() {
 
   if (loading) return <SkeletonList count={4} />;
   if (error)   return (
-    <div className="text-center py-10 text-destructive">
-      {error} <button onClick={reload} className="underline ml-2">Tentar novamente</button>
+    <div className="rounded-lg border border-destructive/30 bg-destructive/5 py-10 text-center text-destructive" role="alert">
+      {error} <Button variant="link" onClick={reload} className="min-h-11 px-2 text-destructive">Tentar novamente</Button>
     </div>
   );
 
@@ -129,7 +129,7 @@ export function ProjetosManager() {
     <div className="space-y-4">
 
       {/* Cabeçalho — padrão igual ContractDetail */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           <FolderKanban className="h-5 w-5 text-muted-foreground" />
           <div>
@@ -139,7 +139,7 @@ export function ProjetosManager() {
             </p>
           </div>
         </div>
-        <Button size="sm" onClick={openCreate} className="gap-1.5">
+        <Button size="sm" onClick={openCreate} className="min-h-11 w-full gap-1.5 sm:min-h-9 sm:w-auto">
           <Plus className="h-4 w-4" /> Novo Projeto
         </Button>
       </div>
@@ -152,11 +152,12 @@ export function ProjetosManager() {
             placeholder="Buscar projeto..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-9 h-9"
+            className="min-h-11 pl-9 sm:min-h-9"
+            aria-label="Buscar projeto"
           />
         </div>
         <Select value={filterModule} onValueChange={setFilterModule}>
-          <SelectTrigger className="w-[160px] h-9">
+          <SelectTrigger className="min-h-11 w-full sm:min-h-9 sm:w-[160px]" aria-label="Filtrar por tipo de módulo">
             <SelectValue placeholder="Tipo de módulo" />
           </SelectTrigger>
           <SelectContent>
@@ -182,7 +183,7 @@ export function ProjetosManager() {
               const code        = (p as any).code as string | null;
 
               return (
-                <Card key={p.id} className="hover:shadow-md transition-shadow">
+                <Card key={p.id} className="shadow-sm transition-shadow hover:shadow-md">
                   <CardContent className="p-4 space-y-3">
 
                     {/* Header do card */}
@@ -200,7 +201,7 @@ export function ProjetosManager() {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                          <Button variant="ghost" size="icon" className="min-h-11 min-w-11 shrink-0 sm:min-h-9 sm:min-w-9" aria-label={`Ações do projeto ${p.nome}`}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -271,14 +272,14 @@ export function ProjetosManager() {
             </div>
 
             {/* Código + Redmine */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Código</Label>
                 <Input
                   value={form.code}
                   onChange={e => setForm(p => ({ ...p, code: e.target.value }))}
                   placeholder="Ex: NEXO"
-                  className="h-8 text-sm"
+                  className="min-h-11 text-sm sm:min-h-9"
                 />
               </div>
               <div className="space-y-1.5">
@@ -288,7 +289,7 @@ export function ProjetosManager() {
                   value={form.redmine_id}
                   onChange={e => setForm(p => ({ ...p, redmine_id: e.target.value }))}
                   placeholder="ID numérico"
-                  className="h-8 text-sm"
+                  className="min-h-11 text-sm sm:min-h-9"
                 />
               </div>
             </div>
@@ -300,7 +301,7 @@ export function ProjetosManager() {
                 value={form.module_type}
                 onValueChange={v => setForm(p => ({ ...p, module_type: v }))}
               >
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-11 text-sm sm:min-h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {MODULE_OPTIONS.map(o => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -324,8 +325,8 @@ export function ProjetosManager() {
           </div>
 
           <DialogFooter className="border-t pt-3 mt-1 bg-muted/10 -mx-6 px-6 -mb-6 pb-4 rounded-b-lg">
-            <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button size="sm" onClick={handleSubmit} className="min-w-[90px]">
+            <Button variant="outline" size="sm" onClick={() => setShowForm(false)} className="min-h-11 sm:min-h-9">Cancelar</Button>
+            <Button size="sm" onClick={handleSubmit} className="min-h-11 min-w-[90px] sm:min-h-9">
               {editing ? 'Salvar' : 'Criar Projeto'}
             </Button>
           </DialogFooter>

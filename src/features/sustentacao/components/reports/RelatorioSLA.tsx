@@ -302,7 +302,7 @@ export function RelatorioSLA({ onBack }: Props) {
             {previewUrl && <iframe src={previewUrl} className="w-full h-full border-0" title="Preview do relatório PDF" />}
           </div>
           <DialogFooter className="px-6 py-3 border-t flex justify-end">
-            <Button variant="outline" size="sm" onClick={handleClosePreview}>Fechar</Button>
+            <Button className="min-h-11 sm:min-h-9" variant="outline" size="sm" onClick={handleClosePreview}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -344,10 +344,10 @@ export function RelatorioSLA({ onBack }: Props) {
               { cor: "hsl(var(--destructive))", label: `Violado (${barData.violado})` },
             ]}
           >
-            <div className="h-8 rounded-full overflow-hidden flex bg-muted mt-2">
-              {barData.dentro  > 0 && <div className="bg-emerald-500 h-full transition-all" style={{ width: `${(barData.dentro  / barData.total) * 100}%` }} />}
-              {barData.emRisco > 0 && <div className="bg-orange-400 h-full transition-all" style={{ width: `${(barData.emRisco / barData.total) * 100}%` }} />}
-              {barData.violado > 0 && <div className="bg-destructive h-full transition-all" style={{ width: `${(barData.violado / barData.total) * 100}%` }} />}
+            <div className="mt-2 flex h-8 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${barData.dentro} dentro do SLA, ${barData.emRisco} em risco e ${barData.violado} violados`}>
+              {barData.dentro  > 0 && <div aria-hidden="true" className="h-full bg-emerald-500 transition-all" style={{ width: `${(barData.dentro  / barData.total) * 100}%` }} />}
+              {barData.emRisco > 0 && <div aria-hidden="true" className="h-full bg-orange-400 transition-all" style={{ width: `${(barData.emRisco / barData.total) * 100}%` }} />}
+              {barData.violado > 0 && <div aria-hidden="true" className="h-full bg-destructive transition-all" style={{ width: `${(barData.violado / barData.total) * 100}%` }} />}
             </div>
           </ReportChart>
         }

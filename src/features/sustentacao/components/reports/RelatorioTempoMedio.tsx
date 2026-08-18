@@ -301,7 +301,7 @@ export function RelatorioTempoMedio({ onBack }: Props) {
             {previewUrl && <iframe src={previewUrl} className="w-full h-full border-0" title="Preview do relatório PDF" />}
           </div>
           <DialogFooter className="px-6 py-3 border-t flex justify-end">
-            <Button variant="outline" size="sm" onClick={handleClosePreview}>Fechar</Button>
+            <Button className="min-h-11 sm:min-h-9" variant="outline" size="sm" onClick={handleClosePreview}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

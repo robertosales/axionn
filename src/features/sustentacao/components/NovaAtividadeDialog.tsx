@@ -237,7 +237,7 @@ export function NovaAtividadeDialog({
                 <p className="text-xs text-muted-foreground italic">Nenhum responsável vinculado à demanda.</p>
               ) : (
                 <Select value={targetUserId} onValueChange={setTargetUserId}>
-                  <SelectTrigger className="h-10 text-sm">
+                  <SelectTrigger className="min-h-11 text-sm">
                     <SelectValue placeholder="Selecione o membro">
                       {membroSelecionado && (
                         <span className="flex items-center gap-2">
@@ -270,8 +270,8 @@ export function NovaAtividadeDialog({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" size="sm" onClick={handleClose} disabled={loading}>Cancelar</Button>
-          <Button size="sm" onClick={handleSalvar} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={handleClose} disabled={loading} className="min-h-11 sm:min-h-9">Cancelar</Button>
+          <Button size="sm" onClick={handleSalvar} disabled={loading} className="min-h-11 sm:min-h-9">
             {loading ? "Salvando..." : isEditing ? "Salvar alterações" : "Salvar atividade"}
           </Button>
         </DialogFooter>

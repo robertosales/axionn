@@ -177,7 +177,6 @@ export function ImportacaoPreviewTable({
       } finally { setLoadingEnrich(false); }
     }
     enrich();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
   const displayRows = useMemo(
@@ -237,7 +236,7 @@ export function ImportacaoPreviewTable({
   if (loadingEnrich) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
+        <Loader2 className="h-7 w-7 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">Comparando com o sistema…</p>
       </div>
     );
@@ -249,7 +248,7 @@ export function ImportacaoPreviewTable({
     <div className="flex flex-col">
 
       {/* ── Contadores ── */}
-      <div className="grid grid-cols-4 gap-3 px-6 py-5 border-b border-border">
+      <div className="grid grid-cols-2 gap-3 border-b border-border px-4 py-5 sm:px-6 lg:grid-cols-4" aria-label="Resumo da importação">
         <Counter label="Novos"         count={counts.novos}        cls="bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400" />
         <Counter label="Atualizações"  count={counts.atualizacoes} cls="bg-sky-500/10 border-sky-500/20 text-sky-700 dark:text-sky-400" />
         <Counter label="Sem alteração" count={counts.semAlteracao} cls="bg-muted border-border text-muted-foreground" />
@@ -293,7 +292,7 @@ export function ImportacaoPreviewTable({
                   key={row.rhm}
                   className={cn(
                     "border-b border-border/50 transition-colors",
-                    isSelected    && "bg-blue-500/5 dark:bg-blue-500/10",
+                    isSelected    && "bg-primary/5",
                     !isSelectable && "opacity-50",
                     row.tipoAcao === "atualizacao" && "border-l-2 border-l-amber-400 dark:border-l-amber-500",
                   )}
@@ -303,6 +302,7 @@ export function ImportacaoPreviewTable({
                       checked={isSelected}
                       onCheckedChange={() => isSelectable && toggleRow(row.rhm)}
                       disabled={!isSelectable || loading}
+                      aria-label={`Selecionar RHM ${row.rhm}`}
                     />
                   </TableCell>
 
@@ -416,8 +416,8 @@ export function ImportacaoPreviewTable({
 
       {/* ── Paginação ── */}
       {displayRows.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-t border-border bg-muted/20">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs text-muted-foreground">
               {displayRows.length} registro(s) — {counts.selecionados} selecionado(s)
             </span>
@@ -428,7 +428,7 @@ export function ImportacaoPreviewTable({
                   key={size}
                   onClick={() => handlePageSizeChange(size)}
                   className={cn(
-                    "text-xs px-2 py-0.5 rounded transition-colors",
+                    "min-h-11 min-w-11 rounded px-2 text-xs transition-colors sm:min-h-8 sm:min-w-8",
                     pageSize === size
                       ? "bg-primary text-primary-foreground font-semibold"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -443,7 +443,7 @@ export function ImportacaoPreviewTable({
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={safePage <= 1}
-              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 sm:min-h-8 sm:min-w-8"
               aria-label="Página anterior"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -454,7 +454,7 @@ export function ImportacaoPreviewTable({
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage >= totalPages}
-              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 sm:min-h-8 sm:min-w-8"
               aria-label="Próxima página"
             >
               <ChevronRight className="h-4 w-4" />
@@ -464,9 +464,9 @@ export function ImportacaoPreviewTable({
       )}
 
       {/* ── Footer de ações ── */}
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 px-6 py-4 border-t border-border bg-card">
+      <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-border bg-card px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
         <Button
-          className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white h-9 px-5 rounded-xl text-sm font-medium"
+          className="min-h-11 w-full rounded-xl px-5 text-sm font-medium sm:min-h-9 sm:w-auto"
           onClick={handleMigrarSelecionados}
           disabled={loading || counts.selecionados === 0}
         >
@@ -479,7 +479,7 @@ export function ImportacaoPreviewTable({
 
         <Button
           variant="outline"
-          className="h-9 px-5 rounded-xl text-sm font-medium"
+          className="min-h-11 w-full rounded-xl px-5 text-sm font-medium sm:min-h-9 sm:w-auto"
           onClick={handleMigrarTodos}
           disabled={loading || selectableRhms.length === 0}
         >
@@ -488,7 +488,7 @@ export function ImportacaoPreviewTable({
 
         <Button
           variant="ghost"
-          className="h-9 px-4 rounded-xl text-sm text-muted-foreground hover:text-foreground"
+          className="min-h-11 w-full rounded-xl px-4 text-sm text-muted-foreground hover:text-foreground sm:min-h-9 sm:w-auto"
           onClick={onCancel}
           disabled={loading}
         >
@@ -503,7 +503,7 @@ export function ImportacaoPreviewTable({
 
 function Counter({ label, count, cls }: { label: string; count: number; cls: string }) {
   return (
-    <div className={cn("h-24 rounded-xl border flex flex-col items-center justify-center", cls)}>
+    <div className={cn("flex h-24 flex-col items-center justify-center rounded-xl border", cls)}>
       <p className="text-3xl font-bold leading-none tabular-nums">{count}</p>
       <p className="text-[11px] font-medium mt-2 opacity-75">{label}</p>
     </div>

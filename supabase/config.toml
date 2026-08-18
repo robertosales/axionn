@@ -56,3 +56,6 @@ verify_jwt = true
 
 [functions.copilot-plugin]
 verify_jwt = false
+
+[functions.git-webhook-handler]
+verify_jwt = false

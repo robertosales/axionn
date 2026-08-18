@@ -92,7 +92,7 @@ export function extractApfSpecificationFromText(
       inCriteria = false;
       const match = line.match(section.pattern);
       const inline = clean(match?.[1] ?? "");
-      if (section.single) {
+      if ("single" in section && section.single) {
         objective = inline || objective;
         active = "objective";
       } else {

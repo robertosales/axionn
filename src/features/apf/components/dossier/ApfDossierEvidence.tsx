@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ExternalLink, FilePlus2, GitCommitHorizontal, GitMerge, Link2, Loader2, ShieldCheck } from "lucide-react";
+import { ExternalLink, FilePlus2, GitCommitHorizontal, GitMerge, Link2, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useApfEvidenceSources } from "../../hooks/useApfEvidenceDossiers";
-import { createApfEvidenceSource, importApfGitEvidence, linkApfCriterionToEvidence, listApfGitEvidenceCandidates } from "../../services/apfEvidenceDossier.service";
+import { createApfEvidenceSource, importApfGitEvidence, importApfRedmineEvidence, linkApfCriterionToEvidence, listApfGitEvidenceCandidates } from "../../services/apfEvidenceDossier.service";
 import type { ApfAcceptanceCriterion, ApfEvidenceCategory, ApfEvidenceSource, ApfEvidenceVerification, ApfGitEvidenceCandidates } from "../../types/apfEvidenceDossier.types";
 
 const categoryPrefix: Record<ApfEvidenceCategory, string> = { api: "API", code: "CODE", interface: "UI", database: "DB", integration: "INT", test: "TEST", document: "DOC" };
@@ -22,11 +22,13 @@ export function ApfDossierEvidence({ dossierId, organizationId, userStoryId, cri
   const [gitDialogOpen, setGitDialogOpen] = useState(false);
   const [linkingEvidenceId, setLinkingEvidenceId] = useState<string | null>(null);
   const [criterionId, setCriterionId] = useState("");
+  const [redmineLoading, setRedmineLoading] = useState(false);
   const linkedCount = evidence.filter((item) => item.criterionIds.length > 0).length;
+  const importRedmine=async()=>{setRedmineLoading(true);try{const count=await importApfRedmineEvidence(dossierId);toast.success(count?`${count} evidência(s) importada(s) do Redmine.`:"Nenhuma nova evidência vinculada no Redmine.");await refetch();}catch(error){toast.error(error instanceof Error?error.message:"Falha ao importar do Redmine.");}finally{setRedmineLoading(false);}};
   const link = async () => { if (!linkingEvidenceId || !criterionId) return; try { await linkApfCriterionToEvidence(dossierId, criterionId, linkingEvidenceId); toast.success("Critério vinculado à evidência."); setLinkingEvidenceId(null); setCriterionId(""); await refetch(); } catch (error) { toast.error(error instanceof Error ? error.message : "Falha ao criar vínculo."); } };
 
   return <section className="space-y-3" aria-labelledby="evidence-title">
-    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 id="evidence-title" className="font-semibold">Catálogo de evidências</h3><p className="text-sm text-muted-foreground">{evidence.length} evidências · {linkedCount} vinculadas a critérios</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setGitDialogOpen(true)} disabled={!userStoryId}><GitMerge className="mr-2 h-4 w-4" />Importar do GitLab</Button><Button onClick={() => setDialogOpen(true)}><FilePlus2 className="mr-2 h-4 w-4" />Adicionar evidência</Button></div></div>
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 id="evidence-title" className="font-semibold">Catálogo de evidências</h3><p className="text-sm text-muted-foreground">{evidence.length} evidências · {linkedCount} vinculadas a critérios</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setGitDialogOpen(true)} disabled={!userStoryId}><GitMerge className="mr-2 h-4 w-4" />Importar do GitLab</Button><Button variant="outline" onClick={()=>void importRedmine()} disabled={!userStoryId||redmineLoading}>{redmineLoading?<Loader2 className="mr-2 h-4 w-4 animate-spin"/>:<RefreshCw className="mr-2 h-4 w-4"/>}Importar do Redmine</Button><Button onClick={() => setDialogOpen(true)}><FilePlus2 className="mr-2 h-4 w-4" />Adicionar evidência</Button></div></div>
     {isLoading ? <div className="flex min-h-28 items-center justify-center" role="status"><Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />Carregando evidências…</div> : isError ? <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">Falha ao carregar evidências.</p> : evidence.length === 0 ? <Card className="border-dashed"><CardContent className="py-10 text-center text-sm text-muted-foreground">Nenhuma evidência cadastrada.</CardContent></Card> : <div className="grid gap-3 lg:grid-cols-2">{evidence.map((item) => <Card key={item.id}><CardHeader className="pb-3"><div className="flex items-start justify-between gap-2"><div><CardTitle className="font-mono text-sm">{item.stableId}</CardTitle><CardDescription>{item.category} · {item.sourceType}</CardDescription></div><VerificationBadge status={item.verificationStatus} /></div></CardHeader><CardContent className="space-y-3"><p className="text-sm">{item.summary}</p><div className="flex flex-wrap gap-1">{item.criterionIds.map((id) => <Badge key={id} variant="outline">{criteria.find((criterion) => criterion.id === id)?.stableId ?? id.slice(0, 8)}</Badge>)}</div><div className="flex justify-end gap-2">{item.permanentUrl && <Button variant="ghost" size="sm" asChild><a href={item.permanentUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-2 h-3.5 w-3.5" />Abrir fonte</a></Button>}<Button variant="outline" size="sm" onClick={() => setLinkingEvidenceId(item.id)} disabled={criteria.length === 0}><Link2 className="mr-2 h-3.5 w-3.5" />Vincular CA</Button></div></CardContent></Card>)}</div>}
     <CreateEvidenceDialog open={dialogOpen} onOpenChange={setDialogOpen} dossierId={dossierId} evidence={evidence} onCreated={refetch} />
     {userStoryId && <GitEvidenceDialog open={gitDialogOpen} onOpenChange={setGitDialogOpen} dossierId={dossierId} organizationId={organizationId} userStoryId={userStoryId} onImported={refetch} />}

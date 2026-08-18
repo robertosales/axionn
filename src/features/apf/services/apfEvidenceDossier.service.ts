@@ -80,6 +80,8 @@ export async function importApfGitEvidence(dossierId: string, mergeRequestIds: s
   return Number(data ?? 0) + Number(indexed ?? 0);
 }
 
+export async function importApfRedmineEvidence(dossierId:string):Promise<number>{const{data,error}=await supabase.rpc("import_apf_redmine_evidence"as never,{p_dossier_id:dossierId}as never);if(error)throw error;return Number(data??0);}
+
 export async function listApfDossierVersions(dossierId: string): Promise<ApfDossierVersion[]> {
   const { data, error } = await supabase.from("apf_dossier_versions" as never).select("id, dossier_id, version_number, rendered_markdown, content_hash, created_by, created_at").eq("dossier_id", dossierId).order("version_number", { ascending: false });
   if (error) throw error;

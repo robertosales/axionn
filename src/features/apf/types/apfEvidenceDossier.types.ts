@@ -206,6 +206,7 @@ export type ApfExceptionDisposition="counted"|"absorbed"|"reuse_zero_pf"|"not_co
 export interface ApfExceptionReview{countingItemId:string;description:string;disposition:ApfExceptionDisposition;absorbedByItemId:string|null;justification:string;}
 export interface ApfMeasurementBatch{id:string;code:string;competence:string;status:"draft"|"under_review"|"approved"|"glosa_requested"|"glosa_resolved"|"closed"|"cancelled";totalPf:number;disputedPf:number;dossierCount:number;billingStatus:"submitted"|"linked"|"invoiced"|"cancelled"|null;}
 export interface ApfAuditPackageData{batch:ApfMeasurementBatch&{updatedAt:string};dossiers:Array<{code:string;title:string;pf:number;hash:string;version:number;markdown:string}>;decisions:Array<{decision:string;note:string;disputedPf:number|null;actorId:string;createdAt:string}>;}
+export interface ApfGovernanceMetrics{dossierCount:number;homologatedCount:number;suggestionReviewCount:number;suggestionAcceptanceRate:number;openAuditFindings:number;criticalOpenFindings:number;approvedPf:number;disputedPf:number;glosaRate:number;countingDivergencePf:number;}
 
 export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   draft: "Rascunho",

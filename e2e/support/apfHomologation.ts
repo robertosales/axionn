@@ -220,3 +220,40 @@ export function writeHomologationReport(report: HomologationReport) {
   );
   return REPORT_PATH;
 }
+
+/**
+ * Autentica o navegador de teste sem passar pela tela de login.
+ *
+ * Útil para executar o app local contra o Supabase remoto, pois o rate limiter
+ * de produção pode rejeitar origens localhost. A proteção do produto não é
+ * alterada e a senha nunca é escrita em logs, screenshots ou storage state.
+ */
+export async function signInForLocalE2e(page: Page, identity: ApfIdentity) {
+  if (!supabaseUrl || !supabasePublishableKey) {
+    throw new Error("configuração do Supabase indisponível para o E2E local.");
+  }
+
+  const response = await page.request.post(
+    `${supabaseUrl}/auth/v1/token?grant_type=password`,
+    {
+      data: { email: identity.email, password: identity.password },
+      headers: {
+        apikey: supabasePublishableKey,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!response.ok()) {
+    throw new Error(
+      `credencial/sessão indisponível para o papel "${identity.role}" (${maskIdentity(identity.email)}; HTTP ${response.status()}).`,
+    );
+  }
+
+  const session = (await response.json()) as Record<string, unknown>;
+  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
+  await page.addInitScript(
+    ({ key, value }) => window.localStorage.setItem(key, JSON.stringify(value)),
+    { key: `sb-${projectRef}-auth-token`, value: session },
+  );
+}

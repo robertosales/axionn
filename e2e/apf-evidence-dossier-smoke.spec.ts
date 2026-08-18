@@ -16,6 +16,7 @@ import {
   restQueryAsUser,
   seedOrganization,
   signIn,
+  signInForLocalE2e,
   supabasePublishableKey,
   supabaseUrl,
   validator,
@@ -34,16 +35,37 @@ test.describe("Dossiê APF por Impacto", () => {
     page,
   }) => {
     const failures: string[] = [];
-    page.on("response", (response) => {
+    const creationOptionResponses: Array<{
+      resource: string;
+      status: number;
+      rows: number | null;
+    }> = [];
+    page.on("response", async (response) => {
       if (
         (response.url().includes("/rest/v1/apf_") ||
           response.url().includes("/rest/v1/rpc/get_apf")) &&
         !response.ok()
       )
         failures.push(`${response.status()} ${response.url()}`);
+      const match = response
+        .url()
+        .match(/\/rest\/v1\/(projects|teams|project_teams|user_stories)(?:\?|$)/);
+      if (!match) return;
+      let rows: number | null = null;
+      try {
+        const body = (await response.json()) as unknown;
+        rows = Array.isArray(body) ? body.length : null;
+      } catch {
+        // O status ainda é útil quando a resposta não contém JSON.
+      }
+      creationOptionResponses.push({
+        resource: match[1],
+        status: response.status(),
+        rows,
+      });
     });
     await seedOrganization(page, organizationId!);
-    await signIn(page, {
+    await signInForLocalE2e(page, {
       role: "homologator",
       email: legacyEmail!,
       password: legacyPassword!,
@@ -51,6 +73,15 @@ test.describe("Dossiê APF por Impacto", () => {
     await page.goto("/sala-agil/medicao-evidencias", {
       waitUntil: "domcontentloaded",
     });
+    const skipTutorial = page.getByRole("button", { name: /pular tutorial/i });
+    if (
+      await skipTutorial
+        .waitFor({ state: "visible", timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false)
+    ) {
+      await skipTutorial.click();
+    }
     await expect(
       page.getByRole("heading", { name: /medição.*evidências/i }),
     ).toBeVisible();
@@ -82,7 +113,18 @@ test.describe("Dossiê APF por Impacto", () => {
 
     await dialog.getByLabel("História de usuário").click();
     const storyOptions = page.getByRole("option");
-    await expect.poll(() => storyOptions.count()).toBeGreaterThan(0);
+    await expect
+      .poll(
+        async () => {
+          const count = await storyOptions.count();
+          if (count === 0) {
+            return JSON.stringify(creationOptionResponses);
+          }
+          return "stories-loaded";
+        },
+        { message: "Respostas das opções de criação" },
+      )
+      .toBe("stories-loaded");
     await storyOptions.first().click();
 
     await dialog.getByLabel("Sessão de contagem").click();

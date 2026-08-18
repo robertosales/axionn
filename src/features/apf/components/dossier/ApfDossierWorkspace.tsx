@@ -10,6 +10,7 @@ import { useApfEvidenceDossiers } from "../../hooks/useApfEvidenceDossiers";
 import { APF_DOSSIER_STATUS_LABELS, type ApfDossierStatus } from "../../types/apfEvidenceDossier.types";
 import { CreateApfDossierDialog } from "./CreateApfDossierDialog";
 import { ApfDossierSpecification } from "./ApfDossierSpecification";
+import { ApfMeasurementBatches } from "./ApfMeasurementBatches";
 
 const FLOW = ["Visão geral", "Especificação", "Evidências", "Rastreabilidade", "Contagem", "Auditoria", "Documento"];
 const statusVariant: Record<ApfDossierStatus, "default" | "secondary" | "outline" | "destructive"> = {
@@ -50,6 +51,7 @@ export function ApfDossierWorkspace() {
       <Metric icon={CheckCircle2} label="Homologados" value={homologated} />
       <Card><CardContent className="space-y-2 p-4"><div className="flex items-center justify-between text-xs font-medium"><span>Prontidão global</span><span>{readiness}%</span></div><Progress value={readiness} aria-label={`Prontidão global: ${readiness}%`} /></CardContent></Card>
     </div>
+    {currentOrganizationId && <ApfMeasurementBatches organizationId={currentOrganizationId} dossiers={dossiers} />}
 
     {isLoading ? <div className="flex min-h-48 items-center justify-center" role="status"><Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />Carregando dossiês…</div>
       : isError ? <Card role="alert" className="border-destructive/30"><CardContent className="flex items-center justify-between gap-4 p-5"><p className="text-sm text-destructive">Não foi possível carregar os dossiês desta organização.</p><Button variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button></CardContent></Card>

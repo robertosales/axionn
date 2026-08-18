@@ -16,6 +16,7 @@ import type {
   ApfTraceabilitySuggestion,
   ApfAuditFinding,
   ApfLogicalFileReview,
+  ApfExceptionReview,
 } from "../types/apfEvidenceDossier.types";
 
 type DossierRow = {
@@ -157,6 +158,8 @@ export async function listApfLogicalFileReviews(dossierId: string, sessionId: st
   return ((items??[]) as Item[]).map((item)=>{const r=map.get(item.id);return {id:r?.id??null,countingItemId:item.id,description:item.ef_description,recognizable:r?.recognizable??false,maintained:r?.maintained_by_application??false,independentLifecycle:r?.independent_lifecycle??false,insideBoundary:r?.inside_boundary??false,usedByTransaction:r?.used_by_transaction??false,decision:r?.decision??"pending",justification:r?.justification??""};});
 }
 export async function reviewApfLogicalFile(dossierId:string, review:ApfLogicalFileReview):Promise<void>{const {error}=await supabase.rpc("review_apf_logical_file" as never,{p_dossier_id:dossierId,p_counting_item_id:review.countingItemId,p_recognizable:review.recognizable,p_maintained:review.maintained,p_independent_lifecycle:review.independentLifecycle,p_inside_boundary:review.insideBoundary,p_used_by_transaction:review.usedByTransaction,p_decision:review.decision,p_justification:review.justification.trim()} as never);if(error)throw error;}
+export async function listApfExceptionReviews(dossierId:string,sessionId:string):Promise<ApfExceptionReview[]>{const[{data:items,error:iError},{data:reviews,error:rError}]=await Promise.all([supabase.from("apf_counting_items" as never).select("id,ef_description,counting_decision,absorbed_by_item_id,justification").eq("session_id",sessionId).order("sort_order"),supabase.from("apf_exception_reviews" as never).select("counting_item_id,disposition,absorbed_by_item_id,justification").eq("dossier_id",dossierId)]);if(iError)throw iError;if(rError)throw rError;type I={id:string;ef_description:string;counting_decision:string;absorbed_by_item_id:string|null;justification:string|null};type R={counting_item_id:string;disposition:ApfExceptionReview["disposition"];absorbed_by_item_id:string|null;justification:string};const map=new Map(((reviews??[])as R[]).map(r=>[r.counting_item_id,r]));return((items??[])as I[]).map(i=>{const r=map.get(i.id);return{countingItemId:i.id,description:i.ef_description,disposition:r?.disposition??(i.counting_decision==="absorbed"?"absorbed":i.counting_decision==="not_countable"?"not_countable":"counted"),absorbedByItemId:r?.absorbed_by_item_id??i.absorbed_by_item_id,justification:r?.justification??i.justification??""};});}
+export async function reviewApfException(dossierId:string,review:ApfExceptionReview):Promise<void>{const{error}=await supabase.rpc("review_apf_exception" as never,{p_dossier_id:dossierId,p_counting_item_id:review.countingItemId,p_disposition:review.disposition,p_absorbed_by:review.absorbedByItemId,p_justification:review.justification.trim()}as never);if(error)throw error;}
 
 export async function listApfEvidenceSources(dossierId: string): Promise<ApfEvidenceSource[]> {
   const [{ data: sources, error: sourceError }, { data: catalog, error: catalogError }, { data: links, error: linkError }] = await Promise.all([

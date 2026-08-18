@@ -200,6 +200,8 @@ export interface ApfLogicalFileReview {
   independentLifecycle: boolean; insideBoundary: boolean; usedByTransaction: boolean;
   decision: "ALI" | "AIE" | "not_logical_file" | "pending"; justification: string;
 }
+export type ApfExceptionDisposition="counted"|"absorbed"|"reuse_zero_pf"|"not_countable"|"non_functional"|"pending_evidence"|"hu_implementation_divergence"|"audit_risk";
+export interface ApfExceptionReview{countingItemId:string;description:string;disposition:ApfExceptionDisposition;absorbedByItemId:string|null;justification:string;}
 
 export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   draft: "Rascunho",

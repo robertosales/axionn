@@ -19,6 +19,7 @@ import { ApfDossierAudit } from "./ApfDossierAudit";
 import { ApfDossierValidation } from "./ApfDossierValidation";
 import { ApfDossierTraceability } from "./ApfDossierTraceability";
 import { ApfLogicalFileMatrix } from "./ApfLogicalFileMatrix";
+import { ApfExceptionReviews } from "./ApfExceptionReviews";
 
 const decisions: Array<{ value: ApfAcceptanceDecision; label: string }> = [
   { value: "meets", label: "Atende" }, { value: "partially_meets", label: "Atende parcialmente" },
@@ -49,7 +50,7 @@ export function ApfDossierSpecification({ dossier, onBack, onSuccessorCreated }:
       </TabsContent>
       <TabsContent value="evidence"><ApfDossierEvidence dossierId={dossier.id} organizationId={dossier.organizationId} userStoryId={dossier.userStoryId} criteria={criteria} /></TabsContent>
       <TabsContent value="traceability"><ApfDossierTraceability dossierId={dossier.id} criteria={criteria} /></TabsContent>
-      <TabsContent value="counting" className="space-y-5"><ApfDossierCounting dossierId={dossier.id} sessionId={dossier.countingSessionId} /><ApfLogicalFileMatrix dossierId={dossier.id} sessionId={dossier.countingSessionId} /></TabsContent>
+      <TabsContent value="counting" className="space-y-5"><ApfDossierCounting dossierId={dossier.id} sessionId={dossier.countingSessionId} /><ApfLogicalFileMatrix dossierId={dossier.id} sessionId={dossier.countingSessionId} /><ApfExceptionReviews dossierId={dossier.id} sessionId={dossier.countingSessionId} /></TabsContent>
       <TabsContent value="audit"><ApfDossierAudit dossierId={dossier.id} /></TabsContent>
       <TabsContent value="document"><ApfDossierValidation dossier={dossier} onSuccessorCreated={onSuccessorCreated} /></TabsContent>
     </Tabs>

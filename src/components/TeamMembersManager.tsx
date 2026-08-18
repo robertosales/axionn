@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar, Code2, Pencil } from "lucide-react";
+import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar, Code2, Pencil, AlertCircle, RefreshCw } from "lucide-react";
 import { getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { getInitials } from "@/lib/nameUtils";
 import { groupTeamMembershipsByUser } from "@/lib/teamMemberships";
@@ -66,6 +66,8 @@ export function TeamMembersManager() {
   const [showCustom, setShowCustom] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [profilesError, setProfilesError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"name" | "recent" | "oldest">("name");
@@ -79,15 +81,16 @@ export function TeamMembersManager() {
   const fetchMembers = async () => {
     if (!currentTeamId) return;
     setLoading(true);
+    setLoadError(null);
 
     if (orgEnabled && currentOrganizationId) {
       const { data: rpcMembers, error: rpcError } = await (supabase as any).rpc(
         "get_organization_team_members_v2",
         { p_org_id: currentOrganizationId, p_team_id: currentTeamId },
       );
-      if (!rpcError && rpcMembers) {
+      if (!rpcError) {
         setMembers(
-          (rpcMembers as any[]).map((row) => ({
+          ((rpcMembers || []) as any[]).map((row) => ({
             id: String(row.team_member_id),
             user_id: String(row.user_id),
             role: String(row.role ?? "member"),
@@ -109,13 +112,29 @@ export function TeamMembersManager() {
           "[TeamMembersManager] get_organization_team_members_v2:",
           rpcError,
         );
+        setMembers([]);
+        setLoadError(
+          resolveOrganizationOperationalError(
+            rpcError,
+            "Não foi possível carregar os membros deste time.",
+          ),
+        );
+        setLoading(false);
+        return;
       }
     }
 
-    const { data: tmData } = await supabase
+    const { data: tmData, error: teamMembersError } = await supabase
       .from("team_members")
       .select("*")
       .eq("team_id", currentTeamId);
+
+    if (teamMembersError) {
+      setMembers([]);
+      setLoadError("Não foi possível carregar os membros deste time.");
+      setLoading(false);
+      return;
+    }
 
     const memberList = tmData || [];
     const userIds = memberList.map((m: any) => m.user_id);
@@ -152,13 +171,14 @@ export function TeamMembersManager() {
 
   const fetchAllProfiles = async () => {
     if (!canAdd) return;
+    setProfilesError(null);
 
     if (orgEnabled && currentOrganizationId) {
       const { data: orgMembers, error: orgError } = await (supabase as any).rpc(
         "get_organization_members_v2",
         { p_org_id: currentOrganizationId },
       );
-      if (!orgError && orgMembers) {
+      if (!orgError) {
         const organizationTeams = teams.filter(
           (team) => !team.organizationId || team.organizationId === currentOrganizationId,
         );
@@ -173,12 +193,20 @@ export function TeamMembersManager() {
           );
           if (membershipsError) {
             console.error("[TeamMembersManager] get_team_members_for_teams_v2:", membershipsError);
+            setAllProfiles([]);
+            setProfilesError(
+              resolveOrganizationOperationalError(
+                membershipsError,
+                "Não foi possível carregar as participações das pessoas.",
+              ),
+            );
+            return;
           } else {
             membershipsByUser = groupTeamMembershipsByUser(organizationTeams, memberships || []);
           }
         }
         setAllProfiles(
-          (orgMembers as any[])
+          ((orgMembers || []) as any[])
             .filter((row) => row.is_active !== false)
             .map((row) => ({
               user_id: String(row.user_id),
@@ -194,13 +222,26 @@ export function TeamMembersManager() {
           "[TeamMembersManager] get_organization_members_v2:",
           orgError,
         );
+        setAllProfiles([]);
+        setProfilesError(
+          resolveOrganizationOperationalError(
+            orgError,
+            "Não foi possível carregar as pessoas da organização.",
+          ),
+        );
+        return;
       }
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("user_id, display_name, email")
       .eq("is_active", true);
+    if (error) {
+      setAllProfiles([]);
+      setProfilesError("Não foi possível carregar as pessoas disponíveis.");
+      return;
+    }
     setAllProfiles((data || []).map((profile) => ({ ...profile, teams: [] })));
   };
 
@@ -460,6 +501,19 @@ export function TeamMembersManager() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                {profilesError && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3" role="alert">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                      <div className="space-y-2">
+                        <p className="text-sm text-foreground">{profilesError}</p>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void fetchAllProfiles()}>
+                          <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="team-member-user">Usuário *</Label>
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
@@ -600,7 +654,23 @@ export function TeamMembersManager() {
 
       <div className="space-y-3">
         {loading && <SkeletonList count={4} variant="row" />}
-        {sortedMembers.map((member) => {
+        {loadError && !loading && (
+          <Card className="border-destructive/40 bg-destructive/5" role="alert">
+            <CardContent className="flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+                <div>
+                  <p className="font-medium text-foreground">Falha ao carregar membros</p>
+                  <p className="text-sm text-muted-foreground">{loadError}</p>
+                </div>
+              </div>
+              <Button type="button" variant="outline" onClick={() => void fetchMembers()} className="min-h-11 sm:min-h-9">
+                <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+        {!loading && !loadError && sortedMembers.map((member) => {
           const name = member.profile?.display_name || "Usuário";
           return (
             <Card
@@ -770,7 +840,7 @@ export function TeamMembersManager() {
         })}
       </div>
 
-      {sortedMembers.length === 0 && !loading && (
+      {sortedMembers.length === 0 && !loading && !loadError && (
         <Card className="border-dashed p-8 text-center">
           <p className="text-muted-foreground">
             {search

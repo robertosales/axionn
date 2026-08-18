@@ -41,4 +41,13 @@ describe("gestão segura de participações em times", () => {
     expect(source).toContain('import { SkeletonList } from "@/shared/components/common/SkeletonList"');
     expect(source).toContain('{loading && <SkeletonList count={4} variant="row" />}');
   });
+
+  it("não mistura o caminho organizacional com o legado quando uma RPC falha", () => {
+    expect(source).toContain("setLoadError(");
+    expect(source).toContain("setProfilesError(");
+    expect(source).toContain("Falha ao carregar membros");
+    expect(source).toContain("Tentar novamente");
+    expect(source).toContain("setLoading(false);\n        return;");
+    expect(source).toContain("setAllProfiles([]);");
+  });
 });

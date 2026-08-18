@@ -74,8 +74,8 @@ export interface ApfDossierDocumentData {
 }
 const cell = (value: unknown) =>
   String(value ?? "—")
-    .replaceAll("|", "\\|")
-    .replaceAll("\n", " ");
+    .split("|").join("\\|")
+    .split("\n").join(" ");
 const pf = (value: number | null | undefined) =>
   value == null ? "—" : value.toFixed(2).replace(".", ",");
 const bool = (value: boolean) => (value ? "Sim" : "Não");
@@ -106,7 +106,7 @@ export function renderApfDossierMarkdown(data: ApfDossierDocumentData): string {
             counting_item_id: null,
             functional_result: criterion.decision,
             apf_treatment: null,
-            justification: criterion.decisionJustification,
+            justification: null,
             suggested_by_ai: false,
             confirmed_by: null,
             confirmed_at: null,

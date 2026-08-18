@@ -954,6 +954,7 @@ export async function getApfAuditPackageData(
       totalPf: Number(b.total_pf),
       disputedPf: Number(b.disputed_pf),
       dossierCount: memberRows.length,
+      billingStatus: null,
       updatedAt: b.updated_at,
     },
     dossiers: memberRows

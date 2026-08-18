@@ -1,1 +1,31 @@
-import{readFileSync}from"node:fs";import{resolve}from"node:path";import{describe,expect,it}from"vitest";const util=readFileSync(resolve("src/features/apf/utils/apfAuditPackage.ts"),"utf8");const service=readFileSync(resolve("src/features/apf/services/apfEvidenceDossier.service.ts"),"utf8");describe("APF audit package",()=>{it("uses persisted markdown hashes and versions",()=>{expect(service).toContain("rendered_markdown,content_hash");expect(util).toContain("dossier.markdown");});it("includes manifest and decision trail",()=>{expect(util).toContain('"manifest.json"');expect(util).toContain("decisions:data.decisions");});it("lazy loads heavy exporters",()=>{expect(util).toContain('import("jszip")');expect(util).toContain('import("jspdf")');});});
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+const util = readFileSync(
+  resolve("src/features/apf/utils/apfAuditPackage.ts"),
+  "utf8",
+);
+const service = readFileSync(
+  resolve("src/features/apf/services/apfEvidenceDossier.service.ts"),
+  "utf8",
+);
+describe("APF audit package", () => {
+  it("uses persisted markdown hashes and versions", () => {
+    expect(service).toContain("rendered_markdown,content_hash");
+    expect(util).toContain("dossier.markdown");
+  });
+  it("includes manifest and decision trail", () => {
+    expect(util).toContain('"manifest.json"');
+    expect(util).toContain("decisions: data.decisions");
+  });
+  it("lazy loads heavy exporters", () => {
+    expect(util).toContain('import("jszip")');
+    expect(util).toContain('import("jspdf")');
+  });
+  it("embeds every complete dossier and paginates the PDF", () => {
+    expect(util).toContain("writePaginatedText(doc, dossier.markdown");
+    expect(util).toContain("getNumberOfPages");
+    expect(util).toContain("setCreationDate");
+    expect(util).toContain("SHA-256");
+  });
+});

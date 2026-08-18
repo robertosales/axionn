@@ -103,9 +103,19 @@ export async function createApfDossierSuccessor(sourceDossierId: string, dossier
 }
 
 export async function validateAndSnapshotApfDossier(data: ApfDossierDocumentData): Promise<{ markdown: string; hash: string; version: number }> {
-  const markdown = renderApfDossierMarkdown(data);
+  const [{data:dossier,error:dossierError},{data:logicalFiles,error:logicalError},{data:exceptions,error:exceptionError},{data:findings,error:findingError},{data:events,error:eventError},{data:traceability,error:traceabilityError}]=await Promise.all([
+    supabase.from("apf_evidence_dossiers"as never).select("contract_snapshot,baseline_snapshot,ruleset_snapshot,sprint_id,previous_dossier_id,created_by,validated_by,validated_at,homologated_by,homologated_at,total_homologated_pf").eq("id",data.dossier.id).single(),
+    supabase.from("apf_logical_file_reviews"as never).select("counting_item_id,recognizable,maintained_by_application,independent_lifecycle,inside_boundary,used_by_transaction,decision,justification").eq("dossier_id",data.dossier.id),
+    supabase.from("apf_exception_reviews"as never).select("counting_item_id,disposition,absorbed_by_item_id,justification").eq("dossier_id",data.dossier.id),
+    supabase.from("apf_audit_findings"as never).select("finding_type,severity,title,detail,status,resolution_note").eq("dossier_id",data.dossier.id),
+    supabase.from("apf_dossier_events"as never).select("event_type,actor_id,event_data,created_at").eq("dossier_id",data.dossier.id).order("created_at"),
+    supabase.from("apf_traceability_links"as never).select("acceptance_criterion_id,evidence_source_id,counting_item_id,functional_result,apf_treatment,justification,suggested_by_ai,confirmed_by,confirmed_at").eq("dossier_id",data.dossier.id),
+  ]);if(dossierError)throw dossierError;if(logicalError)throw logicalError;if(exceptionError)throw exceptionError;if(findingError)throw findingError;if(eventError)throw eventError;if(traceabilityError)throw traceabilityError;
+  type D={contract_snapshot:Record<string,unknown>;baseline_snapshot:Record<string,unknown>;ruleset_snapshot:Record<string,unknown>;sprint_id:string|null;previous_dossier_id:string|null;created_by:string;validated_by:string|null;validated_at:string|null;homologated_by:string|null;homologated_at:string|null;total_homologated_pf:number|string|null};const d=dossier as D;let previous:null|{dossierCode:string;pf:number}=null;if(d.previous_dossier_id){const{data:p,error}=await supabase.from("apf_evidence_dossiers"as never).select("dossier_code,total_homologated_pf,total_impacted_pf").eq("id",d.previous_dossier_id).single();if(error)throw error;const row=p as{dossier_code:string;total_homologated_pf:number|string|null;total_impacted_pf:number|string};previous={dossierCode:row.dossier_code,pf:Number(row.total_homologated_pf??row.total_impacted_pf)};}
+  const completeData:ApfDossierDocumentData={...data,context:{contractSnapshot:d.contract_snapshot,baselineSnapshot:d.baseline_snapshot,rulesetSnapshot:d.ruleset_snapshot,sprintId:d.sprint_id,previous,createdBy:d.created_by,validatedBy:d.validated_by,validatedAt:d.validated_at,homologatedBy:d.homologated_by,homologatedAt:d.homologated_at,totalHomologatedPf:d.total_homologated_pf===null?null:Number(d.total_homologated_pf),logicalFiles:(logicalFiles??[])as never,exceptions:(exceptions??[])as never,findings:(findings??[])as never,events:(events??[])as never,traceability:(traceability??[])as never}};
+  const markdown = renderApfDossierMarkdown(completeData);
   const hash = await sha256Hex(markdown);
-  const snapshot = { generated_at: new Date().toISOString(), dossier: data.dossier, criteria: data.criteria, evidence: data.evidence, counting: data.counting, scenarios: data.scenarios };
+  const snapshot = { generated_at: new Date().toISOString(), dossier: completeData.dossier, criteria: completeData.criteria, evidence: completeData.evidence, counting: completeData.counting, scenarios: completeData.scenarios, context:completeData.context };
   const { data: rpcData, error } = await supabase.rpc("validate_apf_dossier_snapshot" as never, { p_dossier_id: data.dossier.id, p_snapshot: snapshot, p_rendered_markdown: markdown, p_content_hash: hash, p_total_impacted_pf: data.counting.calculatedTotalPf } as never);
   if (error) throw error;
   const row = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as { version_number: number } | null;
@@ -181,18 +191,18 @@ export async function getApfAuditPackageData(batchId:string):Promise<ApfAuditPac
 
 export async function listApfEvidenceSources(dossierId: string): Promise<ApfEvidenceSource[]> {
   const [{ data: sources, error: sourceError }, { data: catalog, error: catalogError }, { data: links, error: linkError }] = await Promise.all([
-    supabase.from("apf_evidence_sources" as never).select("id, dossier_id, source_type, category, summary, permanent_url, content_hash, verification_status, collected_at").eq("dossier_id", dossierId).order("collected_at", { ascending: false }),
+    supabase.from("apf_evidence_sources" as never).select("id, dossier_id, source_type, category, summary, permanent_url, content_hash, verification_status, collected_at, repository, commit_sha, merge_request_ref, file_path, symbol_ref").eq("dossier_id", dossierId).order("collected_at", { ascending: false }),
     supabase.from("apf_evidence_catalog_entries" as never).select("evidence_source_id, stable_id").eq("dossier_id", dossierId),
     supabase.from("apf_traceability_links" as never).select("evidence_source_id, acceptance_criterion_id").eq("dossier_id", dossierId),
   ]);
   if (sourceError) throw sourceError;
   if (catalogError) throw catalogError;
   if (linkError) throw linkError;
-  type SourceRow = Omit<ApfEvidenceSource, "dossierId" | "stableId" | "criterionIds" | "sourceType" | "permanentUrl" | "contentHash" | "verificationStatus" | "collectedAt"> & { dossier_id: string; source_type: ApfEvidenceSource["sourceType"]; permanent_url: string | null; content_hash: string | null; verification_status: ApfEvidenceSource["verificationStatus"]; collected_at: string };
+  type SourceRow = Omit<ApfEvidenceSource, "dossierId" | "stableId" | "criterionIds" | "sourceType" | "permanentUrl" | "contentHash" | "verificationStatus" | "collectedAt"> & { dossier_id: string; source_type: ApfEvidenceSource["sourceType"]; permanent_url: string | null; content_hash: string | null; verification_status: ApfEvidenceSource["verificationStatus"]; collected_at: string;repository:string|null;commit_sha:string|null;merge_request_ref:string|null;file_path:string|null;symbol_ref:string|null };
   const stableIds = new Map(((catalog ?? []) as Array<{ evidence_source_id: string; stable_id: string }>).map((row) => [row.evidence_source_id, row.stable_id]));
   const criterionIds = new Map<string, string[]>();
   for (const link of (links ?? []) as Array<{ evidence_source_id: string; acceptance_criterion_id: string }>) criterionIds.set(link.evidence_source_id, [...(criterionIds.get(link.evidence_source_id) ?? []), link.acceptance_criterion_id]);
-  return ((sources ?? []) as SourceRow[]).map((row) => ({ id: row.id, dossierId: row.dossier_id, stableId: stableIds.get(row.id) ?? "EV-PENDENTE", sourceType: row.source_type, category: row.category, summary: row.summary, permanentUrl: row.permanent_url, contentHash: row.content_hash, verificationStatus: row.verification_status, collectedAt: row.collected_at, criterionIds: criterionIds.get(row.id) ?? [] }));
+  return ((sources ?? []) as SourceRow[]).map((row) => ({ id: row.id, dossierId: row.dossier_id, stableId: stableIds.get(row.id) ?? "EV-PENDENTE", sourceType: row.source_type, category: row.category, summary: row.summary, permanentUrl: row.permanent_url, contentHash: row.content_hash, verificationStatus: row.verification_status, collectedAt: row.collected_at, criterionIds: criterionIds.get(row.id) ?? [],repository:row.repository,commitSha:row.commit_sha,mergeRequestRef:row.merge_request_ref,filePath:row.file_path,symbolRef:row.symbol_ref }));
 }
 
 export async function createApfEvidenceSource(input: CreateApfEvidenceSourceInput): Promise<void> {

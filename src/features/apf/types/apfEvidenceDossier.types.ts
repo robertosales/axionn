@@ -170,6 +170,11 @@ export interface ApfEvidenceSource {
   verificationStatus: ApfEvidenceVerification;
   collectedAt: string;
   criterionIds: string[];
+  repository?: string | null;
+  commitSha?: string | null;
+  mergeRequestRef?: string | null;
+  filePath?: string | null;
+  symbolRef?: string | null;
 }
 
 export interface CreateApfEvidenceSourceInput {

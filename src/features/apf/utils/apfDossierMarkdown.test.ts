@@ -16,6 +16,9 @@ describe("renderApfDossierMarkdown", () => {
     expect(first).toContain("CA-01");
     expect(first).toContain("EV-API-01");
     expect(first).toContain("**4,00 PF**");
+    for (let section = 1; section <= 18; section += 1) expect(first).toContain(`## ${section}.`);
+    expect(first).toContain("Matriz de decisão ALI/AIE");
+    expect(first).toContain("Documento reproduzido deterministicamente");
     expect(first).not.toContain(new Date().toISOString());
   });
 });

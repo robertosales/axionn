@@ -55,7 +55,7 @@ import {
   validateAndSnapshotApfDossier,
 } from "../../services/apfEvidenceDossier.service";
 import type { ApfEvidenceDossierSummary } from "../../types/apfEvidenceDossier.types";
-import { downloadMarkdownAsFile } from "../../utils/fileDownload";
+import { downloadJsonAsFile, downloadMarkdownAsFile } from "../../utils/fileDownload";
 
 export function ApfDossierValidation({
   dossier,
@@ -231,6 +231,14 @@ export function ApfDossierValidation({
       );
     }
   };
+  const exportJson = async (snapshot: Record<string, unknown>, version: number) => {
+    try {
+      await authorizeApfDossierExport(dossier.id);
+      downloadJsonAsFile(snapshot, `${dossier.dossierCode}-v${version}.json`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível exportar o JSON.");
+    }
+  };
 
   return (
     <section className="space-y-3" aria-labelledby="validation-title">
@@ -366,6 +374,10 @@ export function ApfDossierValidation({
                   >
                     <Download className="mr-2 h-3.5 w-3.5" />
                     DOCX
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => void exportJson(version.snapshotJson, version.versionNumber)}>
+                    <Download className="mr-2 h-3.5 w-3.5" />
+                    JSON
                   </Button>
                   {index === 0 &&
                     effectiveHomologatedVersion === null &&

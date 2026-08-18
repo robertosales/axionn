@@ -85,6 +85,7 @@ export interface ApfDossierVersion {
   dossierId: string;
   versionNumber: number;
   renderedMarkdown: string;
+  snapshotJson: Record<string, unknown>;
   contentHash: string;
   createdBy: string;
   createdAt: string;

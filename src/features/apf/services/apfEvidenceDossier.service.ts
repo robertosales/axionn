@@ -213,7 +213,7 @@ export async function listApfDossierVersions(
   const { data, error } = await supabase
     .from("apf_dossier_versions" as never)
     .select(
-      "id, dossier_id, version_number, rendered_markdown, content_hash, created_by, created_at",
+      "id, dossier_id, version_number, snapshot_json, rendered_markdown, content_hash, created_by, created_at",
     )
     .eq("dossier_id", dossierId)
     .order("version_number", { ascending: false });
@@ -223,6 +223,7 @@ export async function listApfDossierVersions(
     dossier_id: string;
     version_number: number;
     rendered_markdown: string;
+    snapshot_json: Record<string, unknown>;
     content_hash: string;
     created_by: string;
     created_at: string;
@@ -232,6 +233,7 @@ export async function listApfDossierVersions(
     dossierId: row.dossier_id,
     versionNumber: row.version_number,
     renderedMarkdown: row.rendered_markdown,
+    snapshotJson: row.snapshot_json,
     contentHash: row.content_hash,
     createdBy: row.created_by,
     createdAt: row.created_at,

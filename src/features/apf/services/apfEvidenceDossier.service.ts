@@ -28,6 +28,7 @@ import type {
   ApfMeasurementBatch,
   ApfAuditPackageData,
   ApfGovernanceMetrics,
+  ApfCountingType,
 } from "../types/apfEvidenceDossier.types";
 
 type DossierRow = {
@@ -1523,4 +1524,26 @@ export async function createApfEvidenceDossier(
     .single();
   if (error) throw error;
   return (data as { id: string }).id;
+}
+
+export async function updateApfDraftDossier(
+  dossierId: string,
+  dossierCode: string,
+  title: string,
+  countingType: ApfCountingType,
+): Promise<void> {
+  const { error } = await supabase.rpc("update_apf_dossier_draft" as never, {
+    p_dossier_id: dossierId,
+    p_dossier_code: dossierCode.trim(),
+    p_title: title.trim(),
+    p_counting_type: countingType,
+  } as never);
+  if (error) throw error;
+}
+
+export async function deleteApfDraftDossier(dossierId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_apf_dossier_draft" as never, {
+    p_dossier_id: dossierId,
+  } as never);
+  if (error) throw error;
 }

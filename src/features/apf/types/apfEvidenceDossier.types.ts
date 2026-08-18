@@ -232,3 +232,10 @@ export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   superseded: "Substituído",
   cancelled: "Cancelado",
 };
+
+export const APF_COUNTING_TYPE_LABELS: Record<ApfCountingType, string> = {
+  project: "Projeto",
+  impact: "Impacto",
+  corrective: "Corretiva",
+  recount: "Recontagem",
+};

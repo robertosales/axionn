@@ -32,7 +32,7 @@ export function ApfDossierWorkspace() {
   const selectedDossier = dossiers.find((dossier) => dossier.id === selectedDossierId) ?? null;
 
   if (selectedDossier) {
-    return <ApfDossierSpecification dossier={selectedDossier} onBack={() => setSelectedDossierId(null)} onSuccessorCreated={async () => { setSelectedDossierId(null); await refetch(); }} />;
+    return <ApfDossierSpecification dossier={selectedDossier} onBack={() => setSelectedDossierId(null)} onDossierChanged={refetch} onDeleted={async () => { setSelectedDossierId(null); await refetch(); }} onSuccessorCreated={async () => { setSelectedDossierId(null); await refetch(); }} />;
   }
 
   return <section className="space-y-4" aria-labelledby="apf-dossier-title">

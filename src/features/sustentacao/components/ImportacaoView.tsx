@@ -627,30 +627,32 @@ export function ImportacaoView() {
         </div>
         <div className="space-y-3">
           <button
+            type="button"
             onClick={() => setMode("demandas")}
-            className="w-full group flex items-center gap-5 p-5 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 text-left"
+            className="group flex w-full items-center gap-5 rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-md"
           >
-            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 dark:bg-blue-500/15 flex items-center justify-center shrink-0 group-hover:bg-blue-500/20 transition-colors">
-              <FileSpreadsheet className="h-7 w-7 text-blue-600 dark:text-blue-400" />
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+              <FileSpreadsheet className="h-7 w-7" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-base font-semibold text-foreground">Demandas (Redmine)</p>
               <p className="text-sm text-muted-foreground mt-0.5">Importar planilha .csv ou .xlsx exportada do Redmine</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
           </button>
           <button
+            type="button"
             onClick={() => setMode("projetos")}
-            className="w-full group flex items-center gap-5 p-5 rounded-2xl bg-card border border-border shadow-sm hover:shadow-md hover:border-violet-400 dark:hover:border-violet-500 transition-all duration-200 text-left"
+            className="group flex w-full items-center gap-5 rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-md"
           >
-            <div className="w-14 h-14 rounded-2xl bg-violet-500/10 dark:bg-violet-500/15 flex items-center justify-center shrink-0 group-hover:bg-violet-500/20 transition-colors">
-              <FolderKanban className="h-7 w-7 text-violet-600 dark:text-violet-400" />
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+              <FolderKanban className="h-7 w-7" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-base font-semibold text-foreground">Projetos de Sustentação</p>
               <p className="text-sm text-muted-foreground mt-0.5">Importar sistemas de sustentação via .csv ou .xlsx</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
           </button>
         </div>
       </div>
@@ -663,7 +665,7 @@ export function ImportacaoView() {
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
-          <button onClick={cancelPreview} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+          <button type="button" onClick={cancelPreview} aria-label="Voltar para importar demandas" className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-muted">
             <ArrowLeft className="h-4 w-4 text-muted-foreground" />
           </button>
           <div>
@@ -690,7 +692,7 @@ export function ImportacaoView() {
     return (
       <div className="w-full max-w-2xl mx-auto pt-6 space-y-6">
         <div className="flex items-center gap-3">
-          <button onClick={() => { setMode(null); setResult(null); setErrors([]); }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+          <button type="button" onClick={() => { setMode(null); setResult(null); setErrors([]); }} aria-label="Voltar para tipos de importação" className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-muted">
             <ArrowLeft className="h-4 w-4 text-muted-foreground" />
           </button>
           <div>
@@ -699,15 +701,15 @@ export function ImportacaoView() {
           </div>
         </div>
 
-        <label className="flex flex-col items-center justify-center w-full h-48 rounded-2xl border-2 border-dashed border-border hover:border-blue-400 dark:hover:border-blue-500 bg-muted/30 hover:bg-blue-500/5 transition-all cursor-pointer group">
+        <label className="group flex h-48 w-full cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-muted/30 transition-colors hover:border-primary/40 hover:bg-primary/5">
           <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileDemandas} />
-          <Upload className="h-10 w-10 text-muted-foreground/50 group-hover:text-blue-500 transition-colors mb-3" />
+          <Upload className="mb-3 h-10 w-10 text-muted-foreground/50 transition-colors group-hover:text-primary" />
           <p className="text-sm font-medium text-foreground">Clique ou arraste o arquivo aqui</p>
           <p className="text-xs text-muted-foreground mt-1">.csv ou .xlsx — exportação padrão do Redmine</p>
         </label>
 
         {errors.length > 0 && (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+          <div role="alert" className="space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
             <div className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <p className="text-sm font-semibold">{errors.length} erro(s) encontrado(s)</p>
@@ -762,6 +764,7 @@ export function ImportacaoView() {
           <div className="flex flex-col gap-0.5 min-w-0">
             <div className="flex items-center gap-1.5 text-sm">
               <button
+                type="button"
                 onClick={cancelProjetoPreview}
                 className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 disabled={loading}
@@ -782,7 +785,7 @@ export function ImportacaoView() {
             </Button>
             <Button
               size="sm"
-              className="h-8 px-4 text-sm rounded-lg bg-violet-600 hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600 text-white font-semibold"
+              className="h-8 rounded-lg px-4 text-sm font-semibold"
               onClick={handleConfirmarProjetos}
               disabled={loading || projetoCounts.novos === 0}
             >
@@ -795,7 +798,7 @@ export function ImportacaoView() {
         </div>
 
         <div className="grid grid-cols-3 gap-3 px-6 pt-5 pb-4">
-          <SummaryCard count={projetoCounts.novos}      label="Novos"         sub="projetos a criar"  accentColor="bg-violet-500"          cardCls="bg-violet-500/5 border-violet-500/20"      valueCls="text-violet-600 dark:text-violet-400"       subCls="text-violet-600/60 dark:text-violet-400/60" />
+          <SummaryCard count={projetoCounts.novos}      label="Novos"         sub="projetos a criar"  accentColor="bg-primary"             cardCls="bg-primary/5 border-primary/20"             valueCls="text-primary"                               subCls="text-primary/70" />
           <SummaryCard count={projetoCounts.existentes} label="Já existentes" sub="serão ignorados"  accentColor="bg-muted-foreground/30" cardCls="bg-muted/50 border-border"                  valueCls="text-muted-foreground"                     subCls="text-muted-foreground/60" />
           <SummaryCard count={projetoCounts.erros}      label="Erros"          sub="linhas inválidas" accentColor="bg-destructive"         cardCls="bg-destructive/5 border-destructive/20"   valueCls="text-destructive"                          subCls="text-destructive/60" />
         </div>
@@ -807,18 +810,20 @@ export function ImportacaoView() {
               value={projetoSearch}
               onChange={(e) => { setProjetoSearch(e.target.value); setProjetoPagina(1); }}
               placeholder="Buscar nome do projeto…"
-              className="pl-8 h-8 text-sm rounded-lg bg-muted/40 border-border focus-visible:ring-violet-500"
+              className="h-8 rounded-lg border-border bg-muted/40 pl-8 text-sm focus-visible:ring-primary"
             />
           </div>
           <div className="flex items-center gap-1.5">
             {PROJETO_FILTER_OPTIONS.map(({ key, label }) => (
               <button
+                type="button"
                 key={key}
+                aria-pressed={projetoFilter === key}
                 onClick={() => { setProjetoFilter(key); setProjetoPagina(1); }}
                 className={cn(
                   "text-xs px-3 py-1.5 rounded-full border font-medium transition-colors",
                   projetoFilter === key
-                    ? "bg-violet-600 text-white border-violet-600 dark:bg-violet-500 dark:border-violet-500"
+                    ? "border-primary bg-primary text-primary-foreground"
                     : "bg-background text-muted-foreground border-border hover:border-foreground/30 hover:text-foreground",
                 )}
               >
@@ -863,7 +868,7 @@ export function ImportacaoView() {
                       "border-b border-border/50 transition-colors",
                       i % 2 === 1 && "bg-muted/20",
                       isErr && "opacity-60",
-                      row.acao === "novo" && !isErr && "border-l-2 border-l-violet-400",
+                      row.acao === "novo" && !isErr && "border-l-2 border-l-primary/70",
                     )}
                   >
                     <TableCell className="pl-5 py-3.5">
@@ -902,7 +907,7 @@ export function ImportacaoView() {
                       </Badge>
                     </TableCell>
                     <TableCell className="py-3.5 pr-5">
-                      {progMap === "importando" && <span className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400 font-medium"><Loader2 className="h-3.5 w-3.5 animate-spin" />Importando…</span>}
+                      {progMap === "importando" && <span className="flex items-center gap-1.5 text-xs font-medium text-primary"><Loader2 className="h-3.5 w-3.5 animate-spin" />Importando…</span>}
                       {progMap === "importado"  && <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium"><CheckCircle2 className="h-3.5 w-3.5" />Criado</span>}
                       {progMap === "ignorado"   && <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium"><MinusCircle className="h-3.5 w-3.5" />Ignorado</span>}
                       {progMap === "erro"       && <span className="flex items-center gap-1.5 text-xs text-destructive font-medium"><XCircle className="h-3.5 w-3.5" />Erro</span>}
@@ -953,7 +958,9 @@ export function ImportacaoView() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => { setMode(null); setProjetoResult(null); setProjetoContractId(""); setProjetoArquivoErro(null); }}
-          className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+          type="button"
+          aria-label="Voltar para tipos de importação"
+          className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-muted"
         >
           <ArrowLeft className="h-4 w-4 text-muted-foreground" />
         </button>
@@ -991,7 +998,7 @@ export function ImportacaoView() {
         className={cn(
           "flex flex-col items-center justify-center w-full h-48 rounded-2xl border-2 border-dashed transition-all",
           projetoContractId
-            ? "border-border hover:border-violet-400 dark:hover:border-violet-500 bg-muted/30 hover:bg-violet-500/5 cursor-pointer group"
+            ? "group cursor-pointer border-border bg-muted/30 hover:border-primary/40 hover:bg-primary/5"
             : "border-border/40 bg-muted/10 opacity-50 cursor-not-allowed",
         )}
       >
@@ -1005,12 +1012,12 @@ export function ImportacaoView() {
         />
         {loading ? (
           <>
-            <Loader2 className="h-10 w-10 mb-3 text-violet-500 animate-spin" />
+            <Loader2 className="mb-3 h-10 w-10 animate-spin text-primary" />
             <p className="text-sm font-medium text-foreground">Processando arquivo…</p>
           </>
         ) : (
           <>
-            <Upload className={cn("h-10 w-10 mb-3 transition-colors", projetoContractId ? "text-muted-foreground/50 group-hover:text-violet-500" : "text-muted-foreground/30")} />
+            <Upload className={cn("mb-3 h-10 w-10 transition-colors", projetoContractId ? "text-muted-foreground/50 group-hover:text-primary" : "text-muted-foreground/30")} />
             <p className="text-sm font-medium text-foreground">Clique ou arraste o arquivo aqui</p>
             <p className="text-xs text-muted-foreground mt-1">.csv ou .xlsx com colunas: Nome, Descrição, Código, Redmine ID, Módulo</p>
           </>
@@ -1018,7 +1025,7 @@ export function ImportacaoView() {
       </label>
 
       {projetoArquivoErro && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+        <div role="alert" className="space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
           <div className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <p className="text-sm font-semibold">Arquivo inválido ou fora do padrão</p>

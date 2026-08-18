@@ -1,7 +1,9 @@
-import { Shield, AlertTriangle, CheckCircle2, ShieldX, ShieldAlert, Clock, Loader2 } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle2, ShieldX, ShieldAlert, Clock, type LucideIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useSLADashboard } from '../hooks/useSLADashboard';
+import { EmptyState } from '@/shared/components/common/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Props {
   contractId: string | null;
@@ -21,32 +23,33 @@ const COLOR_BADGE: Record<string, string> = {
   red:    'bg-destructive/10 text-destructive  border-destructive/30',
 };
 
+const COLOR_LABEL: Record<string, string> = {
+  green: 'No prazo',
+  yellow: 'Atenção',
+  orange: 'Em risco',
+  red: 'Violado',
+};
+
 export function SLADashboardSection({ contractId }: Props) {
   const { summary, items, loading } = useSLADashboard(contractId);
 
   if (!contractId) {
     return (
-      <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center">
-        <Shield className="mx-auto h-6 w-6 text-muted-foreground/40 mb-2" />
-        <p className="text-xs text-muted-foreground">Selecione um contrato para ver o painel SLA.</p>
-      </div>
+      <EmptyState icon={Shield} title="Selecione um contrato" description="Escolha um contrato nos filtros para visualizar o painel de SLA." />
     );
   }
 
   if (loading && !summary) {
     return (
-      <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" /> Carregando SLA...
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-busy="true" aria-label="Carregando indicadores de SLA">
+        {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}
       </div>
     );
   }
 
   if (!summary || summary.total === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-        <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-2" />
-        <p className="text-sm">Nenhuma demanda ativa com SLA neste contrato.</p>
-      </div>
+      <EmptyState icon={CheckCircle2} title="Nenhuma demanda ativa com SLA" description="Este contrato não possui demandas ativas monitoradas por SLA no período." />
     );
   }
 
@@ -55,7 +58,7 @@ export function SLADashboardSection({ contractId }: Props) {
   return (
     <div className="space-y-4">
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KPICard
           icon={Shield}
           label="Compliance"
@@ -91,7 +94,7 @@ export function SLADashboardSection({ contractId }: Props) {
       {withSla > 0 && (
         <div className="space-y-1.5">
           <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Distribuição SLA</p>
-          <div className="flex h-3 rounded-full overflow-hidden gap-px">
+          <div className="flex h-3 gap-px overflow-hidden rounded-full" role="img" aria-label={`Distribuição SLA de ${withSla} demandas`}>
             {(['green', 'yellow', 'orange', 'red'] as const).map(color => {
               const count = summary[color];
               const pct = (count / withSla) * 100;
@@ -101,7 +104,7 @@ export function SLADashboardSection({ contractId }: Props) {
                   key={color}
                   className={`${COLOR_BAR[color]} transition-all`}
                   style={{ width: `${pct}%` }}
-                  title={`${color}: ${count} (${pct.toFixed(0)}%)`}
+                  title={`${COLOR_LABEL[color]}: ${count} (${pct.toFixed(0)}%)`}
                 />
               );
             })}
@@ -111,7 +114,7 @@ export function SLADashboardSection({ contractId }: Props) {
               summary[color] > 0 && (
                 <span key={color} className="flex items-center gap-1 text-[10px] text-muted-foreground">
                   <span className={`w-2 h-2 rounded-full ${COLOR_BAR[color]}`} />
-                  {color}: {summary[color]}
+                  {COLOR_LABEL[color]}: {summary[color]}
                 </span>
               )
             ))}
@@ -156,7 +159,7 @@ export function SLADashboardSection({ contractId }: Props) {
 }
 
 function KPICard({ icon: Icon, label, value, sub, iconClass, borderClass = '' }: {
-  icon: any; label: string; value: string | number; sub?: string; iconClass: string; borderClass?: string;
+  icon: LucideIcon; label: string; value: string | number; sub?: string; iconClass: string; borderClass?: string;
 }) {
   return (
     <Card className={borderClass}>

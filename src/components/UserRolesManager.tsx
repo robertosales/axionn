@@ -77,6 +77,7 @@ const CONTRACT_ID = "d59ab6dc-421f-41b4-b415-ae0bc072ebd4";
 interface TeamMembershipRow {
   team_id: string | null;
   user_id: string | null;
+  role: string | null;
 }
 
 function toLocalDateTimeInput(value: Date) {
@@ -381,7 +382,12 @@ export function UserRolesManager() {
               const userId = String(membership.user_id || "");
               if (!team || !userId) return;
               if (!teamsByUser[userId]) teamsByUser[userId] = [];
-              teamsByUser[userId].push({ id: team.id, name: team.name, module: team.module });
+              teamsByUser[userId].push({
+                id: team.id,
+                name: team.name,
+                module: team.module,
+                role: String(membership.role || "Membro"),
+              });
             });
           }
 
@@ -446,7 +452,7 @@ export function UserRolesManager() {
       const [profilesRes, umrRes, membersRes, contractRolesRes] = await Promise.all([
         supabase.from("profiles").select("user_id, display_name, email, module_access, is_active, must_change_password"),
         supabase.from("user_module_roles").select("user_id, module, role_name"),
-        supabase.from("team_members").select("user_id, teams(id, name, module)"),
+        supabase.from("team_members").select("user_id, role, teams(id, name, module)"),
         supabase.from("user_contracts").select("user_id, role"),
       ]);
 
@@ -461,7 +467,14 @@ export function UserRolesManager() {
         if (!teamsMap[m.user_id]) teamsMap[m.user_id] = [];
         const t = Array.isArray(m.teams) ? m.teams : [m.teams];
         t.forEach((team: any) => {
-          if (team?.id && team?.name) teamsMap[m.user_id].push({ id: team.id, name: team.name, module: team.module || "" });
+          if (team?.id && team?.name) {
+            teamsMap[m.user_id].push({
+              id: team.id,
+              name: team.name,
+              module: team.module || "",
+              role: String(m.role || "Membro"),
+            });
+          }
         });
       });
 
@@ -1063,7 +1076,7 @@ export function UserRolesManager() {
                       {user.teams.length > 0
                         ? user.teams.map(t => (
                             <Badge key={t.id} variant="outline" className="text-[9px] font-normal px-1.5 py-0 bg-muted/50">
-                              {t.name} · {t.module === "sala_agil" ? "Sala Ágil" : t.module === "sustentacao" ? "Sustentação" : t.module === "rdm" ? "RDM" : t.module}
+                              {t.name} · {t.module === "sala_agil" ? "Sala Ágil" : t.module === "sustentacao" ? "Sustentação" : t.module === "rdm" ? "RDM" : t.module} · {t.role}
                             </Badge>
                           ))
                         : <span className="text-[10.5px] text-muted-foreground">—</span>}

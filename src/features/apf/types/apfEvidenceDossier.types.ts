@@ -205,6 +205,7 @@ export interface ApfLogicalFileReview {
 export type ApfExceptionDisposition="counted"|"absorbed"|"reuse_zero_pf"|"not_countable"|"non_functional"|"pending_evidence"|"hu_implementation_divergence"|"audit_risk";
 export interface ApfExceptionReview{countingItemId:string;description:string;disposition:ApfExceptionDisposition;absorbedByItemId:string|null;justification:string;}
 export interface ApfMeasurementBatch{id:string;code:string;competence:string;status:"draft"|"under_review"|"approved"|"glosa_requested"|"glosa_resolved"|"closed"|"cancelled";totalPf:number;disputedPf:number;dossierCount:number;}
+export interface ApfAuditPackageData{batch:ApfMeasurementBatch&{updatedAt:string};dossiers:Array<{code:string;title:string;pf:number;hash:string;version:number;markdown:string}>;decisions:Array<{decision:string;note:string;disputedPf:number|null;actorId:string;createdAt:string}>;}
 
 export const APF_DOSSIER_STATUS_LABELS: Record<ApfDossierStatus, string> = {
   draft: "Rascunho",

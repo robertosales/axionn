@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar, Code2 } from "lucide-react";
 import { getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { getInitials } from "@/lib/nameUtils";
+import { groupTeamMembershipsByUser } from "@/lib/teamMemberships";
 
 const PREDEFINED_ROLES = [
   "Analista de Requisitos",
@@ -34,17 +35,28 @@ interface TeamMember {
   user_roles?: AppRole[];
 }
 
+interface ProfileCandidate {
+  user_id: string;
+  display_name: string;
+  email: string;
+  teams: { id: string; name: string; module: string; role: string }[];
+}
+
+const MODULE_LABELS: Record<string, string> = {
+  sala_agil: "Sala Ágil",
+  sustentacao: "Sustentação",
+  rdm: "RDM",
+};
+
 export function TeamMembersManager() {
-  const { currentTeamId, isAdmin } = useAuth();
+  const { currentTeamId, isAdmin, teams } = useAuth();
   const { currentOrganizationId, enabled: orgEnabled } = useOrganization();
   const permissions = useTeamManagementPermissions();
   const canAdd = permissions.canAddTeamMember;
   const canRemove = permissions.canRemoveTeamMember;
   const canManage = canAdd || canRemove;
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [allProfiles, setAllProfiles] = useState<
-    { user_id: string; display_name: string; email: string }[]
-  >([]);
+  const [allProfiles, setAllProfiles] = useState<ProfileCandidate[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [memberRole, setMemberRole] = useState("Desenvolvedor Fullstack");
   const [customRole, setCustomRole] = useState("");
@@ -138,6 +150,24 @@ export function TeamMembersManager() {
         { p_org_id: currentOrganizationId },
       );
       if (!orgError && orgMembers) {
+        const organizationTeams = teams.filter(
+          (team) => !team.organizationId || team.organizationId === currentOrganizationId,
+        );
+        let membershipsByUser = new Map<string, ProfileCandidate["teams"]>();
+        if (organizationTeams.length > 0) {
+          const { data: memberships, error: membershipsError } = await supabase.rpc(
+            "get_team_members_for_teams_v2",
+            {
+              p_org_id: currentOrganizationId,
+              p_team_ids: organizationTeams.map((team) => team.id),
+            },
+          );
+          if (membershipsError) {
+            console.error("[TeamMembersManager] get_team_members_for_teams_v2:", membershipsError);
+          } else {
+            membershipsByUser = groupTeamMembershipsByUser(organizationTeams, memberships || []);
+          }
+        }
         setAllProfiles(
           (orgMembers as any[])
             .filter((row) => row.is_active !== false)
@@ -145,6 +175,7 @@ export function TeamMembersManager() {
               user_id: String(row.user_id),
               display_name: String(row.display_name ?? row.email ?? "Usuário"),
               email: String(row.email ?? ""),
+              teams: membershipsByUser.get(String(row.user_id)) || [],
             })),
         );
         return;
@@ -161,13 +192,13 @@ export function TeamMembersManager() {
       .from("profiles")
       .select("user_id, display_name, email")
       .eq("is_active", true);
-    setAllProfiles(data || []);
+    setAllProfiles((data || []).map((profile) => ({ ...profile, teams: [] })));
   };
 
   useEffect(() => {
     fetchMembers();
     fetchAllProfiles();
-  }, [currentTeamId, currentOrganizationId, orgEnabled]);
+  }, [currentTeamId, currentOrganizationId, orgEnabled, teams]);
 
   const handleAddMember = async () => {
     if (!currentTeamId || !selectedUserId) {
@@ -265,6 +296,7 @@ export function TeamMembersManager() {
   const availableProfiles = allProfiles.filter(
     (p) => !members.find((m) => m.user_id === p.user_id)
   );
+  const selectedProfile = availableProfiles.find((profile) => profile.user_id === selectedUserId);
 
   const filteredMembers = members.filter((m) => {
     const term = search.toLowerCase();
@@ -338,12 +370,15 @@ export function TeamMembersManager() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Adicionar Membro ao Time</DialogTitle>
+                <DialogDescription>
+                  Selecione uma pessoa já cadastrada na organização. Esta ação cria apenas um novo vínculo com o time atual.
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label>Usuário *</Label>
+                  <Label htmlFor="team-member-user">Usuário *</Label>
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger>
+                    <SelectTrigger id="team-member-user" className="min-h-11">
                       <SelectValue placeholder="Selecione um usuário" />
                     </SelectTrigger>
                     <SelectContent>
@@ -354,6 +389,22 @@ export function TeamMembersManager() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {selectedProfile && (
+                    <div className="mt-3 rounded-lg border bg-muted/30 p-3" aria-live="polite">
+                      <p className="text-xs font-medium text-foreground">Participações atuais</p>
+                      {selectedProfile.teams.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {selectedProfile.teams.map((team) => (
+                            <Badge key={team.id} variant="outline" className="font-normal">
+                              {team.name} · {MODULE_LABELS[team.module] || team.module} · {team.role}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-muted-foreground">Esta será a primeira participação da pessoa em um time.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>

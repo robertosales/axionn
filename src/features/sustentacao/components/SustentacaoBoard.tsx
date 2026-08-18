@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { Badge }   from "@/components/ui/badge";
 import { Button }  from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -217,7 +218,7 @@ function ResponsavelAvatar({ nome, papel, size = "sm", highlight = false }: { no
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className={`${dim} rounded-full flex items-center justify-center font-bold shrink-0 border-2 transition-transform hover:scale-110`}
+          <div className={`${dim} flex shrink-0 items-center justify-center rounded-full border-2 font-bold transition-colors`}
             style={{ backgroundColor: hexAlpha(color, 0.2), color, borderColor: highlight ? color : hexAlpha(color, 0.4), boxShadow: highlight ? `0 0 0 2px ${hexAlpha(color, 0.25)}` : undefined }}>
             {getInitials(nome)}
           </div>
@@ -249,7 +250,9 @@ function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
-                  className="h-5 min-w-[22px] px-1.5 rounded-full text-[8px] font-bold border transition-all hover:scale-105 active:scale-95"
+                  className="min-h-11 min-w-11 rounded-full border px-1.5 text-[10px] font-bold transition-colors sm:min-h-8 sm:min-w-8"
+                  aria-label={`Exibir mais ${demais.length} responsáveis`}
+                  aria-expanded="false"
                   style={{ backgroundColor: hexAlpha(ultimoColor, 0.1), color: ultimoColor, borderColor: hexAlpha(ultimoColor, 0.35) }}>
                   +{demais.length} <ChevronDown className="inline h-2.5 w-2.5" />
                 </button>
@@ -277,7 +280,9 @@ function ResponsaveisGroup({ responsaveis }: { responsaveis: RespItem[] }) {
       <div className="flex items-center justify-between mb-0.5">
         <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wide">Responsáveis</span>
         <button onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
-          className="h-4 w-4 rounded flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+          className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:min-h-8 sm:min-w-8"
+          aria-label="Recolher lista de responsáveis"
+          aria-expanded="true">
           <ChevronUp className="h-3 w-3" />
         </button>
       </div>
@@ -309,15 +314,20 @@ function ProjetoMultiSelect({ projetos, selected, onChange }: { projetos: string
   return (
     <div className="relative">
       <button onClick={() => setOpen((v) => !v)}
-        className="h-9 px-3 rounded-lg border border-border bg-background text-sm flex items-center gap-2 hover:bg-muted transition-colors min-w-[160px] max-w-[240px]">
+        className="flex min-h-11 min-w-[160px] max-w-[240px] items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm transition-colors hover:bg-muted sm:min-h-9"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Filtrar por projeto: ${label}`}>
         <span className="truncate flex-1 text-left text-foreground">{label}</span>
         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       </button>
       {open && (
-        <div className="absolute top-10 left-0 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[200px] max-h-[280px] overflow-y-auto">
+        <div className="absolute left-0 top-12 z-50 max-h-[280px] min-w-[200px] overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg sm:top-10" role="listbox" aria-label="Projetos disponíveis">
           <div className="px-2 pb-1 pt-0.5">
             <button onClick={() => onChange([])}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-muted-foreground">
+              className="flex min-h-11 w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted sm:min-h-9"
+              role="option"
+              aria-selected={selected.length === 0}>
               <span className={`h-4 w-4 rounded border flex items-center justify-center ${selected.length === 0 ? "bg-primary border-primary" : "border-border"}`}>
                 {selected.length === 0 && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
               </span>
@@ -327,7 +337,9 @@ function ProjetoMultiSelect({ projetos, selected, onChange }: { projetos: string
           <div className="border-t border-border/50 my-0.5" />
           {projetos.map((p) => (
             <button key={p} onClick={() => toggle(p)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 rounded text-sm hover:bg-muted transition-colors text-foreground">
+              className="flex min-h-11 w-full items-center gap-2 rounded px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted sm:min-h-9"
+              role="option"
+              aria-selected={selected.includes(p)}>
               <span className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected.includes(p) ? "bg-primary border-primary" : "border-border"}`}>
                 {selected.includes(p) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
               </span>
@@ -358,7 +370,15 @@ function DemandaCard({ demanda, accentHex, visibleCols, currentIndex, onClick, o
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div onClick={onClick}
-          className="bg-card rounded-lg border border-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_3px_10px_rgba(0,0,0,0.15)] hover:border-border transition-all duration-150 overflow-hidden cursor-pointer select-none group">
+          onKeyDown={(event) => {
+            if (!onClick || (event.key !== "Enter" && event.key !== " ")) return;
+            event.preventDefault();
+            onClick();
+          }}
+          role={onClick ? "button" : undefined}
+          tabIndex={onClick ? 0 : undefined}
+          aria-label={onClick ? `Abrir demanda RHM ${demanda.rhm ?? "sem número"}` : undefined}
+          className="group cursor-pointer select-none overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm transition-[border-color,box-shadow] duration-150 hover:border-border hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <div className="h-0.5" style={{ backgroundColor: accentHex }} />
           <div className="p-3 flex flex-col gap-2">
             <p className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2">
@@ -418,7 +438,8 @@ function DemandaCard({ demanda, accentHex, visibleCols, currentIndex, onClick, o
                   <TooltipProvider><Tooltip>
                     <TooltipTrigger asChild>
                       <button onClick={(e) => { e.stopPropagation(); onNovaAtividade(); }}
-                        className="h-5 w-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary hover:bg-primary/10">
+                        className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary md:min-h-8 md:min-w-8 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
+                        aria-label={`Adicionar atividade à demanda RHM ${demanda.rhm ?? "sem número"}`}>
                         <ActivitySquare className="h-3.5 w-3.5" />
                       </button>
                     </TooltipTrigger>
@@ -490,8 +511,9 @@ function DemandaCard({ demanda, accentHex, visibleCols, currentIndex, onClick, o
 
 function CollapsedCol({ label, count, accentHex, onClick }: { label: string; count: number; accentHex: string; onClick: () => void }) {
   return (
-    <div onClick={onClick}
-      className="flex-shrink-0 w-10 flex flex-col items-center rounded-xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] cursor-pointer hover:shadow-md transition-all py-3 gap-3"
+    <button type="button" onClick={onClick}
+      className="flex w-11 flex-shrink-0 flex-col items-center gap-3 rounded-xl border border-border/60 bg-card py-3 shadow-sm transition-[border-color,box-shadow] hover:border-border hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      aria-label={`Expandir coluna ${label}, ${count} demandas`}
       style={{ borderTop: `3px solid ${accentHex}` }}>
       <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       <span className="text-[11px] font-bold flex-1 text-center leading-tight"
@@ -500,7 +522,7 @@ function CollapsedCol({ label, count, accentHex, onClick }: { label: string; cou
       </span>
       <span className="text-[10px] font-bold rounded-full min-w-[18px] text-center py-0.5 px-1"
         style={{ backgroundColor: hexAlpha(accentHex, 0.14), color: accentHex }}>{count}</span>
-    </div>
+    </button>
   );
 }
 
@@ -511,10 +533,11 @@ function ExpandedCol({ label, colKey, demandas, accentHex, visibleCols, onCollap
 }) {
   const currentIndex = visibleCols.indexOf(colKey);
   return (
-    <div className="flex-shrink-0 w-[280px] flex flex-col rounded-xl border border-border/60 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-all"
+    <section className="flex w-[280px] flex-shrink-0 flex-col rounded-xl border border-border/60 bg-card shadow-sm transition-[border-color,box-shadow]"
+      aria-label={`${label}, ${demandas.length} demandas`}
       style={{ borderTop: `3px solid ${accentHex}` }}>
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border">
-        <button onClick={onCollapse} className="p-0.5 rounded hover:bg-muted transition-colors">
+        <button onClick={onCollapse} className="flex min-h-11 min-w-11 items-center justify-center rounded transition-colors hover:bg-muted sm:min-h-8 sm:min-w-8" aria-label={`Recolher coluna ${label}`}>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
         <span className="flex-1 text-[12px] font-bold tracking-wide uppercase truncate" style={{ color: accentHex }}>{label}</span>
@@ -523,12 +546,12 @@ function ExpandedCol({ label, colKey, demandas, accentHex, visibleCols, onCollap
           {demandas.length}
         </span>
         {onAdd && (
-          <button onClick={onAdd} className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+          <button onClick={onAdd} className="flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:min-h-8 sm:min-w-8" aria-label={`Criar demanda em ${label}`}>
             <Plus className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
-      <div className="p-2 overflow-y-auto flex-1 space-y-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
+      <div className="max-h-[calc(100dvh-260px)] flex-1 space-y-2 overflow-y-auto p-2">
         {demandas.length === 0 ? (
           <div className="flex items-center justify-center h-14 rounded-lg border-2 border-dashed border-border text-xs text-muted-foreground">Sem demandas</div>
         ) : (
@@ -541,7 +564,7 @@ function ExpandedCol({ label, colKey, demandas, accentHex, visibleCols, onCollap
           ))
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -560,7 +583,7 @@ export function SustentacaoBoard({
   onCreateDemanda,
   onMoveDemanda,
 }: SustentacaoBoardProps) {
-  const demandas = demandasProp ?? [];
+  const demandas = useMemo(() => demandasProp ?? [], [demandasProp]);
 
   const [collapsed,     setCollapsed]     = useState<Set<string>>(new Set());
   const [hasColumnPreference, setHasColumnPreference] = useState(false);
@@ -600,7 +623,12 @@ export function SustentacaoBoard({
 
   const toggle = (key: string) => {
     setHasColumnPreference(true);
-    setCollapsed((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
 
   const projetosDisponiveis = useMemo<string[]>(() => {
@@ -617,9 +645,8 @@ export function SustentacaoBoard({
   const responsaveisFilter = useMemo<ResponsavelFilterItem[]>(() => {
     const map = new Map<string, ResponsavelFilterItem>();
     demandas.forEach((d) => {
-      getResponsaveisList(d).forEach(({ papel, nome }) => {
-        if (nome && !map.has(nome))
-          map.set(nome, { userId: nome, name: nome, color: PAPEL_COLORS[papel] } as any);
+      getResponsaveisList(d).forEach(({ nome }) => {
+        if (nome && !map.has(nome)) map.set(nome, { userId: nome, name: nome });
       });
     });
     return Array.from(map.values());
@@ -669,17 +696,19 @@ export function SustentacaoBoard({
   const hasActiveFilters = selectedProjetos.length > 0 || selectedResp.length > 0;
 
   return (
-    <div className="flex flex-col h-full gap-3">
-      <div className="flex items-center gap-3 px-1 flex-wrap">
-        <div className="relative flex-1 max-w-sm">
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3 px-1" aria-label="Filtros do quadro de sustentação">
+        <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+          <label htmlFor="sustentacao-board-search" className="sr-only">Buscar demanda</label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
+          <Input id="sustentacao-board-search" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar demanda..."
-            className="w-full pl-9 pr-3 h-9 rounded-lg border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
+            className="min-h-11 w-full pl-9 pr-11 sm:min-h-9"
           />
           {search && (
             <button onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              className="absolute right-0 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center text-muted-foreground transition-colors hover:text-foreground sm:min-h-9 sm:min-w-9"
+              aria-label="Limpar busca">
               <X className="h-3.5 w-3.5" />
             </button>
           )}
@@ -692,7 +721,7 @@ export function SustentacaoBoard({
         )}
         {hasActiveFilters && (
           <button onClick={() => { setSelectedProjetos([]); setSelectedResp([]); }}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            className="flex min-h-11 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:min-h-9">
             <X className="h-3 w-3" /> Limpar filtros
           </button>
         )}
@@ -702,7 +731,8 @@ export function SustentacaoBoard({
           variant="ghost"
           size="sm"
           onClick={() => setShowArchived((v) => !v)}
-          className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          className="min-h-11 gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:min-h-9"
+          aria-pressed={showArchived}
         >
           {showArchived
             ? <EyeOff className="h-3.5 w-3.5" />
@@ -722,7 +752,7 @@ export function SustentacaoBoard({
         </Badge>
       </div>
 
-      <div className="flex gap-2 pb-4 overflow-x-auto flex-1" style={{ minHeight: 120 }}>
+      <div className="flex min-h-[120px] flex-1 gap-2 overflow-x-auto pb-4" aria-label="Quadro Kanban de sustentação">
         {visibleCols.map((key) => {
           const label = colLabels[key] ?? key;
           const hex   = colColors[key] ?? "#94a3b8";

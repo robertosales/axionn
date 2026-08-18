@@ -28,9 +28,19 @@ const TABS = [
   { value: "baseline", label: "Baseline", icon: Database, short: "Base" },
   { value: "hu", label: "Gerar HUs", icon: Sparkles, short: "HUs" },
   { value: "pf", label: "Contar PF", icon: Cpu, short: "PF" },
-  { value: "generate", label: "Gerar Doc", icon: FileText, short: "Doc" },
-  { value: "templates", label: "Templates", icon: LayoutGrid, short: "Templates" },
-  { value: "predictive", label: "Previsão", icon: BrainCircuit, short: "Previsão" },
+  { value: "generate", label: "Dossiês APF", icon: FileText, short: "Dossiês" },
+  {
+    value: "templates",
+    label: "Templates",
+    icon: LayoutGrid,
+    short: "Templates",
+  },
+  {
+    value: "predictive",
+    label: "Previsão",
+    icon: BrainCircuit,
+    short: "Previsão",
+  },
   { value: "biblioteca", label: "Biblioteca", icon: BookOpen, short: "Biblio" },
 ] as const;
 
@@ -39,9 +49,12 @@ export function ApfGeneratorPage() {
     <AiPipelineProvider>
       <div className="mx-auto flex max-w-screen-xl flex-col gap-4 p-4 md:p-6">
         <header className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Medição &amp; Evidências</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Medição &amp; Evidências
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Contabilize pontos de função, gerencie evidências e gere os artefatos necessários para formalizar as entregas.
+            Contabilize pontos de função, gerencie evidências e gere os
+            artefatos necessários para formalizar as entregas.
           </p>
         </header>
         <Tabs defaultValue="hub">
@@ -60,14 +73,30 @@ export function ApfGeneratorPage() {
           </TabsList>
 
           <div className="mt-4">
-            <TabsContent value="hub" className="m-0"><ApfHubTab /></TabsContent>
-            <TabsContent value="baseline" className="m-0"><ApfBaselineTab /></TabsContent>
-            <TabsContent value="hu" className="m-0"><ApfHuGenerateTab /></TabsContent>
-            <TabsContent value="pf" className="m-0"><ApfFunctionPointTab /></TabsContent>
-            <TabsContent value="generate" className="m-0"><ApfGenerateTab /></TabsContent>
-            <TabsContent value="templates" className="m-0"><ApfTemplatesTab /></TabsContent>
-            <TabsContent value="predictive" className="m-0"><ApfPredictiveTab /></TabsContent>
-            <TabsContent value="biblioteca" className="m-0"><ApfKnowledgeLibrary /></TabsContent>
+            <TabsContent value="hub" className="m-0">
+              <ApfHubTab />
+            </TabsContent>
+            <TabsContent value="baseline" className="m-0">
+              <ApfBaselineTab />
+            </TabsContent>
+            <TabsContent value="hu" className="m-0">
+              <ApfHuGenerateTab />
+            </TabsContent>
+            <TabsContent value="pf" className="m-0">
+              <ApfFunctionPointTab />
+            </TabsContent>
+            <TabsContent value="generate" className="m-0">
+              <ApfGenerateTab />
+            </TabsContent>
+            <TabsContent value="templates" className="m-0">
+              <ApfTemplatesTab />
+            </TabsContent>
+            <TabsContent value="predictive" className="m-0">
+              <ApfPredictiveTab />
+            </TabsContent>
+            <TabsContent value="biblioteca" className="m-0">
+              <ApfKnowledgeLibrary />
+            </TabsContent>
           </div>
         </Tabs>
       </div>

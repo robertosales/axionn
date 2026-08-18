@@ -217,7 +217,7 @@ export async function listApfAuditFindings(dossierId: string): Promise<ApfAuditF
   type Row = { id: string; finding_type: string; severity: ApfAuditFinding["severity"]; title: string; detail: string; entity_type: string | null; status: ApfAuditFinding["status"]; resolution_note: string | null; detected_at: string };
   return ((data ?? []) as Row[]).map((row) => ({ id: row.id, findingType: row.finding_type, severity: row.severity, title: row.title, detail: row.detail, entityType: row.entity_type, status: row.status, resolutionNote: row.resolution_note, detectedAt: row.detected_at }));
 }
-export async function scanApfDossierAudit(dossierId: string): Promise<number> { const { data, error } = await supabase.rpc("scan_apf_dossier_audit" as never, { p_dossier_id: dossierId } as never); if (error) throw error; return Number(data ?? 0); }
+export async function scanApfDossierAudit(dossierId: string): Promise<number> { const { data, error } = await supabase.rpc("scan_apf_dossier_audit" as never, { p_dossier_id: dossierId } as never); if (error) throw error; const {data:quality,error:qualityError}=await supabase.rpc("assess_apf_evidence_quality" as never,{p_dossier_id:dossierId}as never);if(qualityError)throw qualityError;return Number(data??0)+Number(quality??0); }
 export async function reviewApfAuditFinding(findingId: string, status: "resolved" | "accepted_risk", note: string): Promise<void> { const { error } = await supabase.rpc("review_apf_audit_finding" as never, { p_finding_id: findingId, p_status: status, p_note: note.trim() } as never); if (error) throw error; }
 
 export async function listApfAcceptanceCriteria(dossierId: string): Promise<ApfAcceptanceCriterion[]> {

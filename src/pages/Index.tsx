@@ -7,6 +7,7 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { Button } from "@/components/ui/button";
 import { Building2, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { useModuleTeam } from "@/hooks/useModuleTeam";
 
 // ─── Componentes leves — importados estaticamente ─────────────────────────────
 import { SprintManager } from "@/components/SprintManager";
@@ -230,14 +231,13 @@ const Index = () => {
 
   const active = (VALID_SECTIONS.includes(section as SectionKey) ? section : "dashboard") as SectionKey;
 
-  const { loading, currentTeamId, setCurrentTeamId, teams, hasPermission, isAdmin } = useAuth();
+  const { loading, currentTeamId, hasPermission, isAdmin } = useAuth();
   const { activeSprint, sprints } = useSprint();
-  const [showTeamModal, setShowTeamModal] = React.useState(false);
+  const { moduleTeams, showTeamModal, setModuleTeamId, closeTeamModal } = useModuleTeam("sala_agil");
   const [selectedBacklogSprintId, setSelectedBacklogSprintId] = React.useState<string | null>(null);
 
   const [, startTransition] = useTransition();
 
-  const moduleTeams = teams.filter((t) => t.module === "sala_agil");
   const backlogSprintId = selectedBacklogSprintId ?? activeSprint?.id ?? null;
 
   React.useEffect(() => {
@@ -249,17 +249,6 @@ const Index = () => {
       setSelectedBacklogSprintId(null);
     }
   }, [selectedBacklogSprintId, sprints]);
-
-  useEffect(() => {
-    if (loading || moduleTeams.length === 0) return;
-    const currentIsValid = currentTeamId && moduleTeams.some((t) => t.id === currentTeamId);
-    if (currentIsValid) return;
-    if (moduleTeams.length === 1) {
-      setCurrentTeamId(moduleTeams[0].id);
-    } else {
-      setShowTeamModal(true);
-    }
-  }, [loading, teams, currentTeamId]); // eslint-disable-line
 
   useEffect(() => {
     if (loading) return;
@@ -287,11 +276,8 @@ const Index = () => {
         open={showTeamModal}
         teams={moduleTeams}
         moduleLabel="Sala Ágil"
-        onSelect={(id) => {
-          setCurrentTeamId(id);
-          setShowTeamModal(false);
-        }}
-        onClose={() => setShowTeamModal(false)}
+        onSelect={setModuleTeamId}
+        onClose={closeTeamModal}
       />
 
       <div className="w-full p-6">

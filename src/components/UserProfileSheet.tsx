@@ -109,7 +109,7 @@ export interface UserRow {
   module_access:        string;
   is_active:            boolean;
   must_change_password: boolean;
-  teams:                { id: string; name: string }[];
+  teams:                { id: string; name: string; module: ModuleKey | string }[];
   moduleRoles:          ModuleAccess[];
   contract_role?:       "admin_contrato" | "member" | null;
 }

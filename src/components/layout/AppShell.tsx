@@ -28,6 +28,7 @@ import { BreadcrumbsContextual } from "@/components/navigation/BreadcrumbsContex
 import { useQualityPermissions } from "@/features/quality/hooks/useQualityPermissions";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
+import { persistModuleTeamSelection } from "@/lib/moduleTeamSelection";
 
 const SB = {
   bg:       "#0F172A",
@@ -117,7 +118,10 @@ function TeamSwitcher({ module, collapsed }: { module: ActiveModule; collapsed: 
         <DropdownMenuLabel className="text-xs text-muted-foreground">Trocar time</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {moduleTeams.map((team) => (
-          <DropdownMenuItem key={team.id} onClick={() => setCurrentTeamId(team.id)}
+          <DropdownMenuItem key={team.id} onClick={() => {
+            persistModuleTeamSelection(module, team.id);
+            setCurrentTeamId(team.id);
+          }}
             className="text-xs gap-2 justify-between cursor-pointer">
             <span className="flex items-center gap-2"><Building2 className="h-3.5 w-3.5" />{team.name}</span>
             {team.id === currentTeamId && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}

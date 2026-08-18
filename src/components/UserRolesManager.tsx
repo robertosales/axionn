@@ -18,6 +18,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button }  from "@/components/ui/button";
 import { Badge }   from "@/components/ui/badge";
 import { Input }   from "@/components/ui/input";
@@ -72,6 +73,11 @@ import {
 } from "./UserProfileSheet";
 
 const CONTRACT_ID = "d59ab6dc-421f-41b4-b415-ae0bc072ebd4";
+
+interface TeamMembershipRow {
+  team_id: string | null;
+  user_id: string | null;
+}
 
 function toLocalDateTimeInput(value: Date) {
   const offset = value.getTimezoneOffset() * 60_000;
@@ -234,6 +240,7 @@ const TOG0: ToggleState = { user: null, saving: false };
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function UserRolesManager() {
+  const { teams: accessibleTeams } = useAuth();
   const { currentOrganizationId, isOrganizationAdmin } = useOrganization();
   const [users,         setUsers]         = useState<UserRow[]>([]);
   const [loading,       setLoading]       = useState(false);
@@ -272,7 +279,10 @@ export function UserRolesManager() {
           // Leitura e escrita usam a mesma autoridade tenant-scoped.
           setIsCurrentUserAdmin(isOrganizationAdmin);
 
-          const [membersRes, moduleRolesRes, contractRolesRes, rbacProfilesRes] = await Promise.all([
+          const organizationTeamIds = accessibleTeams
+            .filter((team) => team.organizationId === currentOrganizationId)
+            .map((team) => team.id);
+          const [membersRes, moduleRolesRes, contractRolesRes, rbacProfilesRes, teamMembershipsRes] = await Promise.all([
             (supabase as any).rpc("get_organization_members_v2", {
               p_org_id: currentOrganizationId,
             }),
@@ -284,6 +294,14 @@ export function UserRolesManager() {
             (supabase as any).rpc("list_rbac_profiles_v1", {
               p_org_id: currentOrganizationId,
             }),
+            organizationTeamIds.length > 0
+              // RPC tenant-scoped ainda não consta nos tipos gerados do cliente Supabase.
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ? (supabase as any).rpc("get_team_members_for_teams_v2", {
+                  p_org_id: currentOrganizationId,
+                  p_team_ids: organizationTeamIds,
+                })
+              : Promise.resolve({ data: [], error: null }),
           ]);
 
           if (membersRes.error) {
@@ -355,6 +373,18 @@ export function UserRolesManager() {
             },
           );
 
+          const teamById = new Map(accessibleTeams.map((team) => [team.id, team]));
+          const teamsByUser: Record<string, UserRow["teams"]> = {};
+          if (!teamMembershipsRes.error) {
+            ((teamMembershipsRes.data ?? []) as TeamMembershipRow[]).forEach((membership) => {
+              const team = teamById.get(String(membership.team_id));
+              const userId = String(membership.user_id || "");
+              if (!team || !userId) return;
+              if (!teamsByUser[userId]) teamsByUser[userId] = [];
+              teamsByUser[userId].push({ id: team.id, name: team.name, module: team.module });
+            });
+          }
+
           setUsers(
             ((membersRes.data ?? []) as any[]).map((member) => {
               const moduleKeys = ((member.module_keys ?? []) as string[])
@@ -387,7 +417,7 @@ export function UserRolesManager() {
                 // Nesta visão tenant-scoped, status representa a associação à organização.
                 is_active:            Boolean(member.is_active),
                 must_change_password: false,
-                teams:                [],
+                teams:                teamsByUser[String(member.user_id)] || [],
                 moduleRoles:          resolvedModuleRoles,
                 contract_role:        contractRoleMap[member.user_id] ?? null,
               };
@@ -416,7 +446,7 @@ export function UserRolesManager() {
       const [profilesRes, umrRes, membersRes, contractRolesRes] = await Promise.all([
         supabase.from("profiles").select("user_id, display_name, email, module_access, is_active, must_change_password"),
         supabase.from("user_module_roles").select("user_id, module, role_name"),
-        supabase.from("team_members").select("user_id, teams(id, name)"),
+        supabase.from("team_members").select("user_id, teams(id, name, module)"),
         supabase.from("user_contracts").select("user_id, role"),
       ]);
 
@@ -425,13 +455,13 @@ export function UserRolesManager() {
       const memberList      = (membersRes.data       || []) as any[];
       const contractRoles   = contractRolesRes.error  ? [] : (contractRolesRes.data || []) as any[];
 
-      const teamsMap: Record<string, { id: string; name: string }[]> = {};
+      const teamsMap: Record<string, UserRow["teams"]> = {};
       memberList.forEach((m: any) => {
         if (!m.user_id || !m.teams) return;
         if (!teamsMap[m.user_id]) teamsMap[m.user_id] = [];
         const t = Array.isArray(m.teams) ? m.teams : [m.teams];
         t.forEach((team: any) => {
-          if (team?.id && team?.name) teamsMap[m.user_id].push({ id: team.id, name: team.name });
+          if (team?.id && team?.name) teamsMap[m.user_id].push({ id: team.id, name: team.name, module: team.module || "" });
         });
       });
 
@@ -460,7 +490,7 @@ export function UserRolesManager() {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganizationId, isOrganizationAdmin, useOrganizationAuthority]);
+  }, [accessibleTeams, currentOrganizationId, isOrganizationAdmin, useOrganizationAuthority]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -1032,7 +1062,9 @@ export function UserRolesManager() {
                     <div className="flex flex-wrap gap-1">
                       {user.teams.length > 0
                         ? user.teams.map(t => (
-                            <Badge key={t.id} variant="outline" className="text-[9px] font-normal px-1.5 py-0 bg-muted/50">{t.name}</Badge>
+                            <Badge key={t.id} variant="outline" className="text-[9px] font-normal px-1.5 py-0 bg-muted/50">
+                              {t.name} · {t.module === "sala_agil" ? "Sala Ágil" : t.module === "sustentacao" ? "Sustentação" : t.module === "rdm" ? "RDM" : t.module}
+                            </Badge>
                           ))
                         : <span className="text-[10.5px] text-muted-foreground">—</span>}
                     </div>

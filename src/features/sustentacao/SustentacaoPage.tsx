@@ -20,7 +20,7 @@ import { DemandasList }                      from "./components/DemandasList";
 import { SustentacaoRelatorios }             from "./components/reports/SustentacaoRelatorios";
 import { TeamManager }                       from "@/components/TeamManager";
 import { TeamMembersManager }               from "@/components/TeamMembersManager";
-import { UserRolesManager }                 from "@/components/UserRolesManager";
+import RbacWorkspace                       from "@/features/rbac/RbacWorkspace";
 import { CustomFieldManager }               from "@/components/CustomFieldManager";
 import { AutomationManager }                from "@/components/AutomationManager";
 import { DeveloperManager }                 from "@/components/DeveloperManager";
@@ -61,7 +61,7 @@ export default function SustentacaoPage() {
     return () => { supabase.removeChannel(sub); };
   }, [qc]);
 
-  const needsTeam = !moduleTeamId && active !== "times";
+  const needsTeam = !moduleTeamId && !["times", "perfis"].includes(active);
 
   return (
     <AppShell module="sustentacao">
@@ -197,7 +197,7 @@ function SustentacaoSection({ active }: { active: string }) {
     case "fluxo":      return <SustentacaoWorkflow />;
     case "relatorios": return <SustentacaoRelatorios />;
     case "membros":    return <TeamMembersManager />;
-    case "perfis":     return <UserRolesManager />;
+    case "perfis":     return <RbacWorkspace />;
     case "campos":     return <CustomFieldManager />;
     case "automacoes": return <AutomationManager />;
     case "times":      return <TeamManager moduleFilter="sustentacao" />;

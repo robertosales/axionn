@@ -1,0 +1,8 @@
+create or replace function public.persist_apf_ai_traceability_suggestions(p_dossier_id uuid,p_suggestions jsonb)returns integer language plpgsql security definer set search_path=public,pg_temp as $$declare item jsonb;inserted integer:=0;begin
+ if auth.role()<>'service_role'then raise exception'Somente o serviço de IA pode persistir sugestões.'using errcode='42501';end if;if jsonb_typeof(p_suggestions)<>'array'or jsonb_array_length(p_suggestions)>100 then raise exception'Sugestões inválidas.'using errcode='22023';end if;
+ for item in select value from jsonb_array_elements(p_suggestions)loop
+  if not exists(select 1 from public.apf_acceptance_criteria where id=(item->>'criterion_id')::uuid and dossier_id=p_dossier_id)or not exists(select 1 from public.apf_evidence_sources where id=(item->>'evidence_source_id')::uuid and dossier_id=p_dossier_id)then raise exception'Sugestão referencia entidade fora do dossiê.'using errcode='22023';end if;
+  insert into public.apf_traceability_suggestions(dossier_id,acceptance_criterion_id,evidence_source_id,method,confidence,rationale)values(p_dossier_id,(item->>'criterion_id')::uuid,(item->>'evidence_source_id')::uuid,'ai',greatest(0,least(1,(item->>'confidence')::numeric)),trim(item->>'rationale'))
+  on conflict(dossier_id,acceptance_criterion_id,evidence_source_id,method)do update set confidence=excluded.confidence,rationale=excluded.rationale where apf_traceability_suggestions.status='pending';if found then inserted:=inserted+1;end if;
+ end loop;return inserted;end $$;
+revoke all on function public.persist_apf_ai_traceability_suggestions(uuid,jsonb)from public,anon,authenticated;grant execute on function public.persist_apf_ai_traceability_suggestions(uuid,jsonb)to service_role;

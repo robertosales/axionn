@@ -224,6 +224,8 @@ export async function generateApfTraceabilitySuggestions(dossierId: string): Pro
   return Number(data ?? 0);
 }
 
+export async function generateApfSemanticTraceabilitySuggestions(dossierId:string):Promise<number>{const{data,error}=await supabase.functions.invoke("apf-dossier-semantic-suggestions",{body:{dossierId}});if(error)throw error;if(data?.error)throw new Error(String(data.error));return Number(data?.count??0);}
+
 export async function reviewApfTraceabilitySuggestion(suggestionId: string, accept: boolean): Promise<void> {
   const { error } = await supabase.rpc("review_apf_traceability_suggestion" as never, { p_suggestion_id: suggestionId, p_accept: accept } as never);
   if (error) throw error;

@@ -4,7 +4,7 @@
 
 **Produto:** Axionn  
 **Domínio:** Medição & Evidências / APF  
-**Status:** implementado — fases 0 a 4 concluídas em 18/08/2026
+**Status:** implementação de código concluída; homologação operacional pendente em 18/08/2026
 **Objetivo:** gerar no Axionn um dossiê auditável equivalente ao documento-modelo da HU 63
 
 ## 1. Correção de entendimento
@@ -538,34 +538,34 @@ A implementação deve aproveitar o motor APF existente e restaurar a capacidade
 
 O resultado esperado é que o Axionn passe a gerar, revisar, homologar e reproduzir documentos equivalentes ao modelo apresentado, independentemente do tema da HU, com evidência verificável, memória de cálculo e governança suficientes para auditoria e cobrança.
 
-## 19. Fechamento da implementação
+## 19. Situação da implementação e homologação
 
 ### 19.1 Situação das fases
 
 | Fase | Situação | Entregas verificadas |
 |---|---|---|
-| Fase 0 — Fundação contratual e snapshot | Concluída | Snapshot de contrato, baseline e ruleset; versões imutáveis e hash |
-| Fase 1 — Dossiê e evidência manual | Concluída | Workspace, CA, catálogo, rastreabilidade, contagem, prévia, Markdown, DOCX, validação e homologação |
-| Fase 2 — Coleta GitLab | Concluída | MRs, commits, artefatos técnicos, catálogo, links permanentes e sugestões revisáveis |
-| Fase 3 — Auditoria APF assistida | Concluída | DET/FTR/RET, matriz ALI/AIE, exceções, reúso, absorção, achados, contradições e qualidade |
-| Fase 4 — Integrações e consolidação | Concluída | GitHub, Jira, Azure DevOps, Redmine, lotes por competência, glosa, aprovação formal, faturamento, PDF/ZIP e indicadores |
+| Fase 0 — Fundação contratual e snapshot | Código concluído; runtime pendente | Snapshot de contrato, baseline e ruleset; versões imutáveis e hash |
+| Fase 1 — Dossiê e evidência manual | Código concluído; runtime pendente | Workspace, CA, catálogo, rastreabilidade, contagem, prévia, Markdown, DOCX, JSON, validação e homologação |
+| Fase 2 — Coleta GitLab | Código concluído; runtime pendente | MRs, commits, artefatos técnicos, catálogo, links permanentes e sugestões revisáveis |
+| Fase 3 — Auditoria APF assistida | Código concluído; runtime pendente | DET/FTR/RET, matriz ALI/AIE, exceções, reúso, absorção, achados, contradições e qualidade |
+| Fase 4 — Integrações e consolidação | Código concluído; runtime pendente | GitHub, Jira, Azure DevOps, Redmine, lotes por competência, glosa, aprovação formal, faturamento, PDF/ZIP e indicadores |
 
 ### 19.2 Critérios do MVP
 
-Os 18 critérios de aceite da seção 13 possuem implementação correspondente. A reexportação usa o snapshot homologado; a correção cria sucessor; homologação e coleta respeitam imutabilidade; todos os novos acessos são delimitados por organização e protegidos por RLS ou RPC com verificação interna.
+Os 18 critérios de aceite da seção 13 possuem implementação correspondente e testes locais. A aceitação final permanece condicionada à execução do cenário operacional descrito em `docs/apf/evidence-dossier-homologation-runbook.md`. A reexportação usa o snapshot homologado; a correção cria sucessor; homologação e coleta respeitam imutabilidade; os novos acessos são delimitados por organização e protegidos por RLS ou RPC com verificação interna.
 
 O pacote ZIP contém o manifesto JSON estruturado, documentos homologados, hashes, versões e trilha de decisões. O PDF consolida a medição e a auditoria sem recalcular o resultado homologado.
 
 ### 19.3 Dependências operacionais
 
-O código do módulo está concluído, mas a coleta depende da configuração dos serviços externos:
+O código do módulo está concluído, mas ainda não existe evidência suficiente para declarar homologação ponta a ponta. A coleta depende da configuração dos serviços externos:
 
 - GitLab, GitHub e Azure DevOps precisam de `git_integrations` ativa, sincronização e vínculo da atividade com a HU;
 - Redmine precisa de integração ativa e `redmine_issue_links` sincronizado;
-- o conector Jira deve alimentar `upsert_apf_jira_issue_link` usando `service_role` antes da importação pelo usuário;
+- o webhook `apf-jira-webhook` deve estar implantado e configurado em `apf_jira_webhook_integrations`;
 - documentos e faturamento dependem das migrations desta proposta estarem aplicadas na ordem cronológica;
 - evidência proveniente de conectores externos permanece não verificada até decisão humana, exceto atividade Git já coletada pelo fluxo autenticado existente.
 
 ### 19.4 Evidência técnica de conclusão
 
-A implementação está registrada na sequência de migrations `20260817120000` a `20260818190000`, acompanhada por testes de contrato para fundação, snapshot, homologação, correção, conectores, auditoria, métricas, consolidação, faturamento e governança.
+A implementação está registrada na sequência de migrations `20260817120000` a `20260818290000`. Em 18/08/2026, a suíte local aprovou 133 arquivos e 592 testes. O smoke Playwright do módulo foi descoberto corretamente, mas não ultrapassou a autenticação do ambiente E2E; portanto, banco, Edge Functions, conectores e fluxo de navegador continuam pendentes de homologação operacional.

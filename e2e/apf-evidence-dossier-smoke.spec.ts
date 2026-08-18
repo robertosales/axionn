@@ -110,17 +110,61 @@ test.describe("Dossiê APF por Impacto", () => {
 
     const projectTrigger = dialog.getByLabel("Projeto");
     await projectTrigger.click();
-    await expect(page.getByPlaceholder(/buscar por projeto, código ou contrato/i)).toBeVisible();
+    const projectSearch = page.getByPlaceholder(/buscar por projeto, código ou contrato/i);
+    await expect(projectSearch).toBeVisible();
     const projectOptions = page.getByRole("option");
-    await expect.poll(() => projectOptions.count()).toBeGreaterThan(0);
+    await expect.poll(() => projectOptions.count()).toBeGreaterThan(10);
+    const allProjectCount = await projectOptions.count();
     const projectList = page.getByTestId("dossier-project-list");
+    const projectContent = page.getByTestId("dossier-project-list-content");
     await expect(projectList).toBeVisible();
-    expect(await projectList.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(224);
+    await expect(projectContent).toHaveAttribute("data-side", "bottom");
+    expect(await dialog.getByTestId("dossier-project-list").count()).toBe(0);
+    const triggerBox = await projectTrigger.boundingBox();
+    const contentBox = await projectContent.boundingBox();
+    expect(triggerBox).not.toBeNull();
+    expect(contentBox).not.toBeNull();
+    expect(Math.abs(contentBox!.x - triggerBox!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(contentBox!.width - triggerBox!.width)).toBeLessThanOrEqual(1);
+    expect(contentBox!.y).toBeGreaterThanOrEqual(triggerBox!.y + triggerBox!.height);
+    expect(await projectList.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(320);
     expect(await projectList.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    expect(await projectList.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+    const searchBoxBeforeListScroll = await projectSearch.boundingBox();
+    await projectList.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    expect(await projectSearch.boundingBox()).toEqual(searchBoxBeforeListScroll);
+    const lastProjectOption = projectOptions.last();
+    const listBox = await projectList.boundingBox();
+    const lastOptionBox = await lastProjectOption.boundingBox();
+    expect(lastOptionBox).not.toBeNull();
+    expect(lastOptionBox!.y + lastOptionBox!.height).toBeLessThanOrEqual(listBox!.y + listBox!.height + 1);
+
+    await projectSearch.fill("NEXO");
+    await expect.poll(() => projectOptions.count()).toBeGreaterThan(0);
+    expect(await projectOptions.count()).toBeLessThan(allProjectCount);
+    await projectSearch.fill("PROJETO-INEXISTENTE-E2E");
+    await expect(page.getByText("Nenhum projeto encontrado.")).toBeVisible();
+    await projectSearch.fill("");
+    await page.keyboard.press("ArrowDown");
+    await expect(projectContent.locator("[cmdk-item][data-selected='true']")).toBeVisible();
+
+    const modalBodyWhileOpen = page.getByTestId("dossier-dialog-body");
+    const anchorDeltaBeforeScroll = contentBox!.y - triggerBox!.y;
+    await modalBodyWhileOpen.evaluate((element) => { element.scrollTop += 12; });
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    const movedTriggerBox = await projectTrigger.boundingBox();
+    const movedContentBox = await projectContent.boundingBox();
+    expect(Math.abs((movedContentBox!.y - movedTriggerBox!.y) - anchorDeltaBeforeScroll)).toBeLessThanOrEqual(2);
     await page.keyboard.press("Escape");
     await expect(projectTrigger).toBeFocused();
+    await modalBodyWhileOpen.evaluate((element) => { element.scrollTop = 0; });
     await projectTrigger.click();
+    const titledProjectLabels = projectContent.locator("[cmdk-item] [title]");
+    await expect.poll(() => titledProjectLabels.count()).toBeGreaterThan(0);
+    expect(Math.max(...(await titledProjectLabels.evaluateAll((elements) => elements.map((element) => element.getAttribute("title")?.length ?? 0))))).toBeGreaterThan(20);
     await projectOptions.first().click();
+    const selectedProjectLabel = (await projectTrigger.textContent())?.trim();
 
     const storyTrigger = dialog.getByLabel("História de usuário");
     await storyTrigger.click();
@@ -140,12 +184,14 @@ test.describe("Dossiê APF por Impacto", () => {
     await expect(dialog.getByText(/128 história\(s\) disponível/i)).toBeVisible();
     const storyList = page.getByTestId("dossier-story-list");
     await expect(storyList).toBeVisible();
-    expect(await storyList.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(256);
+    expect(await storyList.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(320);
     expect(await storyList.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
     await page.keyboard.press("Escape");
     await expect(storyTrigger).toBeFocused();
     await storyTrigger.click();
     await storyOptions.first().click();
+    expect((await projectTrigger.textContent())?.trim()).toBe(selectedProjectLabel);
+    await expect(dialog.getByRole("button", { name: /criar dossiê/i })).toBeEnabled();
 
     await dialog.getByLabel("Sessão de contagem").click();
     const sessionOptions = page.getByRole("option");
@@ -191,6 +237,23 @@ test.describe("Dossiê APF por Impacto", () => {
     await body.evaluate((element) => { element.scrollTop = element.scrollHeight; });
     expect(await header.boundingBox()).toEqual(headerBeforeScroll);
     expect(await footer.boundingBox()).toEqual(footerBeforeScroll);
+
+    await page.setViewportSize({ width: 390, height: 420 });
+    await body.evaluate((element) => { element.scrollTop = 0; });
+    await projectTrigger.scrollIntoViewIfNeeded();
+    await projectTrigger.click();
+    await expect(projectContent).toBeVisible();
+    await expect(projectContent).toHaveAttribute("data-side", /^(top|bottom)$/);
+    const compactContentBox = await projectContent.boundingBox();
+    const compactTriggerBox = await projectTrigger.boundingBox();
+    expect(compactContentBox).not.toBeNull();
+    expect(compactTriggerBox).not.toBeNull();
+    expect(compactContentBox!.y).toBeGreaterThanOrEqual(8);
+    expect(compactContentBox!.y + compactContentBox!.height).toBeLessThanOrEqual(412);
+    expect(Math.abs(compactContentBox!.x - compactTriggerBox!.x)).toBeLessThanOrEqual(1);
+    expect(await projectList.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(projectTrigger).toBeFocused();
 
     expect(failures).toEqual([]);
   });

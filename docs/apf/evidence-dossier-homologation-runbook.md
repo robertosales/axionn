@@ -4,7 +4,7 @@ Este runbook fecha a diferença entre código entregue e operação comprovada. 
 
 ## 1. Banco de dados
 
-Aplicar, em ordem cronológica, todas as migrations de `20260817120000_apf_evidence_dossiers_foundation.sql` até `20260818290000_apf_server_readiness_gate.sql`. Não executar apenas as migrations mais recentes: elas endurecem objetos criados nas etapas anteriores.
+Aplicar, em ordem cronológica, todas as migrations de `20260817120000_apf_evidence_dossiers_foundation.sql` até `20260818310000_apf_draft_lifecycle.sql`. Não executar apenas as migrations mais recentes: elas endurecem objetos criados nas etapas anteriores, incluindo o isolamento por tenant e o ciclo de vida de rascunhos.
 
 Depois, executar `supabase/diagnostics/apf_dossier_homologation_readiness.sql`. O resultado esperado é zero linhas com `status = 'missing'` e oito permissões APF registradas.
 

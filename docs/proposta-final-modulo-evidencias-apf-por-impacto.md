@@ -568,4 +568,4 @@ O código do módulo está concluído, mas ainda não existe evidência suficien
 
 ### 19.4 Evidência técnica de conclusão
 
-A implementação está registrada na sequência de migrations `20260817120000` a `20260818290000`. Em 18/08/2026, a suíte local aprovou 133 arquivos e 592 testes. O smoke Playwright do módulo foi descoberto corretamente, mas não ultrapassou a autenticação do ambiente E2E; portanto, banco, Edge Functions, conectores e fluxo de navegador continuam pendentes de homologação operacional.
+A implementação está registrada na sequência de migrations `20260817120000` a `20260818310000`. Em 18/08/2026, a suíte local aprovou 136 arquivos e 601 testes, e o build de produção foi concluído. O diagnóstico de prontidão do banco confirmou os oito objetos e as oito permissões obrigatórias. O smoke Playwright básico do módulo passou contra o Supabase remoto usando o frontend local; os quatro cenários que comprovam atores distintos e isolamento cross-tenant permaneceram ignorados por ausência das identidades E2E separadas. Portanto, o fluxo segregado, a segurança cross-tenant, as Edge Functions e os conectores continuam pendentes de homologação operacional.

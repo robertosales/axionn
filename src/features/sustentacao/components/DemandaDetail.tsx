@@ -39,6 +39,8 @@ import { EncerramentoDialog } from "./EncerramentoDialog";
 import { SuspensaoDialog } from "./SuspensaoDialog";
 import { NovaAtividadeDialog } from "./NovaAtividadeDialog";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
+import { EmptyState } from "@/shared/components/common/EmptyState";
+import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { HorasInput, hhmmToDecimal } from "@/shared/components/common/HorasInput";
 import {
   Dialog,
@@ -248,10 +250,6 @@ function minutesToDisplay(horas: number): string {
 }
 
 // ─── cor teal do design system ───────────────────────────────────────────────
-const TEAL = "#0bbcaf";
-const TEAL_BG = "rgba(11,188,175,0.1)";
-const TEAL_BORDER = "rgba(11,188,175,0.35)";
-
 export function DemandaDetail({
   demanda: rawDemanda,
   onBack,
@@ -844,54 +842,52 @@ export function DemandaDetail({
 
   return (
     <>
-      <div className="w-full max-w-[1100px] mx-auto py-6 px-4 md:px-0 space-y-6 animate-in fade-in duration-300">
+      <div className="mx-auto w-full max-w-[1100px] space-y-6 px-4 py-4 sm:py-6 lg:px-0 animate-in fade-in duration-300">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm">
           <Button
             variant="ghost"
             size="sm"
-            className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
+            className="-ml-2 min-h-11 gap-1.5 text-muted-foreground hover:text-foreground sm:min-h-9"
             onClick={onBack}
+            aria-label="Voltar para a lista de demandas"
           >
             <ArrowLeft className="h-4 w-4" />
             Demandas
           </Button>
           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="font-mono font-semibold" style={{ color: TEAL }}>
+          <span className="font-mono font-semibold text-primary">
             {demanda.rhm}
           </span>
         </div>
 
         <div className="bg-card rounded-xl border shadow-sm">
           {/* ── Header com accent bar teal ── */}
-          <div
-            className="px-6 py-5 border-b"
-            style={{ borderLeft: `4px solid ${TEAL}`, borderRadius: "12px 12px 0 0" }}
-          >
-            <div className="flex items-start justify-between gap-4">
+          <div className="rounded-t-xl border-b border-l-4 border-l-primary px-4 py-5 sm:px-6">
+            <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
               <div className="space-y-1.5">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-xl font-bold tracking-tight font-mono" style={{ color: TEAL }}>
+                  <h1 className="font-mono text-xl font-bold tracking-tight text-primary">
                     {demanda.rhm}
                   </h1>
                   <Badge className={`text-xs ${resolveColor(demanda.situacao)}`}>
                     {resolveLabel(demanda.situacao)}
                   </Badge>
-                  <Badge className={`text-xs ${SLA_COR_CLASS[slaStatus.cor]}`}>
-                    {slaStatus.cor === "green"
-                      ? "🟢"
-                      : slaStatus.cor === "yellow"
-                        ? "🟡"
-                        : slaStatus.cor === "orange"
-                          ? "🟠"
-                          : "🔴"}{" "}
+                  <Badge className={`gap-1.5 text-xs ${SLA_COR_CLASS[slaStatus.cor]}`}>
+                    <Circle className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
                     {slaStatus.label}
                   </Badge>
                   {isBloqueada && (
-                    <Badge className="text-xs bg-red-100 text-red-700 border-red-300">🔒 Bloqueada</Badge>
+                    <Badge className="gap-1.5 border-red-300 bg-red-100 text-xs text-red-700">
+                      <AlertCircle className="h-3 w-3" aria-hidden="true" />
+                      Bloqueada
+                    </Badge>
                   )}
                   {isRejeitada && (
-                    <Badge className="text-xs bg-rose-100 text-rose-800 border-rose-300">❌ Rejeitada</Badge>
+                    <Badge className="gap-1.5 border-rose-300 bg-rose-100 text-xs text-rose-800">
+                      <X className="h-3 w-3" aria-hidden="true" />
+                      Rejeitada
+                    </Badge>
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground">
@@ -899,7 +895,7 @@ export function DemandaDetail({
                   {new Date(demanda.created_at).toLocaleDateString("pt-BR")}
                 </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
                 {isTerminal ? (
                   <Badge className="bg-gray-200 text-gray-700 border-gray-300 text-xs">Somente leitura</Badge>
                 ) : editing ? (
@@ -910,10 +906,7 @@ export function DemandaDetail({
                     </Button>
                     <Button
                       size="sm"
-                      className="gap-1.5 text-white"
-                      style={{ background: TEAL }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                      className="min-h-11 gap-1.5 sm:min-h-9"
                       onClick={saveEdit}
                     >
                       <Save className="h-4 w-4" />
@@ -941,19 +934,13 @@ export function DemandaDetail({
                   <div key={step} className="flex items-center flex-1 last:flex-none">
                     <div className="flex flex-col items-center gap-1.5">
                       <div
-                        className="flex items-center justify-center h-7 w-7 rounded-full border-2 transition-all"
-                        style={
+                        className={`flex h-7 w-7 items-center justify-center rounded-full border-2 transition-colors ${
                           isPast
-                            ? { background: "#10b981", borderColor: "#10b981", color: "#fff" }
+                            ? "border-emerald-500 bg-emerald-500 text-white"
                             : isActive
-                              ? {
-                                  background: TEAL,
-                                  borderColor: TEAL,
-                                  color: "#fff",
-                                  boxShadow: `0 0 0 3px ${TEAL_BG}`,
-                                }
-                              : {}
-                        }
+                              ? "border-primary bg-primary text-primary-foreground ring-4 ring-primary/10"
+                              : "border-border bg-background"
+                        }`}
                       >
                         {isPast ? (
                           <Check className="h-3.5 w-3.5" />
@@ -964,28 +951,26 @@ export function DemandaDetail({
                         )}
                       </div>
                       <span
-                        className="text-[10px] font-medium text-center leading-tight max-w-[72px]"
-                        style={
+                        className={`max-w-[72px] text-center text-[10px] font-medium leading-tight ${
                           isActive
-                            ? { color: TEAL, fontWeight: 600 }
+                            ? "font-semibold text-primary"
                             : isPast
-                              ? { color: "#10b981" }
-                              : { color: "hsl(var(--muted-foreground))" }
-                        }
+                              ? "text-emerald-600"
+                              : "text-muted-foreground"
+                        }`}
                       >
                         {STEPPER_LABELS[step]}
                       </span>
                     </div>
                     {!isLast && (
                       <div
-                        className="flex-1 h-0.5 mx-1.5 mt-[-18px] rounded-full transition-colors"
-                        style={
+                        className={`mx-1.5 mt-[-18px] h-0.5 flex-1 rounded-full transition-colors ${
                           isPast
-                            ? { background: "#10b981" }
+                            ? "bg-emerald-500"
                             : isActive
-                              ? { background: `linear-gradient(to right, ${TEAL}, hsl(var(--border)))` }
-                              : { background: "hsl(var(--border))" }
-                        }
+                              ? "bg-gradient-to-r from-primary to-border"
+                              : "bg-border"
+                        }`}
                       />
                     )}
                   </div>
@@ -1006,16 +991,13 @@ export function DemandaDetail({
 
           {/* ── Painel de movimentação com fundo teal suave ── */}
           {!editing && !isTerminal && (
-            <div className="px-6 py-3 border-b" style={{ background: TEAL_BG }}>
+            <div className="border-b bg-primary/5 px-4 py-3 sm:px-6">
               {isBloqueada ? (
                 <div className="flex items-center gap-3 flex-wrap">
                   <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
                   <span className="text-sm font-medium text-destructive shrink-0">Demanda bloqueada</span>
                   <Button
-                    className="text-white h-8 text-sm"
-                    style={{ background: "#10b981" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#059669")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "#10b981")}
+                    className="min-h-11 bg-emerald-600 text-sm text-white hover:bg-emerald-700 sm:min-h-8"
                     onClick={handleUnblock}
                   >
                     Desbloquear (retornar à etapa anterior)
@@ -1028,10 +1010,7 @@ export function DemandaDetail({
                     Demanda rejeitada — reencaminhar para execução
                   </span>
                   <Button
-                    className="text-white h-8 text-sm"
-                    style={{ background: TEAL }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                    className="min-h-11 text-sm sm:min-h-8"
                     onClick={async () => {
                       const ok = await onMoveTo(demanda, "em_execucao", "Reencaminhado após rejeição");
                       if (ok) await refreshAllData();
@@ -1042,7 +1021,7 @@ export function DemandaDetail({
                 </div>
               ) : (
                 <div className="flex items-center gap-3 flex-wrap">
-                  <MoveRight className="h-4 w-4 shrink-0" style={{ color: TEAL }} />
+                  <MoveRight className="h-4 w-4 shrink-0 text-primary" />
                   <span className="text-sm font-medium text-foreground shrink-0">Mover para:</span>
                   <Select value={newStatus} onValueChange={setNewStatus}>
                     <SelectTrigger className="h-9 text-sm flex-1 max-w-xs bg-card">
@@ -1058,10 +1037,7 @@ export function DemandaDetail({
                     </SelectContent>
                   </Select>
                   <Button
-                    className="h-9 text-sm text-white"
-                    style={{ background: TEAL }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                    className="min-h-11 text-sm sm:min-h-9"
                     onClick={handleMove}
                     disabled={!newStatus}
                   >
@@ -1125,9 +1101,9 @@ export function DemandaDetail({
           )}
 
           {/* ── Tabs ── */}
-          <div className="px-6 py-5">
+          <div className="px-4 py-5 sm:px-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
+              <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto bg-muted/50 p-1">
                 {[
                   { value: "detalhes", icon: <FileText className="h-4 w-4" />, label: "Detalhes" },
                   { value: "historico", icon: <History className="h-4 w-4" />, label: "Histórico" },
@@ -1155,18 +1131,17 @@ export function DemandaDetail({
                     key={tab.value}
                     value={tab.value}
                     disabled={tab.disabled}
-                    className="gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="min-h-11 shrink-0 gap-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9"
                   >
                     {tab.icon}
                     {tab.label}
                     {tab.badge !== undefined && (
                       <span
-                        className="ml-1 text-[10px] h-5 px-1.5 rounded-full flex items-center font-medium"
-                        style={
+                        className={`ml-1 flex h-5 items-center rounded-full px-1.5 text-[10px] font-medium ${
                           activeTab === tab.value
-                            ? { background: TEAL_BG, color: TEAL }
-                            : { background: "hsl(var(--secondary))", color: "hsl(var(--secondary-foreground))" }
-                        }
+                            ? "bg-primary/10 text-primary"
+                            : "bg-secondary text-secondary-foreground"
+                        }`}
                       >
                         {tab.badge}
                       </span>
@@ -1283,10 +1258,7 @@ export function DemandaDetail({
                       </div>
 
                       {/* ── Card informações com divide-y ── */}
-                      <div
-                        className="rounded-xl border overflow-hidden"
-                        style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
-                      >
+                      <div className="overflow-hidden rounded-xl border shadow-sm">
                         <div className="px-4 py-2.5 border-b bg-muted/40">
                           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Informações
@@ -1364,10 +1336,7 @@ export function DemandaDetail({
                         </Card>
                       )}
                       {responsaveis.length > 0 && (
-                        <div
-                          className="rounded-xl border overflow-hidden"
-                          style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
-                        >
+                        <div className="overflow-hidden rounded-xl border shadow-sm">
                           <div className="px-4 py-2.5 border-b bg-muted/40">
                             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                               Equipe Vinculada
@@ -1379,10 +1348,7 @@ export function DemandaDetail({
                                 key={r.id}
                                 className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors"
                               >
-                                <div
-                                  className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0"
-                                  style={{ background: TEAL_BG, color: TEAL }}
-                                >
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                                   {getInitials(r.profile?.display_name)}
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -1403,9 +1369,13 @@ export function DemandaDetail({
 
               {/* ─── ABA HISTÓRICO ─── */}
               <TabsContent value="historico" className="mt-5">
-                {tLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
+                {tLoading && <SkeletonList count={3} variant="row" />}
                 {!tLoading && transitions.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Nenhuma transição registrada.</p>
+                  <EmptyState
+                    icon={History}
+                    title="Nenhuma transição registrada"
+                    description="As mudanças de etapa desta demanda aparecerão aqui."
+                  />
                 )}
                 {transitions.length > 0 && (
                   <div className="space-y-3">
@@ -1415,10 +1385,7 @@ export function DemandaDetail({
                         <div key={t.id} className="flex gap-3 text-sm">
                           <div className="flex flex-col items-center">
                             <div
-                              className="h-2 w-2 rounded-full mt-1.5"
-                              style={
-                                isFirst ? { background: TEAL } : { background: "hsl(var(--muted-foreground) / 0.4)" }
-                              }
+                              className={`mt-1.5 h-2 w-2 rounded-full ${isFirst ? "bg-primary" : "bg-muted-foreground/40"}`}
                             />
                             {idx < transitions.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
                           </div>
@@ -1454,7 +1421,7 @@ export function DemandaDetail({
               <TabsContent value="horas" className="mt-5 space-y-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <p className="text-sm font-semibold text-foreground">
-                    Total Acumulado: <span style={{ color: TEAL }}>{minutesToDisplay(total)}</span>
+                    Total Acumulado: <span className="text-primary">{minutesToDisplay(total)}</span>
                   </p>
                   <div className="min-w-[220px]">
                     <Label className="text-xs">Analista</Label>
@@ -1487,7 +1454,7 @@ export function DemandaDetail({
                 </div>
 
                 {/* Card lançar horas */}
-                <div className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                <div className="overflow-hidden rounded-xl border shadow-sm">
                   <div className="px-4 py-2.5 border-b bg-muted/40 flex items-center justify-between">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lançar Horas</p>
                     {isAdmin && (
@@ -1549,10 +1516,7 @@ export function DemandaDetail({
                       </div>
                       <Button
                         size="sm"
-                        className="gap-1.5 text-white"
-                        style={{ background: TEAL }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                        className="min-h-11 gap-1.5 sm:min-h-9"
                         onClick={handleAddHour}
                       >
                         <Plus className="h-4 w-4" />
@@ -1566,10 +1530,7 @@ export function DemandaDetail({
                 </div>
 
                 {filteredHours.length > 0 ? (
-                  <div
-                    className="rounded-xl border overflow-x-auto"
-                    style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
-                  >
+                  <div className="overflow-x-auto rounded-xl border shadow-sm">
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
                         <tr>
@@ -1660,9 +1621,11 @@ export function DemandaDetail({
                   </div>
                 ) : (
                   hours.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum lançamento para o analista selecionado.
-                    </p>
+                    <EmptyState
+                      icon={Clock}
+                      title="Nenhum lançamento encontrado"
+                      description="Ajuste o filtro de analista ou registre uma nova atividade."
+                    />
                   )
                 )}
               </TabsContent>
@@ -1692,10 +1655,7 @@ export function DemandaDetail({
                     {searchResults.map((r) => (
                       <button
                         key={r.user_id}
-                        className="w-full text-left px-4 py-2.5 hover:bg-muted/50 transition-colors flex items-center gap-3"
-                        style={{ borderLeft: `3px solid transparent` }}
-                        onMouseEnter={(e) => (e.currentTarget.style.borderLeftColor = TEAL)}
-                        onMouseLeave={(e) => (e.currentTarget.style.borderLeftColor = "transparent")}
+                        className="flex min-h-11 w-full items-center gap-3 border-l-4 border-l-transparent px-4 py-2.5 text-left transition-colors hover:border-l-primary hover:bg-muted/50 focus-visible:border-l-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => handleAddResp(r.user_id)}
                       >
                         <UserPlus className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -1705,24 +1665,23 @@ export function DemandaDetail({
                     ))}
                   </div>
                 )}
-                {respLoading && <p className="text-sm text-muted-foreground">Carregando...</p>}
+                {respLoading && <SkeletonList count={3} variant="row" />}
                 {!respLoading && responsaveis.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Nenhum responsável vinculado.</p>
+                  <EmptyState
+                    icon={Users}
+                    title="Nenhum responsável vinculado"
+                    description="Use a busca acima para adicionar participantes à demanda."
+                  />
                 )}
                 {responsaveis.length > 0 && (
-                  <div
-                    className="rounded-xl border overflow-hidden divide-y"
-                    style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
-                  >
+                  <div className="divide-y overflow-hidden rounded-xl border shadow-sm">
                     {responsaveis.map((r) => (
                       <div
                         key={r.id}
-                        className="flex items-center gap-3 px-4 py-3 bg-card hover:bg-muted/30 transition-colors"
-                        style={{ borderLeft: `3px solid ${TEAL_BORDER}` }}
+                        className="flex items-center gap-3 border-l-4 border-l-primary/30 bg-card px-4 py-3 transition-colors hover:bg-muted/30"
                       >
                         <div
-                          className="h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold shrink-0"
-                          style={{ background: TEAL_BG, color: TEAL }}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
                         >
                           {getInitials(r.profile?.display_name)}
                         </div>
@@ -1735,8 +1694,9 @@ export function DemandaDetail({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                          className="min-h-11 min-w-11 p-0 text-muted-foreground hover:text-destructive sm:min-h-9 sm:min-w-9"
                           onClick={() => setDeleteRespId(r.id)}
+                          aria-label={`Remover ${formatPersonName(r.profile?.display_name) || "responsável"}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -1749,7 +1709,7 @@ export function DemandaDetail({
               {/* ─── ABA EVIDÊNCIAS ─── */}
               <TabsContent value="evidencias" className="mt-5 space-y-5">
                 {/* Card adicionar evidência */}
-                <div className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                <div className="overflow-hidden rounded-xl border shadow-sm">
                   <div className="px-4 py-2.5 border-b bg-muted/40">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Adicionar Evidência
@@ -1824,10 +1784,7 @@ export function DemandaDetail({
                     </div>
                     <Button
                       size="sm"
-                      className="gap-1.5 text-white"
-                      style={{ background: TEAL }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = TEAL)}
+                      className="min-h-11 gap-1.5 sm:min-h-9"
                       onClick={handleAddEvidencia}
                     >
                       <Plus className="h-4 w-4" />
@@ -1836,14 +1793,18 @@ export function DemandaDetail({
                   </div>
                 </div>
 
-                {evidLoading && <p className="text-sm text-muted-foreground">Carregando evidências...</p>}
+                {evidLoading && <SkeletonList count={3} variant="row" />}
 
                 {!evidLoading && evidencias.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Nenhuma evidência cadastrada.</p>
+                  <EmptyState
+                    icon={ShieldCheck}
+                    title="Nenhuma evidência cadastrada"
+                    description="Adicione um arquivo ou link para documentar esta demanda."
+                  />
                 )}
 
                 {EVIDENCIA_FASES.filter((f) => evidenciasByFase[f]?.length > 0).map((fase) => (
-                  <div key={fase} className="rounded-xl border overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                  <div key={fase} className="overflow-hidden rounded-xl border shadow-sm">
                     <div className="px-4 py-2.5 border-b bg-muted/40">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {EVIDENCIA_FASE_LABELS[fase]}
@@ -1857,7 +1818,7 @@ export function DemandaDetail({
                             {ev.descricao && <p className="text-xs text-muted-foreground truncate">{ev.descricao}</p>}
                             <p className="text-xs text-muted-foreground">
                               {ev.tipo === "link" && ev.url_externa ? (
-                                <a href={safeExternalUrl(ev.url_externa)} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: TEAL }}>
+                                <a href={safeExternalUrl(ev.url_externa)} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
                                   {ev.url_externa}
                                 </a>
                               ) : ev.file_name ? (
@@ -1977,8 +1938,6 @@ export function DemandaDetail({
                 Cancelar
               </Button>
               <Button
-                className="text-white"
-                style={{ background: TEAL }}
                 onClick={async () => {
                   if (!editHour) return;
                   await updateHour(editHour.id, {
@@ -2032,8 +1991,8 @@ export function DemandaDetail({
                 />
                 <Button
                   size="sm"
-                  className="text-white shrink-0"
-                  style={{ background: TEAL }}
+                  className="min-h-11 shrink-0 sm:min-h-9"
+                  aria-label="Adicionar nova fase"
                   onClick={async () => {
                     if (!newFaseLabel.trim()) return;
                     await createFase(newFaseLabel.trim());

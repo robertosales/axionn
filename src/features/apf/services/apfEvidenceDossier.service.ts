@@ -1464,6 +1464,9 @@ export async function getApfDossierCreationOptions(
       code: project.code,
       contractId: project.contract_id,
       contractName: project.contracts.name,
+      teamIds: [...projectsByTeam.entries()]
+        .filter(([, projectIds]) => projectIds.has(project.id))
+        .map(([teamId]) => teamId),
     })),
     userStories: ((userStories ?? []) as StoryRow[]).flatMap((story) =>
       [...(projectsByTeam.get(story.team_id) ?? [])].map((projectId) => ({

@@ -97,6 +97,7 @@ export interface ApfDossierCreationProject {
   code: string | null;
   contractId: string;
   contractName: string;
+  teamIds: string[];
 }
 
 export interface ApfDossierCreationUserStory {

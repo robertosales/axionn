@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CheckCircle2, ChevronRight, FileCheck2, FileSearch, FolderKanban, Loader2, Plus } from "lucide-react";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,7 @@ const statusVariant: Record<ApfDossierStatus, "default" | "secondary" | "outline
 
 export function ApfDossierWorkspace() {
   const { currentOrganizationId } = useOrganization();
+  const { currentTeamId, currentTeam } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedDossierId, setSelectedDossierId] = useState<string | null>(null);
   const { data: dossiers = [], isLoading, isError, refetch } = useApfEvidenceDossiers(currentOrganizationId);
@@ -62,7 +64,7 @@ export function ApfDossierWorkspace() {
         <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs text-muted-foreground">{dossier.dossierCode}</span><Badge variant={statusVariant[dossier.status]}>{APF_DOSSIER_STATUS_LABELS[dossier.status]}</Badge></div><h3 className="mt-1 truncate font-semibold">{dossier.title}</h3><p className="mt-1 text-xs text-muted-foreground">{dossier.userStory ? `${dossier.userStory.code} · ${dossier.userStory.title}` : "HU não vinculada"}{` · Atualizado ${format(new Date(dossier.updatedAt), "dd MMM yyyy", { locale: ptBR })}`}</p></div>
         <div className="flex items-center justify-between gap-4 md:justify-end"><div className="text-right"><p className="text-lg font-semibold tabular-nums">{dossier.totalImpactedPf.toLocaleString("pt-BR")} PF</p><p className="text-[11px] text-muted-foreground">impactado</p></div><Button variant="ghost" size="icon" aria-label={`Abrir dossiê ${dossier.dossierCode}`} onClick={() => setSelectedDossierId(dossier.id)}><ChevronRight className="h-4 w-4" aria-hidden="true" /></Button></div>
       </CardContent></Card>)}</div>}
-    {currentOrganizationId && <CreateApfDossierDialog open={createOpen} onOpenChange={setCreateOpen} organizationId={currentOrganizationId} onCreated={refetch} />}
+    {currentOrganizationId && <CreateApfDossierDialog open={createOpen} onOpenChange={setCreateOpen} organizationId={currentOrganizationId} currentTeamId={currentTeamId} currentTeamName={currentTeam?.name ?? null} onCreated={refetch} />}
   </section>;
 }
 

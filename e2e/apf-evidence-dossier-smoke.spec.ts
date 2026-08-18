@@ -105,8 +105,11 @@ test.describe("Dossiê APF por Impacto", () => {
     await page.getByRole("button", { name: /novo dossiê/i }).click();
     const dialog = page.getByRole("dialog", { name: /novo dossiê apf/i });
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /cancelar/i })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /criar dossiê/i })).toBeVisible();
 
     await dialog.getByLabel("Projeto").click();
+    await expect(page.getByPlaceholder(/buscar por projeto, código ou contrato/i)).toBeVisible();
     const projectOptions = page.getByRole("option");
     await expect.poll(() => projectOptions.count()).toBeGreaterThan(0);
     await projectOptions.first().click();

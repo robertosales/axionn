@@ -76,7 +76,7 @@ test.describe("Dossiê APF por Impacto", () => {
     const skipTutorial = page.getByRole("button", { name: /pular tutorial/i });
     if (
       await skipTutorial
-        .waitFor({ state: "visible", timeout: 5_000 })
+        .waitFor({ state: "visible", timeout: 15_000 })
         .then(() => true)
         .catch(() => false)
     ) {
@@ -108,13 +108,22 @@ test.describe("Dossiê APF por Impacto", () => {
     await expect(dialog.getByRole("button", { name: /cancelar/i })).toBeVisible();
     await expect(dialog.getByRole("button", { name: /criar dossiê/i })).toBeVisible();
 
-    await dialog.getByLabel("Projeto").click();
+    const projectTrigger = dialog.getByLabel("Projeto");
+    await projectTrigger.click();
     await expect(page.getByPlaceholder(/buscar por projeto, código ou contrato/i)).toBeVisible();
     const projectOptions = page.getByRole("option");
     await expect.poll(() => projectOptions.count()).toBeGreaterThan(0);
+    const projectList = page.getByTestId("dossier-project-list");
+    await expect(projectList).toBeVisible();
+    expect(await projectList.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(224);
+    expect(await projectList.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(projectTrigger).toBeFocused();
+    await projectTrigger.click();
     await projectOptions.first().click();
 
-    await dialog.getByLabel("História de usuário").click();
+    const storyTrigger = dialog.getByLabel("História de usuário");
+    await storyTrigger.click();
     const storyOptions = page.getByRole("option");
     await expect
       .poll(
@@ -128,6 +137,14 @@ test.describe("Dossiê APF por Impacto", () => {
         { message: "Respostas das opções de criação" },
       )
       .toBe("stories-loaded");
+    await expect(dialog.getByText(/128 história\(s\) disponível/i)).toBeVisible();
+    const storyList = page.getByTestId("dossier-story-list");
+    await expect(storyList).toBeVisible();
+    expect(await storyList.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(256);
+    expect(await storyList.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(storyTrigger).toBeFocused();
+    await storyTrigger.click();
     await storyOptions.first().click();
 
     await dialog.getByLabel("Sessão de contagem").click();
@@ -136,6 +153,44 @@ test.describe("Dossiê APF por Impacto", () => {
     const sessionLabels = await sessionOptions.allTextContents();
     expect(sessionLabels.join("\n")).not.toMatch(/\bin_progress\b/i);
     expect(sessionLabels.join("\n")).not.toMatch(/\b[0-9a-f]{8}-[0-9a-f]{4}-/i);
+    await page.keyboard.press("Escape");
+
+    await page.setViewportSize({ width: 390, height: 700 });
+    const header = page.getByTestId("dossier-dialog-header");
+    const body = page.getByTestId("dossier-dialog-body");
+    const footer = page.getByTestId("dossier-dialog-footer");
+    await expect(header).toBeVisible();
+    await expect(footer).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /cancelar/i })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: /criar dossiê/i })).toBeVisible();
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const horizontalOverflow = await body.evaluate((element) => ({
+      body: { clientWidth: element.clientWidth, scrollWidth: element.scrollWidth },
+      offenders: [...element.querySelectorAll<HTMLElement>("*")]
+        .filter((child) => child.getBoundingClientRect().right > element.getBoundingClientRect().right + 1)
+        .slice(0, 8)
+        .map((child) => ({
+          className: child.className,
+          clientWidth: child.clientWidth,
+          scrollWidth: child.scrollWidth,
+          tag: child.tagName,
+        })),
+    }));
+    expect(horizontalOverflow).toEqual({
+      body: { clientWidth: horizontalOverflow.body.clientWidth, scrollWidth: horizontalOverflow.body.clientWidth },
+      offenders: [],
+    });
+    expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await dialog.evaluate(async (element) => {
+      await Promise.all(
+        element.getAnimations({ subtree: true }).map((animation) => animation.finished),
+      );
+    });
+    const headerBeforeScroll = await header.boundingBox();
+    const footerBeforeScroll = await footer.boundingBox();
+    await body.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    expect(await header.boundingBox()).toEqual(headerBeforeScroll);
+    expect(await footer.boundingBox()).toEqual(footerBeforeScroll);
 
     expect(failures).toEqual([]);
   });

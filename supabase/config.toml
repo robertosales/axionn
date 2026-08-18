@@ -30,6 +30,12 @@ verify_jwt = false
 [functions.redmine-sync]
 verify_jwt = false
 
+[functions.apf-jira-webhook]
+verify_jwt = false
+
+[functions.apf-dossier-semantic-suggestions]
+verify_jwt = true
+
 [functions.apex-webhook]
 verify_jwt = false
 

@@ -1,10 +1,33 @@
 import { expect, test } from "../playwright-fixture";
-const email = process.env.E2E_USER_EMAIL,
-  password = process.env.E2E_USER_PASSWORD,
-  organizationId = process.env.E2E_ORGANIZATION_ID;
+import {
+  creator,
+  fingerprintDownload,
+  hasCrossTenantSet,
+  hasFullIdentitySet,
+  homologator,
+  maskIdentity,
+  missingIdentitiesMessage,
+  openApfDossierWorkspace,
+  openDossierByCode,
+  organizationId,
+  otherOrganizationId,
+  otherTenantUser,
+  readAuthenticatedUserId,
+  restQueryAsUser,
+  seedOrganization,
+  signIn,
+  supabasePublishableKey,
+  supabaseUrl,
+  validator,
+  writeHomologationReport,
+} from "./support/apfHomologation";
+
+const legacyEmail = process.env.E2E_USER_EMAIL,
+  legacyPassword = process.env.E2E_USER_PASSWORD;
+
 test.describe("Dossiê APF por Impacto", () => {
   test.skip(
-    !(email && password && organizationId),
+    !(legacyEmail && legacyPassword && organizationId),
     "Defina as credenciais e a organização E2E.",
   );
   test("carrega o workspace operacional e consulta somente a organização selecionada", async ({
@@ -24,8 +47,8 @@ test.describe("Dossiê APF por Impacto", () => {
       organizationId!,
     );
     await page.goto("/auth");
-    await page.getByLabel(/e-mail/i).fill(email!);
-    await page.getByRole("textbox", { name: /^senha/i }).fill(password!);
+    await page.getByLabel(/e-mail/i).fill(legacyEmail!);
+    await page.getByRole("textbox", { name: /^senha/i }).fill(legacyPassword!);
     await page.getByRole("button", { name: /entrar/i }).click();
     await page.waitForURL((url) => !url.pathname.startsWith("/auth"));
     await page.goto("/sala-agil/medicao-evidencias", {

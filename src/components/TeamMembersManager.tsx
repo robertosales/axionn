@@ -17,6 +17,7 @@ import { getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { getInitials } from "@/lib/nameUtils";
 import { groupTeamMembershipsByUser } from "@/lib/teamMemberships";
 import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
+import { SkeletonList } from "@/shared/components/common/SkeletonList";
 
 const PREDEFINED_ROLES = [
   "Analista de Requisitos",
@@ -54,8 +55,9 @@ export function TeamMembersManager() {
   const { currentOrganizationId, enabled: orgEnabled } = useOrganization();
   const permissions = useTeamManagementPermissions();
   const canAdd = permissions.canAddTeamMember;
+  const canUpdate = permissions.canUpdateTeamMember;
   const canRemove = permissions.canRemoveTeamMember;
-  const canManage = canAdd || canRemove;
+  const canManage = canAdd || canUpdate || canRemove;
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [allProfiles, setAllProfiles] = useState<ProfileCandidate[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -149,7 +151,7 @@ export function TeamMembersManager() {
   };
 
   const fetchAllProfiles = async () => {
-    if (!canManage) return;
+    if (!canAdd) return;
 
     if (orgEnabled && currentOrganizationId) {
       const { data: orgMembers, error: orgError } = await (supabase as any).rpc(
@@ -317,7 +319,7 @@ export function TeamMembersManager() {
 
   const handleUpdateMemberRole = async () => {
     if (!memberToEdit || !currentTeamId) return;
-    if (!canManage) {
+    if (!canUpdate) {
       toast.error(
         permissions.writeBlockedReason ??
           "Você não tem permissão para gerenciar membros deste time.",
@@ -443,7 +445,7 @@ export function TeamMembersManager() {
           </p>
         </div>
 
-        {canManage && (
+        {canAdd && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="min-h-11 sm:min-h-9">
@@ -597,6 +599,7 @@ export function TeamMembersManager() {
       </div>
 
       <div className="space-y-3">
+        {loading && <SkeletonList count={4} variant="row" />}
         {sortedMembers.map((member) => {
           const name = member.profile?.display_name || "Usuário";
           return (
@@ -622,24 +625,28 @@ export function TeamMembersManager() {
                       </div>
                       {canManage && (
                         <div className="-mr-1 -mt-1 flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="min-h-11 min-w-11"
-                            onClick={() => openRoleEditor(member)}
-                            aria-label={`Editar função de ${name} no time ${activeTeam?.name || "atual"}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="min-h-11 min-w-11"
-                            onClick={() => setMemberToRemove(member)}
-                            aria-label={`Remover ${name} do time ${activeTeam?.name || "atual"}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {canUpdate && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="min-h-11 min-w-11"
+                              onClick={() => openRoleEditor(member)}
+                              aria-label={`Editar função de ${name} no time ${activeTeam?.name || "atual"}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canRemove && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="min-h-11 min-w-11"
+                              onClick={() => setMemberToRemove(member)}
+                              aria-label={`Remover ${name} do time ${activeTeam?.name || "atual"}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>

@@ -26,4 +26,19 @@ describe("gestão segura de participações em times", () => {
     expect(source).toContain("A identidade, os perfis RBAC e os outros vínculos não serão modificados");
     expect(source).toContain("Função no time atualizada");
   });
+
+  it("aplica permissões específicas para adicionar, editar e remover", () => {
+    expect(source).toContain("const canAdd = permissions.canAddTeamMember");
+    expect(source).toContain("const canUpdate = permissions.canUpdateTeamMember");
+    expect(source).toContain("const canRemove = permissions.canRemoveTeamMember");
+    expect(source).toContain("{canAdd && (");
+    expect(source).toContain("{canUpdate && (");
+    expect(source).toContain("{canRemove && (");
+    expect(source).toContain('if (!canUpdate) {');
+  });
+
+  it("usa o skeleton compartilhado durante o carregamento", () => {
+    expect(source).toContain('import { SkeletonList } from "@/shared/components/common/SkeletonList"');
+    expect(source).toContain('{loading && <SkeletonList count={4} variant="row" />}');
+  });
 });

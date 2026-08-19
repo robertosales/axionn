@@ -52,17 +52,74 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 const FEATURE_LABELS: Record<string, string> = {
-  "users.max": "Usuarios",
+  "users.max": "Limite de usuários",
   "projects.max": "Projetos",
   "contracts.max": "Contratos",
-  "apf.countings.monthly": "Contagens APF mensais",
-  "ai.calls.monthly": "Chamadas de IA mensais",
-  "apf.ai_generation": "Geracao de APF com IA",
-  "reports.advanced": "Relatorios avancados",
-  "audit.access": "Auditoria de acessos",
+  "apf.countings.monthly": "Contagens APF por mês",
+  "ai.calls.monthly": "Chamadas de IA por mês",
+  "apf.ai_generation": "Geração de APF com IA",
+  "reports.advanced": "Relatórios avançados",
+  "audit.access": "Acesso à auditoria",
+  "ai.briefing.enabled": "Briefing por IA",
+  "ai.briefing.apply_actions": "Aplicação de ações sugeridas por IA",
+  "ai.briefing.max_input_chars": "Limite de caracteres de entrada",
+  "ai.briefing.runs.monthly": "Execuções de briefing por mês",
+  "ai.briefing.sprint_summary": "Resumo de sprint por IA",
+  "ai.briefing.risk_analysis": "Análise de riscos por IA",
+  "ai.briefing.metric_explanation": "Explicação de métricas por IA",
+  "ai.briefing.recommendations": "Recomendações operacionais por IA",
+  "ai.tokens.monthly": "Tokens de IA por mês",
+  "ai.sprint_summary": "Resumo de sprint",
+  "ai.risk_analysis": "Análise de riscos",
+  "ai.metric_explanation": "Explicação de métricas",
+  "ai.recommendations": "Recomendações de IA",
+  "ai.custom_provider": "Provedor de IA próprio",
+  "ai.audit_logs": "Auditoria de uso de IA",
+  "okr.view": "Visualização de OKRs",
+  "okr.create": "Criação de OKRs",
+  "okr.edit": "Edição de OKRs",
+  "okr.archive": "Arquivamento de OKRs",
+  "okr.check_in": "Check-in de resultados-chave",
+  "okr.initiatives": "Iniciativas vinculadas a OKRs",
+  "okr.automatic_metrics": "Medições automáticas de OKR",
+  "okr.history": "Histórico de OKRs",
+  "okr.export": "Exportação de OKRs",
+  "okr.ai_recommendations": "Recomendações de IA para OKRs",
+  "okr.alignments": "Alinhamento de objetivos",
+  "okr.cycle_management": "Gestão de ciclos OKR",
+  "okr.executive_dashboard": "Painel executivo de OKR",
+  "okr.advanced_alerts": "Alertas avançados de OKR",
+  "briefing.connections.view": "Visualização de conexões de reuniões",
+  "briefing.connections.manage": "Gestão de conexões de reuniões",
+  "briefing.cross_meeting_insights": "Insights entre reuniões",
+  "briefing.integrations.auto_sync": "Sincronização automática de integrações",
+  "briefing.integrations.connections_max": "Limite de conexões de integrações",
+  "briefing.integrations.enabled": "Integrações de reuniões",
+  "briefing.integrations.meet": "Integração com Google Meet",
+  "briefing.integrations.meetings_monthly": "Reuniões integradas por mês",
+  "briefing.integrations.minutes_monthly": "Minutos de reuniões por mês",
+  "briefing.integrations.retention_days_max": "Retenção máxima de reuniões",
+  "briefing.integrations.teams": "Integração com Microsoft Teams",
+  "briefing.recording_access": "Acesso às gravações de reuniões",
+  "briefing.meetings.list": "Visualização de reuniões externas",
+  "briefing.meetings.import": "Importação de reuniões externas",
+  "briefing.process": "Processamento de briefings",
 };
 
 const COMMON_FEATURES = Object.keys(FEATURE_LABELS);
+
+const PLAN_STATUS_LABELS: Record<PlanStatus, string> = {
+  active: "Ativo",
+  inactive: "Inativo",
+  archived: "Arquivado",
+};
+
+function featureLabel(featureKey: string) {
+  return FEATURE_LABELS[featureKey] ?? featureKey
+    .split(".")
+    .map((part) => part.replace(/_/g, " "))
+    .join(" / ");
+}
 
 interface PlanForm {
   id?: string;
@@ -95,7 +152,7 @@ function parseLimit(value: string) {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error("Limite deve ser um numero positivo ou vazio para ilimitado.");
+    throw new Error("O limite deve ser um número positivo ou ficar vazio para indicar ilimitado.");
   }
   return parsed;
 }
@@ -162,8 +219,8 @@ export default function PlatformPlansPage() {
   };
 
   const savePlan = async () => {
-    if (!planForm.name.trim()) return toast.error("Nome e obrigatorio");
-    if (!planForm.id && !planForm.code.trim()) return toast.error("Codigo e obrigatorio");
+    if (!planForm.name.trim()) return toast.error("O nome é obrigatório.");
+    if (!planForm.id && !planForm.code.trim()) return toast.error("O código é obrigatório.");
 
     setSaving(true);
     try {
@@ -176,7 +233,7 @@ export default function PlatformPlansPage() {
           status: planForm.status,
           metadata: current?.metadata ?? {},
         });
-        toast.success("Plano atualizado");
+        toast.success("Plano atualizado com sucesso.");
       } else {
         await createPlatformPlan({
           code: planForm.code.trim().toLowerCase(),
@@ -184,7 +241,7 @@ export default function PlatformPlansPage() {
           description: planForm.description.trim() || null,
           status: planForm.status,
         });
-        toast.success("Plano criado");
+        toast.success("Plano criado com sucesso.");
       }
 
       setPlanFormOpen(false);
@@ -198,7 +255,7 @@ export default function PlatformPlansPage() {
 
   const saveEntitlement = async () => {
     if (!entitlementForm) return;
-    if (!entitlementForm.featureKey.trim()) return toast.error("Recurso e obrigatorio");
+    if (!entitlementForm.featureKey.trim()) return toast.error("O recurso é obrigatório.");
 
     setSaving(true);
     try {
@@ -208,7 +265,7 @@ export default function PlatformPlansPage() {
         enabled: entitlementForm.enabled,
         limitValue: parseLimit(entitlementForm.limitValue),
       });
-      toast.success("Recurso atualizado");
+      toast.success("Recurso atualizado com sucesso.");
       setEntitlementForm(null);
       await load();
     } catch (error) {
@@ -222,7 +279,7 @@ export default function PlatformPlansPage() {
     setSaving(true);
     try {
       await deletePlatformPlanEntitlement(plan.id, entitlement.featureKey);
-      toast.success("Recurso removido");
+      toast.success("Recurso removido com sucesso.");
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Erro ao remover recurso");
@@ -236,7 +293,7 @@ export default function PlatformPlansPage() {
     setSaving(true);
     try {
       await archivePlatformPlan(archiveTarget.id);
-      toast.success("Plano arquivado");
+      toast.success("Plano arquivado com sucesso.");
       setArchiveTarget(null);
       await load();
     } catch (error) {
@@ -253,7 +310,8 @@ export default function PlatformPlansPage() {
           <div>
             <h1 className="text-xl font-semibold">Planos SaaS</h1>
             <p className="text-sm text-muted-foreground">
-              {plans.length} plano(s), {activePlans} ativo(s).
+              {plans.length} {plans.length === 1 ? "plano" : "planos"}, {activePlans}{" "}
+              {activePlans === 1 ? "plano ativo" : "planos ativos"}.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -282,7 +340,7 @@ export default function PlatformPlansPage() {
                       <CardTitle className="text-base">{plan.name}</CardTitle>
                       <Badge variant="outline">{plan.code}</Badge>
                       <Badge variant={plan.status === "active" ? "secondary" : "outline"}>
-                        {plan.status}
+                        {PLAN_STATUS_LABELS[plan.status]}
                       </Badge>
                     </div>
                     {plan.description && (
@@ -323,20 +381,19 @@ export default function PlatformPlansPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Recurso</TableHead>
+                        <TableHead>Recurso habilitado</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Limite</TableHead>
-                        <TableHead className="text-right">Acoes</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {plan.entitlements.map((entitlement) => (
                         <TableRow key={entitlement.id}>
                           <TableCell className="font-medium">
-                            {FEATURE_LABELS[entitlement.featureKey] ??
-                              entitlement.featureKey}
+                            {featureLabel(entitlement.featureKey)}
                             <div className="text-xs text-muted-foreground">
-                              {entitlement.featureKey}
+                              Identificador interno: {entitlement.featureKey}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -383,7 +440,7 @@ export default function PlatformPlansPage() {
             </DialogHeader>
             <div className="grid gap-4">
               <div className="space-y-2">
-                <Label>Codigo</Label>
+                <Label>Código interno</Label>
                 <Input
                   value={planForm.code}
                   disabled={Boolean(planForm.id)}
@@ -418,14 +475,14 @@ export default function PlatformPlansPage() {
                   <SelectContent>
                     {PLAN_STATUS_OPTIONS.map((status) => (
                       <SelectItem key={status} value={status}>
-                        {status}
+                        {PLAN_STATUS_LABELS[status]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Descricao</Label>
+                <Label>Descrição</Label>
                 <Textarea
                   value={planForm.description}
                   onChange={(event) =>
@@ -475,17 +532,17 @@ export default function PlatformPlansPage() {
                     <SelectContent>
                       {COMMON_FEATURES.map((featureKey) => (
                         <SelectItem key={featureKey} value={featureKey}>
-                          {FEATURE_LABELS[featureKey]}
+                          {featureLabel(featureKey)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Limite</Label>
+                  <Label>Limite do recurso</Label>
                   <Input
                     inputMode="numeric"
-                    placeholder="Vazio para ilimitado"
+                    placeholder="Deixe vazio para ilimitado"
                     value={entitlementForm.limitValue}
                     onChange={(event) =>
                       setEntitlementForm((current) =>
@@ -525,7 +582,7 @@ export default function PlatformPlansPage() {
               <DialogTitle>Arquivar plano?</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
-              {archiveTarget?.name} ficara indisponivel para novas assinaturas.
+              {archiveTarget?.name} ficará indisponível para novas assinaturas.
             </p>
             <DialogFooter>
               <Button variant="outline" onClick={() => setArchiveTarget(null)}>

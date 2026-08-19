@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 
 // Leitura em build-time: version do package.json e data atual
 import { createRequire } from "module";
@@ -33,7 +32,7 @@ function stableVendorChunk(moduleId: string): string | undefined {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = { ...process.env, ...loadEnv(mode, __dirname, "") } as Record<string, string | undefined>;
+  const env = { ...process.env, ...loadEnv(mode, import.meta.dirname, "") } as Record<string, string | undefined>;
   const isTest = mode === "test";
   const supabaseUrl = env.VITE_SUPABASE_URL || (isTest ? "https://test.supabase.invalid" : "");
   const supabaseKey =
@@ -55,16 +54,15 @@ export default defineConfig(({ mode }) => {
 
   return {
   server: {
-    host: "::",
+    host: "127.0.0.1",
     port: 8080,
   },
   plugins: [
     react(),
-    mode === "development" && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
   define: {

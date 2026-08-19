@@ -31,9 +31,9 @@ jobs:
       SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
         with:
           version: latest
 
@@ -43,6 +43,9 @@ jobs:
         run: bash scripts/check-supabase-migrations.sh
 
       - name: Validate staging secrets and confirmation
+        env:
+          APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
+          MIGRATION_CONFIRMATION: ${{ inputs.confirmation }}
         shell: bash
         run: |
           set -euo pipefail
@@ -51,7 +54,7 @@ jobs:
           : "${SUPABASE_DB_PASSWORD:?Missing SUPABASE_STAGING_DB_PASSWORD}"
           : "${SUPABASE_STAGING_DB_URL:?Missing SUPABASE_STAGING_DB_URL}"
 
-          if [[ "${{ inputs.apply_migrations }}" == "true" && "${{ inputs.confirmation }}" != "APPLY-STAGING" ]]; then
+          if [[ "$APPLY_MIGRATIONS" == "true" && "$MIGRATION_CONFIRMATION" != "APPLY-STAGING" ]]; then
             echo "Migration application requires the exact confirmation APPLY-STAGING."
             exit 1
           fi
@@ -91,7 +94,7 @@ jobs:
 
       - name: Publish staging validation logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: staging-tenancy-validation-${{ github.run_number }}
           path: |

@@ -32,7 +32,7 @@ import { Badge } from "@/components/ui/badge";
 
 // ─── SheetJS CDN loader ────────────────────────────────────────────────────
 declare global { interface Window { XLSX: any; } }
-const XLSX_CDN = "https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js";
+const XLSX_CDN = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
 function loadXLSX(): Promise<any> {
   return new Promise((resolve, reject) => {
     if (typeof window !== "undefined" && window.XLSX) return resolve(window.XLSX);

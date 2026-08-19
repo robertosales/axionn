@@ -29,7 +29,7 @@ jobs:
     steps:
       # ── 1. Checkout completo (para poder fazer commit) ────────────────
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0          # histórico completo para o changelog
           ref: develop            # branch que recebe o bump; troque por main se precisar
@@ -52,21 +52,28 @@ jobs:
 
       # ── 4. Bump package.json sem criar nova tag (evita loop) ─────────
       - name: Bump package.json
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
-          npm version ${{ steps.version.outputs.version }} \
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || exit 1
+          [[ "$RELEASE_TAG" == "v$RELEASE_VERSION" ]] || exit 1
+          npm version "$RELEASE_VERSION" \
             --no-git-tag-version \
             --allow-same-version
           git add package.json package-lock.json
           git diff --staged --quiet || \
-            git commit -m "chore(release): bump versão para ${{ steps.version.outputs.tag }}"
+            git commit -m "chore(release): bump versão para $RELEASE_TAG"
           git push origin develop
 
       # ── 5. Gera body do changelog ─────────────────────────────────────
       - name: Gera changelog
         id: changelog
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           # Se existir CHANGELOG.md, extrai a seção da tag atual
-          TAG="${{ steps.version.outputs.tag }}"
+          TAG="$RELEASE_TAG"
           if [ -f CHANGELOG.md ]; then
             BODY=$(awk "/^## \\[?${TAG#v}\\]?/{found=1; next} found && /^## /{exit} found{print}" CHANGELOG.md)
           fi
@@ -87,7 +94,7 @@ jobs:
 
       # ── 6. Cria GitHub Release ────────────────────────────────────────
       - name: Cria GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name:   ${{ steps.version.outputs.tag }}
           name:       "Axion ${{ steps.version.outputs.tag }}"

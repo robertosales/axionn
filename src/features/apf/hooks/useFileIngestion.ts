@@ -1,6 +1,11 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_WORKBOOK_SHEETS = 100;
+const MAX_SHEET_ROWS = 100_000;
+const MAX_PDF_PAGES = 500;
+
 export interface IngestedFile {
   name: string;
   size: number;
@@ -24,6 +29,10 @@ export function useFileIngestion() {
     setCurrentProcessingFile(name);
 
     try {
+      if (size > MAX_FILE_BYTES) {
+        throw new Error("Arquivo excede o limite de 20 MB");
+      }
+
       let content = "";
 
       if (type === "md" || type === "txt") {
@@ -37,12 +46,18 @@ export function useFileIngestion() {
         const XLSX = await import("xlsx");
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer);
+        if (workbook.SheetNames.length > MAX_WORKBOOK_SHEETS) {
+          throw new Error(`Planilha excede o limite de ${MAX_WORKBOOK_SHEETS} abas`);
+        }
 
         let sheetMarkdown = "";
         // Support multiple sheets as requested (at least two or more)
         workbook.SheetNames.forEach((sheetName) => {
           const worksheet = workbook.Sheets[sheetName];
           const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false }) as unknown[][];
+          if (json.length > MAX_SHEET_ROWS) {
+            throw new Error(`A aba ${sheetName} excede o limite de ${MAX_SHEET_ROWS.toLocaleString("pt-BR")} linhas`);
+          }
 
           if (json.length > 0) {
             sheetMarkdown += `### Planilha: ${sheetName}\n\n`;
@@ -72,6 +87,9 @@ export function useFileIngestion() {
         const arrayBuffer = await file.arrayBuffer();
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
+        if (pdf.numPages > MAX_PDF_PAGES) {
+          throw new Error(`PDF excede o limite de ${MAX_PDF_PAGES} páginas`);
+        }
         let pdfText = "";
 
         for (let i = 1; i <= pdf.numPages; i++) {

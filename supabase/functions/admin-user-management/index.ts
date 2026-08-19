@@ -93,13 +93,28 @@ function generateTempPassword(): string {
   const digits = "23456789";
   const symbols = "!@#$%&*";
   const all = upper + lower + digits + symbols;
-  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  const secureIndex = (upperBound: number): number => {
+    if (!Number.isSafeInteger(upperBound) || upperBound <= 0 || upperBound > 256) {
+      throw new RangeError("Invalid password alphabet size");
+    }
+
+    // Rejection sampling avoids modulo bias while keeping password generation
+    // entirely on the platform CSPRNG.
+    const limit = Math.floor(256 / upperBound) * upperBound;
+    const randomByte = new Uint8Array(1);
+    do crypto.getRandomValues(randomByte);
+    while (randomByte[0] >= limit);
+    return randomByte[0] % upperBound;
+  };
+  const pick = (s: string) => s[secureIndex(s.length)];
   let pwd = pick(upper) + pick(lower) + pick(digits) + pick(symbols);
   for (let i = 0; i < 8; i++) pwd += pick(all);
-  return pwd
-    .split("")
-    .sort(() => Math.random() - 0.5)
-    .join("");
+  const chars = pwd.split("");
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = secureIndex(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
 }
 
 Deno.serve(async (req: Request) => {

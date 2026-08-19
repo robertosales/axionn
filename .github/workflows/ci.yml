@@ -15,8 +15,8 @@ jobs:
     name: 🔍 ESLint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -28,8 +28,8 @@ jobs:
     name: 🧪 Vitest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -47,7 +47,7 @@ jobs:
           exit "$code"
       - name: Publica log do Vitest
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vitest-log
           path: |
@@ -70,25 +70,40 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
       VITE_ORG_TENANCY_ENABLED: ${{ matrix.tenancy }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
       - run: npm run build
 
-  edge-functions:
-    name: 🛡️ Edge Functions
+  dependency-audit:
+    name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
-      - uses: denoland/setup-deno@v2
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit complete dependency tree
+        run: npm audit --audit-level=high
+
+  edge-functions:
+    name: 🛡️ Edge Functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
       - name: Verifica Edge Functions críticas
@@ -99,6 +114,8 @@ jobs:
           set +e
           deno check --config supabase/functions/deno.json \
             supabase/functions/apf-generate/index.ts \
+            supabase/functions/admin-user-management/index.ts \
+            supabase/functions/apf-jira-webhook/index.ts \
             supabase/functions/organization-invitations/index.ts \
             > deno-check.log 2>&1
           code=$?
@@ -107,7 +124,7 @@ jobs:
           exit "$code"
       - name: Publica diagnóstico do Deno
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: deno-check-log
           path: |
@@ -122,7 +139,7 @@ jobs:
     name: 🔐 SaaS security contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Valida controles críticos das Fases 0, 1 e 2A
         shell: bash
         run: |

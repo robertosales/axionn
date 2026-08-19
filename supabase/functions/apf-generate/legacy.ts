@@ -25,7 +25,7 @@ import {
   BorderStyle,
   ShadingType,
 } from "https://esm.sh/docx@8.5.0";
-import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { assertSafeOutboundUrl, hostsFromEnv } from "../_shared/outbound-url.ts";
 

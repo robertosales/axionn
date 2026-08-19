@@ -2,6 +2,7 @@ export interface ProjectOption {
   id: string;
   name: string;
   contract_id: string | null;
+  module_type: "sustenance" | "agile" | "mixed";
 }
 
 export interface SprintOption {

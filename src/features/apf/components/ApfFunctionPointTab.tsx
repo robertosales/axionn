@@ -13,6 +13,7 @@ import { useContractualApfCounting } from "../hooks/useContractualApfCounting";
 import { ApfAnalysisReviewDialog } from "./ApfAnalysisReviewDialog";
 import { PaginatedApfStoryList } from "./PaginatedApfStoryList";
 import { ApfValidationDialog } from "./ApfValidationDialog";
+import { Label } from "@/components/ui/label";
 
 export function ApfFunctionPointTab() {
   const counting = useContractualApfCounting();
@@ -33,22 +34,28 @@ export function ApfFunctionPointTab() {
       <Card className="min-w-0">
         <CardContent className="space-y-4 pt-5">
           <div className="grid gap-3 md:grid-cols-2">
-            <Select value={counting.projectId} onValueChange={counting.setProjectId}>
-              <SelectTrigger><SelectValue placeholder="Projeto" /></SelectTrigger>
-              <SelectContent>
-                {counting.projects.map((project) => (
-                  <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={counting.selectedSprintId} onValueChange={counting.setSelectedSprintId}>
-              <SelectTrigger><SelectValue placeholder="Sprint da medição" /></SelectTrigger>
-              <SelectContent>
-                {counting.sprints.map((sprint) => (
-                  <SelectItem key={sprint.id} value={sprint.id}>{sprint.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-1.5">
+              <Label htmlFor="apf-counting-project">Projeto da medição APF</Label>
+              <Select value={counting.projectId} onValueChange={counting.setProjectId}>
+                <SelectTrigger id="apf-counting-project"><SelectValue placeholder="Selecione um projeto Ágil" /></SelectTrigger>
+                <SelectContent>
+                  {counting.projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="apf-counting-sprint">Sprint da medição (Sala Ágil)</Label>
+              <Select value={counting.selectedSprintId} onValueChange={counting.setSelectedSprintId}>
+                <SelectTrigger id="apf-counting-sprint"><SelectValue placeholder="Selecione uma sprint" /></SelectTrigger>
+                <SelectContent>
+                  {counting.sprints.map((sprint) => (
+                    <SelectItem key={sprint.id} value={sprint.id}>{sprint.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {counting.context ? (

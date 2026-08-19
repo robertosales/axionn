@@ -11,7 +11,12 @@ import {
   validateApfBaselineIntegrity,
 } from "../services/apfBaselineIntegrity";
 
-export interface BaselineProject { id: string; name: string; contract_id: string | null }
+export interface BaselineProject {
+  id: string;
+  name: string;
+  contract_id: string | null;
+  module_type: "sustenance" | "agile" | "mixed";
+}
 export interface BaselineRow {
   id: string;
   version: string;
@@ -49,7 +54,7 @@ export function useApfBaselineImport() {
 
   useEffect(() => {
     if (!teamId) return;
-    supabase.from("projects").select("id,name,contract_id").eq("team_id", teamId).order("name")
+    supabase.from("projects").select("id,name,contract_id,module_type").eq("team_id", teamId).in("module_type", ["agile", "mixed"]).order("name")
       .then(({ data, error }) => {
         if (error) return toast.error("Não foi possível carregar os projetos", { description: error.message });
         const rows = (data ?? []) as BaselineProject[];

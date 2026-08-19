@@ -43,17 +43,70 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 const FEATURE_LABELS: Record<string, string> = {
-  "users.max": "Usuarios",
+  "users.max": "Limite de usuários",
   "projects.max": "Projetos",
   "contracts.max": "Contratos",
-  "apf.countings.monthly": "Contagens APF mensais",
-  "ai.calls.monthly": "Chamadas de IA mensais",
-  "apf.ai_generation": "Geracao de APF com IA",
-  "reports.advanced": "Relatorios avancados",
-  "audit.access": "Auditoria de acessos",
+  "apf.countings.monthly": "Contagens APF por mês",
+  "ai.calls.monthly": "Chamadas de IA por mês",
+  "apf.ai_generation": "Geração de APF com IA",
+  "reports.advanced": "Relatórios avançados",
+  "audit.access": "Acesso à auditoria",
+  "ai.briefing.apply_actions": "Aplicação de ações sugeridas por IA",
+  "ai.briefing.enabled": "Briefing por IA",
+  "ai.briefing.max_input_chars": "Limite de caracteres de entrada",
+  "ai.briefing.runs.monthly": "Execuções de briefing por mês",
+  "ai.tokens.monthly": "Tokens de IA por mês",
+  "briefing.cross_meeting_insights": "Insights entre reuniões",
+  "briefing.integrations.auto_sync": "Sincronização automática de integrações",
+  "briefing.integrations.connections_max": "Limite de conexões de integrações",
+  "briefing.integrations.enabled": "Integrações de reuniões",
+  "briefing.integrations.meet": "Integração com Google Meet",
+  "briefing.integrations.meetings_monthly": "Reuniões integradas por mês",
+  "briefing.integrations.minutes_monthly": "Minutos de reuniões por mês",
+  "briefing.integrations.retention_days_max": "Retenção máxima de reuniões",
+  "briefing.integrations.teams": "Integração com Microsoft Teams",
+  "briefing.recording_access": "Acesso às gravações de reuniões",
+  "okr.view": "Visualização de OKRs",
+  "okr.create": "Criação de OKRs",
+  "okr.edit": "Edição de OKRs",
+  "okr.archive": "Arquivamento de OKRs",
+  "okr.check_in": "Check-in de resultados-chave",
+  "okr.initiatives": "Iniciativas vinculadas a OKRs",
+  "okr.automatic_metrics": "Medições automáticas de OKR",
+  "okr.history": "Histórico de OKRs",
+  "okr.export": "Exportação de OKRs",
+  "okr.ai_recommendations": "Recomendações de IA para OKRs",
+  "okr.alignments": "Alinhamento de objetivos",
+  "okr.cycle_management": "Gestão de ciclos OKR",
+  "okr.executive_dashboard": "Painel executivo de OKR",
+  "okr.advanced_alerts": "Alertas avançados de OKR",
 };
 
 const COMMON_FEATURES = Object.keys(FEATURE_LABELS);
+
+const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {
+  pending: "Pendente",
+  trialing: "Em período de teste",
+  active: "Ativa",
+  past_due: "Pagamento pendente",
+  suspended: "Suspensa",
+  canceled: "Cancelada",
+  expired: "Expirada",
+};
+
+const ORGANIZATION_STATUS_LABELS: Record<string, string> = {
+  active: "Ativa",
+  inactive: "Inativa",
+  suspended: "Suspensa",
+  archived: "Arquivada",
+};
+
+function featureLabel(featureKey: string) {
+  return FEATURE_LABELS[featureKey] ?? featureKey
+    .split(".")
+    .map((part) => part.replace(/_/g, " "))
+    .join(" / ");
+}
 
 interface SubscriptionForm {
   orgId: string;
@@ -97,7 +150,7 @@ function parseLimit(value: string) {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error("Limite deve ser um numero positivo ou vazio para ilimitado.");
+    throw new Error("O limite deve ser um número positivo ou ficar vazio para indicar ilimitado.");
   }
   return parsed;
 }
@@ -200,7 +253,7 @@ export default function PlatformSubscriptionsPage({
 
   const saveSubscription = async () => {
     if (!subscriptionForm) return;
-    if (!subscriptionForm.planId) return toast.error("Plano e obrigatorio");
+    if (!subscriptionForm.planId) return toast.error("O plano é obrigatório.");
 
     setSaving(true);
     try {
@@ -212,7 +265,7 @@ export default function PlatformSubscriptionsPage({
         currentPeriodStart: subscriptionForm.currentPeriodStart || null,
         currentPeriodEnd: subscriptionForm.currentPeriodEnd || null,
       });
-      toast.success("Assinatura atualizada");
+      toast.success("Assinatura atualizada com sucesso.");
       setSubscriptionForm(null);
       await load();
     } catch (error) {
@@ -224,9 +277,9 @@ export default function PlatformSubscriptionsPage({
 
   const saveOverride = async () => {
     if (!overrideForm) return;
-    if (!overrideForm.featureKey.trim()) return toast.error("Recurso e obrigatorio");
-    if (!overrideForm.reason.trim()) return toast.error("Justificativa e obrigatoria");
-    if (overrideForm.startsAt && overrideForm.endsAt && overrideForm.endsAt <= overrideForm.startsAt) return toast.error("Fim da vigencia deve ser posterior ao inicio");
+    if (!overrideForm.featureKey.trim()) return toast.error("O recurso é obrigatório.");
+    if (!overrideForm.reason.trim()) return toast.error("A justificativa é obrigatória.");
+    if (overrideForm.startsAt && overrideForm.endsAt && overrideForm.endsAt <= overrideForm.startsAt) return toast.error("O fim da vigência deve ser posterior ao início.");
 
     setSaving(true);
     try {
@@ -242,11 +295,11 @@ export default function PlatformSubscriptionsPage({
         startsAt: overrideForm.startsAt || null,
         endsAt: overrideForm.endsAt || null,
       });
-      toast.success("Override atualizado");
+      toast.success("Exceção atualizada com sucesso.");
       setOverrideForm(null);
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao salvar override");
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar exceção");
     } finally {
       setSaving(false);
     }
@@ -256,10 +309,10 @@ export default function PlatformSubscriptionsPage({
     setSaving(true);
     try {
       await deletePlatformOrganizationOverride(orgId, featureKey);
-      toast.success("Override removido");
+      toast.success("Exceção removida com sucesso.");
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao remover override");
+      toast.error(error instanceof Error ? error.message : "Erro ao remover exceção");
     } finally {
       setSaving(false);
     }
@@ -270,7 +323,7 @@ export default function PlatformSubscriptionsPage({
         <div>
           <h1 className="text-xl font-semibold">Assinaturas</h1>
           <p className="text-sm text-muted-foreground">
-            Controle global de plano, status e excecoes por organizacao.
+            Controle global de planos, assinaturas e exceções por organização.
           </p>
         </div>
 
@@ -283,12 +336,12 @@ export default function PlatformSubscriptionsPage({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Organizacao</TableHead>
+                  <TableHead>Organização</TableHead>
                   <TableHead>Plano</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Uso</TableHead>
-                  <TableHead>Overrides</TableHead>
-                  <TableHead className="text-right">Acoes</TableHead>
+                  <TableHead>Exceções</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -317,13 +370,17 @@ export default function PlatformSubscriptionsPage({
                               : "outline"
                           }
                         >
-                          {subscription.subscriptionStatus ?? "missing"}
+                          {subscription.subscriptionStatus
+                            ? SUBSCRIPTION_STATUS_LABELS[subscription.subscriptionStatus]
+                            : "Sem status"}
                         </Badge>
-                        <Badge variant="outline">{subscription.orgStatus}</Badge>
+                        <Badge variant="outline">
+                          {ORGANIZATION_STATUS_LABELS[subscription.orgStatus] ?? subscription.orgStatus}
+                        </Badge>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
-                      <div>{subscription.usersUsed} usuarios</div>
+                      <div>{subscription.usersUsed} usuários</div>
                       <div className="text-muted-foreground">
                         {subscription.projectsUsed} projetos,{" "}
                         {subscription.contractsUsed} contratos
@@ -336,7 +393,7 @@ export default function PlatformSubscriptionsPage({
                         <div className="flex flex-wrap gap-1">
                           {subscription.overrides.map((override) => (
                             <Badge key={override.id} variant="outline">
-                              {FEATURE_LABELS[override.featureKey] ?? override.featureKey}
+                              {featureLabel(override.featureKey)}
                             </Badge>
                           ))}
                         </div>
@@ -382,21 +439,21 @@ export default function PlatformSubscriptionsPage({
                       <TableHead>Status</TableHead>
                       <TableHead>Limite</TableHead>
                       <TableHead>Motivo</TableHead>
-                      <TableHead className="text-right">Acoes</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {subscription.overrides.map((override) => (
                       <TableRow key={override.id}>
                         <TableCell>
-                          {FEATURE_LABELS[override.featureKey] ?? override.featureKey}
+                          {featureLabel(override.featureKey)}
                           <div className="text-xs text-muted-foreground">
-                            {override.featureKey}
+                            Identificador interno: {override.featureKey}
                           </div>
                         </TableCell>
                         <TableCell>
                           {override.enabled === null
-                            ? "Herdado"
+                            ? "Herdado do plano"
                             : override.enabled
                               ? "Ativo"
                               : "Inativo"}
@@ -446,7 +503,7 @@ export default function PlatformSubscriptionsPage({
                 <div>
                   <p className="font-medium">{subscriptionForm.orgName}</p>
                   <p className="text-sm text-muted-foreground">
-                    Ciclo atual ate {formatDate(subscriptionForm.currentPeriodEnd || null)}
+                    Ciclo atual até {formatDate(subscriptionForm.currentPeriodEnd || null)}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -489,7 +546,7 @@ export default function PlatformSubscriptionsPage({
                     <SelectContent>
                       {SUBSCRIPTION_STATUS_OPTIONS.map((status) => (
                         <SelectItem key={status} value={status}>
-                          {status}
+                          {SUBSCRIPTION_STATUS_LABELS[status]}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -497,7 +554,7 @@ export default function PlatformSubscriptionsPage({
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-2">
-                    <Label>Fim do trial</Label>
+                    <Label>Fim do período de teste</Label>
                     <Input
                       type="date"
                       value={subscriptionForm.trialEndsAt}
@@ -511,7 +568,7 @@ export default function PlatformSubscriptionsPage({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Inicio ciclo</Label>
+                    <Label>Início do ciclo</Label>
                     <Input
                       type="date"
                       value={subscriptionForm.currentPeriodStart}
@@ -525,7 +582,7 @@ export default function PlatformSubscriptionsPage({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Fim ciclo</Label>
+                    <Label>Fim do ciclo</Label>
                     <Input
                       type="date"
                       value={subscriptionForm.currentPeriodEnd}
@@ -559,14 +616,14 @@ export default function PlatformSubscriptionsPage({
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Override de recurso</DialogTitle>
+              <DialogTitle>Exceção de recurso</DialogTitle>
             </DialogHeader>
             {overrideForm && (
               <div className="grid gap-4">
                 <div>
                   <p className="font-medium">{overrideForm.orgName}</p>
                   <p className="text-sm text-muted-foreground">
-                    Configuracao especifica da organizacao.
+                    Configuração específica da organização.
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -585,7 +642,7 @@ export default function PlatformSubscriptionsPage({
                     <SelectContent>
                       {COMMON_FEATURES.map((featureKey) => (
                         <SelectItem key={featureKey} value={featureKey}>
-                          {FEATURE_LABELS[featureKey]}
+                          {featureLabel(featureKey)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -614,10 +671,10 @@ export default function PlatformSubscriptionsPage({
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Limite</Label>
+                  <Label>Limite do recurso</Label>
                   <Input
                     inputMode="numeric"
-                    placeholder="Vazio para manter limite do plano"
+                    placeholder="Deixe vazio para manter o limite do plano"
                     value={overrideForm.limitValue}
                     onChange={(event) =>
                       setOverrideForm((current) =>

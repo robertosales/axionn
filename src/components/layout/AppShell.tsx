@@ -317,7 +317,7 @@ function Topbar({
 
   return (
     <header className="sticky top-0 z-20 h-14 shrink-0 flex items-center justify-between gap-3 px-3 sm:px-4 border-b border-border overflow-hidden bg-card/80 backdrop-blur-md">
-      <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <button
           onClick={onOpenMobile}
           className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted lg:hidden"
@@ -329,7 +329,7 @@ function Topbar({
           items={buildBreadcrumbs(location.pathname, navigationConfig)}
         />
       </div>
-      <button className="hidden h-9 min-w-[180px] items-center justify-between rounded-lg bg-muted/60 px-3 text-left text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:flex lg:min-w-[260px]">
+      <button aria-label="Abrir busca" className="hidden h-9 w-full max-w-[260px] flex-1 items-center justify-between rounded-lg bg-muted/60 px-3 text-left text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:flex">
         <span className="flex items-center gap-2"><Search className="h-3.5 w-3.5" />Search...</span>
         <span className="font-mono text-[10px]">⌘K</span>
       </button>

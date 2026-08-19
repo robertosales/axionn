@@ -182,33 +182,69 @@ Deno.serve(async (request: Request) => {
 
   try {
     const payload = (await request.json()) as {
-      action?: "create" | "resend";
+      action?: "create" | "create_user" | "resend";
       organization_id?: string;
       invitation_id?: string;
       email?: string;
+      display_name?: string;
+      password?: string;
       role?: "admin" | "member";
       module_keys?: string[];
     };
 
     let row: Record<string, unknown> | null = null;
 
+    if (payload.action === "create_user") {
+      if (!payload.organization_id || !payload.email || !payload.display_name || !payload.password || !payload.role) {
+        return jsonResponse(origin!, { error: "organization_id, name, email, password and role are required" }, 400);
+      }
+      if (payload.password.length < 8) {
+        return jsonResponse(origin!, { error: "A senha deve ter pelo menos 8 caracteres" }, 400);
+      }
+
+      const { data: created, error: createError } = await adminClient.auth.admin.createUser({
+        email: payload.email.trim().toLowerCase(),
+        password: payload.password,
+        email_confirm: true,
+        user_metadata: { display_name: payload.display_name.trim() },
+      });
+      if (createError || !created.user) throw createError ?? new Error("Não foi possível criar o usuário.");
+
+      const { error: provisionError } = await adminClient.rpc("provision_organization_user", {
+        p_org_id: payload.organization_id,
+        p_user_id: created.user.id,
+        p_email: payload.email,
+        p_display_name: payload.display_name,
+        p_role: payload.role,
+        p_module_keys: payload.module_keys ?? [],
+        p_actor_id: caller.id,
+      });
+      if (provisionError) {
+        await adminClient.auth.admin.deleteUser(created.user.id);
+        throw provisionError;
+      }
+
+      return jsonResponse(origin!, { success: true, user_id: created.user.id });
+    }
+
     if (payload.action === "create") {
-      if (!payload.organization_id || !payload.email || !payload.role) {
+      if (!payload.organization_id || !payload.email || !payload.display_name || !payload.role) {
         return jsonResponse(
           origin!,
-          { error: "organization_id, email and role are required" },
+          { error: "organization_id, name, email and role are required" },
           400,
         );
       }
 
       const { data, error } = await adminClient.rpc(
-        "create_organization_invitation",
+        "create_organization_invitation_with_name",
         {
           p_org_id: payload.organization_id,
           p_email: payload.email,
           p_role: payload.role,
           p_module_keys: payload.module_keys ?? [],
           p_invited_by: caller.id,
+          p_display_name: payload.display_name,
         },
       );
 

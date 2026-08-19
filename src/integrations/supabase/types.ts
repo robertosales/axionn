@@ -19050,6 +19050,23 @@ export type Database = {
           raw_token: string
         }[]
       }
+      create_organization_invitation_with_name: {
+        Args: {
+          p_display_name: string
+          p_email: string
+          p_expires_at?: string
+          p_invited_by: string
+          p_module_keys: string[]
+          p_org_id: string
+          p_role: string
+        }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          normalized_email: string
+          raw_token: string
+        }[]
+      }
       create_organization_project_v2:
         | {
             Args: {
@@ -19161,6 +19178,10 @@ export type Database = {
         Returns: undefined
       }
       delete_ai_provider_key: { Args: { p_id: string }; Returns: undefined }
+      delete_apf_dossier_draft: {
+        Args: { p_dossier_id: string }
+        Returns: undefined
+      }
       delete_apf_project_baseline: {
         Args: { p_baseline_id: string }
         Returns: Json
@@ -19999,6 +20020,21 @@ export type Database = {
           invitation_status: string
           invited_by_name: string
           module_keys: string[]
+          send_count: number
+        }[]
+      }
+      get_organization_invitations_v3: {
+        Args: { p_org_id: string }
+        Returns: {
+          created_at: string
+          email: string
+          expires_at: string
+          invitation_id: string
+          invitation_role: string
+          invitation_status: string
+          invited_by_name: string
+          module_keys: string[]
+          recipient_name: string
           send_count: number
         }[]
       }
@@ -21221,6 +21257,18 @@ export type Database = {
         Args: { p_contract_id: string; p_model_name?: string }
         Returns: string
       }
+      provision_organization_user: {
+        Args: {
+          p_actor_id: string
+          p_display_name: string
+          p_email: string
+          p_module_keys: string[]
+          p_org_id: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       publish_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
       publish_okr_objective_v2: {
         Args: { p_objective_id: string; p_org_id: string }
@@ -21791,6 +21839,15 @@ export type Database = {
       }
       unlink_quality_test_case_v1: {
         Args: { p_correlation_id?: string; p_link_id: string; p_org_id: string }
+        Returns: undefined
+      }
+      update_apf_dossier_draft: {
+        Args: {
+          p_counting_type: string
+          p_dossier_code: string
+          p_dossier_id: string
+          p_title: string
+        }
         Returns: undefined
       }
       update_backoffice_billing_status: {

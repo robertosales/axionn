@@ -501,7 +501,7 @@ Essa fase é obrigatória porque hoje o motor não possui snapshot contratual co
 - preserva a regra contratual aplicada no momento da contagem;
 - permite simular impacto de interpretações alternativas.
 
-### Qualidade e governança
+### Qualidade e governança.
 
 - liga cada critério ao que foi construído;
 - identifica requisito atendido parcialmente;

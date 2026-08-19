@@ -240,12 +240,12 @@ function InviteMemberDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) reset(); }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="shrink-0 border-b px-6 py-5">
           <DialogTitle>Convidar membro</DialogTitle>
           <DialogDescription>O usuário receberá um link de autenticação e entrada na organização.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <div className="space-y-2">
             <FieldLabel htmlFor="invite-name">Nome da pessoa</FieldLabel>
             <Input id="invite-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="João Silva" autoComplete="name" maxLength={120} className="h-10" />
@@ -269,7 +269,7 @@ function InviteMemberDialog({
             <ModuleSelector value={moduleKeys} onChange={setModuleKeys} />
           </div>
         </div>
-        <DialogFooter className="gap-2">
+        <DialogFooter className="shrink-0 gap-2 border-t bg-muted/20 px-6 py-4">
           <Button variant="outline" className="h-11 px-5" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button className="h-11 px-5" disabled={busy || !displayName.trim() || !email.trim()} onClick={async () => { await onSubmit({ displayName: displayName.trim(), email: email.trim(), role, moduleKeys }); reset(); }}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Enviar convite
@@ -297,19 +297,19 @@ function CreateOrganizationUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) reset(); }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <DialogHeader className="shrink-0 border-b px-6 py-5">
           <DialogTitle>Cadastrar usuário</DialogTitle>
           <DialogDescription>A conta será criada agora, sem envio de convite.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2"><FieldLabel htmlFor="create-user-name">Nome da pessoa</FieldLabel><Input id="create-user-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="João Silva" autoComplete="name" maxLength={120} className="h-10" /></div>
-          <div className="space-y-2"><FieldLabel htmlFor="create-user-email">E-mail</FieldLabel><Input id="create-user-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@empresa.com" autoComplete="email" className="h-10" /></div>
-          <div className="space-y-2"><FieldLabel htmlFor="create-user-password">Senha inicial</FieldLabel><Input id="create-user-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo de 8 caracteres" autoComplete="new-password" minLength={8} className="h-10" /></div>
-          <div className="space-y-2"><FieldLabel>Papel na organização</FieldLabel><Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}><SelectTrigger className="h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="member">Membro</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent></Select></div>
-          <div className="space-y-2"><FieldLabel>Módulos iniciais</FieldLabel><ModuleSelector value={moduleKeys} onChange={setModuleKeys} /></div>
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <div className="space-y-2"><FieldLabel htmlFor="create-user-name">Nome da pessoa</FieldLabel><Input id="create-user-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="João Silva" autoComplete="name" maxLength={120} className="h-11" /></div>
+          <div className="space-y-2"><FieldLabel htmlFor="create-user-email">E-mail</FieldLabel><Input id="create-user-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome@empresa.com" autoComplete="email" className="h-11" /></div>
+          <div className="space-y-2"><FieldLabel htmlFor="create-user-password">Senha inicial</FieldLabel><Input id="create-user-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo de 8 caracteres" autoComplete="new-password" minLength={8} className="h-11" /></div>
+          <div className="space-y-2"><FieldLabel>Papel na organização</FieldLabel><Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}><SelectTrigger className="h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="member">Membro</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent></Select></div>
+          <div className="space-y-3"><FieldLabel>Módulos iniciais</FieldLabel><ModuleSelector value={moduleKeys} onChange={setModuleKeys} /></div>
         </div>
-        <DialogFooter className="gap-2">
+        <DialogFooter className="shrink-0 gap-2 border-t bg-muted/20 px-6 py-4">
           <Button variant="outline" className="h-11 px-5" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button className="h-11 px-5" disabled={busy || !displayName.trim() || !email.trim() || password.length < 8 || moduleKeys.length === 0} onClick={async () => { await onSubmit({ displayName: displayName.trim(), email: email.trim(), password, role, moduleKeys }); reset(); }}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Cadastrar usuário

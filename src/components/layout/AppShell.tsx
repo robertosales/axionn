@@ -306,43 +306,74 @@ function Topbar({
   module,
   onOpenMobile,
   navigationConfig,
+  profile,
+  onSignOut,
+  isSigningOut,
 }: {
   module: ActiveModule;
   onOpenMobile: () => void;
   navigationConfig: NavigationSection[];
+  profile: ReturnType<typeof useAuth>["profile"];
+  onSignOut: (event: React.MouseEvent) => void;
+  isSigningOut: boolean;
 }) {
+  const { teams, currentTeamId } = useAuth();
   const { activeSprint } = useSprint();
   const location = useLocation();
   const accent = ACCENT[module];
+  const activeTeam = teams.find((team) => team.id === currentTeamId && team.module === module);
+  const userInitials = getInitials(profile?.full_name ?? profile?.display_name ?? "U");
+  const userName = profile?.full_name ?? profile?.display_name ?? profile?.email?.split("@")[0] ?? "Usuário";
 
   return (
-    <header className="sticky top-0 z-20 h-14 shrink-0 flex items-center justify-between gap-3 px-3 sm:px-4 border-b border-border overflow-hidden bg-card/80 backdrop-blur-md">
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+    <header className="sticky top-0 z-20 flex min-h-14 shrink-0 items-center gap-2 border-b border-border bg-card/95 px-3 backdrop-blur-md sm:gap-3 sm:px-4">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
         <button
           onClick={onOpenMobile}
-          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted lg:hidden"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
           aria-label="Abrir navegação"
         >
           <Menu className="h-4 w-4" />
         </button>
         <BreadcrumbsContextual
+          className="max-w-[min(42vw,360px)]"
           items={buildBreadcrumbs(location.pathname, navigationConfig)}
         />
       </div>
-      <button aria-label="Abrir busca" className="hidden h-9 w-full max-w-[260px] flex-1 items-center justify-between rounded-lg bg-muted/60 px-3 text-left text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:flex">
+      <button aria-label="Abrir busca" className="hidden h-9 w-[clamp(150px,22vw,240px)] shrink-0 items-center justify-between rounded-lg bg-muted/60 px-3 text-left text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring md:flex">
         <span className="flex items-center gap-2"><Search className="h-3.5 w-3.5" />Search...</span>
         <span className="font-mono text-[10px]">⌘K</span>
       </button>
-      <div className="flex items-center gap-1 shrink-0">
-        {module === "sala_agil" && activeSprint && (
-          <div className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border shrink-0"
-            style={{ backgroundColor: accent.hexAlpha(0.12), color: accent.hex, borderColor: accent.hexAlpha(0.25) }}>
-            <GitBranch className="h-2.5 w-2.5" />
-            <span className="truncate max-w-[120px]">{activeSprint.name}</span>
-          </div>
-        )}
+      <div className="hidden min-w-0 max-w-[190px] items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-2.5 py-1.5 lg:flex">
+        <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate text-xs font-medium" title={activeTeam?.name ?? "Sem time selecionado"}>
+          {activeTeam?.name ?? "Sem time selecionado"}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1 border-l border-border/70 pl-1.5 sm:gap-1.5 sm:pl-2">
         <DarkModeToggle />
         <NotificationBell />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex h-9 max-w-[150px] items-center gap-2 rounded-lg px-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-2">
+              <Avatar className="h-7 w-7 shrink-0">
+                <AvatarFallback className="text-[10px] font-bold text-white" style={{ backgroundColor: accent.avatarBg }}>{userInitials}</AvatarFallback>
+              </Avatar>
+              <span className="hidden truncate text-xs font-semibold sm:block">{userName}</span>
+              <ChevronsUpDown className="hidden h-3.5 w-3.5 shrink-0 text-muted-foreground sm:block" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-normal">
+              <p className="truncate text-sm font-semibold">{userName}</p>
+              <p className="truncate text-xs text-muted-foreground">{profile?.email}</p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onSignOut} disabled={isSigningOut} className="cursor-pointer gap-2 text-red-500 focus:text-red-500">
+              <LogOut className="h-4 w-4" /> {isSigningOut ? "Saindo..." : "Sair"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
@@ -361,22 +392,24 @@ function SprintBanner() {
   const activeImpediments = impediments.filter((imp: any) => !imp.resolvedAt && !imp.resolved_at);
 
   return (
-    <div className="sticky top-14 z-10 border-b border-indigo-500/10 bg-indigo-600/[0.06] px-4 py-2 backdrop-blur-sm">
-      <div className="flex flex-wrap items-center gap-3 text-xs">
-        <div className="flex min-w-0 items-center gap-2">
+    <div className="sticky top-14 z-10 border-b border-indigo-500/10 bg-indigo-600/[0.06] px-3 py-2 backdrop-blur-sm sm:px-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+        <div className="flex min-w-0 max-w-full items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
           </span>
           <span className="font-display font-bold text-indigo-700 dark:text-indigo-300">Sprint ativa</span>
-          <span className="truncate font-semibold text-foreground">{activeSprint.name}</span>
+          <span className="truncate font-semibold text-foreground" title={activeSprint.name}>{activeSprint.name}</span>
         </div>
-        <div className="h-4 w-px bg-border" />
-        <span className="font-mono font-semibold text-indigo-600">{progress}%</span>
-        <div className="h-1.5 w-24 overflow-hidden rounded-full bg-indigo-500/12">
+        <div className="hidden h-4 w-px bg-border sm:block" />
+        <div className="flex items-center gap-2" aria-label={`Progresso da sprint: ${progress}%`}>
+          <span className="font-mono font-semibold text-indigo-600">{progress}%</span>
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-indigo-500/12 sm:w-24">
           <div className="h-full rounded-full bg-indigo-600 transition-all duration-500" style={{ width: `${progress}%` }} />
+          </div>
         </div>
-        <span className="text-muted-foreground">{sprintHUs.length} HUs</span>
+        <span className="rounded-md bg-background/60 px-2 py-1 font-medium text-muted-foreground">{sprintHUs.length} HUs</span>
         {activeImpediments.length > 0 && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/12 px-2 py-0.5 font-semibold text-amber-600">
             <AlertTriangle className="h-3 w-3" />
@@ -581,6 +614,9 @@ export function AppShell({ module, children }: AppShellProps) {
             module={module}
             onOpenMobile={() => setMobileOpen(true)}
             navigationConfig={navigationConfig}
+            profile={profile}
+            onSignOut={handleSignOut}
+            isSigningOut={isSigningOut}
           />
           {module === "sala_agil" && <SprintBanner />}
           <main className="flex-1 overflow-y-auto overflow-x-hidden bg-background">{children}</main>

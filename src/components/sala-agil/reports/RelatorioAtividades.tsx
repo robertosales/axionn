@@ -851,6 +851,12 @@ export function RelatorioAtividades({ sprints, developers, rawData, teamName, cu
             { key: "dateTo",   label: "Período fim",    type: "date" },
           ]}
           values={filters}
+          defaultValues={{
+            sprintId: "all",
+            memberId: !isAdmin && ownDeveloperId ? ownDeveloperId : "all",
+            dateFrom: "",
+            dateTo: "",
+          }}
           onChange={(k, v) => {
             if (k === "memberId" && !isAdmin) return;
             setFilters((f) => ({ ...f, [k]: v }));

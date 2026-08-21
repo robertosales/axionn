@@ -356,6 +356,7 @@ export function RelatorioBacklog({ sprints, developers, rawData, teamName, curre
           { key: "memberId", label: "Membro", type: "select", options: memberOptions },
         ]}
         values={filters}
+        defaultValues={{ sprintId: "all", memberId: "all" }}
         onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
         onReset={() => setFilters({ sprintId: "all", memberId: "all" })}
       />

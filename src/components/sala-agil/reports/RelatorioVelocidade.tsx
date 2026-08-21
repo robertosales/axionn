@@ -96,6 +96,7 @@ export function RelatorioVelocidade({ sprints, rawData, teamName, onBack }: Prop
           ]},
         ]}
         values={filters}
+        defaultValues={{ sprintQtd: "5" }}
         onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
         onReset={() => setFilters({ sprintQtd: "5" })}
       />

@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   lint:
-    name: 🔍 ESLint
+    name: ESLint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -25,7 +25,7 @@ jobs:
         run: npm run lint:ci
 
   test:
-    name: 🧪 Vitest
+    name: Vitest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -59,7 +59,7 @@ jobs:
         run: exit "$(cat vitest.exit 2>/dev/null || echo 1)"
 
   build-check:
-    name: 📦 Vite build (${{ matrix.tenancy == 'true' && 'tenant' || 'legacy' }})
+    name: Vite build (${{ matrix.tenancy == 'true' && 'tenant' || 'legacy' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -94,7 +94,7 @@ jobs:
         run: npm audit --audit-level=high
 
   edge-functions:
-    name: 🛡️ Edge Functions
+    name: Edge Functions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -136,7 +136,7 @@ jobs:
         run: exit "$(cat deno-check.exit 2>/dev/null || echo 1)"
 
   security-contract:
-    name: 🔐 SaaS security contract
+    name: SaaS security contract
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

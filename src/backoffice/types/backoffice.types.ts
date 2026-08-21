@@ -33,7 +33,25 @@ export interface BackofficeDashboardSummary {
   pastDueSubscriptions: number;
 }
 
-export type BillingStatus = "pending" | "paid" | "overdue" | "cancelled" | "refunded";
+export const BILLING_STATUSES = ["pending", "paid", "overdue", "cancelled", "refunded"] as const;
+
+export type BillingStatus = (typeof BILLING_STATUSES)[number];
+
+export const BILLING_STATUS_LABELS: Record<BillingStatus, string> = {
+  pending: "Pendente",
+  paid: "Paga",
+  overdue: "Vencida",
+  cancelled: "Cancelada",
+  refunded: "Reembolsada",
+};
+
+export const BILLING_STATUS_TRANSITIONS: Record<BillingStatus, readonly BillingStatus[]> = {
+  pending: ["paid", "overdue", "cancelled"],
+  overdue: ["paid", "cancelled"],
+  paid: ["refunded"],
+  cancelled: [],
+  refunded: [],
+};
 export type SupportStatus = "open" | "in_progress" | "waiting_client" | "resolved" | "closed";
 
 export interface BillingRecord {

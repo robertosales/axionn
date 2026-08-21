@@ -66,4 +66,59 @@ describe("backoffice financeiro contract", () => {
     expect(page).toContain("markOverdueInvoices()");
     expect(page.indexOf("markOverdueInvoices()")).toBeLessThan(page.indexOf("listBillingRecords()"));
   });
+
+  it("uses pt-BR labels and only valid status transitions", () => {
+    const types = source("src/backoffice/types/backoffice.types.ts");
+    expect(types).toContain("BILLING_STATUS_LABELS");
+    expect(types).toContain('pending: "Pendente"');
+    expect(page).toContain("BILLING_STATUS_TRANSITIONS[record.status].length === 0");
+    expect(page).not.toMatch(/<SelectItem[^>]*value=\{status\}>\{status\}/);
+    expect(page).not.toContain('const statuses: BillingStatus[]');
+  });
+
+  it("requires a reason for terminal status changes", () => {
+    expect(page).toContain("billingReasonSchema.safeParse");
+    expect(page).toContain('status === "cancelled" || status === "refunded"');
+  });
+
+  it("paginates the invoice table", () => {
+    expect(page).toContain("PAGE_SIZE = 10");
+    expect(page).toContain("Página {currentPage} de {totalPages}");
+  });
+
+  it("exports csv through the shared utility with BOM", () => {
+    expect(page).toContain('from "@/lib/exportToCsv"');
+    expect(page).not.toContain("new Blob(");
+    const util = source("src/lib/exportToCsv.ts");
+    expect(util).toContain("\\uFEFF");
+  });
+
+  it("validates forms with zod schemas", () => {
+    const schema = source("src/backoffice/schemas/billing.schema.ts");
+    expect(page).toContain('from "@/backoffice/schemas/billing.schema"');
+    expect(page).toContain("invoiceFormSchema.safeParse");
+    expect(schema).toContain(".uuid(");
+    expect(schema).toContain("parseBRLInput");
+    expect(schema).toContain("planPriceSchema");
+  });
+
+  it("formats money through the shared currency util", () => {
+    expect(source("src/lib/currency.ts")).toContain('new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })');
+    expect(page).toContain("formatCurrencyBRL(");
+    expect(page).not.toContain("new Intl.NumberFormat");
+    expect(source("src/backoffice/pages/BOAnalitico.tsx")).toContain("formatCurrencyBRL(");
+    expect(source("src/backoffice/pages/BOAnalitico.tsx")).not.toContain("new Intl.NumberFormat");
+    expect(source("src/features/apf/components/dossier/ApfDossierAudit.tsx")).toContain('from "@/lib/currency"');
+  });
+
+  it("keeps price saving dirty-tracked to changed plans only", () => {
+    expect(page).toContain("priceBaseline.current");
+    expect(page).toContain("priceChanges.map(updateBackofficePlanPrice)");
+  });
+
+  it("renders shared empty and error states with retry", () => {
+    expect(page).toContain('from "@/shared/components/common/EmptyState"');
+    expect(page).toContain('from "@/shared/components/common/ErrorState"');
+    expect(page).toContain("onRetry={() => void load()}");
+  });
 });

@@ -1,94 +1,202 @@
-import { useEffect, useMemo, useState } from "react";
-import { Download, Loader2, Plus, RefreshCw, Save, Search, Settings2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Download, Loader2, Plus, Receipt, RefreshCw, Save, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   createBillingRecord, generateMonthlyBilling, listBackofficePlanPrices,
   listBillingCustomers, listBillingRecords, markOverdueInvoices, updateBackofficePlanPrice, updateBillingStatus,
 } from "@/backoffice/services/backoffice.service";
-import type { BackofficePlanPrice, BillingCustomer, BillingRecord, BillingStatus } from "@/backoffice/types/backoffice.types";
+import { billingReasonSchema, invoiceFormSchema, planPriceSchema } from "@/backoffice/schemas/billing.schema";
+import {
+  BILLING_STATUSES, BILLING_STATUS_LABELS, BILLING_STATUS_TRANSITIONS,
+  type BackofficePlanPrice, type BillingCustomer, type BillingRecord, type BillingStatus,
+} from "@/backoffice/types/backoffice.types";
+import { exportToCsv } from "@/lib/exportToCsv";
+import { formatCurrencyBRL, parseBRLInput } from "@/lib/currency";
+import { EmptyState } from "@/shared/components/common/EmptyState";
+import { ErrorState } from "@/shared/components/common/ErrorState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const statuses: BillingStatus[] = ["pending", "paid", "overdue", "cancelled", "refunded"];
-const today = () => new Date().toISOString().slice(0, 10);
+const PAGE_SIZE = 10;
+
+type PeriodFilter = "all" | "month" | "next30";
+
+const statusVariant: Record<BillingStatus, "default" | "secondary" | "destructive" | "outline"> = {
+  paid: "default",
+  pending: "secondary",
+  overdue: "destructive",
+  cancelled: "outline",
+  refunded: "outline",
+};
+
+const isoDate = (date: Date) => date.toISOString().slice(0, 10);
+const today = () => isoDate(new Date());
+
+function withinPeriod(dueDate: string, period: PeriodFilter) {
+  if (period === "all") return true;
+  if (period === "month") return dueDate.startsWith(today().slice(0, 7));
+  const end = new Date();
+  end.setDate(end.getDate() + 30);
+  return dueDate >= today() && dueDate <= isoDate(end);
+}
 
 export default function BOFinanceiro() {
   const [records, setRecords] = useState<BillingRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
   const [plans, setPlans] = useState<BackofficePlanPrice[]>([]);
   const [customers, setCustomers] = useState<BillingCustomer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [period, setPeriod] = useState<PeriodFilter>("all");
+  const [page, setPage] = useState(1);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
   const [invoice, setInvoice] = useState({ tenantId: "", billingPeriod: "monthly", dueDate: today(), amount: "", notes: "" });
+  const [pendingStatus, setPendingStatus] = useState<{ record: BillingRecord; status: BillingStatus } | null>(null);
+  const [reason, setReason] = useState("");
+  const priceBaseline = useRef<BackofficePlanPrice[]>([]);
 
-  useEffect(() => {
-    void markOverdueInvoices()
-      .catch(() => undefined)
-      .then(() => Promise.all([listBillingRecords(), listBackofficePlanPrices(), listBillingCustomers()]))
-      .then(([billing, prices, organizations]) => { setRecords(billing); setPlans(prices); setCustomers(organizations); })
-      .catch(() => toast.error("Erro ao carregar o financeiro.")).finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      await markOverdueInvoices().catch(() => undefined);
+      const [billing, prices, organizations] = await Promise.all([listBillingRecords(), listBackofficePlanPrices(), listBillingCustomers()]);
+      setRecords(billing);
+      setPlans(prices);
+      priceBaseline.current = prices;
+      setCustomers(organizations);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const reloadBilling = async () => setRecords(await listBillingRecords());
+  useEffect(() => { void load(); }, [load]);
+
+  const visible = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    return records.filter((record) =>
+      (filter === "all" || record.status === filter) &&
+      withinPeriod(record.dueDate, period) &&
+      record.tenantName.toLocaleLowerCase("pt-BR").includes(term));
+  }, [records, filter, period, search]);
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const totals = useMemo(() => ({
+    paid: formatCurrencyBRL(records.filter((r) => r.status === "paid").reduce((sum, r) => sum + r.amount, 0)),
+    pending: formatCurrencyBRL(records.filter((r) => r.status === "pending" && r.dueDate >= today()).reduce((sum, r) => sum + r.amount, 0)),
+    overdue: formatCurrencyBRL(records.filter((r) => r.status === "overdue" || (r.status === "pending" && r.dueDate < today())).reduce((sum, r) => sum + r.amount, 0)),
+  }), [records]);
 
   const saveInvoice = async () => {
-    if (!invoice.tenantId || !invoice.dueDate) return toast.error("Cliente e vencimento são obrigatórios.");
+    const parsed = invoiceFormSchema.safeParse(invoice);
+    if (!parsed.success) return toast.error(parsed.error.issues[0]?.message ?? "Dados inválidos.");
     setSaving(true);
     try {
-      await createBillingRecord({ tenantId: invoice.tenantId, billingPeriod: invoice.billingPeriod,
-        dueDate: invoice.dueDate, amount: invoice.amount ? Number(invoice.amount.replace(",", ".")) : null,
-        notes: invoice.notes || null });
-      toast.success("Fatura criada."); setInvoiceOpen(false); await reloadBilling();
+      await createBillingRecord({
+        tenantId: parsed.data.tenantId,
+        billingPeriod: parsed.data.billingPeriod,
+        dueDate: parsed.data.dueDate,
+        amount: parsed.data.amount ? parseBRLInput(parsed.data.amount) : null,
+        notes: parsed.data.notes || null,
+      });
+      toast.success("Fatura criada.");
+      setInvoiceOpen(false);
+      setInvoice({ tenantId: "", billingPeriod: "monthly", dueDate: today(), amount: "", notes: "" });
+      await load();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao criar fatura."); }
     finally { setSaving(false); }
   };
 
+  const priceChanges = useMemo(() => plans.filter((plan) => {
+    const base = priceBaseline.current.find((item) => item.id === plan.id);
+    return !base || base.monthlyPrice !== plan.monthlyPrice ||
+      base.annualPrice !== plan.annualPrice || base.currency !== plan.currency;
+  }), [plans]);
+
   const savePrices = async () => {
+    if (priceChanges.some((plan) => !planPriceSchema.safeParse(plan).success)) {
+      return toast.error("Verifique os preços e a moeda informados.");
+    }
     setSaving(true);
-    try { await Promise.all(plans.map(updateBackofficePlanPrice)); toast.success("Preços atualizados."); setPricesOpen(false); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao salvar preços."); }
+    try {
+      await Promise.all(priceChanges.map(updateBackofficePlanPrice));
+      priceBaseline.current = plans.map((plan) => ({ ...plan }));
+      toast.success(`${priceChanges.length} plano(s) atualizado(s).`);
+      setPricesOpen(false);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao salvar preços."); }
     finally { setSaving(false); }
   };
 
   const generate = async () => {
     setSaving(true);
-    try { const count = await generateMonthlyBilling(today(), 10); toast.success(`${count} fatura(s) gerada(s).`); await reloadBilling(); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Erro na geração mensal."); }
+    try {
+      const count = await generateMonthlyBilling(today(), 10);
+      toast.success(`${count} fatura(s) gerada(s).`);
+      await load();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Erro na geração mensal."); }
     finally { setSaving(false); }
   };
 
-  const visible = useMemo(() => records.filter((record) =>
-    (filter === "all" || record.status === filter) &&
-    record.tenantName.toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR"))), [records, filter, search]);
-
-  const changeStatus = async (record: BillingRecord, status: BillingStatus) => {
+  const applyStatus = async (record: BillingRecord, status: BillingStatus, motive?: string) => {
     try {
-      await updateBillingStatus(record.id, status);
+      await updateBillingStatus(record.id, status, motive);
       setRecords((current) => current.map((item) => item.id === record.id
-        ? { ...item, status, paidAt: status === "paid" ? item.paidAt ?? new Date().toISOString() : item.paidAt } : item));
+        ? {
+            ...item,
+            status,
+            paidAt: status === "paid"
+              ? item.paidAt ?? new Date().toISOString()
+              : status === "refunded" ? item.paidAt : null,
+          }
+        : item));
       toast.success("Status da fatura atualizado.");
-    } catch { toast.error("Não foi possível atualizar a fatura."); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a fatura."); }
   };
 
-  const exportCsv = () => {
-    const rows = [["Cliente", "Valor", "Status", "Plano", "Vencimento"], ...visible.map((r) =>
-      [r.tenantName, String(r.amount), r.status, r.planType, r.dueDate])];
-    const blob = new Blob([rows.map((row) => row.map((cell) => `"${cell.split('"').join('""')}"`).join(",")).join("\n")],
-      { type: "text/csv;charset=utf-8" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob); link.download = "faturas-backoffice.csv"; link.click();
-    URL.revokeObjectURL(link.href);
+  const requestStatus = (record: BillingRecord, status: BillingStatus) => {
+    if (status === record.status) return;
+    if (status === "cancelled" || status === "refunded") {
+      setReason("");
+      setPendingStatus({ record, status });
+      return;
+    }
+    void applyStatus(record, status);
   };
+
+  const confirmStatus = async () => {
+    if (!pendingStatus) return;
+    const parsed = billingReasonSchema.safeParse({ reason });
+    if (!parsed.success) return toast.error(parsed.error.issues[0]?.message ?? "Informe o motivo.");
+    const { record, status } = pendingStatus;
+    setPendingStatus(null);
+    await applyStatus(record, status, parsed.data.reason);
+  };
+
+  const exportCsv = () => exportToCsv({
+    filename: "faturas-backoffice",
+    rows: visible.map((record) => ({
+      Cliente: record.tenantName,
+      Valor: formatCurrencyBRL(record.amount),
+      Status: BILLING_STATUS_LABELS[record.status],
+      Plano: record.planType,
+      Periodo: record.billingPeriod,
+      Vencimento: new Date(`${record.dueDate}T12:00:00`).toLocaleDateString("pt-BR"),
+    })),
+  });
 
   return <div className="space-y-5">
     <div className="flex flex-wrap items-end justify-between gap-3">
@@ -101,22 +209,62 @@ export default function BOFinanceiro() {
       </div>
     </div>
     <div className="grid gap-4 sm:grid-cols-3">
-      {[
-        ["Receita paga", money.format(records.filter((r) => r.status === "paid").reduce((sum, r) => sum + r.amount, 0))],
-        ["Pendente", money.format(records.filter((r) => r.status === "pending" && r.dueDate >= today()).reduce((sum, r) => sum + r.amount, 0))],
-        ["Vencida", money.format(records.filter((r) => r.status === "overdue" || (r.status === "pending" && r.dueDate < today())).reduce((sum, r) => sum + r.amount, 0))],
-      ].map(([label, value]) => <div key={label} className="rounded-lg border bg-white p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div>)}
+      {[["Receita paga", totals.paid], ["Pendente", totals.pending], ["Vencida", totals.overdue]].map(([label, value]) =>
+        <div key={label} className="rounded-lg border bg-white p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div>)}
     </div>
     <div className="rounded-lg border bg-white">
-      <div className="flex flex-col gap-3 border-b p-4 sm:flex-row">
-        <div className="relative flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente" /></div>
-        <Select value={filter} onValueChange={setFilter}><SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos os status</SelectItem>{statuses.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select>
+      <div className="flex flex-col gap-3 border-b p-4 lg:flex-row">
+        <div className="relative flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar cliente" /></div>
+        <Select value={period} onValueChange={(value) => { setPeriod(value as PeriodFilter); setPage(1); }}>
+          <SelectTrigger className="w-full lg:w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todo o período</SelectItem>
+            <SelectItem value="month">Vencimento no mês</SelectItem>
+            <SelectItem value="next30">Próximos 30 dias</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filter} onValueChange={(value) => { setFilter(value); setPage(1); }}>
+          <SelectTrigger className="w-full lg:w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os status</SelectItem>
+            {BILLING_STATUSES.map((status) => <SelectItem key={status} value={status}>{BILLING_STATUS_LABELS[status]}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
       {loading ? <Loader2 className="mx-auto my-16 h-6 w-6 animate-spin" /> :
-        <Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Plano</TableHead><TableHead>Valor</TableHead><TableHead>Vencimento</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-          <TableBody>{visible.map((record) => <TableRow key={record.id}><TableCell className="font-medium">{record.tenantName}</TableCell><TableCell>{record.planType}</TableCell><TableCell>{money.format(record.amount)}</TableCell><TableCell>{new Date(`${record.dueDate}T12:00:00`).toLocaleDateString("pt-BR")}</TableCell><TableCell><Select value={record.status} onValueChange={(value) => void changeStatus(record, value as BillingStatus)}><SelectTrigger className="w-36"><Badge variant="outline">{record.status}</Badge></SelectTrigger><SelectContent>{statuses.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></TableCell></TableRow>)}</TableBody>
-        </Table>}
-      {!loading && visible.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">Nenhuma fatura encontrada.</p>}
+        error ? <ErrorState message="Erro ao carregar o financeiro." onRetry={() => void load()} /> :
+        visible.length === 0 ? <EmptyState icon={Receipt} variant="filtered-empty" title="Nenhuma fatura encontrada" description="Ajuste a busca, o status ou o período para ver outras faturas." /> :
+        <>
+          <Table>
+            <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Plano</TableHead><TableHead>Valor</TableHead><TableHead>Vencimento</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableBody>{paged.map((record) => <TableRow key={record.id}>
+              <TableCell className="font-medium">{record.tenantName}</TableCell>
+              <TableCell>{record.planType}</TableCell>
+              <TableCell>{formatCurrencyBRL(record.amount)}</TableCell>
+              <TableCell>{new Date(`${record.dueDate}T12:00:00`).toLocaleDateString("pt-BR")}</TableCell>
+              <TableCell>
+                {BILLING_STATUS_TRANSITIONS[record.status].length === 0
+                  ? <Badge variant={statusVariant[record.status]}>{BILLING_STATUS_LABELS[record.status]}</Badge>
+                  : <Select value={record.status} onValueChange={(value) => requestStatus(record, value as BillingStatus)}>
+                      <SelectTrigger className="w-40"><Badge variant={statusVariant[record.status]}>{BILLING_STATUS_LABELS[record.status]}</Badge></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={record.status} disabled>{BILLING_STATUS_LABELS[record.status]}</SelectItem>
+                        {BILLING_STATUS_TRANSITIONS[record.status].map((status) => <SelectItem key={status} value={status}>{BILLING_STATUS_LABELS[status]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>}
+              </TableCell>
+            </TableRow>)}</TableBody>
+          </Table>
+          {visible.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} · {visible.length} faturas</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft className="mr-1 h-4 w-4" />Anterior</Button>
+                <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>Próxima<ChevronRight className="ml-1 h-4 w-4" /></Button>
+              </div>
+            </div>
+          )}
+        </>}
     </div>
     <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}><DialogContent><DialogHeader><DialogTitle>Nova fatura</DialogTitle></DialogHeader>
       <div className="grid gap-4">
@@ -127,8 +275,27 @@ export default function BOFinanceiro() {
       </div><DialogFooter><Button variant="outline" onClick={() => setInvoiceOpen(false)}>Cancelar</Button><Button onClick={() => void saveInvoice()} disabled={saving}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Criar</Button></DialogFooter>
     </DialogContent></Dialog>
     <Dialog open={pricesOpen} onOpenChange={setPricesOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle>Preços dos planos</DialogTitle></DialogHeader>
-      <div className="space-y-3">{plans.map((plan, index) => <div key={plan.id} className="grid items-end gap-3 rounded-md border p-3 sm:grid-cols-3"><div><p className="font-medium">{plan.name}</p><p className="text-xs text-muted-foreground">{plan.code}</p></div><div className="space-y-1"><Label>Mensal (R$)</Label><Input type="number" min="0" step="0.01" value={plan.monthlyPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, monthlyPrice: Number(e.target.value) } : item))} /></div><div className="space-y-1"><Label>Anual (R$)</Label><Input type="number" min="0" step="0.01" value={plan.annualPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, annualPrice: Number(e.target.value) } : item))} /></div></div>)}</div>
-      <DialogFooter><Button variant="outline" onClick={() => setPricesOpen(false)}>Cancelar</Button><Button onClick={() => void savePrices()} disabled={saving}><Save className="mr-2 h-4 w-4" />Salvar</Button></DialogFooter>
+      <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">{plans.map((plan, index) => <div key={plan.id} className="grid items-end gap-3 rounded-md border p-3 sm:grid-cols-[1fr_auto_auto]">
+        <div><p className="font-medium">{plan.name}</p><p className="text-xs text-muted-foreground">{plan.code}{priceBaseline.current.find((item) => item.id === plan.id) && (() => {
+          const base = priceBaseline.current.find((item) => item.id === plan.id)!;
+          const changed = base.monthlyPrice !== plan.monthlyPrice || base.annualPrice !== plan.annualPrice || base.currency !== plan.currency;
+          return changed ? <span className="ml-2 font-medium text-cyan-700">alterado</span> : null;
+        })()}</p></div>
+        <div className="space-y-1"><Label>Mensal (R$)</Label><Input type="number" min="0" step="0.01" className="w-32" value={plan.monthlyPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, monthlyPrice: Number(e.target.value) } : item))} /></div>
+        <div className="space-y-1"><Label>Anual (R$)</Label><Input type="number" min="0" step="0.01" className="w-32" value={plan.annualPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, annualPrice: Number(e.target.value) } : item))} /></div>
+      </div>)}</div>
+      <DialogFooter><Button variant="outline" onClick={() => { setPlans(priceBaseline.current.map((plan) => ({ ...plan }))); setPricesOpen(false); }}>Cancelar</Button><Button onClick={() => void savePrices()} disabled={saving || priceChanges.length === 0}><Save className="mr-2 h-4 w-4" />{priceChanges.length > 0 ? `Salvar ${priceChanges.length} alteração(ões)` : "Salvar"}</Button></DialogFooter>
+    </DialogContent></Dialog>
+    <Dialog open={!!pendingStatus} onOpenChange={(open) => { if (!open) setPendingStatus(null); }}><DialogContent>
+      <DialogHeader>
+        <DialogTitle>{pendingStatus ? `${BILLING_STATUS_LABELS[pendingStatus.status]} fatura` : ""}</DialogTitle>
+        <DialogDescription>Esta ação é definitiva e fica registrada na auditoria. Informe o motivo.</DialogDescription>
+      </DialogHeader>
+      <Textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ex.: cliente encerrou o contrato em 21/08/2026." />
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setPendingStatus(null)}>Voltar</Button>
+        <Button variant="destructive" onClick={() => void confirmStatus()}>Confirmar</Button>
+      </DialogFooter>
     </DialogContent></Dialog>
   </div>;
 }

@@ -1,8 +1,8 @@
-import { useId, type LucideIcon, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, type LucideIcon } from "lucide-react";
 
 export interface PageHeaderBadge {
   label: string;

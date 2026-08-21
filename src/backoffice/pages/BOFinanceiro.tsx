@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Loader2, Plus, Receipt, RefreshCw, Save, Search, Settings2 } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Download, Loader2, Link2, Pencil, Plus, Receipt, RefreshCw, Save, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  createBillingRecord, generateMonthlyBilling, listBackofficePlanPrices,
-  listBillingCustomers, listBillingRecords, markOverdueInvoices, updateBackofficePlanPrice, updateBillingStatus,
+  createBillingRecord, generateMonthlyBilling, linkApfBillingRequest, listApfBillingRequests,
+  listBackofficePlanPrices, listBillingCustomers, listBillingRecords, markOverdueInvoices,
+  updateBackofficePlanPrice, updateBillingDetails, updateBillingStatus,
 } from "@/backoffice/services/backoffice.service";
 import { billingReasonSchema, invoiceFormSchema, planPriceSchema } from "@/backoffice/schemas/billing.schema";
 import {
-  BILLING_STATUSES, BILLING_STATUS_LABELS, BILLING_STATUS_TRANSITIONS,
-  type BackofficePlanPrice, type BillingCustomer, type BillingRecord, type BillingStatus,
+  APF_BILLING_STATUS_LABELS, BILLING_STATUSES, BILLING_STATUS_LABELS, BILLING_STATUS_TRANSITIONS,
+  type ApfBillingRequest, type ApfBillingRequestStatus, type BackofficePlanPrice,
+  type BillingCustomer, type BillingRecord, type BillingStatus,
 } from "@/backoffice/types/backoffice.types";
 import { exportToCsv } from "@/lib/exportToCsv";
 import { formatCurrencyBRL, parseBRLInput } from "@/lib/currency";
@@ -16,10 +18,12 @@ import { EmptyState } from "@/shared/components/common/EmptyState";
 import { ErrorState } from "@/shared/components/common/ErrorState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -35,8 +39,20 @@ const statusVariant: Record<BillingStatus, "default" | "secondary" | "destructiv
   refunded: "outline",
 };
 
+const apfStatusVariant: Record<ApfBillingRequestStatus, "default" | "secondary" | "destructive" | "outline"> = {
+  submitted: "outline",
+  linked: "secondary",
+  invoiced: "default",
+  cancelled: "destructive",
+};
+
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const today = () => isoDate(new Date());
+const dueDateBR = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR");
+const competenceBR = (value: string) => {
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+};
 
 function withinPeriod(dueDate: string, period: PeriodFilter) {
   if (period === "all") return true;
@@ -50,6 +66,7 @@ export default function BOFinanceiro() {
   const [records, setRecords] = useState<BillingRecord[]>([]);
   const [plans, setPlans] = useState<BackofficePlanPrice[]>([]);
   const [customers, setCustomers] = useState<BillingCustomer[]>([]);
+  const [apfRequests, setApfRequests] = useState<ApfBillingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -62,6 +79,10 @@ export default function BOFinanceiro() {
   const [invoice, setInvoice] = useState({ tenantId: "", billingPeriod: "monthly", dueDate: today(), amount: "", notes: "" });
   const [pendingStatus, setPendingStatus] = useState<{ record: BillingRecord; status: BillingStatus } | null>(null);
   const [reason, setReason] = useState("");
+  const [detailsTarget, setDetailsTarget] = useState<BillingRecord | null>(null);
+  const [detailsForm, setDetailsForm] = useState({ invoiceUrl: "", notes: "" });
+  const [linkTarget, setLinkTarget] = useState<ApfBillingRequest | null>(null);
+  const [linkForm, setLinkForm] = useState({ billingRecordId: "", note: "", markInvoiced: false });
   const priceBaseline = useRef<BackofficePlanPrice[]>([]);
 
   const load = useCallback(async () => {
@@ -69,11 +90,14 @@ export default function BOFinanceiro() {
     setError(false);
     try {
       await markOverdueInvoices().catch(() => undefined);
-      const [billing, prices, organizations] = await Promise.all([listBillingRecords(), listBackofficePlanPrices(), listBillingCustomers()]);
+      const [billing, prices, organizations, apf] = await Promise.all([
+        listBillingRecords(), listBackofficePlanPrices(), listBillingCustomers(), listApfBillingRequests(),
+      ]);
       setRecords(billing);
       setPlans(prices);
       priceBaseline.current = prices;
       setCustomers(organizations);
+      setApfRequests(apf);
     } catch {
       setError(true);
     } finally {
@@ -95,11 +119,21 @@ export default function BOFinanceiro() {
   const currentPage = Math.min(page, totalPages);
   const paged = visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const totals = useMemo(() => ({
-    paid: formatCurrencyBRL(records.filter((r) => r.status === "paid").reduce((sum, r) => sum + r.amount, 0)),
-    pending: formatCurrencyBRL(records.filter((r) => r.status === "pending" && r.dueDate >= today()).reduce((sum, r) => sum + r.amount, 0)),
-    overdue: formatCurrencyBRL(records.filter((r) => r.status === "overdue" || (r.status === "pending" && r.dueDate < today())).reduce((sum, r) => sum + r.amount, 0)),
-  }), [records]);
+  const totals = useMemo(() => {
+    const now = today();
+    const limit = new Date();
+    limit.setDate(limit.getDate() + 30);
+    const upcoming = records.filter((r) => r.status === "pending" && r.dueDate >= now && r.dueDate <= isoDate(limit));
+    return {
+      paid: formatCurrencyBRL(records.filter((r) => r.status === "paid").reduce((sum, r) => sum + r.amount, 0)),
+      pending: formatCurrencyBRL(records.filter((r) => r.status === "pending" && r.dueDate >= now).reduce((sum, r) => sum + r.amount, 0)),
+      overdue: formatCurrencyBRL(records.filter((r) => r.status === "overdue" || (r.status === "pending" && r.dueDate < now)).reduce((sum, r) => sum + r.amount, 0)),
+      upcomingTotal: formatCurrencyBRL(upcoming.reduce((sum, r) => sum + r.amount, 0)),
+      upcomingCount: upcoming.length,
+    };
+  }, [records]);
+
+  const apfPendingCount = useMemo(() => apfRequests.filter((request) => request.status === "submitted").length, [apfRequests]);
 
   const saveInvoice = async () => {
     const parsed = invoiceFormSchema.safeParse(invoice);
@@ -186,6 +220,52 @@ export default function BOFinanceiro() {
     await applyStatus(record, status, parsed.data.reason);
   };
 
+  const openDetails = (record: BillingRecord) => {
+    setDetailsForm({ invoiceUrl: record.invoiceUrl ?? "", notes: record.notes ?? "" });
+    setDetailsTarget(record);
+  };
+
+  const saveDetails = async () => {
+    if (!detailsTarget) return;
+    const invoiceUrl = detailsForm.invoiceUrl.trim() || null;
+    const notes = detailsForm.notes.trim() || null;
+    setSaving(true);
+    try {
+      await updateBillingDetails(detailsTarget.id, invoiceUrl, notes);
+      setRecords((current) => current.map((item) => item.id === detailsTarget.id
+        ? { ...item, invoiceUrl, notes } : item));
+      toast.success("Detalhes da fatura salvos.");
+      setDetailsTarget(null);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao salvar detalhes."); }
+    finally { setSaving(false); }
+  };
+
+  const linkCandidates = useMemo(() =>
+    linkTarget ? records.filter((r) => r.tenantId === linkTarget.organizationId && r.status === "pending") : [],
+  [linkTarget, records]);
+
+  const openLink = (request: ApfBillingRequest) => {
+    setLinkForm({ billingRecordId: "", note: "", markInvoiced: false });
+    setLinkTarget(request);
+  };
+
+  const confirmLink = async () => {
+    if (!linkTarget || !linkForm.billingRecordId) return;
+    setSaving(true);
+    try {
+      await linkApfBillingRequest({
+        requestId: linkTarget.id,
+        billingRecordId: linkForm.billingRecordId,
+        note: linkForm.note.trim() || null,
+        markInvoiced: linkForm.markInvoiced,
+      });
+      toast.success("Cobrança APF vinculada à fatura.");
+      setLinkTarget(null);
+      await load();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao vincular cobrança APF."); }
+    finally { setSaving(false); }
+  };
+
   const exportCsv = () => exportToCsv({
     filename: "faturas-backoffice",
     rows: visible.map((record) => ({
@@ -194,7 +274,7 @@ export default function BOFinanceiro() {
       Status: BILLING_STATUS_LABELS[record.status],
       Plano: record.planType,
       Periodo: record.billingPeriod,
-      Vencimento: new Date(`${record.dueDate}T12:00:00`).toLocaleDateString("pt-BR"),
+      Vencimento: dueDateBR(record.dueDate),
     })),
   });
 
@@ -208,10 +288,26 @@ export default function BOFinanceiro() {
         <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />CSV</Button>
       </div>
     </div>
-    <div className="grid gap-4 sm:grid-cols-3">
-      {[["Receita paga", totals.paid], ["Pendente", totals.pending], ["Vencida", totals.overdue]].map(([label, value]) =>
-        <div key={label} className="rounded-lg border bg-white p-5"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div>)}
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {[
+        { label: "Receita paga", value: totals.paid },
+        { label: "Pendente", value: totals.pending },
+        { label: "Vencida", value: totals.overdue },
+        { label: "Próximos 30 dias", value: totals.upcomingTotal, detail: `${totals.upcomingCount} fatura(s) a vencer` },
+      ].map((card) => (
+        <div key={card.label} className="rounded-lg border bg-white p-5">
+          <p className="text-sm text-muted-foreground">{card.label}</p>
+          <p className="mt-1 text-2xl font-semibold">{card.value}</p>
+          {card.detail && <p className="mt-1 text-xs text-muted-foreground">{card.detail}</p>}
+        </div>
+      ))}
     </div>
+    <Tabs defaultValue="faturas">
+      <TabsList>
+        <TabsTrigger value="faturas"><Receipt className="mr-2 h-4 w-4" />Faturas</TabsTrigger>
+        <TabsTrigger value="apf"><Link2 className="mr-2 h-4 w-4" />Cobranças APF{apfPendingCount > 0 ? ` · ${apfPendingCount}` : ""}</TabsTrigger>
+      </TabsList>
+      <TabsContent value="faturas" className="mt-4 space-y-4">
     <div className="rounded-lg border bg-white">
       <div className="flex flex-col gap-3 border-b p-4 lg:flex-row">
         <div className="relative flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Buscar cliente" /></div>
@@ -236,12 +332,14 @@ export default function BOFinanceiro() {
         visible.length === 0 ? <EmptyState icon={Receipt} variant="filtered-empty" title="Nenhuma fatura encontrada" description="Ajuste a busca, o status ou o período para ver outras faturas." /> :
         <>
           <Table>
-            <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Plano</TableHead><TableHead>Valor</TableHead><TableHead>Vencimento</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow>
+              <TableHead>Cliente</TableHead><TableHead>Plano</TableHead><TableHead>Valor</TableHead><TableHead>Vencimento</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead>
+            </TableRow></TableHeader>
             <TableBody>{paged.map((record) => <TableRow key={record.id}>
               <TableCell className="font-medium">{record.tenantName}</TableCell>
               <TableCell>{record.planType}</TableCell>
               <TableCell>{formatCurrencyBRL(record.amount)}</TableCell>
-              <TableCell>{new Date(`${record.dueDate}T12:00:00`).toLocaleDateString("pt-BR")}</TableCell>
+              <TableCell>{dueDateBR(record.dueDate)}</TableCell>
               <TableCell>
                 {BILLING_STATUS_TRANSITIONS[record.status].length === 0
                   ? <Badge variant={statusVariant[record.status]}>{BILLING_STATUS_LABELS[record.status]}</Badge>
@@ -252,6 +350,18 @@ export default function BOFinanceiro() {
                         {BILLING_STATUS_TRANSITIONS[record.status].map((status) => <SelectItem key={status} value={status}>{BILLING_STATUS_LABELS[status]}</SelectItem>)}
                       </SelectContent>
                     </Select>}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center justify-end gap-1">
+                  {BILLING_STATUS_TRANSITIONS[record.status].includes("paid") && (
+                    <Button variant="ghost" size="sm" title="Marcar como pago" aria-label={`Marcar como pago ${record.tenantName}`} onClick={() => void applyStatus(record, "paid")}>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" title="Editar detalhes" aria-label={`Editar detalhes ${record.tenantName}`} onClick={() => openDetails(record)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>)}</TableBody>
           </Table>
@@ -266,6 +376,39 @@ export default function BOFinanceiro() {
           )}
         </>}
     </div>
+      </TabsContent>
+      <TabsContent value="apf" className="mt-4 space-y-4">
+        {loading ? <Loader2 className="mx-auto my-16 h-6 w-6 animate-spin" /> :
+          apfRequests.length === 0 ? <EmptyState icon={Link2} title="Nenhuma cobrança APF registrada" description="Lotes APF aprovados e enviados ao faturamento aparecem aqui para vínculo com as faturas." /> :
+          <div className="rounded-lg border bg-white">
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>Organização</TableHead><TableHead>Competência</TableHead><TableHead>PF aprovados</TableHead><TableHead>Valor</TableHead><TableHead>Vencimento</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ação</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{apfRequests.map((request) => {
+                const linked = request.billingRecordId
+                  ? records.find((r) => r.id === request.billingRecordId)
+                  : undefined;
+                return <TableRow key={request.id}>
+                  <TableCell className="font-medium">{request.organizationName}</TableCell>
+                  <TableCell>{competenceBR(request.competence)}</TableCell>
+                  <TableCell>{request.approvedPf.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</TableCell>
+                  <TableCell>{formatCurrencyBRL(request.grossAmount)}</TableCell>
+                  <TableCell>{dueDateBR(request.dueDate)}</TableCell>
+                  <TableCell><Badge variant={apfStatusVariant[request.status]}>{APF_BILLING_STATUS_LABELS[request.status]}</Badge></TableCell>
+                  <TableCell className="text-right">
+                    {request.status === "submitted"
+                      ? <Button size="sm" variant="outline" onClick={() => openLink(request)}><Link2 className="mr-1 h-4 w-4" />Vincular fatura</Button>
+                      : linked
+                        ? <span className="text-xs text-muted-foreground">{dueDateBR(linked.dueDate)} · {formatCurrencyBRL(linked.amount)}</span>
+                        : <span className="text-xs text-muted-foreground">—</span>}
+                  </TableCell>
+                </TableRow>;
+              })}</TableBody>
+            </Table>
+          </div>}
+      </TabsContent>
+    </Tabs>
     <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}><DialogContent><DialogHeader><DialogTitle>Nova fatura</DialogTitle></DialogHeader>
       <div className="grid gap-4">
         <div className="space-y-2"><Label>Cliente</Label><Select value={invoice.tenantId} onValueChange={(tenantId) => setInvoice((v) => ({ ...v, tenantId }))}><SelectTrigger><SelectValue placeholder="Selecione uma assinatura" /></SelectTrigger><SelectContent>{customers.map((c) => <SelectItem key={c.orgId} value={c.orgId}>{c.orgName} · {c.planName}</SelectItem>)}</SelectContent></Select></div>
@@ -275,15 +418,15 @@ export default function BOFinanceiro() {
       </div><DialogFooter><Button variant="outline" onClick={() => setInvoiceOpen(false)}>Cancelar</Button><Button onClick={() => void saveInvoice()} disabled={saving}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Criar</Button></DialogFooter>
     </DialogContent></Dialog>
     <Dialog open={pricesOpen} onOpenChange={setPricesOpen}><DialogContent className="sm:max-w-2xl"><DialogHeader><DialogTitle>Preços dos planos</DialogTitle></DialogHeader>
-      <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">{plans.map((plan, index) => <div key={plan.id} className="grid items-end gap-3 rounded-md border p-3 sm:grid-cols-[1fr_auto_auto]">
-        <div><p className="font-medium">{plan.name}</p><p className="text-xs text-muted-foreground">{plan.code}{priceBaseline.current.find((item) => item.id === plan.id) && (() => {
-          const base = priceBaseline.current.find((item) => item.id === plan.id)!;
-          const changed = base.monthlyPrice !== plan.monthlyPrice || base.annualPrice !== plan.annualPrice || base.currency !== plan.currency;
-          return changed ? <span className="ml-2 font-medium text-cyan-700">alterado</span> : null;
-        })()}</p></div>
+      <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">{plans.map((plan, index) => {
+        const base = priceBaseline.current.find((item) => item.id === plan.id);
+        const changed = !!base && (base.monthlyPrice !== plan.monthlyPrice || base.annualPrice !== plan.annualPrice || base.currency !== plan.currency);
+        return <div key={plan.id} className="grid items-end gap-3 rounded-md border p-3 sm:grid-cols-[1fr_auto_auto]">
+        <div><p className="font-medium">{plan.name}{changed && <span className="ml-2 align-middle text-xs font-medium text-cyan-700">alterado</span>}</p><p className="text-xs text-muted-foreground">{plan.code}</p></div>
         <div className="space-y-1"><Label>Mensal (R$)</Label><Input type="number" min="0" step="0.01" className="w-32" value={plan.monthlyPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, monthlyPrice: Number(e.target.value) } : item))} /></div>
         <div className="space-y-1"><Label>Anual (R$)</Label><Input type="number" min="0" step="0.01" className="w-32" value={plan.annualPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, annualPrice: Number(e.target.value) } : item))} /></div>
-      </div>)}</div>
+      </div>;
+      })}</div>
       <DialogFooter><Button variant="outline" onClick={() => { setPlans(priceBaseline.current.map((plan) => ({ ...plan }))); setPricesOpen(false); }}>Cancelar</Button><Button onClick={() => void savePrices()} disabled={saving || priceChanges.length === 0}><Save className="mr-2 h-4 w-4" />{priceChanges.length > 0 ? `Salvar ${priceChanges.length} alteração(ões)` : "Salvar"}</Button></DialogFooter>
     </DialogContent></Dialog>
     <Dialog open={!!pendingStatus} onOpenChange={(open) => { if (!open) setPendingStatus(null); }}><DialogContent>
@@ -295,6 +438,45 @@ export default function BOFinanceiro() {
       <DialogFooter>
         <Button variant="outline" onClick={() => setPendingStatus(null)}>Voltar</Button>
         <Button variant="destructive" onClick={() => void confirmStatus()}>Confirmar</Button>
+      </DialogFooter>
+    </DialogContent></Dialog>
+    <Dialog open={!!detailsTarget} onOpenChange={(open) => { if (!open) setDetailsTarget(null); }}><DialogContent>
+      <DialogHeader>
+        <DialogTitle>Detalhes da fatura</DialogTitle>
+        <DialogDescription>{detailsTarget ? `${detailsTarget.tenantName} · vence em ${dueDateBR(detailsTarget.dueDate)} · ${formatCurrencyBRL(detailsTarget.amount)}` : ""}</DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-4">
+        <div className="space-y-2"><Label>URL da fatura / documento</Label><Input value={detailsForm.invoiceUrl} onChange={(e) => setDetailsForm((form) => ({ ...form, invoiceUrl: e.target.value }))} placeholder="https://..." /></div>
+        <div className="space-y-2"><Label>Observações</Label><Textarea rows={3} value={detailsForm.notes} onChange={(e) => setDetailsForm((form) => ({ ...form, notes: e.target.value }))} /></div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setDetailsTarget(null)}>Cancelar</Button>
+        <Button onClick={() => void saveDetails()} disabled={saving}><Save className="mr-2 h-4 w-4" />Salvar detalhes</Button>
+      </DialogFooter>
+    </DialogContent></Dialog>
+    <Dialog open={!!linkTarget} onOpenChange={(open) => { if (!open) setLinkTarget(null); }}><DialogContent>
+      <DialogHeader>
+        <DialogTitle>Vincular cobrança APF à fatura</DialogTitle>
+        <DialogDescription>{linkTarget ? `${linkTarget.organizationName} · competência ${competenceBR(linkTarget.competence)} · ${formatCurrencyBRL(linkTarget.grossAmount)}` : ""}</DialogDescription>
+      </DialogHeader>
+      <div className="grid gap-4">
+        <div className="space-y-2"><Label>Fatura pendente da organização</Label>
+          {linkCandidates.length === 0
+            ? <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">Nenhuma fatura pendente para esta organização. Crie uma fatura na aba Faturas e volte aqui.</p>
+            : <Select value={linkForm.billingRecordId} onValueChange={(value) => setLinkForm((form) => ({ ...form, billingRecordId: value }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione a fatura" /></SelectTrigger>
+                <SelectContent>{linkCandidates.map((candidate) => <SelectItem key={candidate.id} value={candidate.id}>{dueDateBR(candidate.dueDate)} · {formatCurrencyBRL(candidate.amount)} · {candidate.planType}</SelectItem>)}</SelectContent>
+              </Select>}
+        </div>
+        <div className="space-y-2"><Label>Nota do vínculo (opcional)</Label><Textarea rows={2} value={linkForm.note} onChange={(e) => setLinkForm((form) => ({ ...form, note: e.target.value }))} /></div>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={linkForm.markInvoiced} onCheckedChange={(checked) => setLinkForm((form) => ({ ...form, markInvoiced: checked === true }))} />
+          Marcar como faturada imediatamente
+        </label>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setLinkTarget(null)}>Cancelar</Button>
+        <Button onClick={() => void confirmLink()} disabled={saving || linkCandidates.length === 0 || !linkForm.billingRecordId}>Vincular</Button>
       </DialogFooter>
     </DialogContent></Dialog>
   </div>;

@@ -1,4 +1,4 @@
-export const BACKOFFICE_ROLES = [
+﻿export const BACKOFFICE_ROLES = [
   "admin",
   "financeiro",
   "suporte",
@@ -64,7 +64,35 @@ export interface BillingRecord {
   billingPeriod: string;
   dueDate: string;
   paidAt: string | null;
+  invoiceUrl: string | null;
+  notes: string | null;
   createdAt: string;
+}
+
+export type ApfBillingRequestStatus = "submitted" | "linked" | "invoiced" | "cancelled";
+
+export const APF_BILLING_STATUS_LABELS: Record<ApfBillingRequestStatus, string> = {
+  submitted: "Aguardando vÃ­nculo",
+  linked: "Vinculada",
+  invoiced: "Faturada",
+  cancelled: "Cancelada",
+};
+
+export interface ApfBillingRequest {
+  id: string;
+  batchId: string;
+  organizationId: string;
+  organizationName: string;
+  competence: string;
+  approvedPf: number;
+  unitPrice: number;
+  grossAmount: number;
+  currency: string;
+  dueDate: string;
+  status: ApfBillingRequestStatus;
+  billingRecordId: string | null;
+  note: string | null;
+  submittedAt: string;
 }
 
 export interface SupportTicket {
@@ -108,3 +136,4 @@ export interface BillingCustomer {
   planName: string | null;
   planCode: string | null;
 }
+

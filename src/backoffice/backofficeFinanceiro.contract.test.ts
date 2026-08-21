@@ -5,6 +5,7 @@ const source = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n
 
 describe("backoffice financeiro contract", () => {
   const sql = source("supabase/migrations/20260821000000_financeiro_hardening.sql");
+  const sqlDetails = source("supabase/migrations/20260821010000_financeiro_invoice_details.sql");
   const service = source("src/backoffice/services/backoffice.service.ts");
   const page = source("src/backoffice/pages/BOFinanceiro.tsx");
 
@@ -121,4 +122,49 @@ describe("backoffice financeiro contract", () => {
     expect(page).toContain('from "@/shared/components/common/ErrorState"');
     expect(page).toContain("onRetry={() => void load()}");
   });
+
+  it("exposes the APF billing bridge through service functions", () => {
+    expect(service).toContain('from("apf_measurement_billing_requests")');
+    expect(service).toContain('"link_apf_billing_record"');
+    expect(service).toContain("p_mark_invoiced");
+  });
+
+  it("keeps invoice details update staff-only and audited", () => {
+    expect(sqlDetails).toContain("assert_backoffice_staff(array['admin', 'financeiro'])");
+    expect(sqlDetails).toContain("'billing_details_updated'");
+    expect(sqlDetails).toContain("public.backoffice_audit_log");
+    expect(sqlDetails).toMatch(/revoke all on function public\.update_backoffice_billing_details\(uuid, text, text\) from public, anon/);
+    expect(sqlDetails).toMatch(/grant execute on function public\.update_backoffice_billing_details\(uuid, text, text\) to authenticated, service_role/);
+  });
+
+  it("service maps invoice_url and notes into billing records", () => {
+    expect(service).toContain("invoiceUrl:");
+    const types = source("src/backoffice/types/backoffice.types.ts");
+    expect(types).toContain("invoiceUrl: string | null");
+    expect(types).toContain("notes: string | null");
+  });
+
+  it("renders the APF tab with link flow", () => {
+    expect(page).toContain('from "@/components/ui/tabs"');
+    expect(page).toContain("Cobranças APF");
+    expect(page).toContain("listApfBillingRequests()");
+    expect(page).toContain("linkApfBillingRequest({");
+    expect(page).toContain("APF_BILLING_STATUS_LABELS[request.status]");
+  });
+
+  it("offers quick payment and details editing on invoice rows", () => {
+    expect(page).toContain('title="Marcar como pago"');
+    expect(page).toContain('title="Editar detalhes"');
+    expect(page).toContain("updateBillingDetails(detailsTarget.id");
+    expect(service).toContain('"update_backoffice_billing_details"');
+  });
+
+  it("shows upcoming 30-day invoices card", () => {
+    expect(page).toContain('{ label: "Próximos 30 dias"');
+    expect(totalsUpcoming(page)).toBe(true);
+  });
 });
+
+function totalsUpcoming(source: string): boolean {
+  return source.includes("upcomingTotal") && source.includes("upcomingCount");
+}

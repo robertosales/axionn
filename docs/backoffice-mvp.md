@@ -46,9 +46,32 @@ Estrutura:
 O Backoffice usa `AuthenticatedRoute`, sem `OrganizationOperationalGuard`, para
 nao depender da organizacao ativa do cliente.
 
+## Financeiro (lote concluido)
+
+Frontend: `src/backoffice/pages/BOFinanceiro.tsx` com abas Faturas e Cobrancas APF,
+paginacao, filtros de status/periodo, exportacao CSV com BOM (`src/lib/exportToCsv`),
+maquina de estados de status com motivo obrigatorio para cancelamento/reembolso,
+marcacao rapida de pagamento, edicao de detalhes (URL/observacoes) e dialogo de
+vinculo das cobrancas APF as faturas.
+
+Banco:
+
+- `supabase/migrations/20260708210000_backoffice_operations.sql` — `billing_records` base
+- `supabase/migrations/20260708220000_backoffice_billing_cycle.sql` — precificacao e geracao recorrente
+- `supabase/migrations/20260821000000_financeiro_hardening.sql` — MRR/ARR por assinatura ativa,
+  `mark_overdue_invoices()`, maquina de estados em `update_backoffice_billing_status(uuid,text,text)`
+  e geracao mensal idempotente com `p_dry_run`
+- `supabase/migrations/20260821010000_financeiro_invoice_details.sql` —
+  `update_backoffice_billing_details(uuid,text,text)`
+
+Integracao APF: a leitura usa `apf_measurement_billing_requests` (RLS libera staff do
+backoffice) e o vinculo usa `link_apf_billing_record` (migration
+`20260818140000_apf_billing_bridge.sql`). Toda mutacao grava em `backoffice_audit_log`.
+
+Contract test: `src/backoffice/backofficeFinanceiro.contract.test.ts`.
+
 ## Proximos lotes
 
 - Clientes: detalhes de tenant, historico e links de suporte.
-- Financeiro: `billing_records`, faturas e exportacao.
 - Suporte: `support_tickets` e workflow.
 - Analytics: MRR, ARR, churn e snapshots diarios.

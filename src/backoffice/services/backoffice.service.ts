@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
+  type ApfBillingRequest,
+  type ApfBillingRequestStatus,
   type BackofficeDashboardSummary,
   type BackofficeRole,
   type BackofficeStaffMember,
@@ -117,6 +119,8 @@ function normalizeBilling(row: Record<string, unknown>): BillingRecord {
     billingPeriod: String(row.billing_period ?? ""),
     dueDate: String(row.due_date ?? ""),
     paidAt: row.paid_at == null ? null : String(row.paid_at),
+    invoiceUrl: row.invoice_url == null ? null : String(row.invoice_url),
+    notes: row.notes == null ? null : String(row.notes),
     createdAt: String(row.created_at ?? ""),
   };
 }
@@ -200,6 +204,62 @@ export async function generateMonthlyBilling(referenceDate: string, dueDay: numb
   });
   if (error) throw error;
   return toNumber(data);
+}
+
+export async function updateBillingDetails(id: string, invoiceUrl: string | null, notes: string | null) {
+  const { error } = await (supabase as any).rpc("update_backoffice_billing_details", {
+    p_billing_id: id,
+    p_invoice_url: invoiceUrl,
+    p_notes: notes,
+  });
+  if (error) throw error;
+}
+
+export async function listApfBillingRequests(): Promise<ApfBillingRequest[]> {
+  const { data: rows, error } = await (supabase as any)
+    .from("apf_measurement_billing_requests")
+    .select("*")
+    .order("submitted_at", { ascending: false });
+  if (error) throw error;
+  const list = ((rows ?? []) as Array<Record<string, unknown>>);
+  const orgIds = [...new Set(list.map((row) => String(row.organization_id)))];
+  const orgNames = new Map<string, string>();
+  if (orgIds.length > 0) {
+    const { data: orgs, error: orgsError } = await (supabase as any)
+      .from("organizations")
+      .select("id,name")
+      .in("id", orgIds);
+    if (orgsError) throw orgsError;
+    for (const org of (orgs ?? []) as Array<{ id: string; name: string }>) orgNames.set(org.id, org.name);
+  }
+  return list.map((row) => ({
+    id: String(row.id),
+    batchId: String(row.batch_id),
+    organizationId: String(row.organization_id),
+    organizationName: orgNames.get(String(row.organization_id)) ?? "",
+    competence: String(row.competence ?? ""),
+    approvedPf: toNumber(row.approved_pf),
+    unitPrice: toNumber(row.unit_price),
+    grossAmount: toNumber(row.gross_amount),
+    currency: String(row.currency ?? "BRL"),
+    dueDate: String(row.due_date ?? ""),
+    status: String(row.status ?? "submitted") as ApfBillingRequestStatus,
+    billingRecordId: row.billing_record_id == null ? null : String(row.billing_record_id),
+    note: row.note == null ? null : String(row.note),
+    submittedAt: String(row.submitted_at ?? ""),
+  }));
+}
+
+export async function linkApfBillingRequest(payload: {
+  requestId: string; billingRecordId: string; note: string | null; markInvoiced: boolean;
+}) {
+  const { error } = await (supabase as any).rpc("link_apf_billing_record", {
+    p_request_id: payload.requestId,
+    p_billing_record_id: payload.billingRecordId,
+    p_note: payload.note,
+    p_mark_invoiced: payload.markInvoiced,
+  });
+  if (error) throw error;
 }
 
 function normalizeTicket(row: Record<string, unknown>): SupportTicket {

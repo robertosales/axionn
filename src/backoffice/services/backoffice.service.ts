@@ -127,12 +127,19 @@ export async function listBillingRecords() {
   return ((data ?? []) as Record<string, unknown>[]).map(normalizeBilling);
 }
 
-export async function updateBillingStatus(id: string, status: BillingStatus) {
+export async function updateBillingStatus(id: string, status: BillingStatus, reason?: string) {
   const { error } = await (supabase as any).rpc("update_backoffice_billing_status", {
     p_billing_id: id,
     p_status: status,
+    p_reason: reason?.trim() ? reason.trim() : null,
   });
   if (error) throw error;
+}
+
+export async function markOverdueInvoices() {
+  const { data, error } = await (supabase as any).rpc("mark_overdue_invoices");
+  if (error) throw error;
+  return toNumber(data);
 }
 
 export async function listBackofficePlanPrices(): Promise<BackofficePlanPrice[]> {

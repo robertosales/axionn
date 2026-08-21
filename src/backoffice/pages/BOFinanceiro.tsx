@@ -3,7 +3,7 @@ import { Download, Loader2, Plus, RefreshCw, Save, Search, Settings2 } from "luc
 import { toast } from "sonner";
 import {
   createBillingRecord, generateMonthlyBilling, listBackofficePlanPrices,
-  listBillingCustomers, listBillingRecords, updateBackofficePlanPrice, updateBillingStatus,
+  listBillingCustomers, listBillingRecords, markOverdueInvoices, updateBackofficePlanPrice, updateBillingStatus,
 } from "@/backoffice/services/backoffice.service";
 import type { BackofficePlanPrice, BillingCustomer, BillingRecord, BillingStatus } from "@/backoffice/types/backoffice.types";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,9 @@ export default function BOFinanceiro() {
   const [invoice, setInvoice] = useState({ tenantId: "", billingPeriod: "monthly", dueDate: today(), amount: "", notes: "" });
 
   useEffect(() => {
-    void Promise.all([listBillingRecords(), listBackofficePlanPrices(), listBillingCustomers()])
+    void markOverdueInvoices()
+      .catch(() => undefined)
+      .then(() => Promise.all([listBillingRecords(), listBackofficePlanPrices(), listBillingCustomers()]))
       .then(([billing, prices, organizations]) => { setRecords(billing); setPlans(prices); setCustomers(organizations); })
       .catch(() => toast.error("Erro ao carregar o financeiro.")).finally(() => setLoading(false));
   }, []);

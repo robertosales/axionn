@@ -21,6 +21,8 @@ describe("ReportDataTable", () => {
     const sortButton = screen.getByRole("button", { name: "Ordenar por Nome" });
 
     expect(nameHeader).toHaveAttribute("aria-sort", "none");
+    fireEvent.click(nameHeader);
+    expect(nameHeader).toHaveAttribute("aria-sort", "none");
 
     fireEvent.click(sortButton);
     expect(nameHeader).toHaveAttribute("aria-sort", "ascending");

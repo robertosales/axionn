@@ -47,7 +47,13 @@ describe("gestão segura de participações em times", () => {
     expect(source).toContain("setProfilesError(");
     expect(source).toContain("Falha ao carregar membros");
     expect(source).toContain("Tentar novamente");
-    expect(source).toContain("setLoading(false);\n        return;");
+    expect(source).toMatch(/setLoading\(false\);\s+return;/);
     expect(source).toContain("setAllProfiles([]);");
+  });
+
+  it("renderiza uma única instância dos diálogos de gestão fora da lista", () => {
+    expect(source.match(/<ConfirmDialog/g)).toHaveLength(1);
+    expect(source.match(/<Dialog open=\{Boolean\(memberToEdit\)\}/g)).toHaveLength(1);
+    expect(source.indexOf("<ConfirmDialog")).toBeGreaterThan(source.indexOf("sortedMembers.length === 0"));
   });
 });

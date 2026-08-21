@@ -753,7 +753,24 @@ export function TeamMembersManager() {
                         <span className="h-2 w-2 rounded-full bg-emerald-500" />
                         Ativo
                       </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      {sortedMembers.length === 0 && !loading && !loadError && (
+        <Card className="border-dashed p-8 text-center">
+          <p className="text-muted-foreground">
+            {search
+              ? `Nenhum membro encontrado para "${search}".`
+              : "Nenhum membro neste time ainda."}
+          </p>
+        </Card>
+      )}
 
       <ConfirmDialog
         open={Boolean(memberToRemove)}
@@ -832,23 +849,6 @@ export function TeamMembersManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {sortedMembers.length === 0 && !loading && !loadError && (
-        <Card className="border-dashed p-8 text-center">
-          <p className="text-muted-foreground">
-            {search
-              ? `Nenhum membro encontrado para "${search}".`
-              : "Nenhum membro neste time ainda."}
-          </p>
-        </Card>
-      )}
     </div>
   );
 }

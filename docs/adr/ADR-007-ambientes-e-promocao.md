@@ -1,45 +1,37 @@
-# ADR-007 — Ambientes e promoção imutável
+# ADR-007 — Banco via Lovable e promoção imutável
 
-- Status: aceito como guarda-corpo técnico; provisionamento depende do operador
+- Status: aceito
 - Data: 2026-08-21
 
 ## Contexto
 
-O estado operacional mais recente registra que o Lovable Cloud é produção e que não há Supabase de staging separado. Em paralelo, o repositório possui um workflow capaz de vincular a CLI e aplicar migrations a um projeto configurado como staging. Sem validação de identidade, um secret incorreto poderia apontar esse workflow para produção.
+O Lovable Cloud é o backend remoto de produção do Axionn e não há staging persistente autorizado. Migrations, Edge Functions, secrets, cron e webhooks precisam ser aplicados pelo fluxo suportado do Lovable. O GitHub Actions não pode vincular a CLI nem escrever em projetos Supabase remotos.
 
-O workflow de release também alterava `develop` depois do disparo por tag. Assim, a release poderia não representar o conteúdo imutável da tag.
+O histórico contém cinco versões numéricas duplicadas de migrations. Como esses arquivos podem estar publicados, renomeá-los sem confrontar o estado do Lovable poderia corromper a rastreabilidade.
 
 ## Decisão
 
-1. Lovable Cloud continua sendo produção e nunca será alvo da Supabase CLI.
-2. Validação remota automatizada só pode rodar em projeto Supabase separado e homologado.
-3. O environment protegido `staging` deve possuir refs distintas de staging e produção; o workflow falha quando forem iguais.
-4. Toda execução exige confirmação explícita. Aplicar migrations exige confirmação diferente da validação.
-5. A URL do banco deve pertencer à ref de staging declarada.
-6. Na ausência desse ambiente, somente testes locais/CI e operações manuais autorizadas no Lovable são permitidos; o gate remoto permanece pendente.
-7. Uma release é criada somente a partir de tag cujo commit já pertence a `main` e cuja versão coincide com `package.json`. O workflow não altera branches nem arquivos.
+1. Toda mudança remota de banco ou Edge Function é preparada no repositório e executada pelo Lovable.
+2. GitHub Actions faz somente inventário, análise estática, testes TypeScript e validação de contratos.
+3. Workflows não recebem credenciais de banco e não executam `supabase link`, `db push`, `db reset`, `migration repair`, `functions deploy` ou `--linked`.
+4. As cinco colisões existentes ficam numa allowlist exata e imutável. Qualquer nova colisão reprova o CI.
+5. Migrations publicadas não são renomeadas nem reescritas. Correções usam versões novas e aditivas.
+6. Cada lote remoto possui pacote Lovable com preflight, ordem, pós-validação, rollback e evidência de execução.
+7. Uma release só é criada a partir de tag cujo commit já pertence a `main` e cuja versão coincide com `package.json`. O workflow não altera branches.
 
-## Configuração obrigatória de `staging`
+## Gates
 
-- aprovação manual de mantenedor;
-- `SUPABASE_STAGING_PROJECT_REF`;
-- `SUPABASE_PRODUCTION_PROJECT_REF`, usada somente para impedir identidade entre ambientes;
-- `SUPABASE_STAGING_DB_PASSWORD`;
-- `SUPABASE_STAGING_DB_URL`;
-- `SUPABASE_ACCESS_TOKEN` restrito ao staging quando suportado.
-
-Confirmações:
-
-- `VALIDATE-ISOLATED-STAGING`: dry-run e testes;
-- `APPLY-ISOLATED-STAGING`: aplicação de migrations e testes.
+- CI local/estático verde;
+- pacote Lovable revisado;
+- aplicação confirmada pelo operador do Lovable;
+- pós-validação e jornadas afetadas aprovadas;
+- PR protegido `develop → main` com revisão;
+- tag criada somente depois do merge.
 
 ## Consequências
 
-- o workflow não funciona até existir staging real e isolado, o que é intencional;
-- produção não pode ser usada para satisfazer os gates remotos;
-- tags criadas antes da promoção para `main` falham em vez de publicar artefato divergente;
-- o bump de versão precisa ser commitado e validado antes da tag.
+O CI não declara que migrations foram aplicadas nem substitui pgTAP remoto. A promoção permanece bloqueada até a devolução das evidências do Lovable. Em contrapartida, nenhuma credencial ou comando de mutação remota entra nos workflows do GitHub.
 
 ## Rollback
 
-As mudanças são guards de CI. Em caso de falso negativo, corrigir a configuração ou o parser do host; não remover a comparação com produção nem executar a CLI no Lovable.
+O rollback segue o arquivo específico do pacote Lovable ou uma migration aditiva de forward-fix. Nunca usar reset, repair ou reescrita do histórico remoto.

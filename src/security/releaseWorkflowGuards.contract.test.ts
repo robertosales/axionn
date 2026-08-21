@@ -2,15 +2,22 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const staging = readFileSync(".github/workflows/staging-tenancy-validation.yml", "utf8");
+const database = readFileSync(".github/workflows/database-tests.yml", "utf8");
 const release = readFileSync(".github/workflows/release.yml", "utf8");
 
 describe("release workflow safety guards", () => {
-  it("refuses to treat production as isolated staging", () => {
-    expect(staging).toContain("SUPABASE_PRODUCTION_PROJECT_REF");
-    expect(staging).toContain('SUPABASE_PROJECT_REF" == "$SUPABASE_PRODUCTION_PROJECT_REF');
-    expect(staging).toContain("VALIDATE-ISOLATED-STAGING");
-    expect(staging).toContain("APPLY-ISOLATED-STAGING");
-    expect(staging).toContain('db_host" != *"$SUPABASE_PROJECT_REF"*');
+  it("keeps database workflows read-only and delegates remote changes to Lovable", () => {
+    const workflows = `${staging}\n${database}`;
+    expect(staging).toContain("Validate Lovable handoff package");
+    expect(workflows).not.toMatch(/supabase (link|db push|db reset|migration repair|functions deploy)/);
+    expect(workflows).not.toContain("--linked");
+    expect(workflows).not.toContain("SUPABASE_ACCESS_TOKEN");
+    expect(workflows).not.toContain("SUPABASE_DB_PASSWORD");
+  });
+
+  it("rejects tracked runtime environment files", () => {
+    expect(staging).toContain("Reject tracked environment files");
+    expect(staging).toContain("git ls-files");
   });
 
   it("publishes the immutable tagged commit only after main promotion", () => {

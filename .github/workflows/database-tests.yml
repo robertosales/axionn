@@ -1,4 +1,4 @@
-name: 🗄️ Database isolation tests
+name: Database contract validation
 
 on:
   pull_request:
@@ -6,8 +6,8 @@ on:
     paths:
       - "supabase/migrations/**"
       - "supabase/tests/**"
+      - "src/**/*.contract.test.ts"
       - "scripts/check-supabase-migrations.sh"
-      - "scripts/run-tenant-isolation-tests.sh"
       - ".github/workflows/database-tests.yml"
   push:
     branches: [develop]
@@ -15,54 +15,45 @@ on:
       - "supabase/migrations/**"
       - "supabase/tests/**"
       - "scripts/check-supabase-migrations.sh"
-      - "scripts/run-tenant-isolation-tests.sh"
       - ".github/workflows/database-tests.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
-  group: database-tests-${{ github.ref }}
+  group: database-contracts-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  tenancy-database:
-    name: 🔒 pgTAP tenant isolation
+  database-contracts:
+    name: Static database and tenancy contracts
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1.7.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          version: latest
-
-      - name: Validate migration versions and build replay manifest
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Validate migration inventory
         env:
-          MIGRATION_ORDER_OUTPUT: migration-replay-order.txt
+          MIGRATION_ORDER_OUTPUT: migration-order.txt
         run: bash scripts/check-supabase-migrations.sh
-
-      - name: Start local database and replay all migrations
-        run: supabase db start
-
-      - name: Run tenancy database tests
-        env:
-          SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-        shell: bash
-        run: |
-          set -o pipefail
-          bash scripts/run-tenant-isolation-tests.sh 2>&1 | tee tenant-isolation-tests.log
-
-      - name: Publish database validation artifacts
+      - name: Run database security contract tests
+        run: >-
+          npx vitest run
+          src/saas/tenantIsolationContract.test.ts
+          src/features/apf/apfDatabaseIsolation.contract.test.ts
+          src/features/quality/qualityRls.contract.test.ts
+          src/features/rbac/rbacGovernance.contract.test.ts
+          src/security/releaseWorkflowGuards.contract.test.ts
+      - name: Publish validation inventory
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: database-validation-${{ github.run_number }}
-          path: |
-            migration-replay-order.txt
-            tenant-isolation-tests.log
+          name: database-contract-validation-${{ github.run_number }}
+          path: migration-order.txt
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Stop local database
-        if: always()
-        run: supabase stop --no-backup

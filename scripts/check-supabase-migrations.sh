@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MIGRATIONS_DIR="$ROOT_DIR/supabase/migrations"
+LEGACY_COLLISIONS_FILE="$MIGRATIONS_DIR/legacy-version-collisions.txt"
 OUTPUT_FILE="${MIGRATION_ORDER_OUTPUT:-}"
 
 if [[ -n "$OUTPUT_FILE" ]]; then
@@ -15,15 +16,23 @@ if [[ ! -d "$MIGRATIONS_DIR" ]]; then
 fi
 
 mapfile -t MIGRATIONS < <(find "$MIGRATIONS_DIR" -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | LC_ALL=C sort)
-
 if [[ ${#MIGRATIONS[@]} -eq 0 ]]; then
   echo "Nenhuma migration SQL encontrada em: $MIGRATIONS_DIR" >&2
   exit 2
 fi
 
 declare -A VERSION_TO_FILE=()
+declare -A LEGACY_COLLISIONS=()
 declare -a INVALID_FILES=()
 declare -a DUPLICATE_MESSAGES=()
+declare -a LEGACY_MESSAGES=()
+
+if [[ -f "$LEGACY_COLLISIONS_FILE" ]]; then
+  while IFS='|' read -r version first second; do
+    [[ -z "$version" || "$version" == \#* ]] && continue
+    LEGACY_COLLISIONS["$version|$first|$second"]=1
+  done < "$LEGACY_COLLISIONS_FILE"
+fi
 
 for migration in "${MIGRATIONS[@]}"; do
   if [[ ! "$migration" =~ ^([0-9]{8,})_[A-Za-z0-9._-]+\.sql$ ]]; then
@@ -33,7 +42,12 @@ for migration in "${MIGRATIONS[@]}"; do
 
   version="${BASH_REMATCH[1]}"
   if [[ -n "${VERSION_TO_FILE[$version]:-}" ]]; then
-    DUPLICATE_MESSAGES+=("versão $version: ${VERSION_TO_FILE[$version]} <-> $migration")
+    first="${VERSION_TO_FILE[$version]}"
+    if [[ -n "${LEGACY_COLLISIONS["$version|$first|$migration"]:-}" ]]; then
+      LEGACY_MESSAGES+=("versão histórica $version: $first <-> $migration")
+    else
+      DUPLICATE_MESSAGES+=("versão $version: $first <-> $migration")
+    fi
   else
     VERSION_TO_FILE[$version]="$migration"
   fi
@@ -45,7 +59,7 @@ if [[ ${#INVALID_FILES[@]} -gt 0 ]]; then
 fi
 
 if [[ ${#DUPLICATE_MESSAGES[@]} -gt 0 ]]; then
-  echo "Versões de migration duplicadas:" >&2
+  echo "Novas versões de migration duplicadas:" >&2
   printf '  - %s\n' "${DUPLICATE_MESSAGES[@]}" >&2
 fi
 
@@ -54,10 +68,13 @@ if [[ ${#INVALID_FILES[@]} -gt 0 || ${#DUPLICATE_MESSAGES[@]} -gt 0 ]]; then
   exit 3
 fi
 
-echo "# Ordem canônica de replay das migrations Supabase"
-echo "# Gerada em UTC: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-echo "# Total: ${#MIGRATIONS[@]}"
+if [[ ${#LEGACY_MESSAGES[@]} -gt 0 ]]; then
+  echo "Colisões históricas reconhecidas (imutáveis; reconciliar no Lovable):"
+  printf '  - %s\n' "${LEGACY_MESSAGES[@]}"
+fi
 
+echo "# Ordem canônica das migrations Supabase"
+echo "# Total: ${#MIGRATIONS[@]}"
 for index in "${!MIGRATIONS[@]}"; do
   printf '%04d  %s\n' "$((index + 1))" "${MIGRATIONS[$index]}"
 done

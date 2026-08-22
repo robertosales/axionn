@@ -154,6 +154,20 @@ describe("platform plan management contract", () => {
     expect(organizationShell).toContain("Assinatura e cobrança");
   });
 
+  it("keeps the owner account authorized in every administrative authority", () => {
+    const ownerAccessMigration = source(
+      "supabase/migrations/20260822110000_restore_roberto_sales_superadmin_access.sql",
+    );
+
+    expect(ownerAccessMigration).toContain("roberto.sales@gmail.com");
+    expect(ownerAccessMigration).toContain("public.user_roles");
+    expect(ownerAccessMigration).toContain("public.user_module_roles");
+    expect(ownerAccessMigration).toContain("public.platform_user_roles");
+    expect(ownerAccessMigration).toContain("'platform_admin'");
+    expect(ownerAccessMigration).toContain("public.owner_staff_members");
+    expect(ownerAccessMigration).toContain("on conflict (user_id, role) do nothing");
+  });
+
   it("exposes only platform-admin RPCs for plan and subscription mutations", () => {
     expect(migration).toContain("perform public.assert_platform_admin_v2()");
     expect(migration).toContain("create_platform_saas_plan_v1");

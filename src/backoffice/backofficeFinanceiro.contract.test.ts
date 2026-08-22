@@ -6,6 +6,7 @@ const source = (path: string) => readFileSync(path, "utf8").replace(/\r\n/g, "\n
 describe("backoffice financeiro contract", () => {
   const sql = source("supabase/migrations/20260821000000_financeiro_hardening.sql");
   const sqlDetails = source("supabase/migrations/20260821010000_financeiro_invoice_details.sql");
+  const sqlConcurrency = source("supabase/migrations/20260822000000_financeiro_status_concurrency.sql");
   const service = source("src/backoffice/services/backoffice.service.ts");
   const page = source("src/backoffice/pages/BOFinanceiro.tsx");
 
@@ -32,14 +33,34 @@ describe("backoffice financeiro contract", () => {
   });
 
   it("enforces the billing state machine with terminal states and required reason", () => {
-    expect(sql).toContain("p_reason text default null");
-    expect(sql).toContain("message = 'billing_reason_required'");
-    expect(sql).toContain("message = 'billing_transition_invalid'");
-    expect(sql).toContain("(v_current = 'pending' and p_status in ('paid', 'overdue', 'cancelled'))");
-    expect(sql).toContain("(v_current = 'overdue' and p_status in ('paid', 'cancelled'))");
-    expect(sql).toContain("(v_current = 'paid' and p_status = 'refunded')");
-    expect(sql).toContain("when p_status = 'refunded' then paid_at else null end");
+    expect(sqlConcurrency).toContain("p_reason text default null");
+    expect(sqlConcurrency).toContain("assert_backoffice_staff(array['admin', 'financeiro'])");
+    expect(sqlConcurrency).toContain("message = 'billing_reason_required'");
+    expect(sqlConcurrency).toContain("message = 'billing_transition_invalid'");
+    expect(sqlConcurrency).toContain("(v_current = 'pending' and p_status in ('paid', 'overdue', 'cancelled'))");
+    expect(sqlConcurrency).toContain("(v_current = 'overdue' and p_status in ('paid', 'cancelled'))");
+    expect(sqlConcurrency).toContain("(v_current = 'paid' and p_status = 'refunded')");
+    expect(sqlConcurrency).toContain("when p_status = 'refunded' then b.paid_at");
     expect(sql).toContain("drop function if exists public.update_backoffice_billing_status(uuid, text)");
+  });
+
+  it("serializes concurrent status changes and checks the expected status", () => {
+    expect(sqlConcurrency).toMatch(/from public\.billing_records b[\s\S]*for update/);
+    expect(sqlConcurrency).toContain("and b.status::text = v_current");
+    expect(sqlConcurrency).toContain("message = 'billing_status_concurrent_update'");
+    expect(sqlConcurrency).toContain("errcode = '40001'");
+  });
+
+  it("audits the complete rows before and after the persisted change", () => {
+    expect(sqlConcurrency).toContain("v_before := to_jsonb(v_record)");
+    expect(sqlConcurrency).toContain("returning to_jsonb(b) into v_after");
+    expect(sqlConcurrency).toContain("v_after || jsonb_build_object('reason'");
+    expect(sqlConcurrency).toMatch(
+      /revoke all on function public\.update_backoffice_billing_status\(uuid, text, text\) from public, anon/,
+    );
+    expect(sqlConcurrency).toMatch(
+      /grant execute on function public\.update_backoffice_billing_status\(uuid, text, text\) to authenticated, service_role/,
+    );
   });
 
   it("generates monthly billing as idempotent bulk with dry-run", () => {

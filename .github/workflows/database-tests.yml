@@ -48,6 +48,7 @@ jobs:
           src/features/apf/apfDatabaseIsolation.contract.test.ts
           src/features/quality/qualityRls.contract.test.ts
           src/features/rbac/rbacGovernance.contract.test.ts
+          src/backoffice/backofficeFinancialIntegrity.contract.test.ts
           src/security/releaseWorkflowGuards.contract.test.ts
       - name: Publish validation inventory
         if: always()

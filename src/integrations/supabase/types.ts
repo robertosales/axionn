@@ -19366,7 +19366,11 @@ export type Database = {
         Returns: number
       }
       generate_backoffice_monthly_billing: {
-        Args: { p_due_day?: number; p_reference_date?: string }
+        Args: {
+          p_dry_run?: boolean
+          p_due_day?: number
+          p_reference_date?: string
+        }
         Returns: number
       }
       generate_briefing_agenda: {
@@ -19586,6 +19590,13 @@ export type Database = {
           suspended_tenants: number
           total_tenants: number
           trial_tenants: number
+        }[]
+      }
+      get_backoffice_financial_integrity_violations: {
+        Args: never
+        Returns: {
+          invariant_name: string
+          violation_count: number
         }[]
       }
       get_backoffice_saas_metrics: {

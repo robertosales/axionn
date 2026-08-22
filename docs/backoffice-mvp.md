@@ -63,12 +63,21 @@ Banco:
   e geracao mensal idempotente com `p_dry_run`
 - `supabase/migrations/20260821010000_financeiro_invoice_details.sql` —
   `update_backoffice_billing_details(uuid,text,text)`
+- `supabase/migrations/20260822000000_financeiro_status_concurrency.sql` —
+  serializacao das transicoes de status e auditoria completa antes/depois
+- `supabase/migrations/20260822010000_financeiro_integrity.sql` — constraints
+  monetarias, geracao mensal concorrente idempotente e reconciliacao APF/fatura
 
 Integracao APF: a leitura usa `apf_measurement_billing_requests` (RLS libera staff do
 backoffice) e o vinculo usa `link_apf_billing_record` (migration
 `20260818140000_apf_billing_bridge.sql`). Toda mutacao grava em `backoffice_audit_log`.
 
 Contract test: `src/backoffice/backofficeFinanceiro.contract.test.ts`.
+
+Qualidade e rollout: `src/backoffice/backofficeFinancialIntegrity.contract.test.ts`,
+`src/backoffice/backofficeFinancialQuality.contract.test.ts`,
+`supabase/tests/database/22_backoffice_financial_integrity.test.sql` e
+`docs/financeiro-rollout-runbook.md`.
 
 ## Proximos lotes
 

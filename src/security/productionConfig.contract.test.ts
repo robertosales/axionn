@@ -23,6 +23,20 @@ describe("production configuration contract", () => {
     expect(client).not.toMatch(/https:\/\/[^\s"']+\.supabase\.co/);
   });
 
+  it("limits the public production recovery config to canonical hostnames", async () => {
+    const { getCanonicalProductionSupabaseConfig } = await import(
+      "@/config/supabasePublicConfig"
+    );
+
+    expect(getCanonicalProductionSupabaseConfig("axionn.app")).toMatchObject({
+      url: "https://rgikyyazotqapaxijwui.supabase.co",
+    });
+    expect(getCanonicalProductionSupabaseConfig("www.axionn.app")).toBeDefined();
+    expect(getCanonicalProductionSupabaseConfig("preview.axionn.app")).toBeUndefined();
+    expect(getCanonicalProductionSupabaseConfig("localhost")).toBeUndefined();
+    expect(getCanonicalProductionSupabaseConfig("axionn.app.attacker.example")).toBeUndefined();
+  });
+
   it("documents the required production variables", () => {
     const example = source(".env.production.example");
 

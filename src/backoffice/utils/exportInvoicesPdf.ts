@@ -1,5 +1,3 @@
-import { formatCurrencyBRL, parseBRLInput } from "@/lib/currency";
-
 export async function exportInvoicesToPdf(rows: Array<{
   cliente: string; plano: string; valor: string; vencimento: string; status: string; periodo: string;
 }>, filename: string) {

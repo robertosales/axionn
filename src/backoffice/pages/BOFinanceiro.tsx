@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronLeft, ChevronRight, Download, Loader2, Link2, Pencil, Plus, Receipt, RefreshCw, Save, Search, Settings2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Bell, CheckCircle2, ChevronLeft, ChevronRight, Download, Loader2, Link2, Pencil, Plus, Receipt, RefreshCw, Save, Search, Settings2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import {
   createBillingRecord, generateMonthlyBilling, linkApfBillingRequest, listApfBillingRequests,
-  listBackofficePlanPrices, listBillingCustomers, listBillingRecords, markOverdueInvoices,
-  updateBackofficePlanPrice, updateBillingDetails, updateBillingStatus,
+  listBackofficePlanPrices, listBillingCustomers, listBillingRecords, listPlanPriceHistory, markOverdueInvoices,
+  recordBillingReminder, updateBackofficePlanPrice, updateBillingDetails, updateBillingStatus,
 } from "@/backoffice/services/backoffice.service";
+import { exportInvoicesToPdf } from "@/backoffice/utils/exportInvoicesPdf";
 import { billingReasonSchema, invoiceFormSchema, planPriceSchema } from "@/backoffice/schemas/billing.schema";
 import {
   APF_BILLING_STATUS_LABELS, BILLING_STATUSES, BILLING_STATUS_LABELS, BILLING_STATUS_TRANSITIONS,
   type ApfBillingRequest, type ApfBillingRequestStatus, type BackofficePlanPrice,
-  type BillingCustomer, type BillingRecord, type BillingStatus,
+  type BillingCustomer, type BillingRecord, type BillingStatus, type PlanPriceHistoryEntry,
 } from "@/backoffice/types/backoffice.types";
 import { exportToCsv } from "@/lib/exportToCsv";
 import { formatCurrencyBRL, parseBRLInput } from "@/lib/currency";
@@ -30,6 +31,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const PAGE_SIZE = 10;
 
 type PeriodFilter = "all" | "month" | "next30";
+type SortKey = "tenantName" | "amount" | "dueDate" | "status";
 
 const statusVariant: Record<BillingStatus, "default" | "secondary" | "destructive" | "outline"> = {
   paid: "default",
@@ -62,6 +64,15 @@ function withinPeriod(dueDate: string, period: PeriodFilter) {
   return dueDate >= today() && dueDate <= isoDate(end);
 }
 
+function compareRows(a: BillingRecord, b: BillingRecord, key: SortKey, dir: "asc" | "desc") {
+  const mult = dir === "asc" ? 1 : -1;
+  if (key === "tenantName") return mult * a.tenantName.localeCompare(b.tenantName, "pt-BR");
+  if (key === "amount") return mult * (a.amount - b.amount);
+  if (key === "dueDate") return mult * (a.dueDate.localeCompare(b.dueDate));
+  if (key === "status") return mult * a.status.localeCompare(b.status, "pt-BR");
+  return 0;
+}
+
 export default function BOFinanceiro() {
   const [records, setRecords] = useState<BillingRecord[]>([]);
   const [plans, setPlans] = useState<BackofficePlanPrice[]>([]);
@@ -74,8 +85,12 @@ export default function BOFinanceiro() {
   const [filter, setFilter] = useState("all");
   const [period, setPeriod] = useState<PeriodFilter>("all");
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<SortKey>("dueDate");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
+  const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<PlanPriceHistoryEntry[]>([]);
   const [invoice, setInvoice] = useState({ tenantId: "", billingPeriod: "monthly", dueDate: today(), amount: "", notes: "" });
   const [pendingStatus, setPendingStatus] = useState<{ record: BillingRecord; status: BillingStatus } | null>(null);
   const [reason, setReason] = useState("");
@@ -83,6 +98,8 @@ export default function BOFinanceiro() {
   const [detailsForm, setDetailsForm] = useState({ invoiceUrl: "", notes: "" });
   const [linkTarget, setLinkTarget] = useState<ApfBillingRequest | null>(null);
   const [linkForm, setLinkForm] = useState({ billingRecordId: "", note: "", markInvoiced: false });
+  const [reminderTarget, setReminderTarget] = useState<BillingRecord | null>(null);
+  const [reminderNote, setReminderNote] = useState("");
   const priceBaseline = useRef<BackofficePlanPrice[]>([]);
 
   const load = useCallback(async () => {
@@ -109,11 +126,13 @@ export default function BOFinanceiro() {
 
   const visible = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
-    return records.filter((record) =>
+    let filtered = records.filter((record) =>
       (filter === "all" || record.status === filter) &&
       withinPeriod(record.dueDate, period) &&
       record.tenantName.toLocaleLowerCase("pt-BR").includes(term));
-  }, [records, filter, period, search]);
+    filtered = [...filtered].sort((a, b) => compareRows(a, b, sortKey, sortDir));
+    return filtered;
+  }, [records, filter, period, search, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -134,6 +153,17 @@ export default function BOFinanceiro() {
   }, [records]);
 
   const apfPendingCount = useMemo(() => apfRequests.filter((request) => request.status === "submitted").length, [apfRequests]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+    setPage(1);
+  };
+
+  const SortIcon = ({ key }: { key: SortKey }) => {
+    if (sortKey !== key) return <span className="ml-1 text-muted-foreground">⇅</span>;
+    return sortDir === "asc" ? <ArrowUp className="ml-1 h-3.5 w-3.5" /> : <ArrowDown className="ml-1 h-3.5 w-3.5" />;
+  };
 
   const saveInvoice = async () => {
     const parsed = invoiceFormSchema.safeParse(invoice);
@@ -240,6 +270,11 @@ export default function BOFinanceiro() {
     finally { setSaving(false); }
   };
 
+  const openPriceHistory = async () => {
+    try { const hist = await listPlanPriceHistory(); setPriceHistory(hist); setPriceHistoryOpen(true); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao carregar histórico de preços."); }
+  };
+
   const linkCandidates = useMemo(() =>
     linkTarget ? records.filter((r) => r.tenantId === linkTarget.organizationId && r.status === "pending") : [],
   [linkTarget, records]);
@@ -266,6 +301,23 @@ export default function BOFinanceiro() {
     finally { setSaving(false); }
   };
 
+  const openReminder = (record: BillingRecord) => {
+    setReminderNote("");
+    setReminderTarget(record);
+  };
+
+  const confirmReminder = async () => {
+    if (!reminderTarget) return;
+    setSaving(true);
+    try {
+      await recordBillingReminder(reminderTarget.id, reminderNote.trim() || null);
+      toast.success("Lembrete registrado.");
+      setReminderTarget(null);
+      await load();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Erro ao registrar lembrete."); }
+    finally { setSaving(false); }
+  };
+
   const exportCsv = () => exportToCsv({
     filename: "faturas-backoffice",
     rows: visible.map((record) => ({
@@ -278,6 +330,18 @@ export default function BOFinanceiro() {
     })),
   });
 
+  const exportPdf = () => exportInvoicesToPdf(
+    visible.map((record) => ({
+      cliente: record.tenantName,
+      plano: record.planType,
+      valor: formatCurrencyBRL(record.amount),
+      vencimento: dueDateBR(record.dueDate),
+      status: BILLING_STATUS_LABELS[record.status],
+      periodo: record.billingPeriod,
+    })),
+    "faturas-backoffice"
+  );
+
   return <div className="space-y-5">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="text-xl font-semibold">Financeiro</h1><p className="text-sm text-muted-foreground">Faturas, receitas e inadimplência.</p></div>
@@ -286,6 +350,7 @@ export default function BOFinanceiro() {
         <Button variant="outline" onClick={() => void generate()} disabled={saving}><RefreshCw className="mr-2 h-4 w-4" />Gerar mensalidade</Button>
         <Button onClick={() => setInvoiceOpen(true)}><Plus className="mr-2 h-4 w-4" />Nova fatura</Button>
         <Button variant="outline" onClick={exportCsv}><Download className="mr-2 h-4 w-4" />CSV</Button>
+        <Button variant="outline" onClick={exportPdf}><FileText className="mr-2 h-4 w-4" />PDF</Button>
       </div>
     </div>
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -477,6 +542,41 @@ export default function BOFinanceiro() {
       <DialogFooter>
         <Button variant="outline" onClick={() => setLinkTarget(null)}>Cancelar</Button>
         <Button onClick={() => void confirmLink()} disabled={saving || linkCandidates.length === 0 || !linkForm.billingRecordId}>Vincular</Button>
+      </DialogFooter>
+    </DialogContent></Dialog>
+    <Dialog open={!!reminderTarget} onOpenChange={(open) => { if (!open) setReminderTarget(null); }}><DialogContent>
+      <DialogHeader>
+        <DialogTitle>Registrar lembrete de cobrança</DialogTitle>
+        <DialogDescription>{reminderTarget ? `${reminderTarget.tenantName} · vence em ${dueDateBR(reminderTarget.dueDate)} · ${reminderTarget.lastReminderAt ? `Último: ${dueDateBR(reminderTarget.lastReminderAt.slice(0,10))}` : "Nenhum lembrete anterior"}` : ""}</DialogDescription>
+      </DialogHeader>
+      <Textarea rows={3} value={reminderNote} onChange={(e) => setReminderNote(e.target.value)} placeholder="Nota opcional para a equipe..." />
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setReminderTarget(null)}>Cancelar</Button>
+        <Button onClick={() => void confirmReminder()} disabled={saving}>Registrar lembrete</Button>
+      </DialogFooter>
+    </DialogContent></Dialog>
+    <Dialog open={!!priceHistoryOpen} onOpenChange={(open) => { if (!open) setPriceHistoryOpen(false); }}><DialogContent className="sm:max-w-3xl">
+      <DialogHeader>
+        <DialogTitle>Histórico de alteração de preços</DialogTitle>
+        <DialogDescription>Registros de auditoria das alterações de preços dos planos (admin/financeiro).</DialogDescription>
+      </DialogHeader>
+      <div className="max-h-[60vh] overflow-y-auto">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Data</TableHead><TableHead>Plano</TableHead><TableHead>Mensal</TableHead><TableHead>Anual</TableHead><TableHead>Moeda</TableHead><TableHead>Responsável</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{priceHistory.map((entry, i) => <TableRow key={i}>
+            <TableCell>{new Date(entry.actionAt).toLocaleString("pt-BR")}</TableCell>
+            <TableCell>{entry.planName} <span className="text-xs text-muted-foreground">({entry.planCode})</span></TableCell>
+            <TableCell>{formatCurrencyBRL(entry.monthlyPrice)}</TableCell>
+            <TableCell>{formatCurrencyBRL(entry.annualPrice)}</TableCell>
+            <TableCell>{entry.currency}</TableCell>
+            <TableCell>{entry.actorName} <span className="text-xs text-muted-foreground">{entry.actorEmail && `<${entry.actorEmail}>`}</span></TableCell>
+          </TableRow>)}</TableBody>
+        </Table>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setPriceHistoryOpen(false)}>Fechar</Button>
       </DialogFooter>
     </DialogContent></Dialog>
   </div>;

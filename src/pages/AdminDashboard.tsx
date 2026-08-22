@@ -41,6 +41,7 @@ import {
   FolderKanban,
   RefreshCw,
   Building2,
+  Layers,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -382,6 +383,17 @@ function AdminDashboardInner() {
         aria-label="Navegação admin"
         style={{ scrollbarWidth: "none" }}
       >
+        <button
+          type="button"
+          onClick={() => {
+            navigate("/modulos");
+            if (mobile) setSidebarOpen(false);
+          }}
+          className="mb-2 flex min-h-11 w-full items-center gap-2.5 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-left text-[13px] font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <Layers className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="truncate">Módulos</span>
+        </button>
         {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
           const isActive = activePage === key;
           return (

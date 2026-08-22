@@ -6,13 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SkeletonList } from "@/shared/components/common/SkeletonList";
 import { useImrPeriodo, inicioDeMes } from "../hooks/useImrPeriodo";
 import { INDICADORES_GRUPO2, getIndicadorFaixa, EVENTOS_CONFIG } from "../types/imr";
-import { Target, Shield, TestTube, Star, DollarSign, Clock, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Target, Shield, TestTube, Star, DollarSign, Clock, AlertTriangle, ChevronDown, ChevronUp, Circle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 5;
 
-const INDICATOR_ICONS: Record<string, any> = {
+const INDICATOR_ICONS: Record<string, LucideIcon> = {
   IAP: Target,
   IQS: Shield,
   ICT: TestTube,
@@ -30,13 +31,6 @@ const COR_BG_MAP: Record<string, string> = {
   orange: "bg-orange-500/10 border-orange-500/30",
   red:    "bg-destructive/10 border-destructive/30",
 };
-const EMOJI_MAP: Record<string, string> = {
-  green:  "🟢",
-  yellow: "🟡",
-  orange: "🟠",
-  red:    "🔴",
-};
-
 // ─── Period helpers ───────────────────────────────────────────────────────────
 
 interface PeriodOption {
@@ -125,25 +119,28 @@ export function ImrDashboard() {
   return (
     <div className="space-y-6">
       {/* ── Header ────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
             Indicadores Grupo 2 — IMR
           </h3>
           <p className="text-xs text-muted-foreground">Instrumento de Medição de Resultados</p>
         </div>
-        <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-          <SelectTrigger className="w-[180px] h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {periodOptions.map((p) => (
-              <SelectItem key={p.value} value={p.value}>
-                {p.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-auto">
+          <label htmlFor="imr-period" className="sr-only">Período de apuração</label>
+          <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+            <SelectTrigger id="imr-period" className="min-h-11 w-full sm:min-h-9 sm:w-[180px]" aria-label="Selecionar período de apuração">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {periodOptions.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* ── Period info ───────────────────────────────────────── */}
@@ -155,7 +152,7 @@ export function ImrDashboard() {
       )}
 
       {/* ── KPI Cards ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Indicadores do IMR">
         {INDICADORES_GRUPO2.map((ind) => {
           const valor = indicatorValues[ind.sigla as keyof typeof indicatorValues];
           const faixa = getIndicadorFaixa(ind, valor);
@@ -167,12 +164,12 @@ export function ImrDashboard() {
             : iap.qdtot > 0;
 
           return (
-            <Card key={ind.sigla} className={`${COR_BG_MAP[faixa.cor]} transition-colors`}>
+            <Card key={ind.sigla} className={`${COR_BG_MAP[faixa.cor]} shadow-sm transition-colors`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm">{EMOJI_MAP[faixa.cor]}</span>
+                      <Circle className={`h-3 w-3 fill-current ${COR_MAP[faixa.cor]}`} aria-hidden="true" />
                       <span className="text-xs font-bold uppercase tracking-wide">{ind.sigla}</span>
                     </div>
                     <p className="text-[10px] text-muted-foreground leading-tight">{ind.nome}</p>
@@ -191,9 +188,7 @@ export function ImrDashboard() {
                       </Badge>
                     )}
                   </div>
-                  <div
-                    className={`h-9 w-9 rounded-lg flex items-center justify-center ${COR_MAP[faixa.cor]} bg-background/50`}
-                  >
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-background/50 ${COR_MAP[faixa.cor]}`} aria-hidden="true">
                     <Icon className="h-4 w-4" />
                   </div>
                 </div>
@@ -207,7 +202,7 @@ export function ImrDashboard() {
       </div>
 
       {/* ── Atraso E8: contador + lista paginada ──────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
         {/* Contador — 2/5 */}
         <Card className={`lg:col-span-2 ${atrasadosGlosa.length > 0 ? "border-destructive/30" : ""}`}>
           <CardContent className="p-5">
@@ -243,7 +238,7 @@ export function ImrDashboard() {
         </Card>
 
         {/* Lista paginada — 3/5 */}
-        <Card className="lg:col-span-3 flex flex-col" style={{ height: "280px" }}>
+        <Card className="flex min-h-[280px] flex-col shadow-sm lg:col-span-3">
           <CardHeader className="pb-2 shrink-0">
             <CardTitle className="text-sm flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -260,7 +255,7 @@ export function ImrDashboard() {
 
           <CardContent className="pt-0 flex-1 flex flex-col min-h-0">
             {atrasadosList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center flex-1 gap-2">
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center">
                 <Clock className="h-8 w-8 text-muted-foreground/40" />
                 <p className="text-sm text-muted-foreground">Nenhuma demanda com atraso E8</p>
               </div>
@@ -275,6 +270,7 @@ export function ImrDashboard() {
                           ? "border-destructive/20 bg-destructive/5"
                           : "border-yellow-500/20 bg-yellow-500/5"
                       }`}
+                      aria-label={`${a.rhm}, ${a.diasAtraso} dias de atraso, ${a.tipo_alerta === "glosa" ? "com glosa" : "em alerta"}`}
                     >
                       <span
                         className={`h-2 w-2 rounded-full shrink-0 ${
@@ -303,16 +299,16 @@ export function ImrDashboard() {
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between pt-2 shrink-0 border-t border-border/40 mt-1">
+                <div className="mt-1 flex flex-col gap-2 border-t border-border/40 pt-2 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-[11px] text-muted-foreground">
                     Exibindo <strong>{atrasadosVisiveis.length}</strong> de <strong>{atrasadosList.length}</strong>
                   </span>
-                  <div className="flex gap-1">
+                  <div className="flex flex-wrap gap-2">
                     {temMais && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs gap-1"
+                        className="min-h-11 gap-1 text-xs sm:min-h-9"
                         onClick={() => setAtrasadosPage((p) => p + 1)}
                       >
                         Ver mais <ChevronDown className="h-3 w-3" />
@@ -322,7 +318,7 @@ export function ImrDashboard() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs gap-1"
+                        className="min-h-11 gap-1 text-xs sm:min-h-9"
                         onClick={() => setAtrasadosPage(1)}
                       >
                         Recolher <ChevronUp className="h-3 w-3" />
@@ -345,7 +341,7 @@ export function ImrDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Resumo percentual de glosas">
             <GlosaCell
               label="Glosa IAP"
               value={`${iapGlosa.toFixed(2)}%`}
@@ -371,8 +367,8 @@ export function ImrDashboard() {
               {Object.entries(glosas.byEvento).map(([ev, data]) => {
                 const cfg = EVENTOS_CONFIG.find((e) => e.codigo === ev);
                 return (
-                  <div key={ev} className="flex items-center justify-between text-xs bg-muted/50 p-2 rounded">
-                    <span className="font-medium truncate mr-2">
+                  <div key={ev} className="flex flex-col gap-2 rounded bg-muted/50 p-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+                    <span className="min-w-0 font-medium sm:mr-2 sm:truncate">
                       {ev} — {cfg?.descricao.slice(0, 40)}...
                     </span>
                     <div className="flex items-center gap-2 shrink-0">

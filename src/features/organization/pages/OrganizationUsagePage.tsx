@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft,
   Bot,
   Boxes,
   Building2,
@@ -142,7 +141,7 @@ export default function OrganizationUsagePage() {
 
   if (!organization) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="flex min-h-64 items-center justify-center p-6">
         <Alert className="max-w-xl">
           <AlertDescription>
             Selecione uma organização para consultar plano e uso.
@@ -153,13 +152,9 @@ export default function OrganizationUsagePage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 lg:px-8">
+    <div className="space-y-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <Gauge className="h-5 w-5 text-primary" />
             </div>
@@ -171,7 +166,7 @@ export default function OrganizationUsagePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -183,7 +178,7 @@ export default function OrganizationUsagePage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate("/organization/usage?view=settings")}
+              onClick={() => navigate("/organization/settings")}
             >
               <Settings2 className="mr-2 h-4 w-4" />
               Configurações
@@ -193,10 +188,9 @@ export default function OrganizationUsagePage() {
               Atualizar
             </Button>
           </div>
-        </div>
-      </header>
+      </div>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 lg:px-8">
+      <div className="space-y-6">
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -326,7 +320,7 @@ export default function OrganizationUsagePage() {
             </AlertDescription>
           </Alert>
         )}
-      </main>
+      </div>
     </div>
   );
 }

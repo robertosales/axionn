@@ -87,7 +87,7 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} aria-label="Atualizar lista de RDMs">
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
           <Button size="sm" onClick={onNew} className="gap-1.5">
@@ -164,6 +164,7 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
               <button
                 className="flex-1 text-left p-4 space-y-3"
                 onClick={() => onSelect(rdm)}
+                aria-label={`Abrir detalhes da RDM ${rdm.codigo ? `${rdm.codigo} — ` : ""}${rdm.nome}`}
               >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-2">
@@ -213,7 +214,7 @@ export function RdmList({ rdms, loading, onNew, onSelect, onRefresh, onDelete }:
                     onClick={(e) => { e.stopPropagation(); setConfirmId(rdm.id); }}
                     className="flex items-center gap-1.5 text-xs text-muted-foreground
                       hover:text-destructive transition-colors"
-                    title="Excluir RDM"
+                    aria-label={`Excluir RDM ${rdm.codigo ? `${rdm.codigo} — ` : ""}${rdm.nome}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Excluir

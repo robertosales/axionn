@@ -113,6 +113,7 @@ export function RelatorioRetro({ sprints, rawData, teamName, onBack }: Props) {
           ]},
         ]}
         values={filters}
+        defaultValues={{ sprintId: "all", status: "all", criticality: "all" }}
         onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
         onReset={() => setFilters({ sprintId: "all", status: "all", criticality: "all" })}
       />

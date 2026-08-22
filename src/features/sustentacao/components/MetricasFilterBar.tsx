@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
-import { X, BookmarkPlus, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { X, Bookmark, BookmarkPlus, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -42,9 +43,9 @@ export interface ViewSalva {
 }
 
 const VIEWS_BUILTIN: ViewSalva[] = [
-  { id: "atrasados", label: "Atrasados",     icon: "🔴", filtros: { ...FILTROS_DEFAULT, situacao: "bloqueada" } },
-  { id: "ultimos7",  label: "Últimos 7 dias", icon: "⚡",   filtros: { ...FILTROS_DEFAULT, periodo: "7" } },
-  { id: "ultimos30", label: "Últimos 30 dias",icon: "📅",   filtros: { ...FILTROS_DEFAULT, periodo: "30" } },
+  { id: "atrasados", label: "Atrasados",      icon: "", filtros: { ...FILTROS_DEFAULT, situacao: "bloqueada" } },
+  { id: "ultimos7",  label: "Últimos 7 dias", icon: "", filtros: { ...FILTROS_DEFAULT, periodo: "7" } },
+  { id: "ultimos30", label: "Últimos 30 dias",icon: "", filtros: { ...FILTROS_DEFAULT, periodo: "30" } },
 ];
 
 const LS_KEY = "metricas_views_salvas";
@@ -63,11 +64,11 @@ const PERIODO_LABELS: Record<string, string> = {
 };
 
 const CHIP_COLORS: Record<keyof MetricasFiltros, string> = {
-  projeto:     "text-violet-400 border-violet-400/40 bg-violet-400/10",
-  periodo:     "text-cyan-400   border-cyan-400/40   bg-cyan-400/10",
-  situacao:    "text-amber-400  border-amber-400/40  bg-amber-400/10",
-  membro:      "text-emerald-400 border-emerald-400/40 bg-emerald-400/10",
-  contract_id: "text-sky-400   border-sky-400/40    bg-sky-400/10",
+  projeto:     "text-primary border-primary/40 bg-primary/10",
+  periodo:     "text-info border-info/40 bg-info/10",
+  situacao:    "text-warning border-warning/40 bg-warning/10",
+  membro:      "text-success border-success/40 bg-success/10",
+  contract_id: "text-primary border-primary/40 bg-primary/10",
 };
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -151,7 +152,7 @@ export function MetricasFilterBar({
 
   function saveCurrentView() {
     if (!saveLabel.trim()) return;
-    const newView: ViewSalva = { id: Date.now().toString(), label: saveLabel.trim(), icon: "📌", filtros: { ...filtros } };
+    const newView: ViewSalva = { id: Date.now().toString(), label: saveLabel.trim(), icon: "", filtros: { ...filtros } };
     const updated = [...viewsCustom, newView];
     setViewsCustom(updated);
     saveViewsToLS(updated);
@@ -191,7 +192,7 @@ export function MetricasFilterBar({
               <TooltipTrigger asChild>
                 <button
                   onClick={() => setShowSaveInput(true)}
-                  className="h-7 px-2 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary text-[11px] flex items-center gap-1 transition-colors"
+                  className="flex min-h-11 items-center gap-1 rounded-full border border-dashed border-border px-3 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary sm:min-h-8"
                 >
                   <BookmarkPlus className="h-3 w-3" /> Salvar filtro atual
                 </button>
@@ -201,16 +202,17 @@ export function MetricasFilterBar({
           </TooltipProvider>
         ) : (
           <div className="flex items-center gap-1">
-            <input
+            <Input
               autoFocus
               value={saveLabel}
               onChange={(e) => setSaveLabel(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") saveCurrentView(); if (e.key === "Escape") setShowSaveInput(false); }}
               placeholder="Nome da visão..."
-              className="h-7 px-2 rounded-lg border border-primary/50 bg-background text-xs text-foreground focus:outline-none w-36"
+              className="min-h-11 w-40 border-primary/50 text-xs sm:min-h-8"
+              aria-label="Nome da visão salva"
             />
-            <button onClick={saveCurrentView} className="h-7 px-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium">OK</button>
-            <button onClick={() => setShowSaveInput(false)} className="h-7 px-2 rounded-lg text-muted-foreground hover:text-foreground text-xs"><X className="h-3 w-3" /></button>
+            <button onClick={saveCurrentView} className="min-h-11 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground sm:min-h-8">OK</button>
+            <button onClick={() => setShowSaveInput(false)} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-xs text-muted-foreground hover:text-foreground sm:min-h-8 sm:min-w-8" aria-label="Cancelar criação da visão"><X className="h-3 w-3" /></button>
           </div>
         )}
       </div>
@@ -222,11 +224,11 @@ export function MetricasFilterBar({
         {activeChips.map((chip) => (
           <span
             key={chip.key}
-            className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[11px] font-medium ${CHIP_COLORS[chip.key]}`}
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-medium sm:min-h-8 ${CHIP_COLORS[chip.key]}`}
           >
             <span className="text-muted-foreground/60 text-[10px]">{chip.label}:</span>
             {chip.display}
-            <button onClick={() => clearChip(chip.key)} className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity">
+            <button onClick={() => clearChip(chip.key)} className="ml-0.5 flex min-h-8 min-w-8 items-center justify-center rounded-full opacity-60 transition-opacity hover:opacity-100" aria-label={`Remover filtro ${chip.label}`}>
               <X className="h-2.5 w-2.5" />
             </button>
           </span>
@@ -234,7 +236,7 @@ export function MetricasFilterBar({
 
         <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
           <PopoverTrigger asChild>
-            <button className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-primary text-[11px] transition-colors">
+            <button className="inline-flex min-h-11 items-center gap-1 rounded-full border border-dashed border-border px-3 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary sm:min-h-8">
               <SlidersHorizontal className="h-3 w-3" /> Adicionar filtro
               <ChevronDown className="h-2.5 w-2.5" />
             </button>
@@ -245,7 +247,7 @@ export function MetricasFilterBar({
             {contracts.length > 0 && (
               <FilterGroup
                 label="Contrato"
-                colorClass="text-sky-400"
+                colorClass="text-primary"
                 items={[
                   { value: "all", label: "Todos", count: demandas.length },
                   ...contracts.map((c) => ({
@@ -262,7 +264,7 @@ export function MetricasFilterBar({
             {/* Projeto */}
             <FilterGroup
               label="Projeto"
-              colorClass="text-violet-400"
+              colorClass="text-primary"
               items={[{ value: "all", label: "Todos", count: demandas.length }, ...projetos.map((p) => ({ value: p.nome, label: p.nome, count: counts.projetoCounts[p.nome] ?? 0 }))]}
               selected={filtros.projeto}
               onSelect={(v) => { onChange({ ...filtros, projeto: v }); setActiveViewId(null); }}
@@ -271,7 +273,7 @@ export function MetricasFilterBar({
             {/* Período */}
             <FilterGroup
               label="Período"
-              colorClass="text-cyan-400"
+              colorClass="text-info"
               items={[
                 { value: "all", label: "Todos",        count: counts.periodoItems("all") },
                 { value: "7",   label: "Últimos 7d",   count: counts.periodoItems("7") },
@@ -285,7 +287,7 @@ export function MetricasFilterBar({
             {/* Status */}
             <FilterGroup
               label="Status"
-              colorClass="text-amber-400"
+              colorClass="text-warning"
               items={[{ value: "all", label: "Todos", count: demandas.length }, ...situacoes.map((s) => ({ value: s, label: SITUACAO_LABELS[s] ?? s, count: counts.situacaoCounts[s] ?? 0 }))]}
               selected={filtros.situacao}
               onSelect={(v) => { onChange({ ...filtros, situacao: v }); setActiveViewId(null); }}
@@ -295,7 +297,7 @@ export function MetricasFilterBar({
             {membros.length > 0 && (
               <FilterGroup
                 label="Membro"
-                colorClass="text-emerald-400"
+                colorClass="text-success"
                 items={[{ value: "all", label: "Todos", count: demandas.length }, ...membros.map((m) => ({ value: m, label: m.split(" ")[0] + (m.split(" ")[1] ? " " + m.split(" ")[1][0] + "." : ""), count: counts.membroCounts[m] ?? 0 }))]}
                 selected={filtros.membro}
                 onSelect={(v) => { onChange({ ...filtros, membro: v }); setActiveViewId(null); }}
@@ -305,7 +307,7 @@ export function MetricasFilterBar({
         </Popover>
 
         {activeChips.length > 0 && (
-          <button onClick={clearAll} className="inline-flex items-center gap-1 h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={clearAll} className="inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:min-h-8">
             <X className="h-3 w-3" /> Limpar
           </button>
         )}
@@ -322,22 +324,21 @@ function ViewChip({ view, active, onApply, onDelete }: {
   view: ViewSalva; active: boolean; onApply: () => void; onDelete?: () => void;
 }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-[11px] font-medium cursor-pointer transition-all select-none ${
-        active
-          ? "bg-primary/15 border-primary/60 text-primary"
-          : "bg-muted/40 border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-      }`}
-      onClick={onApply}
-    >
-      <span>{view.icon}</span>
-      {view.label}
+    <div className={`inline-flex min-h-11 items-center rounded-full border text-[11px] font-medium transition-colors sm:min-h-8 ${
+      active
+        ? "border-primary/60 bg-primary/15 text-primary"
+        : "border-border bg-muted/40 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+    }`}>
+      <button onClick={onApply} className="flex min-h-11 items-center gap-1 rounded-l-full px-2.5 sm:min-h-8" aria-pressed={active}>
+        <Bookmark className="h-3 w-3" aria-hidden="true" />
+        {view.label}
+      </button>
       {onDelete && (
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity">
+        <button onClick={onDelete} className="flex min-h-11 min-w-9 items-center justify-center rounded-r-full opacity-50 transition-opacity hover:opacity-100 sm:min-h-8" aria-label={`Excluir visão ${view.label}`}>
           <X className="h-2.5 w-2.5" />
         </button>
       )}
-    </span>
+    </div>
   );
 }
 
@@ -354,7 +355,7 @@ function FilterGroup({ label, colorClass, items, selected, onSelect }: {
           <button
             key={item.value}
             onClick={() => onSelect(item.value)}
-            className={`inline-flex items-center gap-1 h-6 px-2 rounded-full border text-[10px] transition-all ${
+            className={`inline-flex min-h-11 items-center gap-1 rounded-full border px-2 text-[10px] transition-colors sm:min-h-8 ${
               selected === item.value
                 ? `${colorClass} border-current bg-current/10 font-semibold`
                 : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"

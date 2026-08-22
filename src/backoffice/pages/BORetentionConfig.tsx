@@ -159,10 +159,10 @@ export default function BORetentionConfig() {
         </CardContent>
       </Card>
 
-      <Card className="border-cyan-500/20">
+      <Card className="border-primary/20">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Timer className="h-5 w-5 text-cyan-500" />
+            <Timer className="h-5 w-5 text-primary" />
             <CardTitle className="text-base">Retenção padrão</CardTitle>
           </div>
           <CardDescription>
@@ -261,11 +261,11 @@ export default function BORetentionConfig() {
         </CardContent>
       </Card>
 
-      <Card className="border-amber-500/20">
+      <Card className="border-warning/25">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Database className="h-5 w-5 text-amber-500" />
-            <CardTitle className="text-base text-amber-700">Ação manual</CardTitle>
+            <Database className="h-5 w-5 text-warning" />
+            <CardTitle className="text-base text-warning">Ação manual</CardTitle>
           </div>
           <CardDescription>
             Arquiva agora todos os briefings que já passaram do prazo de retenção.

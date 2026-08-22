@@ -1,4 +1,4 @@
-name: 🩺 Database startup diagnostics
+name: Database inventory diagnostics
 
 on:
   workflow_dispatch:
@@ -6,33 +6,37 @@ on:
     branches: [develop, main]
     paths:
       - "supabase/migrations/**"
+      - "supabase/operations/**"
+      - "scripts/check-supabase-migrations.sh"
       - ".github/workflows/database-diagnostics.yml"
 
+permissions:
+  contents: read
+
 jobs:
-  startup:
+  inventory:
+    name: Migration inventory diagnostics
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-      - name: Replay migrations
-        id: replay
-        continue-on-error: true
-        run: supabase db start > supabase-start.log 2>&1
-      - name: Upload startup log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: supabase-startup-log
-          path: supabase-start.log
-          retention-days: 3
-      - name: Report migration failure
-        if: steps.replay.outcome == 'failure'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build canonical inventory
+        env:
+          MIGRATION_ORDER_OUTPUT: migration-order.txt
+        run: bash scripts/check-supabase-migrations.sh
+      - name: Reject unresolved merge markers in SQL
+        shell: bash
         run: |
-          cat supabase-start.log
-          exit 1
-      - name: Stop local database
+          set -euo pipefail
+          if grep -R -nE '^(<<<<<<<|=======|>>>>>>>)' supabase/migrations supabase/operations; then
+            echo "Unresolved merge markers found in database SQL."
+            exit 1
+          fi
+      - name: Upload migration inventory
         if: always()
-        run: supabase stop --no-backup
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: migration-inventory-${{ github.run_number }}
+          path: migration-order.txt
+          if-no-files-found: warn
+          retention-days: 14

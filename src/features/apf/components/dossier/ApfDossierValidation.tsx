@@ -1,0 +1,500 @@
+import { useState } from "react";
+import {
+  CheckCircle2,
+  Download,
+  Eye,
+  Loader2,
+  LockKeyhole,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  useApfAcceptanceCriteria,
+  useApfAuditScenarios,
+  useApfDossierCountingMemory,
+  useApfDossierVersions,
+  useApfEvidenceSources,
+} from "../../hooks/useApfEvidenceDossiers";
+import {
+  authorizeApfDossierExport,
+  createApfDossierSuccessor,
+  homologateApfDossier,
+  validateAndSnapshotApfDossier,
+} from "../../services/apfEvidenceDossier.service";
+import type { ApfEvidenceDossierSummary } from "../../types/apfEvidenceDossier.types";
+import { downloadJsonAsFile, downloadMarkdownAsFile } from "../../utils/fileDownload";
+
+export function ApfDossierValidation({
+  dossier,
+  onSuccessorCreated,
+}: {
+  dossier: ApfEvidenceDossierSummary;
+  onSuccessorCreated: () => Promise<unknown>;
+}) {
+  const criteriaQuery = useApfAcceptanceCriteria(dossier.id);
+  const evidenceQuery = useApfEvidenceSources(dossier.id);
+  const countingQuery = useApfDossierCountingMemory(dossier.countingSessionId);
+  const auditQuery = useApfAuditScenarios(dossier.id);
+  const versionsQuery = useApfDossierVersions(dossier.id);
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{
+    markdown: string;
+    hash: string;
+    version: number;
+  } | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [homologating, setHomologating] = useState(false);
+  const [homologatedVersion, setHomologatedVersion] = useState<number | null>(
+    dossier.status === "homologated"
+      ? (versionsQuery.data?.[0]?.versionNumber ?? null)
+      : null,
+  );
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [successorCode, setSuccessorCode] = useState(
+    `${dossier.dossierCode}-R1`,
+  );
+  const [successorTitle, setSuccessorTitle] = useState(
+    `Correção — ${dossier.title}`,
+  );
+  const [creatingSuccessor, setCreatingSuccessor] = useState(false);
+  const effectiveHomologatedVersion =
+    homologatedVersion ??
+    (dossier.status === "homologated"
+      ? (versionsQuery.data?.[0]?.versionNumber ?? null)
+      : null);
+  const loading =
+    criteriaQuery.isLoading ||
+    evidenceQuery.isLoading ||
+    countingQuery.isLoading ||
+    auditQuery.isLoading;
+  const criteria = criteriaQuery.data ?? [];
+  const evidence = evidenceQuery.data ?? [];
+  const counting = countingQuery.data;
+  const scenarios = auditQuery.data ?? [];
+  const checks = [
+    {
+      label: "Todos os critérios possuem decisão",
+      ok:
+        criteria.length > 0 && criteria.every((item) => item.decision !== null),
+    },
+    {
+      label: "Todos os critérios possuem evidência",
+      ok:
+        criteria.length > 0 &&
+        criteria.every((criterion) =>
+          evidence.some((item) => item.criterionIds.includes(criterion.id)),
+        ),
+    },
+    {
+      label: "Há evidência verificada",
+      ok: evidence.some((item) => item.verificationStatus === "verified"),
+    },
+    {
+      label: "Todos os itens contáveis foram validados",
+      ok:
+        Boolean(counting?.items.length) &&
+        Boolean(
+          counting?.items
+            .filter((item) => item.decision === "counted")
+            .every((item) => item.isValidated),
+        ),
+    },
+    {
+      label: "Memória de cálculo fecha com a sessão",
+      ok: Boolean(counting?.closes),
+    },
+    {
+      label: "Contrato, baseline e ruleset estão congelados",
+      ok: Boolean(dossier.countingSessionId),
+    },
+  ];
+  const ready = checks.every((check) => check.ok) && Boolean(counting);
+  const validate = async () => {
+    if (!ready || !counting) return;
+    setSaving(true);
+    try {
+      const snapshot = await validateAndSnapshotApfDossier({
+        dossier,
+        criteria,
+        evidence,
+        counting,
+        scenarios,
+      });
+      setResult(snapshot);
+      await versionsQuery.refetch();
+      toast.success(`Dossiê validado na versão ${snapshot.version}.`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao validar o dossiê.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+  const homologate = async (version: number) => {
+    setHomologating(true);
+    try {
+      await homologateApfDossier(dossier.id, version);
+      setHomologatedVersion(version);
+      toast.success(`Versão ${version} homologada e bloqueada.`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Falha ao homologar o dossiê.";
+      toast.error(
+        message.includes("distinct_user")
+          ? "A homologação deve ser realizada por pessoa diferente do criador e validador."
+          : message,
+      );
+    } finally {
+      setHomologating(false);
+    }
+  };
+  const createSuccessor = async () => {
+    if (!successorCode.trim() || !successorTitle.trim()) return;
+    setCreatingSuccessor(true);
+    try {
+      await createApfDossierSuccessor(
+        dossier.id,
+        successorCode,
+        successorTitle,
+      );
+      toast.success("Dossiê sucessor criado em rascunho.");
+      setCorrectionOpen(false);
+      await onSuccessorCreated();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao criar a correção.",
+      );
+    } finally {
+      setCreatingSuccessor(false);
+    }
+  };
+  const exportMarkdown = async (markdown: string, version: number) => {
+    try {
+      await authorizeApfDossierExport(dossier.id);
+      downloadMarkdownAsFile(markdown, `${dossier.dossierCode}-v${version}.md`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Sem permissão para exportar o dossiê.",
+      );
+    }
+  };
+  const exportDocx = async (markdown: string, version: number) => {
+    try {
+      await authorizeApfDossierExport(dossier.id);
+      const { downloadDocxFromMarkdown } =
+        await import("../../utils/markdownToDocx");
+      await downloadDocxFromMarkdown(
+        markdown,
+        `${dossier.dossierCode}-v${version}.docx`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar o DOCX.",
+      );
+    }
+  };
+  const exportJson = async (snapshot: Record<string, unknown>, version: number) => {
+    try {
+      await authorizeApfDossierExport(dossier.id);
+      downloadJsonAsFile(snapshot, `${dossier.dossierCode}-v${version}.json`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível exportar o JSON.");
+    }
+  };
+
+  return (
+    <section className="space-y-3" aria-labelledby="validation-title">
+      <div>
+        <h3 id="validation-title" className="font-semibold">
+          Validação e documento
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          O snapshot é gerado sem IA e não recalcula os valores oficiais.
+        </p>
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <LockKeyhole className="h-4 w-4 text-primary" />
+            Checklist de prontidão
+          </CardTitle>
+          <CardDescription>
+            {ready
+              ? "Todos os requisitos de validação foram atendidos."
+              : "Resolva os bloqueios antes de criar uma versão imutável."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {loading ? (
+            <div className="flex items-center text-sm" role="status">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+              Verificando dossiê…
+            </div>
+          ) : (
+            checks.map((check) => (
+              <div
+                key={check.label}
+                className="flex items-center gap-2 text-sm"
+              >
+                {check.ok ? (
+                  <CheckCircle2
+                    className="h-4 w-4 text-emerald-600"
+                    aria-label="Atendido"
+                  />
+                ) : (
+                  <XCircle
+                    className="h-4 w-4 text-destructive"
+                    aria-label="Bloqueado"
+                  />
+                )}
+                <span>{check.label}</span>
+              </div>
+            ))
+          )}
+          <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+            {result && (
+              <>
+                <Button variant="outline" onClick={() => setPreviewOpen(true)}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  Prévia
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void exportMarkdown(result.markdown, result.version)}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Markdown
+                </Button>
+              </>
+            )}
+            <Button
+              onClick={() => void validate()}
+              disabled={!ready || saving || loading}
+            >
+              {saving && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+              )}
+              {result ? "Criar nova versão" : "Validar e congelar"}
+            </Button>
+          </div>
+          {result && (
+            <p className="break-all rounded-md bg-muted p-2 font-mono text-[11px] text-muted-foreground">
+              v{result.version} · SHA-256 {result.hash}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+      {(versionsQuery.data?.length ?? 0) > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Versões imutáveis</CardTitle>
+            <CardDescription>
+              Downloads usam o conteúdo armazenado; nenhum cálculo ou chamada de
+              IA é executado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {versionsQuery.data?.map((version, index) => (
+              <div
+                key={version.id}
+                className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">
+                      Versão {version.versionNumber}
+                    </span>
+                    {effectiveHomologatedVersion === version.versionNumber && (
+                      <Badge>
+                        <ShieldCheck className="mr-1 h-3 w-3" />
+                        Homologada
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="truncate font-mono text-[11px] text-muted-foreground">
+                    SHA-256 {version.contentHash}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void exportMarkdown(version.renderedMarkdown, version.versionNumber)}
+                  >
+                    <Download className="mr-2 h-3.5 w-3.5" />
+                    Markdown
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      void exportDocx(
+                        version.renderedMarkdown,
+                        version.versionNumber,
+                      )
+                    }
+                  >
+                    <Download className="mr-2 h-3.5 w-3.5" />
+                    DOCX
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => void exportJson(version.snapshotJson, version.versionNumber)}>
+                    <Download className="mr-2 h-3.5 w-3.5" />
+                    JSON
+                  </Button>
+                  {index === 0 &&
+                    effectiveHomologatedVersion === null &&
+                    (dossier.status === "validated" || result) && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" disabled={homologating}>
+                            <ShieldCheck className="mr-2 h-3.5 w-3.5" />
+                            Homologar
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Homologar versão {version.versionNumber}?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta ação congela definitivamente o total e exige
+                              uma pessoa diferente do criador e do validador.
+                              Correções futuras deverão gerar outro dossiê.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() =>
+                                void homologate(version.versionNumber)
+                              }
+                            >
+                              Confirmar homologação
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      {effectiveHomologatedVersion !== null && (
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={() => setCorrectionOpen(true)}>
+            Criar correção sucessora
+          </Button>
+        </div>
+      )}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col">
+          <DialogHeader>
+            <DialogTitle>Prévia do dossiê · v{result?.version}</DialogTitle>
+            <DialogDescription>
+              Conteúdo determinístico associado ao hash exibido no checklist.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-md border p-5">
+            <article className="prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {result?.markdown ?? ""}
+              </ReactMarkdown>
+            </article>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={correctionOpen} onOpenChange={setCorrectionOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Criar correção do dossiê</DialogTitle>
+            <DialogDescription>
+              O original permanecerá homologado até o sucessor também ser
+              homologado. Evidências copiadas voltarão ao estado não verificado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="successor-code">Novo código</Label>
+              <Input
+                id="successor-code"
+                value={successorCode}
+                onChange={(event) => setSuccessorCode(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="successor-title">Título</Label>
+              <Input
+                id="successor-title"
+                value={successorTitle}
+                onChange={(event) => setSuccessorTitle(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCorrectionOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={
+                creatingSuccessor ||
+                !successorCode.trim() ||
+                !successorTitle.trim()
+              }
+              onClick={() => void createSuccessor()}
+            >
+              {creatingSuccessor && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+              )}
+              Criar sucessor
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}

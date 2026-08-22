@@ -1,0 +1,42 @@
+import { useQuery } from "@tanstack/react-query";
+import { getApfDossierCountingMemory, getApfDossierCreationOptions, listApfAcceptanceCriteria, listApfAuditScenarios, listApfDossierVersions, listApfEvidenceDossiers, listApfEvidenceSources } from "../services/apfEvidenceDossier.service";
+
+export function useApfEvidenceDossiers(organizationId: string | null) {
+  return useQuery({
+    queryKey: ["apf-evidence-dossiers", organizationId],
+    queryFn: () => listApfEvidenceDossiers(organizationId!),
+    enabled: Boolean(organizationId),
+  });
+}
+
+export function useApfDossierVersions(dossierId: string | null) {
+  return useQuery({ queryKey: ["apf-dossier-versions", dossierId], queryFn: () => listApfDossierVersions(dossierId!), enabled: Boolean(dossierId) });
+}
+
+export function useApfAuditScenarios(dossierId: string | null) {
+  return useQuery({ queryKey: ["apf-audit-scenarios", dossierId], queryFn: () => listApfAuditScenarios(dossierId!), enabled: Boolean(dossierId) });
+}
+
+export function useApfDossierCountingMemory(sessionId: string | null) {
+  return useQuery({ queryKey: ["apf-dossier-counting-memory", sessionId], queryFn: () => getApfDossierCountingMemory(sessionId!), enabled: Boolean(sessionId) });
+}
+
+export function useApfEvidenceSources(dossierId: string | null) {
+  return useQuery({ queryKey: ["apf-evidence-sources", dossierId], queryFn: () => listApfEvidenceSources(dossierId!), enabled: Boolean(dossierId) });
+}
+
+export function useApfAcceptanceCriteria(dossierId: string | null) {
+  return useQuery({
+    queryKey: ["apf-acceptance-criteria", dossierId],
+    queryFn: () => listApfAcceptanceCriteria(dossierId!),
+    enabled: Boolean(dossierId),
+  });
+}
+
+export function useApfDossierCreationOptions(organizationId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["apf-dossier-creation-options", organizationId],
+    queryFn: () => getApfDossierCreationOptions(organizationId!),
+    enabled: Boolean(organizationId) && enabled,
+  });
+}

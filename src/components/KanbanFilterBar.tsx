@@ -388,6 +388,7 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
             <button
               onClick={() => onChange({ ...filtros, search: "" })}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Limpar busca do Kanban"
             >
               <X className="h-3 w-3" />
             </button>
@@ -453,6 +454,7 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
             <button
               onClick={() => setShowSaveInput(false)}
               className="h-7 px-2 rounded-lg text-muted-foreground hover:text-foreground text-xs"
+              aria-label="Cancelar criação da visualização"
             >
               <X className="h-3 w-3" />
             </button>
@@ -472,6 +474,7 @@ export const KanbanFilterBar = React.memo(function KanbanFilterBar({
             <button
               onClick={() => clearChip(chip.key)}
               className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+              aria-label={`Remover filtro de ${CHIP_LABELS[chip.key]}`}
             >
               <X className="h-2.5 w-2.5" />
             </button>
@@ -567,6 +570,15 @@ const ViewChip = React.memo(function ViewChip({ view, active, onApply, onDelete 
           : "bg-muted/40 border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
       }`}
       onClick={onApply}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onApply();
+        }
+      }}
+      aria-label={`Aplicar visualização ${view.label}`}
     >
       <span>{view.icon}</span>
       {view.label}
@@ -574,6 +586,7 @@ const ViewChip = React.memo(function ViewChip({ view, active, onApply, onDelete 
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity"
+          aria-label={`Excluir visualização ${view.label}`}
         >
           <X className="h-2.5 w-2.5" />
         </button>

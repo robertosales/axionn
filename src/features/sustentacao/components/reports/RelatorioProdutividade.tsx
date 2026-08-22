@@ -786,29 +786,29 @@ export function RelatorioProdutividade({ onBack }: Props) {
         table={
           <div className="space-y-4">
             {/* Ações de exportação */}
-            <div className="flex justify-end gap-2 print:hidden">
-              <Button onClick={handleExportCSV} disabled={grupos.length === 0} size="sm" variant="outline" className="gap-2" title="Exportar dados achatados em CSV">
+            <div className="flex flex-wrap justify-end gap-2 print:hidden">
+              <Button onClick={handleExportCSV} disabled={grupos.length === 0} size="sm" variant="outline" className="min-h-11 gap-2 sm:min-h-9" title="Exportar dados achatados em CSV">
                 <Download className="h-4 w-4" /> CSV
               </Button>
-              <Button onClick={handleExportXLSX} disabled={grupos.length === 0} size="sm" variant="outline" className="gap-2" title="Exportar XLSX com Resumo e Detalhado">
+              <Button onClick={handleExportXLSX} disabled={grupos.length === 0} size="sm" variant="outline" className="min-h-11 gap-2 sm:min-h-9" title="Exportar XLSX com Resumo e Detalhado">
                 <FileSpreadsheet className="h-4 w-4" /> XLSX
               </Button>
-              <Button onClick={handleVisualizarPDF} disabled={generatingPDF || grupos.length === 0} size="sm" className="gap-2" title={isIndividual ? "Pré-visualizar PDF" : "Pré-visualizar PDF (primeiro analista)"}>
+              <Button onClick={handleVisualizarPDF} disabled={generatingPDF || grupos.length === 0} size="sm" className="min-h-11 gap-2 sm:min-h-9" title={isIndividual ? "Pré-visualizar PDF" : "Pré-visualizar PDF (primeiro analista)"}>
                 <Eye className="h-4 w-4" /> {generatingPDF ? "Gerando..." : "PDF"}
               </Button>
             </div>
 
             {grupos.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
+              <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-12 text-center text-muted-foreground" role="status">
                 <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm">Nenhum dado encontrado para o período e filtros selecionados.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {grupos.length > 1 && (
-                  <div className="flex gap-2 justify-end">
-                    <Button variant="outline" size="sm" className="text-xs h-7" onClick={expandAll}>Expandir todos</Button>
-                    <Button variant="outline" size="sm" className="text-xs h-7" onClick={collapseAll}>Recolher todos</Button>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button variant="outline" size="sm" className="min-h-11 text-xs sm:min-h-9" onClick={expandAll}>Expandir todos</Button>
+                    <Button variant="outline" size="sm" className="min-h-11 text-xs sm:min-h-9" onClick={collapseAll}>Recolher todos</Button>
                   </div>
                 )}
                 {grupos.map(grupo => (
@@ -899,7 +899,7 @@ export function RelatorioProdutividade({ onBack }: Props) {
             />
           )}
           <DialogFooter className="px-6 py-3 border-t">
-            <Button variant="outline" onClick={handleClosePreview}>Fechar</Button>
+            <Button className="min-h-11 sm:min-h-9" variant="outline" onClick={handleClosePreview}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

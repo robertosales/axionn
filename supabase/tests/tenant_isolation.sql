@@ -9,3 +9,4 @@
 \set ON_ERROR_STOP on
 \ir database/01_tenancy_contract.test.sql
 \ir database/02_tenancy_isolation.test.sql
+\ir database/21_apf_dossier_rbac_isolation.test.sql

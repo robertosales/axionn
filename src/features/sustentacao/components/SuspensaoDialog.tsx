@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon } from "lucide-react";
+import { AlertTriangle, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -39,14 +39,14 @@ export function SuspensaoDialog({ open, onClose, onConfirm }: Props) {
         <DialogHeader><DialogTitle>Suspender Demanda</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>Justificativa da suspensão <span className="text-destructive">*</span></Label>
-            <Textarea value={justificativa} onChange={e => setJustificativa(e.target.value)} rows={3} placeholder="Informe o motivo da suspensão..." className="mt-1" />
+            <Label htmlFor="suspension-justification">Justificativa da suspensão <span className="text-destructive">*</span></Label>
+            <Textarea id="suspension-justification" value={justificativa} onChange={e => setJustificativa(e.target.value)} rows={3} placeholder="Informe o motivo da suspensão..." className="mt-1" />
           </div>
           <div>
             <Label>Nova previsão de encerramento <span className="text-destructive">*</span></Label>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" className={cn("w-full justify-start text-left font-normal mt-1", !novaPrevisao && "text-muted-foreground")}>
+                <Button variant="outline" className={cn("mt-1 min-h-11 w-full justify-start text-left font-normal", !novaPrevisao && "text-muted-foreground")} aria-label="Selecionar nova previsão de encerramento">
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {novaPrevisao ? format(novaPrevisao, "dd/MM/yyyy", { locale: ptBR }) : "Selecione a data"}
                 </Button>
@@ -56,11 +56,11 @@ export function SuspensaoDialog({ open, onClose, onConfirm }: Props) {
               </PopoverContent>
             </Popover>
           </div>
-          <p className="text-xs text-destructive">⚠️ Preencha a justificativa e a data de previsão antes de suspender a demanda.</p>
+          <p className="flex items-start gap-1.5 text-xs text-destructive"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />Preencha a justificativa e a data de previsão antes de suspender a demanda.</p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button className="bg-destructive hover:bg-destructive/90 text-destructive-foreground" onClick={handle}>Confirmar Suspensão</Button>
+          <Button variant="outline" onClick={onClose} className="min-h-11 sm:min-h-9">Cancelar</Button>
+          <Button variant="destructive" onClick={handle} className="min-h-11 sm:min-h-9">Confirmar Suspensão</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

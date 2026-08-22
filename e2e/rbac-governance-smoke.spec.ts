@@ -1,4 +1,5 @@
 import { expect, test } from "../playwright-fixture";
+import type { Page } from "@playwright/test";
 
 const email = process.env.E2E_USER_EMAIL;
 const password = process.env.E2E_USER_PASSWORD;
@@ -13,9 +14,10 @@ test.describe("RBAC — governança e acesso temporário", () => {
 
   test("carrega o workspace e a central de governança sem mutações", async ({
     page,
-  }) => {
+  }, testInfo) => {
     page.setDefaultTimeout(20_000);
     const failedRpcs: string[] = [];
+    const diagnostics = createRbacDiagnostics(page);
 
     page.on("response", (response) => {
       if (response.url().includes("/rest/v1/rpc/") && !response.ok()) {
@@ -27,70 +29,170 @@ test.describe("RBAC — governança e acesso temporário", () => {
       window.localStorage.setItem("selectedOrganizationId", orgId);
     }, organizationId!);
 
-    await login(page);
-    await markOnboardingCompleteLocally(page);
-    await page.goto("/sala-agil/perfis", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    try {
+      await measuredStep(diagnostics, "autenticação", () => login(page));
+      await measuredStep(diagnostics, "onboarding local", () => markOnboardingCompleteLocally(page));
+      await measuredStep(diagnostics, "navegação para perfis", () =>
+        page.goto("/sala-agil/perfis", { waitUntil: "domcontentloaded", timeout: 60_000 }),
+      );
 
-    await expect(
-      page.getByRole("heading", { name: /perfis e permissões/i }),
-    ).toBeVisible();
+      await measuredStep(diagnostics, "workspace visível", async () => {
+        await expect(
+          page.getByRole("heading", { name: /perfis e permissões/i }),
+        ).toBeVisible();
 
-    for (const tabName of [
-      /perfis de acesso/i,
-      /atribuições/i,
-      /simulador/i,
-      /histórico/i,
-      /governança/i,
-    ]) {
-      await expect(page.getByRole("tab", { name: tabName })).toBeVisible();
+        for (const tabName of [
+          /perfis de acesso/i,
+          /atribuições/i,
+          /simulador/i,
+          /histórico/i,
+          /governança/i,
+        ]) {
+          await expect(page.getByRole("tab", { name: tabName })).toBeVisible();
+        }
+      });
+
+      await measuredStep(diagnostics, "histórico", async () => {
+        const auditResponse = page.waitForResponse((response) =>
+          response.url().includes("/rpc/list_rbac_audit_events_v1"),
+        );
+        await page.getByRole("tab", { name: /histórico/i }).click();
+        await assertRpcResponse("list_rbac_audit_events_v1", await auditResponse);
+        await expect(page.getByText(/histórico de acesso|nenhuma alteração encontrada/i).first()).toBeVisible();
+      });
+
+      await measuredStep(diagnostics, "simulador", async () => {
+        const membersResponse = page.waitForResponse((response) =>
+          response.url().includes("/rpc/get_organization_members_v2"),
+        );
+        await page.getByRole("tab", { name: /simulador/i }).click();
+        await assertRpcResponse("get_organization_members_v2", await membersResponse);
+        await page.getByRole("combobox", { name: /usuário para simulação/i }).click();
+        await page.getByRole("option").first().click();
+        const simulationResponse = page.waitForResponse((response) =>
+          response.url().includes("/rpc/simulate_rbac_user_access_v1"),
+        );
+        await page.getByRole("button", { name: /simular acesso/i }).click();
+        await assertRpcResponse("simulate_rbac_user_access_v1", await simulationResponse);
+        await expect(page.getByRole("region", { name: /resumo do acesso simulado/i })).toBeVisible();
+      });
+
+      await measuredStep(diagnostics, "governança", async () => {
+        const governanceResponse = page.waitForResponse((response) =>
+          response.url().includes("/rpc/list_rbac_governance_v1"),
+        );
+        await page.getByRole("tab", { name: /governança/i }).click();
+        await assertRpcResponse("list_rbac_governance_v1", await governanceResponse);
+
+        await expect(page.getByText("Aguardando revisão", { exact: true })).toBeVisible();
+        await expect(page.getByText("Acessos temporários", { exact: true })).toBeVisible();
+        await expect(page.getByText("Sinais para revisar", { exact: true })).toBeVisible();
+        await expect(page.getByText(/governança baseada em evidências/i)).toBeVisible();
+
+        await page.getByRole("tab", { name: /temporários/i }).click();
+        await expect(
+          page.getByText(/nenhum acesso temporário|prazo:/i).first(),
+        ).toBeVisible();
+
+        await page.getByRole("tab", { name: /menor privilégio/i }).click();
+        await expect(
+          page.getByText(/nenhum sinal crítico|eventos em 90 dias/i).first(),
+        ).toBeVisible();
+      });
+
+      expect(failedRpcs, `RPCs com falha: ${failedRpcs.join(", ")}`).toEqual([]);
+    } finally {
+      await testInfo.attach("rbac-diagnostics.json", {
+        body: Buffer.from(JSON.stringify(diagnostics.report, null, 2)),
+        contentType: "application/json",
+      });
+      diagnostics.dispose();
     }
-
-    const auditResponse = page.waitForResponse((response) =>
-      response.url().includes("/rpc/list_rbac_audit_events_v1"),
-    );
-    await page.getByRole("tab", { name: /histórico/i }).click();
-    await assertRpcResponse("list_rbac_audit_events_v1", await auditResponse);
-    await expect(page.getByText(/histórico de acesso|nenhuma alteração encontrada/i).first()).toBeVisible();
-
-    const membersResponse = page.waitForResponse((response) =>
-      response.url().includes("/rpc/get_organization_members_v2"),
-    );
-    await page.getByRole("tab", { name: /simulador/i }).click();
-    await assertRpcResponse("get_organization_members_v2", await membersResponse);
-    await page.getByRole("combobox", { name: /usuário para simulação/i }).click();
-    await page.getByRole("option").first().click();
-    const simulationResponse = page.waitForResponse((response) =>
-      response.url().includes("/rpc/simulate_rbac_user_access_v1"),
-    );
-    await page.getByRole("button", { name: /simular acesso/i }).click();
-    await assertRpcResponse("simulate_rbac_user_access_v1", await simulationResponse);
-    await expect(page.getByRole("region", { name: /resumo do acesso simulado/i })).toBeVisible();
-
-    const governanceResponse = page.waitForResponse((response) =>
-      response.url().includes("/rpc/list_rbac_governance_v1"),
-    );
-    await page.getByRole("tab", { name: /governança/i }).click();
-    const response = await governanceResponse;
-    await assertRpcResponse("list_rbac_governance_v1", response);
-
-    await expect(page.getByText("Aguardando revisão", { exact: true })).toBeVisible();
-    await expect(page.getByText("Acessos temporários", { exact: true })).toBeVisible();
-    await expect(page.getByText("Sinais para revisar", { exact: true })).toBeVisible();
-    await expect(page.getByText(/governança baseada em evidências/i)).toBeVisible();
-
-    await page.getByRole("tab", { name: /temporários/i }).click();
-    await expect(
-      page.getByText(/nenhum acesso temporário|prazo:/i).first(),
-    ).toBeVisible();
-
-    await page.getByRole("tab", { name: /menor privilégio/i }).click();
-    await expect(
-      page.getByText(/nenhum sinal crítico|eventos em 90 dias/i).first(),
-    ).toBeVisible();
-
-    expect(failedRpcs, `RPCs com falha: ${failedRpcs.join(", ")}`).toEqual([]);
   });
 });
+
+type DiagnosticReport = {
+  steps: Array<{ name: string; durationMs: number; outcome: "passed" | "failed" }>;
+  failedRequests: Array<{ method: string; path: string; reason: string }>;
+  failedResponses: Array<{ method: string; path: string; status: number; durationMs?: number }>;
+  consoleErrors: string[];
+  pageErrors: string[];
+};
+
+function createRbacDiagnostics(page: Page) {
+  const report: DiagnosticReport = {
+    steps: [],
+    failedRequests: [],
+    failedResponses: [],
+    consoleErrors: [],
+    pageErrors: [],
+  };
+  const requestStartedAt = new WeakMap<object, number>();
+  const onRequest = (request: import("@playwright/test").Request) => requestStartedAt.set(request, Date.now());
+  const onRequestFailed = (request: import("@playwright/test").Request) => report.failedRequests.push({
+    method: request.method(),
+    path: safePath(request.url()),
+    reason: request.failure()?.errorText ?? "unknown",
+  });
+  const onResponse = (response: import("@playwright/test").Response) => {
+    if (response.ok()) return;
+    report.failedResponses.push({
+      method: response.request().method(),
+      path: safePath(response.url()),
+      status: response.status(),
+      durationMs: requestStartedAt.has(response.request())
+        ? Date.now() - requestStartedAt.get(response.request())!
+        : undefined,
+    });
+  };
+  const onConsole = (message: import("@playwright/test").ConsoleMessage) => {
+    if (message.type() === "error") report.consoleErrors.push(message.text().slice(0, 500));
+  };
+  const onPageError = (error: Error) => report.pageErrors.push(error.message.slice(0, 500));
+
+  page.on("request", onRequest);
+  page.on("requestfailed", onRequestFailed);
+  page.on("response", onResponse);
+  page.on("console", onConsole);
+  page.on("pageerror", onPageError);
+
+  return {
+    report,
+    dispose: () => {
+      page.off("request", onRequest);
+      page.off("requestfailed", onRequestFailed);
+      page.off("response", onResponse);
+      page.off("console", onConsole);
+      page.off("pageerror", onPageError);
+    },
+  };
+}
+
+async function measuredStep<T>(
+  diagnostics: ReturnType<typeof createRbacDiagnostics>,
+  name: string,
+  action: () => Promise<T>,
+) {
+  return test.step(name, async () => {
+    const startedAt = Date.now();
+    try {
+      const result = await action();
+      diagnostics.report.steps.push({ name, durationMs: Date.now() - startedAt, outcome: "passed" });
+      return result;
+    } catch (error) {
+      diagnostics.report.steps.push({ name, durationMs: Date.now() - startedAt, outcome: "failed" });
+      throw error;
+    }
+  });
+}
+
+function safePath(url: string) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return "invalid-url";
+  }
+}
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/auth", { waitUntil: "domcontentloaded", timeout: 60_000 });

@@ -89,25 +89,38 @@ export function ReportDataTable<T extends Record<string, any>>({
                     {columns.map((col) => (
                       <th
                         key={col.key}
+                        aria-sort={
+                          col.sortable
+                            ? sortKey === col.key
+                              ? sortDir === "asc" ? "ascending" : "descending"
+                              : "none"
+                            : undefined
+                        }
                         className={cn(
                           "px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap",
                           col.align === "center" && "text-center",
                           col.align === "right" && "text-right",
-                          col.sortable && "cursor-pointer select-none hover:text-foreground transition-colors",
                           col.width,
                         )}
-                        onClick={() => col.sortable && handleSort(col.key)}
                       >
-                        <span className="inline-flex items-center gap-1">
-                          {col.header ?? col.label}
-                          {col.sortable && (
-                            sortKey === col.key ? (
+                        {col.sortable ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label={`Ordenar por ${col.header ?? col.label ?? col.key}`}
+                            onClick={() => handleSort(col.key)}
+                          >
+                            {col.header ?? col.label}
+                            {sortKey === col.key ? (
                               sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                             ) : (
                               <ChevronsUpDown className="h-3 w-3 opacity-40" />
                             )
-                          )}
-                        </span>
+                            }
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">{col.header ?? col.label}</span>
+                        )}
                       </th>
                     ))}
                   </tr>

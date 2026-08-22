@@ -45,6 +45,14 @@ export function SprintHistoryTable({ metrics, onSelect }: Props) {
               key={m.sprintId}
               className="hover:bg-muted/30 cursor-pointer transition-colors"
               onClick={() => onSelect(m)}
+              tabIndex={0}
+              aria-label={`Abrir detalhes da sprint ${m.sprintName}`}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect(m);
+                }
+              }}
             >
               {/* Sprint */}
               <TableCell className="py-2">

@@ -6,7 +6,7 @@ import { resolveGitlabBacklogPlacement } from '../_shared/gitlab-backlog-placeme
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-integration-id, x-git-provider, x-gitlab-token, x-hub-signature-256, x-github-event, x-gitlab-event',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-integration-id, x-git-provider, x-gitlab-token, x-hub-signature-256, x-github-event, x-github-delivery, x-gitlab-event, x-vss-event, x-azure-webhook-token',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -44,8 +44,8 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const eventType = normalizeEventType(req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || 'unknown');
-    const signature = req.headers.get('x-gitlab-token') || req.headers.get('x-hub-signature-256');
+    const eventType = normalizeEventType(req.headers.get('x-gitlab-event') || req.headers.get('x-github-event') || req.headers.get('x-vss-event') || 'unknown');
+    const signature = req.headers.get('x-gitlab-token') || req.headers.get('x-hub-signature-256') || req.headers.get('x-azure-webhook-token') || basicPassword(req.headers.get('authorization'));
 
     const rawBody = await readTextBody(req, 2_000_000);
     let payload: Record<string, unknown>;
@@ -103,7 +103,7 @@ serve(async (req: Request) => {
     }
 
     const provider = String(integration.provider || '').toLowerCase();
-    if (!['gitlab', 'github'].includes(provider)) {
+    if (!['gitlab', 'github', 'azure_devops'].includes(provider)) {
       return new Response(JSON.stringify({ error: 'Unsupported integration provider' }), {
         status: 422,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -153,7 +153,7 @@ serve(async (req: Request) => {
     // Capturar headers relevantes para auditoria
     const relevantHeaders: Record<string, string> = {};
     [
-      'x-integration-id', 'x-git-provider', 'x-gitlab-event', 'x-github-event',
+      'x-integration-id', 'x-git-provider', 'x-gitlab-event', 'x-github-event', 'x-github-delivery', 'x-vss-event',
       'content-type', 'user-agent',
       'x-forwarded-for', 'x-real-ip',
     ].forEach(k => {
@@ -162,6 +162,8 @@ serve(async (req: Request) => {
     });
 
     // Gerar provider_event_id determinístico para garantia de idempotência.
+    payload.__delivery_id = req.headers.get('x-github-delivery') || payload.id || null;
+    const normalizedPayload = normalizeProviderPayload(provider, eventType, payload);
     const providerEventId =
       extractProviderEventId(provider, eventType, payload) ??
       `${integrationId}-${eventType}-${correlationId}`;
@@ -229,7 +231,7 @@ serve(async (req: Request) => {
     }
 
     // Process event asynchronously based on type
-    await processGitEvent(supabase, integration, gitEvent, payload, eventType, correlationId);
+    await processGitEvent(supabase, integration, gitEvent, normalizedPayload, normalizeProviderEventType(provider,eventType), correlationId);
 
     // Log integration usage
     await logIntegrationEvent(supabase, organizationId, integrationId, 'webhook_received', 'success', {
@@ -320,11 +322,7 @@ async function verifyWebhookSignature(
 ): Promise<boolean> {
   const encoder = new TextEncoder();
   if (provider === 'gitlab') {
-    const key = await crypto.subtle.importKey(
-      'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'],
-    );
-    const comparison = await crypto.subtle.sign('HMAC', key, encoder.encode(signature));
-    return crypto.subtle.verify('HMAC', key, comparison, encoder.encode(secret));
+    return timingSafeTextEqual(signature, secret);
   } else if (provider === 'github') {
     // GitHub uses X-Hub-Signature-256: sha256=...
     if (!signature.startsWith('sha256=')) return false;
@@ -335,8 +333,43 @@ async function verifyWebhookSignature(
     );
     const bytes = new Uint8Array(supplied.match(/.{2}/g)!.map((part) => Number.parseInt(part, 16)));
     return crypto.subtle.verify('HMAC', key, bytes, encoder.encode(payload));
-  }
+  } else if (provider === 'azure_devops') return timingSafeTextEqual(signature, secret);
   return false;
+}
+
+function timingSafeTextEqual(left:string,right:string):boolean {
+  const a=new TextEncoder().encode(left);const b=new TextEncoder().encode(right);let difference=a.length^b.length;
+  const length=Math.max(a.length,b.length);for(let index=0;index<length;index++)difference|=(a[index%Math.max(a.length,1)]??0)^(b[index%Math.max(b.length,1)]??0);
+  return difference===0;
+}
+
+function basicPassword(header:string|null):string|null {
+  if(!header?.startsWith('Basic '))return null;
+  try { const decoded=atob(header.slice(6));return decoded.slice(decoded.indexOf(':')+1)||null; } catch { return null; }
+}
+
+function normalizeProviderEventType(provider:string,eventType:string):string {
+  if(provider!=='azure_devops')return eventType;
+  if(eventType.includes('git_push'))return 'push';
+  if(eventType.includes('pullrequest'))return 'pull_request';
+  if(eventType.includes('build'))return 'pipeline';
+  if(eventType.includes('workitem'))return 'work_item';
+  return eventType;
+}
+
+function normalizeProviderPayload(provider:string,eventType:string,payload:Record<string,unknown>):Record<string,unknown> {
+  if(provider==='github') {
+    if(eventType==='pull_request') {
+      const pr=(payload.pull_request??{})as any;
+      return {...payload,merge_request:{...pr,iid:pr.number??payload.number,web_url:pr.html_url,source_branch:pr.head?.ref,target_branch:pr.base?.ref,author:pr.user,description:pr.body,action:payload.action,state:pr.merged?'merged':pr.state}};
+    }
+    return payload;
+  }
+  if(provider!=='azure_devops')return payload;
+  const resource=(payload.resource??{})as any;const repository=resource.repository??resource.pullRequest?.repository??{};
+  if(eventType.includes('git_push'))return{...payload,ref:resource.refUpdates?.[0]?.name,repository:{id:repository.id,url:repository.webUrl??repository.url},commits:(resource.commits??[]).map((commit:any)=>({id:commit.commitId,message:commit.comment,timestamp:commit.author?.date,author:{email:commit.author?.email,name:commit.author?.name}}))};
+  if(eventType.includes('pullrequest')) { const pr=resource;return{...payload,merge_request:{id:pr.pullRequestId,iid:pr.pullRequestId,title:pr.title,description:pr.description,state:pr.status==='completed'?'merged':pr.status,action:pr.status,source_branch:String(pr.sourceRefName??'').replace('refs/heads/',''),target_branch:String(pr.targetRefName??'').replace('refs/heads/',''),author:{id:pr.createdBy?.id,username:pr.createdBy?.uniqueName,email:pr.createdBy?.uniqueName},web_url:pr.url,created_at:pr.creationDate,updated_at:pr.closedDate??pr.creationDate,merged_at:pr.status==='completed'?pr.closedDate:null}}; }
+  return payload;
 }
 
 async function processGitEvent(
@@ -627,7 +660,7 @@ function normalizeEventType(raw: string | null): string {
   return raw
     .toLowerCase()
     .replace(/ hook$/, '')
-    .replace(/\s+/g, '_')
+    .replace(/[.\s]+/g, '_')
     .trim();
 }
 
@@ -952,8 +985,12 @@ function extractProviderEventId(
       }
     }
     if (provider === 'github') {
-      const delivery = payload['x-github-delivery'] as string | undefined;
+      const delivery = payload.__delivery_id as string | undefined;
       return delivery ? `github-${eventType}-${delivery}` : null;
+    }
+    if(provider==='azure_devops') {
+      const delivery=(payload.id??payload.__delivery_id)as string|undefined;
+      return delivery?`azure-${eventType}-${delivery}`:null;
     }
     return null;
   } catch {

@@ -1,21 +1,23 @@
 import { useNavigate } from "react-router-dom";
 import {
+  ArrowRight,
   Building2,
   Check,
   ChevronsUpDown,
   ClipboardCheck,
+  CreditCard,
   Gauge,
   Kanban,
   Loader2,
   Settings2,
   ShieldCheck,
-  SlidersHorizontal,
   Users,
   Wrench,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { AxionLogo } from "@/components/AxionLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserAccountMenu } from "@/components/GlobalLogoutButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,9 +98,9 @@ export default function OrganizationModuleSelector() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/20">
-      <header className="relative z-[80] border-b bg-background">
-        <div className="mx-auto flex min-h-16 max-w-6xl items-center justify-between gap-4 px-4 py-3">
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="relative z-[80] border-b border-border/70 bg-background/95 backdrop-blur-md">
+        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <AxionLogo size={34} />
             <div className="min-w-0 leading-tight">
@@ -170,7 +172,7 @@ export default function OrganizationModuleSelector() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="cursor-pointer gap-2"
-                        onClick={() => navigate("/organization/usage?view=settings")}
+                        onClick={() => navigate("/organization/settings")}
                       >
                         <Settings2 className="h-4 w-4" />
                         Configurações
@@ -180,28 +182,31 @@ export default function OrganizationModuleSelector() {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            <ThemeToggle />
             <UserAccountMenu variant="inline" />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-4 py-12">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold">Central Axionn</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <div className="mb-8 max-w-2xl">
+          <Badge variant="secondary" className="mb-3">Central de ambientes</Badge>
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Central Axionn</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Escolha o ambiente em que deseja trabalhar.
           </p>
         </div>
 
+        <section aria-labelledby="operational-modules-title">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h2 id="operational-modules-title" className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Módulos operacionais
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Os acessos consideram a organização atualmente selecionada.
           </p>
         </div>
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {MODULES.map((module) => {
             const Icon = module.icon;
             const allowed = isAdmin || isPlatformAdmin || hasModuleAccess(module.key);
@@ -209,7 +214,7 @@ export default function OrganizationModuleSelector() {
             return (
               <Card
                 key={module.key}
-                className={allowed ? "transition-shadow hover:shadow-md" : "opacity-50"}
+                className={allowed ? "group transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg" : "opacity-55"}
               >
                 <CardHeader>
                   <div className="flex items-start justify-between gap-3">
@@ -222,8 +227,8 @@ export default function OrganizationModuleSelector() {
                   </div>
                   <CardTitle className="pt-3 text-lg">{module.title}</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-5">
-                  <p className="min-h-12 text-sm text-muted-foreground">
+                <CardContent className="space-y-4">
+                  <p className="min-h-10 text-sm leading-6 text-muted-foreground">
                     {module.description}
                   </p>
                   <Button
@@ -233,31 +238,39 @@ export default function OrganizationModuleSelector() {
                     onClick={() => navigate(module.path)}
                   >
                     {allowed ? "Acessar módulo" : "Acesso não concedido"}
+                    {allowed && <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />}
                   </Button>
                 </CardContent>
               </Card>
             );
           })}
         </div>
+        </section>
 
         {(isOrganizationAdmin || isAdmin || isPlatformAdmin || staffMember) && (
-          <>
-            <div className="mb-4 mt-10">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <section className="mt-10 border-t border-border/70 pt-8" aria-labelledby="management-modules-title">
+            <div className="mb-4">
+              <h2 id="management-modules-title" className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Gestão e administração
               </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Acessos administrativos exibidos conforme as permissões da sua conta.
+              </p>
             </div>
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {(isOrganizationAdmin || isAdmin) && (
-                <Card className="transition-shadow hover:shadow-md">
+                <Card className="group transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg">
                   <CardHeader>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10">
-                      <Building2 className="h-5 w-5 text-blue-600" />
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
+                        <Building2 className="h-5 w-5 text-primary" />
+                      </div>
+                      <Badge variant="outline">Organização</Badge>
                     </div>
                     <CardTitle className="pt-3 text-lg">Administrador</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-5">
-                    <p className="min-h-12 text-sm text-muted-foreground">
+                  <CardContent className="space-y-4">
+                    <p className="min-h-10 text-sm leading-6 text-muted-foreground">
                       Empresas, contratos, projetos, times, usuários e configurações da organização.
                     </p>
                     <Button
@@ -268,50 +281,59 @@ export default function OrganizationModuleSelector() {
                       }
                     >
                       Acessar administração
+                      <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </Button>
                   </CardContent>
                 </Card>
               )}
 
               {staffMember && (
-                <Card className="transition-shadow hover:shadow-md">
+                <Card className="group transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg">
                   <CardHeader>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10">
-                      <ShieldCheck className="h-5 w-5 text-cyan-600" />
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-info/15 bg-info/10">
+                        <ShieldCheck className="h-5 w-5 text-info" />
+                      </div>
+                      <Badge variant="outline">Operação interna</Badge>
                     </div>
                     <CardTitle className="pt-3 text-lg">Backoffice Axionn</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-5">
-                    <p className="min-h-12 text-sm text-muted-foreground">
+                  <CardContent className="space-y-4">
+                    <p className="min-h-10 text-sm leading-6 text-muted-foreground">
                       Gestão interna de clientes, assinaturas, financeiro, equipe e suporte.
                     </p>
                     <Button className="w-full" variant="outline" onClick={() => navigate("/backoffice")}>
                       Acessar backoffice
+                      <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </Button>
                   </CardContent>
                 </Card>
               )}
 
               {isPlatformAdmin && (
-                <Card className="transition-shadow hover:shadow-md">
+                <Card className="group transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-lg">
                   <CardHeader>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-500/10">
-                      <SlidersHorizontal className="h-5 w-5 text-violet-600" />
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-warning/15 bg-warning/10">
+                        <CreditCard className="h-5 w-5 text-warning" />
+                      </div>
+                      <Badge variant="outline">Admin global</Badge>
                     </div>
-                    <CardTitle className="pt-3 text-lg">Configuração da plataforma</CardTitle>
+                    <CardTitle className="pt-3 text-lg">Configurações e planos</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-5">
-                    <p className="min-h-12 text-sm text-muted-foreground">
-                      Catálogo de planos, assinaturas globais e provedores de inteligência artificial.
+                  <CardContent className="space-y-4">
+                    <p className="min-h-10 text-sm leading-6 text-muted-foreground">
+                      Planos de pagamento, assinaturas globais, recursos e provedores de inteligência artificial.
                     </p>
-                    <Button className="w-full" variant="outline" onClick={() => navigate("/platform")}>
-                      Acessar plataforma
+                    <Button className="w-full" variant="outline" onClick={() => navigate("/platform/plans")}>
+                      Gerenciar plataforma
+                      <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </Button>
                   </CardContent>
                 </Card>
               )}
             </div>
-          </>
+          </section>
         )}
       </main>
     </div>

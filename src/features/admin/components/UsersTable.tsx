@@ -115,6 +115,7 @@ export function UsersTable({
             <TableCell className="text-center">
               <Switch
                 checked={u.is_admin}
+                aria-label={`Alternar administrador para ${u.display_name}`}
                 onCheckedChange={v => onToggleAdmin(u.user_id, v)}
                 className="scale-75"
               />
@@ -124,6 +125,7 @@ export function UsersTable({
             <TableCell className="text-center">
               <Switch
                 checked={u.is_active}
+                aria-label={`Alternar status ativo para ${u.display_name}`}
                 onCheckedChange={v => onToggleActive(u.user_id, v)}
                 className="scale-75"
               />
@@ -133,7 +135,12 @@ export function UsersTable({
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    aria-label={`Ações de ${u.display_name}`}
+                  >
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>

@@ -110,12 +110,12 @@ export function BackofficeMfaGate({ children }: { children: React.ReactNode }) {
   if (verified) return <>{children}</>;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
-      <Card className="w-full max-w-md border-cyan-500/30 shadow-2xl">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md border-primary/30 shadow-2xl">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex items-center gap-2">
             <AxionLogo size={36} />
-            <ShieldCheck className="h-6 w-6 text-cyan-600" />
+            <ShieldCheck className="h-6 w-6 text-primary" />
           </div>
           <CardTitle>Verificação obrigatória do backoffice</CardTitle>
           <CardDescription>
@@ -125,7 +125,7 @@ export function BackofficeMfaGate({ children }: { children: React.ReactNode }) {
         <CardContent className="space-y-5">
           {loading ? (
             <div className="py-8 text-center">
-              <Loader2 className="mx-auto h-6 w-6 animate-spin text-cyan-600" />
+              <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
               <p className="mt-3 text-sm text-muted-foreground">Preparando segundo fator...</p>
             </div>
           ) : (

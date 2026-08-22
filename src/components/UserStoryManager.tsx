@@ -438,8 +438,11 @@ export function UserStoryManager({ selectedSprintId, onSelectSprint }: UserStory
       {totalItems === 0 && (
         <EmptyState
           icon={BookOpen}
-          title="Nenhum item encontrado"
-          description={hasFilters ? "Tente ajustar os filtros" : "Adicione as User Stories desta Sprint"}
+          variant={hasFilters ? "filtered-empty" : "empty"}
+          title={hasFilters ? "Nenhuma User Story corresponde aos filtros" : "Nenhuma User Story nesta sprint"}
+          description={hasFilters ? "Ajuste a busca ou limpe os filtros aplicados." : "Adicione as User Stories desta sprint para começar."}
+          actionLabel={hasFilters ? "Limpar filtros" : undefined}
+          onAction={hasFilters ? () => { clearFilters(); setCurrentPage(1); } : undefined}
         />
       )}
 

@@ -5,14 +5,18 @@ import {
   CircuitOpenError,
 } from "@/lib/circuit-breaker";
 import { retryQuery } from "@/lib/query-retry";
+import { getCanonicalProductionSupabaseConfig } from "@/config/supabasePublicConfig";
 
 const isTestEnvironment = import.meta.env.MODE === "test";
+const canonicalProductionConfig = getCanonicalProductionSupabaseConfig();
 const configuredUrl =
   import.meta.env.VITE_SUPABASE_URL?.trim() ||
+  canonicalProductionConfig?.url ||
   (isTestEnvironment ? "http://127.0.0.1:54321" : undefined);
 const configuredKey =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ||
   import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ||
+  canonicalProductionConfig?.publishableKey ||
   (isTestEnvironment ? "test-anon-key" : undefined);
 
 if (!configuredUrl || !configuredKey) {

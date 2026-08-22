@@ -52,13 +52,13 @@ interface SubscriptionAction {
 // ============================================================
 
 const STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  trialing: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  pending: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-  past_due: "bg-orange-500/15 text-orange-400 border-orange-500/30",
-  suspended: "bg-red-500/15 text-red-400 border-red-500/30",
-  canceled: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
-  expired: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+  active: "border-success/30 bg-success/15 text-success",
+  trialing: "border-info/30 bg-info/15 text-info",
+  pending: "border-warning/30 bg-warning/15 text-warning",
+  past_due: "border-destructive/30 bg-destructive/15 text-destructive",
+  suspended: "border-destructive/30 bg-destructive/15 text-destructive",
+  canceled: "border-border bg-muted text-muted-foreground",
+  expired: "border-border bg-muted text-muted-foreground",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -330,12 +330,12 @@ export default function OrganizationSubscriptionPage() {
               </span>
             </div>
             {subscription.trialEndsAt && (
-              <p className="text-xs text-blue-400 mt-1">
+              <p className="mt-1 text-xs text-info">
                 Trial termina em: {formatDate(subscription.trialEndsAt)}
               </p>
             )}
             {subscription.canceledAt && (
-              <p className="text-xs text-red-400 mt-1">
+              <p className="mt-1 text-xs text-destructive">
                 Cancelada em: {formatDate(subscription.canceledAt)}
               </p>
             )}
@@ -368,10 +368,10 @@ export default function OrganizationSubscriptionPage() {
                     variant="outline"
                     className={
                       u.status === "reached"
-                        ? "border-red-500/30 text-red-400"
+                        ? "border-destructive/30 text-destructive"
                         : u.status === "warning"
-                          ? "border-yellow-500/30 text-yellow-400"
-                          : "border-emerald-500/30 text-emerald-400"
+                          ? "border-warning/30 text-warning"
+                          : "border-success/30 text-success"
                     }
                   >
                     {u.status === "reached"

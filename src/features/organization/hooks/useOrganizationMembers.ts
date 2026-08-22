@@ -23,6 +23,7 @@ export interface OrganizationMember {
 export interface OrganizationInvitation {
   invitationId: string;
   email: string;
+  recipientName: string;
   invitationRole: Exclude<OrganizationMemberRole, "owner">;
   moduleKeys: OrganizationModuleKey[];
   invitationStatus: OrganizationInvitationStatus;
@@ -34,8 +35,13 @@ export interface OrganizationInvitation {
 
 interface InviteMemberInput {
   email: string;
+  displayName: string;
   role: "admin" | "member";
   moduleKeys: OrganizationModuleKey[];
+}
+
+interface CreateOrganizationUserInput extends InviteMemberInput {
+  password: string;
 }
 
 interface UpdateMemberInput {
@@ -68,6 +74,7 @@ function normalizeInvitation(
   return {
     invitationId: String(row.invitation_id),
     email: String(row.email ?? ""),
+    recipientName: String(row.recipient_name ?? ""),
     invitationRole: String(row.invitation_role ?? "member") as
       | "admin"
       | "member",
@@ -114,7 +121,7 @@ export function useOrganizationMembers() {
       (supabase as any).rpc("get_organization_members_v2", {
         p_org_id: currentOrganizationId,
       }),
-      (supabase as any).rpc("get_organization_invitations_v2", {
+      (supabase as any).rpc("get_organization_invitations_v3", {
         p_org_id: currentOrganizationId,
       }),
     ]);
@@ -158,6 +165,7 @@ export function useOrganizationMembers() {
               action: "create",
               organization_id: currentOrganizationId,
               email: input.email,
+              display_name: input.displayName,
               role: input.role,
               module_keys: input.moduleKeys,
             },
@@ -173,6 +181,36 @@ export function useOrganizationMembers() {
       }
     },
     [currentOrganizationId, refresh],
+  );
+
+  const createOrganizationUser = useCallback(
+    async (input: CreateOrganizationUserInput) => {
+      if (!currentOrganizationId) throw new Error("Organização não selecionada.");
+      setMutating(true);
+      try {
+        const { data, error: invokeError } = await supabase.functions.invoke(
+          "organization-invitations",
+          {
+            body: {
+              action: "create_user",
+              organization_id: currentOrganizationId,
+              email: input.email,
+              display_name: input.displayName,
+              password: input.password,
+              role: input.role,
+              module_keys: input.moduleKeys,
+            },
+          },
+        );
+        if (invokeError) throw invokeError;
+        if (data?.error) throw new Error(String(data.error));
+        await Promise.all([refresh(), refreshOrganizations(), refreshModuleAccess(currentOrganizationId)]);
+        return data;
+      } finally {
+        setMutating(false);
+      }
+    },
+    [currentOrganizationId, refresh, refreshModuleAccess, refreshOrganizations],
   );
 
   const resendInvitation = useCallback(
@@ -322,6 +360,7 @@ export function useOrganizationMembers() {
       error,
       refresh,
       inviteMember,
+      createOrganizationUser,
       resendInvitation,
       revokeInvitation,
       updateMember,
@@ -334,6 +373,7 @@ export function useOrganizationMembers() {
       error,
       invitations,
       inviteMember,
+      createOrganizationUser,
       loading,
       members,
       mutating,

@@ -64,12 +64,12 @@ export function ReportFilters({
     return (
       <Card className="border-dashed">
         <CardContent className="pt-4 pb-3">
-          <div className="flex flex-wrap gap-4 items-end">
+          <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {setTeamId && (
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Time</Label>
                 <Select value={teamId || "all"} onValueChange={handleTeamChange}>
-                  <SelectTrigger className="w-[180px] h-8 text-xs">
+                  <SelectTrigger className="min-h-11 w-full text-xs sm:min-h-9" aria-label="Selecionar time">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -88,7 +88,7 @@ export function ReportFilters({
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Analista</Label>
                 <Select value={analista || "all"} onValueChange={setAnalista}>
-                  <SelectTrigger className="w-[210px] h-8 text-xs">
+                  <SelectTrigger className="min-h-11 w-full text-xs sm:min-h-9" aria-label="Selecionar analista">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
@@ -104,26 +104,28 @@ export function ReportFilters({
             )}
 
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Data Início</Label>
+              <Label htmlFor="report-start-date" className="text-xs font-semibold">Data Início</Label>
               <Input
                 type="date"
                 value={dataInicio || ""}
                 onChange={(e) => setDataInicio!(e.target.value)}
-                className="h-8 text-xs w-[140px]"
+                id="report-start-date"
+                className="min-h-11 w-full text-xs sm:min-h-9"
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Data Fim</Label>
+              <Label htmlFor="report-end-date" className="text-xs font-semibold">Data Fim</Label>
               <Input
                 type="date"
                 value={dataFim || ""}
                 onChange={(e) => setDataFim!(e.target.value)}
-                className="h-8 text-xs w-[140px]"
+                id="report-end-date"
+                className="min-h-11 w-full text-xs sm:min-h-9"
               />
             </div>
 
-            <div className="flex gap-1 items-end pb-0.5">
+            <div className="flex flex-wrap items-end gap-2 pb-0.5">
               {[
                 { label: "7d", days: 7 },
                 { label: "30d", days: 30 },
@@ -133,7 +135,7 @@ export function ReportFilters({
                   key={label}
                   size="sm"
                   variant="outline"
-                  className="h-8 text-xs px-2"
+                  className="min-h-11 px-3 text-xs sm:min-h-9"
                   onClick={() => {
                     setDataInicio!(daysAgo(days));
                     setDataFim!(today());
@@ -152,10 +154,10 @@ export function ReportFilters({
 
   // Layout legado (compacto)
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
       {setTeamId && (
         <Select value={teamId || "all"} onValueChange={handleTeamChange}>
-          <SelectTrigger className="w-[150px] h-8 text-xs">
+          <SelectTrigger className="min-h-11 w-full text-xs sm:min-h-9 sm:w-[150px]" aria-label="Selecionar time">
             <SelectValue placeholder="Time" />
           </SelectTrigger>
           <SelectContent>
@@ -169,7 +171,7 @@ export function ReportFilters({
         </Select>
       )}
       <Select value={periodo} onValueChange={setPeriodo}>
-        <SelectTrigger className="w-[150px] h-8 text-xs">
+        <SelectTrigger className="min-h-11 w-full text-xs sm:min-h-9 sm:w-[150px]" aria-label="Selecionar período">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -181,7 +183,7 @@ export function ReportFilters({
       </Select>
       {showAnalista && analistas && setAnalista && (
         <Select value={analista || "all"} onValueChange={setAnalista}>
-          <SelectTrigger className="w-[200px] h-8 text-xs">
+          <SelectTrigger className="min-h-11 w-full text-xs sm:min-h-9 sm:w-[200px]" aria-label="Selecionar analista">
             <SelectValue placeholder="Todos analistas" />
           </SelectTrigger>
           <SelectContent>

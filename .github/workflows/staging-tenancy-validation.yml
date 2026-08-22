@@ -1,104 +1,56 @@
-name: 🧭 Staging tenancy validation
+name: Lovable database handoff validation
 
 on:
   workflow_dispatch:
-    inputs:
-      apply_migrations:
-        description: "Apply pending migrations to staging before validation"
-        required: true
-        default: false
-        type: boolean
-      confirmation:
-        description: "When applying migrations, type APPLY-STAGING"
-        required: false
-        type: string
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/operations/**"
+      - "scripts/check-supabase-migrations.sh"
+      - "docs/lovable/**"
+      - ".github/workflows/staging-tenancy-validation.yml"
 
-concurrency:
-  group: staging-tenancy-validation
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
-  validate-staging:
-    name: Validate staging isolation
+  validate-handoff:
+    name: Validate Lovable handoff package
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: staging
-
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_REF }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_STAGING_DB_PASSWORD }}
-      SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
-
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Validate migration versions and build replay manifest
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate migration names and legacy collision allowlist
         env:
-          MIGRATION_ORDER_OUTPUT: migration-replay-order.txt
+          MIGRATION_ORDER_OUTPUT: migration-order.txt
         run: bash scripts/check-supabase-migrations.sh
-
-      - name: Validate staging secrets and confirmation
+      - name: Reject remote Supabase mutation commands in workflows
         shell: bash
         run: |
           set -euo pipefail
-          : "${SUPABASE_ACCESS_TOKEN:?Missing SUPABASE_ACCESS_TOKEN}"
-          : "${SUPABASE_PROJECT_REF:?Missing SUPABASE_STAGING_PROJECT_REF}"
-          : "${SUPABASE_DB_PASSWORD:?Missing SUPABASE_STAGING_DB_PASSWORD}"
-          : "${SUPABASE_STAGING_DB_URL:?Missing SUPABASE_STAGING_DB_URL}"
-
-          if [[ "${{ inputs.apply_migrations }}" == "true" && "${{ inputs.confirmation }}" != "APPLY-STAGING" ]]; then
-            echo "Migration application requires the exact confirmation APPLY-STAGING."
+          remote_cli='supabase (li''nk|db pu''sh|db re''set|migration re''pair|functions de''ploy)'
+          linked_flag='--lin''ked'
+          if grep -R -nE "$remote_cli|$linked_flag" .github/workflows; then
+            echo "Remote Supabase mutations must be executed by Lovable, never by GitHub Actions."
             exit 1
           fi
-
-      - name: Link staging project
-        run: |
-          supabase link \
-            --project-ref "$SUPABASE_PROJECT_REF" \
-            --password "$SUPABASE_DB_PASSWORD"
-
-      - name: Preview pending migrations
+      - name: Reject tracked environment files
         shell: bash
         run: |
           set -euo pipefail
-          supabase db push --linked --dry-run 2>&1 | tee migration-dry-run.log
-
-      - name: Apply pending migrations
-        if: ${{ inputs.apply_migrations == true }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          supabase db push --linked 2>&1 | tee migration-apply.log
-
-      - name: Prove tenant isolation against staging
-        shell: bash
-        run: |
-          set -euo pipefail
-          supabase test db supabase/tests/database \
-            --db-url "$SUPABASE_STAGING_DB_URL" 2>&1 | tee database-isolation.log
-
-      - name: Check pre-enforcement readiness
-        shell: bash
-        run: |
-          set -euo pipefail
-          supabase test db supabase/tests/staging/01_pre_enforcement_readiness.test.sql \
-            --db-url "$SUPABASE_STAGING_DB_URL" 2>&1 | tee tenancy-readiness.log
-
-      - name: Publish staging validation logs
+          tracked=$(git ls-files '.env' '.env.local' '.env.*.local' '.env.production' '.env.staging' '.env.e2e')
+          if [[ -n "$tracked" ]]; then
+            echo "Tracked environment files are forbidden:"
+            printf '%s\n' "$tracked"
+            exit 1
+          fi
+      - name: Publish handoff inventory
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: staging-tenancy-validation-${{ github.run_number }}
-          path: |
-            migration-replay-order.txt
-            migration-dry-run.log
-            migration-apply.log
-            database-isolation.log
-            tenancy-readiness.log
-          if-no-files-found: ignore
+          name: lovable-database-handoff-${{ github.run_number }}
+          path: migration-order.txt
+          if-no-files-found: warn
           retention-days: 14

@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Building2,
   Clock3,
   Loader2,
@@ -48,7 +46,6 @@ function formatDate(value: string) {
 }
 
 export default function OrganizationSettingsPage() {
-  const navigate = useNavigate();
   const {
     organization,
     settings,
@@ -108,7 +105,7 @@ export default function OrganizationSettingsPage() {
 
   if (!organization) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="flex min-h-64 items-center justify-center p-6">
         <Alert className="max-w-xl">
           <AlertDescription>
             Selecione uma organização para editar as configurações.
@@ -119,13 +116,9 @@ export default function OrganizationSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 lg:px-8">
+    <div className="space-y-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <Settings2 className="h-5 w-5 text-primary" />
             </div>
@@ -143,10 +136,9 @@ export default function OrganizationSettingsPage() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Atualizar
           </Button>
-        </div>
-      </header>
+      </div>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] lg:px-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
         <div className="space-y-6">
           {error && (
             <Alert variant="destructive">
@@ -340,7 +332,7 @@ export default function OrganizationSettingsPage() {
             )}
           </CardContent>
         </Card>
-      </main>
+      </div>
     </div>
   );
 }

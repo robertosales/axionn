@@ -20,7 +20,7 @@ import { DemandasList }                      from "./components/DemandasList";
 import { SustentacaoRelatorios }             from "./components/reports/SustentacaoRelatorios";
 import { TeamManager }                       from "@/components/TeamManager";
 import { TeamMembersManager }               from "@/components/TeamMembersManager";
-import { UserRolesManager }                 from "@/components/UserRolesManager";
+import RbacWorkspace                       from "@/features/rbac/RbacWorkspace";
 import { CustomFieldManager }               from "@/components/CustomFieldManager";
 import { AutomationManager }                from "@/components/AutomationManager";
 import { DeveloperManager }                 from "@/components/DeveloperManager";
@@ -30,8 +30,9 @@ import { TeamSelectionModal }               from "@/shared/components/common/Tea
 import { supabase }                         from "@/integrations/supabase/client";
 import { useQueryClient }                   from "@tanstack/react-query";
 import { Building2 }                        from "lucide-react";
-import { Button }                           from "@/components/ui/button";
 import { toast }                            from "sonner";
+import { EmptyState }                       from "@/shared/components/common/EmptyState";
+import { SkeletonList }                     from "@/shared/components/common/SkeletonList";
 
 export default function SustentacaoPage() {
   const { pathname }              = useLocation();
@@ -60,7 +61,7 @@ export default function SustentacaoPage() {
     return () => { supabase.removeChannel(sub); };
   }, [qc]);
 
-  const needsTeam = !moduleTeamId && active !== "times";
+  const needsTeam = !moduleTeamId && !["times", "perfis"].includes(active);
 
   return (
     <AppShell module="sustentacao">
@@ -72,31 +73,27 @@ export default function SustentacaoPage() {
         onClose={closeTeamModal}
       />
 
-      <div className="max-w-7xl mx-auto p-4 md:p-6">
+      <main className="mx-auto w-full max-w-[1500px] px-4 pb-8 pt-5 md:px-8 md:pt-6">
         {authLoading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-info" />
+          <div aria-busy="true" aria-label="Carregando Sustentação">
+            <SkeletonList count={5} variant="card" />
           </div>
         )}
 
         {!authLoading && needsTeam && (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <Building2 className="h-14 w-14 text-muted-foreground/30" />
-            <p className="text-lg text-muted-foreground font-medium">
-              Selecione ou crie um time para começar
-            </p>
-            {hasPermission("manage_teams") && (
-              <Button onClick={() => navigate("/sustentacao/times")} size="lg">
-                <Building2 className="h-4 w-4 mr-2" /> Ir para Times
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            icon={Building2}
+            title="Selecione ou crie um time para começar"
+            description="A Sustentação utiliza o time ativo para delimitar demandas, responsáveis e indicadores."
+            actionLabel={hasPermission("manage_teams") ? "Ir para Times" : undefined}
+            onAction={hasPermission("manage_teams") ? () => navigate("/sustentacao/times") : undefined}
+          />
         )}
 
         {!authLoading && !needsTeam && (
           <SustentacaoSection key={moduleTeamId ?? "no-team"} active={active} />
         )}
-      </div>
+      </main>
     </AppShell>
   );
 }
@@ -136,8 +133,8 @@ function SustentacaoSection({ active }: { active: string }) {
       try {
         await moveTo(demanda, targetKey);
         toast.success("Demanda movida com sucesso!");
-      } catch (e: any) {
-        toast.error("Erro ao mover demanda: " + (e?.message ?? ""));
+      } catch (error: unknown) {
+        toast.error("Erro ao mover demanda: " + (error instanceof Error ? error.message : ""));
       }
     },
     [moveTo],
@@ -165,19 +162,20 @@ function SustentacaoSection({ active }: { active: string }) {
     case "dashboard":  return <SustentacaoDashboard />;
     case "board":
       return (
-        <div className="flex flex-col h-full">
-          {loading && (
-            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-              Carregando demandas…
+        <div className="flex h-full flex-col">
+          {loading ? (
+            <div aria-busy="true" aria-label="Carregando quadro de demandas">
+              <SkeletonList count={4} variant="card" />
             </div>
+          ) : (
+            <SustentacaoBoard
+              demandas={demandas}
+              workflowColumns={workflowColumns}
+              onCreateDemanda={handleCreateDemanda}
+              onSelectDemanda={handleSelectDemanda}
+              onMoveDemanda={handleMoveDemanda}
+            />
           )}
-          <SustentacaoBoard
-            demandas={demandas}
-            workflowColumns={workflowColumns}
-            onCreateDemanda={handleCreateDemanda}
-            onSelectDemanda={handleSelectDemanda}
-            onMoveDemanda={handleMoveDemanda}
-          />
           <DemandaForm
             open={showCreate}
             onClose={() => setShowCreate(false)}
@@ -199,7 +197,7 @@ function SustentacaoSection({ active }: { active: string }) {
     case "fluxo":      return <SustentacaoWorkflow />;
     case "relatorios": return <SustentacaoRelatorios />;
     case "membros":    return <TeamMembersManager />;
-    case "perfis":     return <UserRolesManager />;
+    case "perfis":     return <RbacWorkspace />;
     case "campos":     return <CustomFieldManager />;
     case "automacoes": return <AutomationManager />;
     case "times":      return <TeamManager moduleFilter="sustentacao" />;

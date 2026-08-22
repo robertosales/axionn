@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   Building2,
+  CreditCard,
   FileText,
   FolderKanban,
   Gauge,
@@ -32,6 +33,7 @@ const navItems = [
   { to: "/organization/teams", label: "Times", icon: UsersRound },
   { to: "/organization/members", label: "Usuários", icon: Users },
   { to: "/organization/usage", label: "Plano e uso", icon: Gauge },
+  { to: "/organization/subscription", label: "Assinatura e cobrança", icon: CreditCard },
   { to: "/organization/settings", label: "Configurações", icon: Settings2 },
   { to: "/organization/gitlab-integrations", label: "GitLab", icon: GitBranch },
 ] as const;
@@ -70,10 +72,10 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
 
   const sidebar = (
     <aside className="flex h-full w-64 flex-col bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]">
-      <div className="flex h-14 items-center gap-2 border-b border-white/10 px-4">
+      <div className="flex h-14 items-center gap-2 border-b border-[hsl(var(--sidebar-accent))] px-4">
         <AxionLogo size={24} />
         <div className="min-w-0">
-          <p className="text-sm font-semibold leading-none text-white">Axion</p>
+          <p className="text-sm font-semibold leading-none text-[hsl(var(--sidebar-foreground))]">Axionn</p>
           <p className="mt-1 text-[10px] uppercase tracking-widest text-primary">
             Organização
           </p>
@@ -89,8 +91,8 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
         </Button>
       </div>
 
-      <div className="border-b border-white/10 px-4 py-3">
-        <p className="truncate text-sm font-medium text-white">
+      <div className="border-b border-[hsl(var(--sidebar-accent))] px-4 py-3">
+        <p className="truncate text-sm font-medium text-[hsl(var(--sidebar-foreground))]">
           {currentOrganization?.name ?? "Organização"}
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -111,7 +113,7 @@ export function OrganizationAdminShell({ children }: { children: ReactNode }) {
         <ShellNav onNavigate={() => setMobileOpen(false)} />
       </div>
 
-      <div className="border-t border-white/10 px-3 pt-3">
+      <div className="border-t border-[hsl(var(--sidebar-accent))] px-3 pt-3">
         <Button
           asChild
           variant="ghost"

@@ -24,7 +24,7 @@ interface TeamMemberInfo {
 }
 
 interface TeamManagerProps {
-  moduleFilter?: "sala_agil" | "sustentacao";
+  moduleFilter?: "sala_agil" | "sustentacao" | "rdm";
 }
 
 export function TeamManager({ moduleFilter }: TeamManagerProps) {
@@ -384,7 +384,7 @@ export function TeamManager({ moduleFilter }: TeamManagerProps) {
     setDeleteTarget(null);
   };
 
-  const MODULE_LABELS: Record<string, string> = { sala_agil: "Sala Ágil", sustentacao: "Sustentação" };
+  const MODULE_LABELS: Record<string, string> = { sala_agil: "Sala Ágil", sustentacao: "Sustentação", rdm: "RDM" };
 
   return (
     <div className="space-y-6">

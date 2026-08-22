@@ -51,8 +51,9 @@ export function useApfCatalog(teamId: string) {
     void Promise.all([
       supabase
         .from("projects")
-        .select("id,name,contract_id")
+        .select("id,name,contract_id,module_type")
         .eq("team_id", teamId)
+        .in("module_type", ["agile", "mixed"])
         .order("name"),
       supabase
         .from("sprints")

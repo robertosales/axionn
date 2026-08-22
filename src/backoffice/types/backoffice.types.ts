@@ -1,4 +1,4 @@
-export const BACKOFFICE_ROLES = [
+﻿export const BACKOFFICE_ROLES = [
   "admin",
   "financeiro",
   "suporte",
@@ -33,7 +33,25 @@ export interface BackofficeDashboardSummary {
   pastDueSubscriptions: number;
 }
 
-export type BillingStatus = "pending" | "paid" | "overdue" | "cancelled" | "refunded";
+export const BILLING_STATUSES = ["pending", "paid", "overdue", "cancelled", "refunded"] as const;
+
+export type BillingStatus = (typeof BILLING_STATUSES)[number];
+
+export const BILLING_STATUS_LABELS: Record<BillingStatus, string> = {
+  pending: "Pendente",
+  paid: "Paga",
+  overdue: "Vencida",
+  cancelled: "Cancelada",
+  refunded: "Reembolsada",
+};
+
+export const BILLING_STATUS_TRANSITIONS: Record<BillingStatus, readonly BillingStatus[]> = {
+  pending: ["paid", "overdue", "cancelled"],
+  overdue: ["paid", "cancelled"],
+  paid: ["refunded"],
+  cancelled: [],
+  refunded: [],
+};
 export type SupportStatus = "open" | "in_progress" | "waiting_client" | "resolved" | "closed";
 
 export interface BillingRecord {
@@ -46,7 +64,63 @@ export interface BillingRecord {
   billingPeriod: string;
   dueDate: string;
   paidAt: string | null;
+  invoiceUrl: string | null;
+  notes: string | null;
+  lastReminderAt: string | null;
   createdAt: string;
+}
+
+export interface PlanPriceHistoryEntry {
+  actionAt: string;
+  planCode: string;
+  planName: string;
+  monthlyPrice: number;
+  annualPrice: number;
+  currency: string;
+  actorName: string;
+  actorEmail: string;
+}
+
+export interface SaasSnapshot {
+  snapshotDate: string;
+  totalTenants: number;
+  activeTenants: number;
+  trialTenants: number;
+  churnedTenants: number;
+  mrr: number;
+  arr: number;
+  newMrr: number;
+  churnedMrr: number;
+  totalUsers: number;
+  activeUsers30d: number;
+  openTickets: number;
+  createdAt: string;
+}
+
+export type ApfBillingRequestStatus = "submitted" | "linked" | "invoiced" | "cancelled";
+
+export const APF_BILLING_STATUS_LABELS: Record<ApfBillingRequestStatus, string> = {
+  submitted: "Aguardando vÃ­nculo",
+  linked: "Vinculada",
+  invoiced: "Faturada",
+  cancelled: "Cancelada",
+};
+
+export interface ApfBillingRequest {
+  id: string;
+  batchId: string;
+  organizationId: string;
+  organizationName: string;
+  competence: string;
+  approvedPf: number;
+  unitPrice: number;
+  grossAmount: number;
+  currency: string;
+  dueDate: string;
+  status: ApfBillingRequestStatus;
+  billingRecordId: string | null;
+  note: string | null;
+  submittedAt: string;
 }
 
 export interface SupportTicket {
@@ -90,3 +164,4 @@ export interface BillingCustomer {
   planName: string | null;
   planCode: string | null;
 }
+

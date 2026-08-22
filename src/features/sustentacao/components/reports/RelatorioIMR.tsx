@@ -122,9 +122,12 @@ export function RelatorioIMR({ onBack }: Props) {
           {eventosData.length > 0 ? (
             <ReportDataTable titulo="Eventos de Glosa" columns={colsEventos} data={eventosData} rowKey={(r) => r.ev} />
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum evento de glosa registrado no período.</p>
+            <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-8 text-center" role="status">
+              <p className="text-sm font-medium">Nenhum evento de glosa</p>
+              <p className="mt-1 text-xs text-muted-foreground">Não há registros no período selecionado.</p>
+            </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {[
               { label: "Glosa Integral Total", value: glosas.totalIntegral },
               { label: "Glosa Limitada Total", value: glosas.totalLimitada },

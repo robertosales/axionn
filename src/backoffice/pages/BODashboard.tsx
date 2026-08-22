@@ -37,7 +37,7 @@ function MetricCard({
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-700">
+        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Icon className="h-5 w-5" />
         </div>
       </CardContent>

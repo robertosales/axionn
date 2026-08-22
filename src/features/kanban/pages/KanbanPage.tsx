@@ -9,6 +9,7 @@ import { UserStoryDetailModal }    from "../components/UserStoryDetailModal";
 import { Skeleton }   from "@/components/ui/skeleton";
 import { Badge }      from "@/components/ui/badge";
 import { Button }     from "@/components/ui/button";
+import { PageHeader } from "@/shared/components/common/PageHeader";
 import { RefreshCw, Layers, Loader2, ChevronDown } from "lucide-react";
 import { useAuth }    from "@/contexts/AuthContext";
 import type { KanbanCard } from "../hooks/useKanbanBoard";
@@ -138,30 +139,23 @@ export function KanbanPage() {
 
   return (
     <div className="space-y-4 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Layers className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-semibold tracking-tight">Kanban</h1>
-          <Badge variant="outline" className="text-[10px]">
-            {filteredCards.length} HU{filteredCards.length !== 1 ? "s" : ""}
-          </Badge>
-          {activeSprint && (
-            <Badge variant="secondary" className="text-[10px]">
-              {activeSprint.name}
-            </Badge>
-          )}
-          {/* Badge de paginação: só aparece no modo all com mais páginas */}
-          {filters.sprintId === "all" && hasMoreCards && (
-            <Badge variant="outline" className="text-[10px] text-muted-foreground">
-              parcial
-            </Badge>
-          )}
-        </div>
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={reload}>
+      <PageHeader
+        title="Kanban"
+        description="Visualize o fluxo de trabalho, os limites de WIP e as User Stories da sprint."
+        icon={Layers}
+        badges={[
+          { label: `${filteredCards.length} HU${filteredCards.length !== 1 ? "s" : ""}` },
+          ...(activeSprint ? [{ label: activeSprint.name, variant: "secondary" as const }] : []),
+          ...(filters.sprintId === "all" && hasMoreCards
+            ? [{ label: "Resultado parcial", className: "text-muted-foreground" }]
+            : []),
+        ]}
+        actions={(
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={reload} aria-label="Atualizar Kanban">
           <RefreshCw className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+          </Button>
+        )}
+      />
 
       <KanbanFiltersBar
         filters={filters}

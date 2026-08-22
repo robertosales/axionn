@@ -1,10 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
+  type ApfBillingRequest,
+  type ApfBillingRequestStatus,
   type BackofficeDashboardSummary,
   type BackofficeRole,
   type BackofficeStaffMember,
   type BillingRecord,
   type BillingStatus,
+  type PlanPriceHistoryEntry,
+  type SaaSSnapshot,
   type SaaSMetrics,
   type SupportStatus,
   type SupportTicket,
@@ -117,6 +121,9 @@ function normalizeBilling(row: Record<string, unknown>): BillingRecord {
     billingPeriod: String(row.billing_period ?? ""),
     dueDate: String(row.due_date ?? ""),
     paidAt: row.paid_at == null ? null : String(row.paid_at),
+    invoiceUrl: row.invoice_url == null ? null : String(row.invoice_url),
+    notes: row.notes == null ? null : String(row.notes),
+    lastReminderAt: row.last_reminder_at == null ? null : String(row.last_reminder_at),
     createdAt: String(row.created_at ?? ""),
   };
 }
@@ -127,12 +134,19 @@ export async function listBillingRecords() {
   return ((data ?? []) as Record<string, unknown>[]).map(normalizeBilling);
 }
 
-export async function updateBillingStatus(id: string, status: BillingStatus) {
+export async function updateBillingStatus(id: string, status: BillingStatus, reason?: string) {
   const { error } = await (supabase as any).rpc("update_backoffice_billing_status", {
     p_billing_id: id,
     p_status: status,
+    p_reason: reason?.trim() ? reason.trim() : null,
   });
   if (error) throw error;
+}
+
+export async function markOverdueInvoices() {
+  const { data, error } = await (supabase as any).rpc("mark_overdue_invoices");
+  if (error) throw error;
+  return toNumber(data);
 }
 
 export async function listBackofficePlanPrices(): Promise<BackofficePlanPrice[]> {
@@ -193,6 +207,109 @@ export async function generateMonthlyBilling(referenceDate: string, dueDay: numb
   });
   if (error) throw error;
   return toNumber(data);
+}
+
+export async function updateBillingDetails(id: string, invoiceUrl: string | null, notes: string | null) {
+  const { error } = await (supabase as any).rpc("update_backoffice_billing_details", {
+    p_billing_id: id,
+    p_invoice_url: invoiceUrl,
+    p_notes: notes,
+  });
+  if (error) throw error;
+}
+
+export async function listApfBillingRequests(): Promise<ApfBillingRequest[]> {
+  const { data: rows, error } = await (supabase as any)
+    .from("apf_measurement_billing_requests")
+    .select("*")
+    .order("submitted_at", { ascending: false });
+  if (error) throw error;
+  const list = ((rows ?? []) as Array<Record<string, unknown>>);
+  const orgIds = [...new Set(list.map((row) => String(row.organization_id)))];
+  const orgNames = new Map<string, string>();
+  if (orgIds.length > 0) {
+    const { data: orgs, error: orgsError } = await (supabase as any)
+      .from("organizations")
+      .select("id,name")
+      .in("id", orgIds);
+    if (orgsError) throw orgsError;
+    for (const org of (orgs ?? []) as Array<{ id: string; name: string }>) orgNames.set(org.id, org.name);
+  }
+  return list.map((row) => ({
+    id: String(row.id),
+    batchId: String(row.batch_id),
+    organizationId: String(row.organization_id),
+    organizationName: orgNames.get(String(row.organization_id)) ?? "",
+    competence: String(row.competence ?? ""),
+    approvedPf: toNumber(row.approved_pf),
+    unitPrice: toNumber(row.unit_price),
+    grossAmount: toNumber(row.gross_amount),
+    currency: String(row.currency ?? "BRL"),
+    dueDate: String(row.due_date ?? ""),
+    status: String(row.status ?? "submitted") as ApfBillingRequestStatus,
+    billingRecordId: row.billing_record_id == null ? null : String(row.billing_record_id),
+    note: row.note == null ? null : String(row.note),
+    submittedAt: String(row.submitted_at ?? ""),
+  }));
+}
+
+export async function linkApfBillingRequest(payload: {
+  requestId: string; billingRecordId: string; note: string | null; markInvoiced: boolean;
+}) {
+  const { error } = await (supabase as any).rpc("link_apf_billing_record", {
+    p_request_id: payload.requestId,
+    p_billing_record_id: payload.billingRecordId,
+    p_note: payload.note,
+    p_mark_invoiced: payload.markInvoiced,
+  });
+  if (error) throw error;
+}
+
+export async function recordBillingReminder(id: string, note?: string) {
+  const { error } = await (supabase as any).rpc("record_billing_reminder", {
+    p_billing_id: id,
+    p_note: note?.trim() ? note.trim() : null,
+  });
+  if (error) throw error;
+}
+
+export async function listPlanPriceHistory(limit = 50): Promise<PlanPriceHistoryEntry[]> {
+  const { data, error } = await (supabase as any).rpc("list_backoffice_plan_price_history", {
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    actionAt: String(row.action_at ?? ""),
+    planCode: String(row.plan_code ?? ""),
+    planName: String(row.plan_name ?? ""),
+    monthlyPrice: toNumber(row.monthly_price),
+    annualPrice: toNumber(row.annual_price),
+    currency: String(row.currency ?? "BRL"),
+    actorName: String(row.actor_name ?? ""),
+    actorEmail: String(row.actor_email ?? ""),
+  }));
+}
+
+export async function listSaasSnapshots(limit = 90): Promise<SaaSSnapshot[]> {
+  const { data, error } = await (supabase as any).rpc("list_backoffice_saas_snapshots", {
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    snapshotDate: String(row.snapshot_date ?? ""),
+    totalTenants: toNumber(row.total_tenants),
+    activeTenants: toNumber(row.active_tenants),
+    trialTenants: toNumber(row.trial_tenants),
+    churnedTenants: toNumber(row.churned_tenants),
+    mrr: toNumber(row.mrr),
+    arr: toNumber(row.arr),
+    newMrr: toNumber(row.new_mrr),
+    churnedMrr: toNumber(row.churned_mrr),
+    totalUsers: toNumber(row.total_users),
+    activeUsers30d: toNumber(row.active_users_30d),
+    openTickets: toNumber(row.open_tickets),
+    createdAt: String(row.created_at ?? ""),
+  }));
 }
 
 function normalizeTicket(row: Record<string, unknown>): SupportTicket {

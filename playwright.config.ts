@@ -6,11 +6,20 @@ const e2eEnvironmentKeys = [
   "E2E_USER_EMAIL",
   "E2E_USER_PASSWORD",
   "E2E_ORGANIZATION_ID",
+  "E2E_APF_CREATOR_EMAIL",
+  "E2E_APF_CREATOR_PASSWORD",
+  "E2E_APF_VALIDATOR_EMAIL",
+  "E2E_APF_VALIDATOR_PASSWORD",
+  "E2E_APF_HOMOLOGATOR_EMAIL",
+  "E2E_APF_HOMOLOGATOR_PASSWORD",
+  "E2E_APF_OTHER_ORGANIZATION_ID",
+  "E2E_APF_OTHER_USER_EMAIL",
+  "E2E_APF_OTHER_USER_PASSWORD",
 ] as const;
 
-if (existsSync(".env.e2e")) {
-  const allowedKeys = new Set<string>(e2eEnvironmentKeys);
-  for (const line of readFileSync(".env.e2e", "utf8").split(/\r?\n/)) {
+function loadAllowedEnvironmentFile(file: string, allowedKeys: Set<string>) {
+  if (!existsSync(file)) return;
+  for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
     const separator = line.indexOf("=");
     if (separator <= 0) continue;
 
@@ -25,6 +34,12 @@ if (existsSync(".env.e2e")) {
     process.env[key] = isQuoted ? rawValue.slice(1, -1) : rawValue;
   }
 }
+
+loadAllowedEnvironmentFile(".env.e2e", new Set<string>(e2eEnvironmentKeys));
+loadAllowedEnvironmentFile(
+  ".env.production",
+  new Set(["VITE_SUPABASE_URL", "VITE_SUPABASE_PUBLISHABLE_KEY"]),
+);
 
 const useLocalApp = process.env.E2E_USE_LOCAL_APP === "true";
 const localAppURL = "http://127.0.0.1:4173";

@@ -77,6 +77,7 @@ export function RelatorioBurndown({ sprints, rawData, teamName, onBack }: Props)
           { value: "8", label: "8 sprints" }, { value: "12", label: "12 sprints" },
         ]}]}
         values={filters}
+        defaultValues={{ sprintQtd: "5" }}
         onChange={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
         onReset={() => setFilters({ sprintQtd: "5" })}
       />

@@ -1,0 +1,59 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const source = readFileSync(resolve("src/components/TeamMembersManager.tsx"), "utf8");
+
+describe("gestão segura de participações em times", () => {
+  it("identifica o time e o módulo administrados", () => {
+    expect(source).toContain("activeTeam.name");
+    expect(source).toContain("activeModuleLabel");
+    expect(source).toContain("A identidade e os outros vínculos da pessoa são preservados");
+  });
+
+  it("remove somente o vínculo após confirmação acessível", () => {
+    expect(source).toContain("<ConfirmDialog");
+    expect(source).toContain('title="Remover participação do time?"');
+    expect(source).toContain('confirmLabel="Remover deste time"');
+    expect(source).toContain("os perfis RBAC e as participações em outros times serão preservados");
+    expect(source).not.toContain('confirm("Remover este membro do time?")');
+  });
+
+  it("altera somente a função operacional da participação existente", () => {
+    expect(source).toContain('"update_organization_team_member_role_v2"');
+    expect(source).toContain('.update({ role: nextRole })');
+    expect(source).toContain("Editar função no time");
+    expect(source).toContain("A identidade, os perfis RBAC e os outros vínculos não serão modificados");
+    expect(source).toContain("Função no time atualizada");
+  });
+
+  it("aplica permissões específicas para adicionar, editar e remover", () => {
+    expect(source).toContain("const canAdd = permissions.canAddTeamMember");
+    expect(source).toContain("const canUpdate = permissions.canUpdateTeamMember");
+    expect(source).toContain("const canRemove = permissions.canRemoveTeamMember");
+    expect(source).toContain("{canAdd && (");
+    expect(source).toContain("{canUpdate && (");
+    expect(source).toContain("{canRemove && (");
+    expect(source).toContain('if (!canUpdate) {');
+  });
+
+  it("usa o skeleton compartilhado durante o carregamento", () => {
+    expect(source).toContain('import { SkeletonList } from "@/shared/components/common/SkeletonList"');
+    expect(source).toContain('{loading && <SkeletonList count={4} variant="row" />}');
+  });
+
+  it("não mistura o caminho organizacional com o legado quando uma RPC falha", () => {
+    expect(source).toContain("setLoadError(");
+    expect(source).toContain("setProfilesError(");
+    expect(source).toContain("Falha ao carregar membros");
+    expect(source).toContain("Tentar novamente");
+    expect(source).toMatch(/setLoading\(false\);\s+return;/);
+    expect(source).toContain("setAllProfiles([]);");
+  });
+
+  it("renderiza uma única instância dos diálogos de gestão fora da lista", () => {
+    expect(source.match(/<ConfirmDialog/g)).toHaveLength(1);
+    expect(source.match(/<Dialog open=\{Boolean\(memberToEdit\)\}/g)).toHaveLength(1);
+    expect(source.indexOf("<ConfirmDialog")).toBeGreaterThan(source.indexOf("sortedMembers.length === 0"));
+  });
+});

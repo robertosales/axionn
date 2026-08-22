@@ -13,3 +13,8 @@ export function downloadMarkdownAsFile(content: string, filename: string) {
   const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
   triggerDownload(blob, filename);
 }
+
+export function downloadJsonAsFile(content: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(content, null, 2)], { type: "application/json;charset=utf-8" });
+  triggerDownload(blob, filename);
+}

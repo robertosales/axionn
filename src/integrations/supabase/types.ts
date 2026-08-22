@@ -962,6 +962,174 @@ export type Database = {
           },
         ]
       }
+      apf_acceptance_criteria: {
+        Row: {
+          created_at: string
+          decision: string | null
+          dossier_id: string
+          expected_behavior: string | null
+          id: string
+          original_text: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sort_order: number
+          source_ref: string | null
+          source_type: string
+          stable_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decision?: string | null
+          dossier_id: string
+          expected_behavior?: string | null
+          id?: string
+          original_text: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sort_order?: number
+          source_ref?: string | null
+          source_type?: string
+          stable_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decision?: string | null
+          dossier_id?: string
+          expected_behavior?: string | null
+          id?: string
+          original_text?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sort_order?: number
+          source_ref?: string | null
+          source_type?: string
+          stable_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_acceptance_criteria_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_audit_findings: {
+        Row: {
+          detail: string
+          detected_at: string
+          dossier_id: string
+          entity_id: string | null
+          entity_type: string | null
+          finding_type: string
+          fingerprint: string
+          id: string
+          resolution_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          severity: string
+          status: string
+          title: string
+        }
+        Insert: {
+          detail: string
+          detected_at?: string
+          dossier_id: string
+          entity_id?: string | null
+          entity_type?: string | null
+          finding_type: string
+          fingerprint: string
+          id?: string
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity: string
+          status?: string
+          title: string
+        }
+        Update: {
+          detail?: string
+          detected_at?: string
+          dossier_id?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          finding_type?: string
+          fingerprint?: string
+          id?: string
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          severity?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_audit_findings_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_audit_scenarios: {
+        Row: {
+          alternative_classification: string | null
+          created_at: string
+          created_by: string
+          description: string
+          dossier_id: string
+          financial_effect: number | null
+          id: string
+          pf_delta: number
+          rationale: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          alternative_classification?: string | null
+          created_at?: string
+          created_by?: string
+          description: string
+          dossier_id: string
+          financial_effect?: number | null
+          id?: string
+          pf_delta?: number
+          rationale: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          alternative_classification?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string
+          dossier_id?: string
+          financial_effect?: number | null
+          id?: string
+          pf_delta?: number
+          rationale?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_audit_scenarios_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_automation_settings: {
         Row: {
           auto_approve_enabled: boolean
@@ -1320,6 +1488,66 @@ export type Database = {
           },
         ]
       }
+      apf_counting_metric_reviews: {
+        Row: {
+          confirmed_det: number | null
+          confirmed_ftr: number | null
+          confirmed_ret: number | null
+          counting_item_id: string
+          dossier_id: string
+          id: string
+          justification: string
+          reviewed_at: string
+          reviewed_by: string
+          suggested_det: number | null
+          suggested_ftr: number | null
+          suggested_ret: number | null
+        }
+        Insert: {
+          confirmed_det?: number | null
+          confirmed_ftr?: number | null
+          confirmed_ret?: number | null
+          counting_item_id: string
+          dossier_id: string
+          id?: string
+          justification: string
+          reviewed_at?: string
+          reviewed_by?: string
+          suggested_det?: number | null
+          suggested_ftr?: number | null
+          suggested_ret?: number | null
+        }
+        Update: {
+          confirmed_det?: number | null
+          confirmed_ftr?: number | null
+          confirmed_ret?: number | null
+          counting_item_id?: string
+          dossier_id?: string
+          id?: string
+          justification?: string
+          reviewed_at?: string
+          reviewed_by?: string
+          suggested_det?: number | null
+          suggested_ftr?: number | null
+          suggested_ret?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_counting_metric_reviews_counting_item_id_fkey"
+            columns: ["counting_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_counting_metric_reviews_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_counting_models: {
         Row: {
           contract_id: string
@@ -1502,6 +1730,82 @@ export type Database = {
           },
         ]
       }
+      apf_dossier_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          dossier_id: string
+          event_data: Json
+          event_type: string
+          id: number
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          dossier_id: string
+          event_data?: Json
+          event_type: string
+          id?: never
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          dossier_id?: string
+          event_data?: Json
+          event_type?: string
+          id?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_dossier_events_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_dossier_versions: {
+        Row: {
+          content_hash: string
+          created_at: string
+          created_by: string
+          dossier_id: string
+          id: string
+          rendered_markdown: string
+          snapshot: Json
+          version_number: number
+        }
+        Insert: {
+          content_hash: string
+          created_at?: string
+          created_by?: string
+          dossier_id: string
+          id?: string
+          rendered_markdown: string
+          snapshot: Json
+          version_number: number
+        }
+        Update: {
+          content_hash?: string
+          created_at?: string
+          created_by?: string
+          dossier_id?: string
+          id?: string
+          rendered_markdown?: string
+          snapshot?: Json
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_dossier_versions_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_elementary_processes: {
         Row: {
           confidence: number | null
@@ -1604,6 +1908,447 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "apf_validation_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_evidence_catalog_entries: {
+        Row: {
+          created_at: string
+          display_summary: string | null
+          display_title: string
+          dossier_id: string
+          evidence_source_id: string
+          id: string
+          sort_order: number
+          stable_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_summary?: string | null
+          display_title: string
+          dossier_id: string
+          evidence_source_id: string
+          id?: string
+          sort_order?: number
+          stable_id: string
+        }
+        Update: {
+          created_at?: string
+          display_summary?: string | null
+          display_title?: string
+          dossier_id?: string
+          evidence_source_id?: string
+          id?: string
+          sort_order?: number
+          stable_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_evidence_catalog_entries_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_catalog_entries_evidence_source_id_fkey"
+            columns: ["evidence_source_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_evidence_dossiers: {
+        Row: {
+          baseline_id: string | null
+          baseline_snapshot: Json
+          contract_id: string
+          contract_snapshot: Json
+          counting_model_id: string | null
+          counting_session_id: string | null
+          counting_type: string
+          created_at: string
+          created_by: string
+          dossier_code: string
+          homologated_at: string | null
+          homologated_by: string | null
+          id: string
+          organization_id: string
+          previous_dossier_id: string | null
+          project_id: string
+          ruleset_snapshot: Json
+          sprint_id: string | null
+          status: string
+          title: string
+          total_homologated_pf: number | null
+          total_impacted_pf: number
+          updated_at: string
+          user_story_id: string | null
+          validated_at: string | null
+          validated_by: string | null
+        }
+        Insert: {
+          baseline_id?: string | null
+          baseline_snapshot?: Json
+          contract_id: string
+          contract_snapshot?: Json
+          counting_model_id?: string | null
+          counting_session_id?: string | null
+          counting_type: string
+          created_at?: string
+          created_by?: string
+          dossier_code: string
+          homologated_at?: string | null
+          homologated_by?: string | null
+          id?: string
+          organization_id: string
+          previous_dossier_id?: string | null
+          project_id: string
+          ruleset_snapshot?: Json
+          sprint_id?: string | null
+          status?: string
+          title: string
+          total_homologated_pf?: number | null
+          total_impacted_pf?: number
+          updated_at?: string
+          user_story_id?: string | null
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Update: {
+          baseline_id?: string | null
+          baseline_snapshot?: Json
+          contract_id?: string
+          contract_snapshot?: Json
+          counting_model_id?: string | null
+          counting_session_id?: string | null
+          counting_type?: string
+          created_at?: string
+          created_by?: string
+          dossier_code?: string
+          homologated_at?: string | null
+          homologated_by?: string | null
+          id?: string
+          organization_id?: string
+          previous_dossier_id?: string | null
+          project_id?: string
+          ruleset_snapshot?: Json
+          sprint_id?: string | null
+          status?: string
+          title?: string
+          total_homologated_pf?: number | null
+          total_impacted_pf?: number
+          updated_at?: string
+          user_story_id?: string | null
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_evidence_dossiers_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "apf_project_baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_counting_model_id_fkey"
+            columns: ["counting_model_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_counting_session_id_fkey"
+            columns: ["counting_session_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_previous_dossier_id_fkey"
+            columns: ["previous_dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "vw_sprint_pf_summary"
+            referencedColumns: ["sprint_id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_user_story_id_fkey"
+            columns: ["user_story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_dossiers_user_story_id_fkey"
+            columns: ["user_story_id"]
+            isOneToOne: false
+            referencedRelation: "v_hu_git_summary"
+            referencedColumns: ["hu_id"]
+          },
+        ]
+      }
+      apf_evidence_quality_assessments: {
+        Row: {
+          assessed_at: string
+          checks: Json
+          dossier_id: string
+          evidence_source_id: string
+          id: string
+          quality_grade: string
+          quality_score: number
+        }
+        Insert: {
+          assessed_at?: string
+          checks: Json
+          dossier_id: string
+          evidence_source_id: string
+          id?: string
+          quality_grade: string
+          quality_score: number
+        }
+        Update: {
+          assessed_at?: string
+          checks?: Json
+          dossier_id?: string
+          evidence_source_id?: string
+          id?: string
+          quality_grade?: string
+          quality_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_evidence_quality_assessments_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_evidence_quality_assessments_evidence_source_id_fkey"
+            columns: ["evidence_source_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_evidence_sources: {
+        Row: {
+          category: string
+          collected_at: string
+          collected_by: string
+          commit_sha: string | null
+          content_hash: string | null
+          created_at: string
+          dossier_id: string
+          file_path: string | null
+          id: string
+          merge_request_ref: string | null
+          metadata: Json
+          permanent_url: string | null
+          repository: string | null
+          source_type: string
+          summary: string
+          symbol_ref: string | null
+          verification_status: string
+        }
+        Insert: {
+          category: string
+          collected_at?: string
+          collected_by?: string
+          commit_sha?: string | null
+          content_hash?: string | null
+          created_at?: string
+          dossier_id: string
+          file_path?: string | null
+          id?: string
+          merge_request_ref?: string | null
+          metadata?: Json
+          permanent_url?: string | null
+          repository?: string | null
+          source_type: string
+          summary: string
+          symbol_ref?: string | null
+          verification_status?: string
+        }
+        Update: {
+          category?: string
+          collected_at?: string
+          collected_by?: string
+          commit_sha?: string | null
+          content_hash?: string | null
+          created_at?: string
+          dossier_id?: string
+          file_path?: string | null
+          id?: string
+          merge_request_ref?: string | null
+          metadata?: Json
+          permanent_url?: string | null
+          repository?: string | null
+          source_type?: string
+          summary?: string
+          symbol_ref?: string | null
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_evidence_sources_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_exception_reviews: {
+        Row: {
+          absorbed_by_item_id: string | null
+          counting_item_id: string
+          disposition: string
+          dossier_id: string
+          id: string
+          justification: string
+          reviewed_at: string
+          reviewed_by: string
+        }
+        Insert: {
+          absorbed_by_item_id?: string | null
+          counting_item_id: string
+          disposition: string
+          dossier_id: string
+          id?: string
+          justification: string
+          reviewed_at?: string
+          reviewed_by?: string
+        }
+        Update: {
+          absorbed_by_item_id?: string | null
+          counting_item_id?: string
+          disposition?: string
+          dossier_id?: string
+          id?: string
+          justification?: string
+          reviewed_at?: string
+          reviewed_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_exception_reviews_absorbed_by_item_id_fkey"
+            columns: ["absorbed_by_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_exception_reviews_counting_item_id_fkey"
+            columns: ["counting_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_exception_reviews_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_external_evidence_imports: {
+        Row: {
+          artifact_kind: string
+          content_hash: string
+          dossier_id: string
+          evidence_source_id: string
+          external_ref: string
+          id: string
+          imported_at: string
+          imported_by: string | null
+          permanent_url: string | null
+          provider: string
+          raw_metadata: Json
+          title: string
+        }
+        Insert: {
+          artifact_kind: string
+          content_hash: string
+          dossier_id: string
+          evidence_source_id: string
+          external_ref: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          permanent_url?: string | null
+          provider: string
+          raw_metadata?: Json
+          title: string
+        }
+        Update: {
+          artifact_kind?: string
+          content_hash?: string
+          dossier_id?: string
+          evidence_source_id?: string
+          external_ref?: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          permanent_url?: string | null
+          provider?: string
+          raw_metadata?: Json
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_external_evidence_imports_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_external_evidence_imports_evidence_source_id_fkey"
+            columns: ["evidence_source_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_sources"
             referencedColumns: ["id"]
           },
         ]
@@ -1899,6 +2644,114 @@ export type Database = {
           },
         ]
       }
+      apf_jira_issue_links: {
+        Row: {
+          content_hash: string
+          external_ref: string
+          external_updated_at: string | null
+          id: string
+          metadata: Json
+          organization_id: string
+          permanent_url: string
+          received_at: string
+          status: string | null
+          title: string
+          user_story_id: string
+        }
+        Insert: {
+          content_hash: string
+          external_ref: string
+          external_updated_at?: string | null
+          id?: string
+          metadata?: Json
+          organization_id: string
+          permanent_url: string
+          received_at?: string
+          status?: string | null
+          title: string
+          user_story_id: string
+        }
+        Update: {
+          content_hash?: string
+          external_ref?: string
+          external_updated_at?: string | null
+          id?: string
+          metadata?: Json
+          organization_id?: string
+          permanent_url?: string
+          received_at?: string
+          status?: string | null
+          title?: string
+          user_story_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_jira_issue_links_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_jira_issue_links_user_story_id_fkey"
+            columns: ["user_story_id"]
+            isOneToOne: false
+            referencedRelation: "user_stories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_jira_issue_links_user_story_id_fkey"
+            columns: ["user_story_id"]
+            isOneToOne: false
+            referencedRelation: "v_hu_git_summary"
+            referencedColumns: ["hu_id"]
+          },
+        ]
+      }
+      apf_jira_webhook_integrations: {
+        Row: {
+          base_url: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          updated_at: string
+          user_story_field_key: string
+          webhook_secret_encrypted: string
+        }
+        Insert: {
+          base_url: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          updated_at?: string
+          user_story_field_key?: string
+          webhook_secret_encrypted: string
+        }
+        Update: {
+          base_url?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          updated_at?: string
+          user_story_field_key?: string
+          webhook_secret_encrypted?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_jira_webhook_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apf_jobs: {
         Row: {
           attempts: number
@@ -2125,6 +2978,324 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_logical_file_reviews: {
+        Row: {
+          counting_item_id: string
+          decision: string
+          dossier_id: string
+          id: string
+          independent_lifecycle: boolean
+          inside_boundary: boolean
+          justification: string
+          maintained_by_application: boolean
+          recognizable: boolean
+          reviewed_at: string
+          reviewed_by: string
+          used_by_transaction: boolean
+        }
+        Insert: {
+          counting_item_id: string
+          decision: string
+          dossier_id: string
+          id?: string
+          independent_lifecycle: boolean
+          inside_boundary: boolean
+          justification: string
+          maintained_by_application: boolean
+          recognizable: boolean
+          reviewed_at?: string
+          reviewed_by?: string
+          used_by_transaction: boolean
+        }
+        Update: {
+          counting_item_id?: string
+          decision?: string
+          dossier_id?: string
+          id?: string
+          independent_lifecycle?: boolean
+          inside_boundary?: boolean
+          justification?: string
+          maintained_by_application?: boolean
+          recognizable?: boolean
+          reviewed_at?: string
+          reviewed_by?: string
+          used_by_transaction?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_logical_file_reviews_counting_item_id_fkey"
+            columns: ["counting_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_logical_file_reviews_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_measurement_batch_decisions: {
+        Row: {
+          actor_id: string
+          batch_id: string
+          created_at: string
+          decision: string
+          disputed_pf: number | null
+          id: number
+          note: string
+        }
+        Insert: {
+          actor_id?: string
+          batch_id: string
+          created_at?: string
+          decision: string
+          disputed_pf?: number | null
+          id?: never
+          note: string
+        }
+        Update: {
+          actor_id?: string
+          batch_id?: string
+          created_at?: string
+          decision?: string
+          disputed_pf?: number | null
+          id?: never
+          note?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_measurement_batch_decisions_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "apf_measurement_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_measurement_batch_dossiers: {
+        Row: {
+          added_at: string
+          added_by: string
+          batch_id: string
+          content_hash: string
+          dossier_id: string
+          pf_snapshot: number
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string
+          batch_id: string
+          content_hash: string
+          dossier_id: string
+          pf_snapshot: number
+        }
+        Update: {
+          added_at?: string
+          added_by?: string
+          batch_id?: string
+          content_hash?: string
+          dossier_id?: string
+          pf_snapshot?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_measurement_batch_dossiers_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "apf_measurement_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_measurement_batch_dossiers_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_measurement_batches: {
+        Row: {
+          code: string
+          competence: string
+          contract_id: string
+          created_at: string
+          created_by: string
+          disputed_pf: number
+          id: string
+          organization_id: string
+          project_id: string | null
+          status: string
+          total_pf: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          competence: string
+          contract_id: string
+          created_at?: string
+          created_by?: string
+          disputed_pf?: number
+          id?: string
+          organization_id: string
+          project_id?: string | null
+          status?: string
+          total_pf?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          competence?: string
+          contract_id?: string
+          created_at?: string
+          created_by?: string
+          disputed_pf?: number
+          id?: string
+          organization_id?: string
+          project_id?: string | null
+          status?: string
+          total_pf?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_measurement_batches_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_measurement_batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_measurement_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_measurement_billing_events: {
+        Row: {
+          actor_id: string
+          created_at: string
+          event_type: string
+          id: number
+          note: string
+          request_id: string
+        }
+        Insert: {
+          actor_id?: string
+          created_at?: string
+          event_type: string
+          id?: never
+          note: string
+          request_id: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          event_type?: string
+          id?: never
+          note?: string
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_measurement_billing_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "apf_measurement_billing_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_measurement_billing_requests: {
+        Row: {
+          approved_pf: number
+          batch_id: string
+          billing_record_id: string | null
+          competence: string
+          currency: string
+          due_date: string
+          gross_amount: number
+          id: string
+          note: string | null
+          organization_id: string
+          status: string
+          submitted_at: string
+          submitted_by: string
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          approved_pf: number
+          batch_id: string
+          billing_record_id?: string | null
+          competence: string
+          currency?: string
+          due_date: string
+          gross_amount: number
+          id?: string
+          note?: string | null
+          organization_id: string
+          status?: string
+          submitted_at?: string
+          submitted_by?: string
+          unit_price: number
+          updated_at?: string
+        }
+        Update: {
+          approved_pf?: number
+          batch_id?: string
+          billing_record_id?: string | null
+          competence?: string
+          currency?: string
+          due_date?: string
+          gross_amount?: number
+          id?: string
+          note?: string | null
+          organization_id?: string
+          status?: string
+          submitted_at?: string
+          submitted_by?: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_measurement_billing_requests_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: true
+            referencedRelation: "apf_measurement_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_measurement_billing_requests_billing_record_id_fkey"
+            columns: ["billing_record_id"]
+            isOneToOne: false
+            referencedRelation: "billing_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_measurement_billing_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -3060,6 +4231,147 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_traceability_links: {
+        Row: {
+          acceptance_criterion_id: string
+          apf_treatment: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          counting_item_id: string | null
+          created_at: string
+          dossier_id: string
+          evidence_source_id: string
+          functional_result: string
+          id: string
+          justification: string | null
+          suggested_by_ai: boolean
+          updated_at: string
+        }
+        Insert: {
+          acceptance_criterion_id: string
+          apf_treatment?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          counting_item_id?: string | null
+          created_at?: string
+          dossier_id: string
+          evidence_source_id: string
+          functional_result?: string
+          id?: string
+          justification?: string | null
+          suggested_by_ai?: boolean
+          updated_at?: string
+        }
+        Update: {
+          acceptance_criterion_id?: string
+          apf_treatment?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          counting_item_id?: string | null
+          created_at?: string
+          dossier_id?: string
+          evidence_source_id?: string
+          functional_result?: string
+          id?: string
+          justification?: string | null
+          suggested_by_ai?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_traceability_links_acceptance_criterion_id_fkey"
+            columns: ["acceptance_criterion_id"]
+            isOneToOne: false
+            referencedRelation: "apf_acceptance_criteria"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_traceability_links_counting_item_id_fkey"
+            columns: ["counting_item_id"]
+            isOneToOne: false
+            referencedRelation: "apf_counting_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_traceability_links_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_traceability_links_evidence_source_id_fkey"
+            columns: ["evidence_source_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      apf_traceability_suggestions: {
+        Row: {
+          acceptance_criterion_id: string
+          confidence: number
+          created_at: string
+          dossier_id: string
+          evidence_source_id: string
+          id: string
+          method: string
+          rationale: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          acceptance_criterion_id: string
+          confidence: number
+          created_at?: string
+          dossier_id: string
+          evidence_source_id: string
+          id?: string
+          method?: string
+          rationale: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          acceptance_criterion_id?: string
+          confidence?: number
+          created_at?: string
+          dossier_id?: string
+          evidence_source_id?: string
+          id?: string
+          method?: string
+          rationale?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "apf_traceability_suggestions_acceptance_criterion_id_fkey"
+            columns: ["acceptance_criterion_id"]
+            isOneToOne: false
+            referencedRelation: "apf_acceptance_criteria"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_traceability_suggestions_dossier_id_fkey"
+            columns: ["dossier_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_dossiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "apf_traceability_suggestions_evidence_source_id_fkey"
+            columns: ["evidence_source_id"]
+            isOneToOne: false
+            referencedRelation: "apf_evidence_sources"
             referencedColumns: ["id"]
           },
         ]
@@ -17022,8 +18334,16 @@ export type Database = {
         Args: { p_briefing_id: string }
         Returns: undefined
       }
+      apf_assert_dossier_permission: {
+        Args: { p_dossier_id: string; p_permission: string }
+        Returns: undefined
+      }
       apf_can_access_baseline: {
         Args: { _baseline_id: string }
+        Returns: boolean
+      }
+      apf_can_access_dossier: {
+        Args: { p_dossier_id: string }
         Returns: boolean
       }
       apf_can_access_model: { Args: { _model_id: string }; Returns: boolean }
@@ -17198,6 +18518,18 @@ export type Database = {
           p_project_id: string
           p_team_id: string
         }
+        Returns: undefined
+      }
+      assess_apf_evidence_quality: {
+        Args: { p_dossier_id: string }
+        Returns: number
+      }
+      authorize_apf_batch_export: {
+        Args: { p_batch_id: string }
+        Returns: undefined
+      }
+      authorize_apf_dossier_export: {
+        Args: { p_dossier_id: string }
         Returns: undefined
       }
       build_apf_prompt:
@@ -17610,6 +18942,25 @@ export type Database = {
         }
         Returns: string
       }
+      create_apf_dossier_successor: {
+        Args: {
+          p_dossier_code: string
+          p_source_dossier_id: string
+          p_title: string
+        }
+        Returns: string
+      }
+      create_apf_measurement_batch: {
+        Args: {
+          p_code: string
+          p_competence: string
+          p_contract_id: string
+          p_dossier_ids: string[]
+          p_organization_id: string
+          p_project_id: string
+        }
+        Returns: string
+      }
       create_backoffice_billing_record: {
         Args: {
           p_amount?: number
@@ -17685,6 +19036,23 @@ export type Database = {
       }
       create_organization_invitation: {
         Args: {
+          p_email: string
+          p_expires_at?: string
+          p_invited_by: string
+          p_module_keys: string[]
+          p_org_id: string
+          p_role: string
+        }
+        Returns: {
+          expires_at: string
+          invitation_id: string
+          normalized_email: string
+          raw_token: string
+        }[]
+      }
+      create_organization_invitation_with_name: {
+        Args: {
+          p_display_name: string
           p_email: string
           p_expires_at?: string
           p_invited_by: string
@@ -17810,6 +19178,10 @@ export type Database = {
         Returns: undefined
       }
       delete_ai_provider_key: { Args: { p_id: string }; Returns: undefined }
+      delete_apf_dossier_draft: {
+        Args: { p_dossier_id: string }
+        Returns: undefined
+      }
       delete_apf_project_baseline: {
         Args: { p_baseline_id: string }
         Returns: Json
@@ -17989,8 +19361,16 @@ export type Database = {
         Args: { p_contract_id?: string; p_project_id?: string }
         Returns: Json
       }
+      generate_apf_traceability_suggestions: {
+        Args: { p_dossier_id: string }
+        Returns: number
+      }
       generate_backoffice_monthly_billing: {
-        Args: { p_due_day?: number; p_reference_date?: string }
+        Args: {
+          p_dry_run?: boolean
+          p_due_day?: number
+          p_reference_date?: string
+        }
         Returns: number
       }
       generate_briefing_agenda: {
@@ -18139,6 +19519,10 @@ export type Database = {
           pf_fs: number
         }[]
       }
+      get_apf_governance_metrics: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
       get_apf_metric_history_for_story: {
         Args: { p_project_id: string; p_story_id: string }
         Returns: {
@@ -18206,6 +19590,13 @@ export type Database = {
           suspended_tenants: number
           total_tenants: number
           trial_tenants: number
+        }[]
+      }
+      get_backoffice_financial_integrity_violations: {
+        Args: never
+        Returns: {
+          invariant_name: string
+          violation_count: number
         }[]
       }
       get_backoffice_saas_metrics: {
@@ -18643,6 +20034,21 @@ export type Database = {
           send_count: number
         }[]
       }
+      get_organization_invitations_v3: {
+        Args: { p_org_id: string }
+        Returns: {
+          created_at: string
+          email: string
+          expires_at: string
+          invitation_id: string
+          invitation_role: string
+          invitation_status: string
+          invited_by_name: string
+          module_keys: string[]
+          recipient_name: string
+          send_count: number
+        }[]
+      }
       get_organization_member_module_roles_v1: {
         Args: { p_org_id: string }
         Returns: {
@@ -18790,6 +20196,14 @@ export type Database = {
           resource: string
         }[]
       }
+      has_apf_dossier_permission: {
+        Args: {
+          p_organization_id: string
+          p_permission: string
+          p_user_id?: string
+        }
+        Returns: boolean
+      }
       has_okr_permission_v2: {
         Args: { _org_id: string; _permission: string; _user_id: string }
         Returns: boolean
@@ -18806,9 +20220,70 @@ export type Database = {
         Returns: boolean
       }
       hash_ip: { Args: { p_ip: unknown }; Returns: string }
+      homologate_apf_dossier: {
+        Args: { p_dossier_id: string; p_version_number: number }
+        Returns: {
+          content_hash: string
+          homologated_at: string
+          version_number: number
+        }[]
+      }
+      import_apf_external_evidence: {
+        Args: { p_artifacts: Json; p_dossier_id: string; p_provider: string }
+        Returns: number
+      }
+      import_apf_functional_specification: {
+        Args: {
+          p_content: string
+          p_content_hash: string
+          p_criteria: Json
+          p_dossier_id: string
+          p_file_name: string
+        }
+        Returns: number
+      }
+      import_apf_functional_specification_v2: {
+        Args: {
+          p_content: string
+          p_content_hash: string
+          p_criteria: Json
+          p_dossier_id: string
+          p_extraction: Json
+          p_file_name: string
+        }
+        Returns: number
+      }
+      import_apf_git_evidence: {
+        Args: {
+          p_commit_shas?: string[]
+          p_dossier_id: string
+          p_merge_request_ids?: string[]
+        }
+        Returns: number
+      }
+      import_apf_git_provider_evidence: {
+        Args: {
+          p_commit_shas: string[]
+          p_dossier_id: string
+          p_merge_request_ids: string[]
+        }
+        Returns: number
+      }
+      import_apf_jira_evidence: {
+        Args: { p_dossier_id: string }
+        Returns: number
+      }
+      import_apf_redmine_evidence: {
+        Args: { p_dossier_id: string }
+        Returns: number
+      }
       increment_license_usage: {
         Args: { p_ai_calls?: number; p_pf_count?: number; p_team_id: string }
         Returns: undefined
+      }
+      index_apf_git_artifacts: {
+        Args: { p_commit_shas?: string[]; p_dossier_id: string }
+        Returns: number
       }
       invalidate_organization_entitlement_cache: {
         Args: { p_org_id: string }
@@ -18896,6 +20371,15 @@ export type Database = {
       is_tenancy_enforced: { Args: never; Returns: boolean }
       join_planning_session: {
         Args: { p_session_id: string }
+        Returns: undefined
+      }
+      link_apf_billing_record: {
+        Args: {
+          p_billing_record_id: string
+          p_mark_invoiced?: boolean
+          p_note: string
+          p_request_id: string
+        }
         Returns: undefined
       }
       link_quality_test_case_v1: {
@@ -19784,6 +21268,18 @@ export type Database = {
         Args: { p_contract_id: string; p_model_name?: string }
         Returns: string
       }
+      provision_organization_user: {
+        Args: {
+          p_actor_id: string
+          p_display_name: string
+          p_email: string
+          p_module_keys: string[]
+          p_org_id: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       publish_okr_cycle_v1: { Args: { p_cycle_id: string }; Returns: undefined }
       publish_okr_objective_v2: {
         Args: { p_objective_id: string; p_org_id: string }
@@ -20042,6 +21538,49 @@ export type Database = {
         }
         Returns: undefined
       }
+      review_apf_audit_finding: {
+        Args: { p_finding_id: string; p_note: string; p_status: string }
+        Returns: undefined
+      }
+      review_apf_counting_metrics: {
+        Args: {
+          p_counting_item_id: string
+          p_det: number
+          p_dossier_id: string
+          p_ftr: number
+          p_justification: string
+          p_ret: number
+        }
+        Returns: undefined
+      }
+      review_apf_exception: {
+        Args: {
+          p_absorbed_by: string
+          p_counting_item_id: string
+          p_disposition: string
+          p_dossier_id: string
+          p_justification: string
+        }
+        Returns: undefined
+      }
+      review_apf_logical_file: {
+        Args: {
+          p_counting_item_id: string
+          p_decision: string
+          p_dossier_id: string
+          p_independent_lifecycle: boolean
+          p_inside_boundary: boolean
+          p_justification: string
+          p_maintained: boolean
+          p_recognizable: boolean
+          p_used_by_transaction: boolean
+        }
+        Returns: undefined
+      }
+      review_apf_traceability_suggestion: {
+        Args: { p_accept: boolean; p_suggestion_id: string }
+        Returns: undefined
+      }
       review_rbac_profile_change_v1: {
         Args: {
           p_decision: string
@@ -20110,6 +21649,10 @@ export type Database = {
           p_profile_key?: string
         }
         Returns: string
+      }
+      scan_apf_dossier_audit: {
+        Args: { p_dossier_id: string }
+        Returns: number
       }
       set_ai_briefing_suggestion_assignee: {
         Args: { p_developer_id?: string; p_suggestion_id: string }
@@ -20223,6 +21766,15 @@ export type Database = {
         }
         Returns: string
       }
+      submit_apf_batch_for_billing: {
+        Args: {
+          p_batch_id: string
+          p_due_date: string
+          p_note: string
+          p_unit_price: number
+        }
+        Returns: string
+      }
       submit_okr_objective_review_v1: {
         Args: { p_objective_id: string; p_org_id: string; p_payload: Json }
         Returns: string
@@ -20276,6 +21828,15 @@ export type Database = {
         Args: { p_new_owner_id: string; p_org_id: string }
         Returns: boolean
       }
+      transition_apf_measurement_batch: {
+        Args: {
+          p_batch_id: string
+          p_decision: string
+          p_disputed_pf?: number
+          p_note: string
+        }
+        Returns: undefined
+      }
       transition_platform_subscription_v2: {
         Args: {
           p_effective_at: string
@@ -20289,6 +21850,15 @@ export type Database = {
       }
       unlink_quality_test_case_v1: {
         Args: { p_correlation_id?: string; p_link_id: string; p_org_id: string }
+        Returns: undefined
+      }
+      update_apf_dossier_draft: {
+        Args: {
+          p_counting_type: string
+          p_dossier_code: string
+          p_dossier_id: string
+          p_title: string
+        }
         Returns: undefined
       }
       update_backoffice_billing_status: {
@@ -20466,6 +22036,20 @@ export type Database = {
         }
         Returns: undefined
       }
+      upsert_apf_jira_issue_link: {
+        Args: {
+          p_content_hash: string
+          p_external_ref: string
+          p_external_updated_at?: string
+          p_metadata?: Json
+          p_organization_id: string
+          p_permanent_url: string
+          p_status: string
+          p_title: string
+          p_user_story_id: string
+        }
+        Returns: string
+      }
       upsert_backoffice_staff_member: {
         Args: {
           p_avatar_url: string
@@ -20554,6 +22138,19 @@ export type Database = {
           p_reason?: string
         }
         Returns: Json
+      }
+      validate_apf_dossier_snapshot: {
+        Args: {
+          p_content_hash: string
+          p_dossier_id: string
+          p_rendered_markdown: string
+          p_snapshot: Json
+          p_total_impacted_pf: number
+        }
+        Returns: {
+          content_hash: string
+          version_number: number
+        }[]
       }
     }
     Enums: {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AppShell }            from "@/components/layout/AppShell";
 import { useAuth }             from "@/contexts/AuthContext";
@@ -12,7 +12,8 @@ import { RdmDashboard }        from "./components/RdmDashboard";
 import { RdmChecklistTemplatesPage } from "./components/RdmChecklistTemplatesPage";
 import { TeamManager }         from "@/components/TeamManager";
 import { TeamMembersManager }  from "@/components/TeamMembersManager";
-import { UserRolesManager }    from "@/components/UserRolesManager";
+import RbacWorkspace           from "@/features/rbac/RbacWorkspace";
+import { useModuleTeam }       from "@/hooks/useModuleTeam";
 import { Button }              from "@/components/ui/button";
 import { Building2 }           from "lucide-react";
 import type { Rdm, RdmUpdate } from "./types/rdm";
@@ -22,25 +23,9 @@ export default function RdmPage() {
   const navigate = useNavigate();
   const active = pathname.split("/")[2] || "dashboard";
   const setActive = (v: string) => navigate(`/rdm/${v}`);
-  const { loading: authLoading, currentTeamId, setCurrentTeamId, teams, hasPermission } = useAuth();
-  const [showTeamModal, setShowTeamModal] = useState(false);
-
-  // RDM filtra apenas times do módulo rdm
-  // Antes usava `teams` sem filtro, aceitando times de sala_agil/sustentacao
-  // como válidos — isso fazia o RDM carregar dados do time errado
-  const moduleTeams = teams.filter((t) => t.module === "rdm");
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!moduleTeams.length) return;
-    // currentTeamId nas deps garante reexecução após boot com currentTeamId=null
-    const currentIsValid = currentTeamId && moduleTeams.some((t) => t.id === currentTeamId);
-    if (currentIsValid) return;
-    if (moduleTeams.length === 1) setCurrentTeamId(moduleTeams[0].id);
-    else setShowTeamModal(true);
-  }, [authLoading, teams, currentTeamId]); // eslint-disable-line
-
-  const needsTeam = !authLoading && !currentTeamId && active !== "times";
+  const { loading: authLoading, hasPermission } = useAuth();
+  const { moduleTeamId, moduleTeams, showTeamModal, setModuleTeamId, closeTeamModal } = useModuleTeam("rdm");
+  const needsTeam = !authLoading && !moduleTeamId && !["times", "perfis"].includes(active);
 
   return (
     <AppShell module="rdm">
@@ -48,8 +33,8 @@ export default function RdmPage() {
         open={showTeamModal}
         teams={moduleTeams}
         moduleLabel="RDM"
-        onSelect={(id) => { setCurrentTeamId(id); setShowTeamModal(false); }}
-        onClose={() => setShowTeamModal(false)}
+        onSelect={setModuleTeamId}
+        onClose={closeTeamModal}
       />
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
@@ -164,9 +149,9 @@ function RdmSection({
         </div>
       );
 
-    case "times":   return <TeamManager />;
+    case "times":   return <TeamManager moduleFilter="rdm" />;
     case "membros": return <TeamMembersManager />;
-    case "perfis":  return <UserRolesManager />;
+    case "perfis":  return <RbacWorkspace />;
     default:        return <RdmDashboard rdms={rdms} />;
   }
 }

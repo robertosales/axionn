@@ -23,6 +23,7 @@ import {
   Zap,
   Target,
   Activity,
+  LifeBuoy,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
@@ -123,12 +124,17 @@ export function SustentacaoDashboard() {
   return (
     <div className="space-y-6">
 
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {getGreeting()}{firstName ? `, ${firstName}` : ""} 👋
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{capitalizeFirst(getFormattedDate())}</p>
-      </div>
+      <header className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary" aria-hidden="true">
+          <LifeBuoy className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {getGreeting()}{firstName ? `, ${firstName}` : ""}
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">{capitalizeFirst(getFormattedDate())}</p>
+        </div>
+      </header>
 
       <div className="rounded-xl border border-border/60 bg-card px-4 py-3">
         <MetricasFilterBar
@@ -142,13 +148,13 @@ export function SustentacaoDashboard() {
 
       <Section title="Atendimento e Volume">
         {kpisLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <KPICard icon={FileText}     label="Chamados Ativos"  value={atendimento.total}          color="info" />
             <KPICard icon={Zap}          label="Abertos Hoje"     value={atendimento.abertosHoje}    color="info" />
             <KPICard icon={CheckCircle2} label="Resolvidos Hoje"  value={atendimento.resolvidosHoje} color="info" />
@@ -159,13 +165,13 @@ export function SustentacaoDashboard() {
 
       <Section title="Tempos Médios">
         {kpisLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <KPICard icon={Timer}      label="TMR (Resposta)"    value={formatHours(tempos.tmr)}  sub={`${tempos.tmrCount} chamados`}   color="info" />
             <KPICard icon={Clock}      label="MTTR (Resolução)"  value={formatHours(tempos.mttr)} sub={`${tempos.mttrCount} resolvidos`} color={tempos.mttr > 4 ? "destructive" : "info"} />
             <KPICard icon={TrendingUp} label="TMA (Atendimento)" value={formatHours(tempos.tma)}  color="info" />
@@ -245,11 +251,12 @@ export function SustentacaoDashboard() {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const sectionId = `sustentacao-${title.toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">{title}</h3>
+    <section aria-labelledby={sectionId}>
+      <h2 id={sectionId} className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h2>
       {children}
-    </div>
+    </section>
   );
 }
 

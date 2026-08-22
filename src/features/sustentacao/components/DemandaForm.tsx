@@ -60,7 +60,7 @@ const SITUACAO_LABELS: Record<string, string> = {
 function parseDemandaError(err: unknown): string {
   if (!err || typeof err !== "object") return "Erro desconhecido ao salvar a demanda.";
 
-  const e = err as Record<string, any>;
+  const e = err as Record<string, unknown>;
   const code    = e.code    as string | undefined;
   const details = e.details as string | undefined;
   const message = e.message as string | undefined;
@@ -95,7 +95,7 @@ function parseDemandaError(err: unknown): string {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: Record<string, any>) => Promise<void>;
+  onSubmit: (data: Record<string, unknown>) => Promise<void>;
   situacaoInicial?: string;
   demanda?: Demanda | null;
 }
@@ -520,11 +520,8 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
 
           {/* BLOCO CONDICIONAL — Manutenção Corretiva */}
           {isCorretiva && (
-            <div
-              className="rounded-md border p-2.5 space-y-2"
-              style={{ backgroundColor: "#e8f2fa", borderColor: "#b3d4ed" }}
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#1a6fa8" }}>
+            <div className="space-y-2 rounded-md border border-info/30 bg-info/10 p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-info">
                 Campos exclusivos — Manutenção Corretiva
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -540,7 +537,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                       }))
                     }
                   >
-                    <SelectTrigger className="h-8 text-sm bg-white">
+                    <SelectTrigger className="h-8 bg-background text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -605,7 +602,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                   Originada de diagnóstico de incidente?
                 </Label>
                 {form.originada_diagnostico && (
-                  <span className="text-[10px] font-medium ml-1" style={{ color: "#1a6fa8" }}>
+                  <span className="ml-1 text-[10px] font-medium text-info">
                     → Prazo de início: IMEDIATO
                   </span>
                 )}
@@ -616,14 +613,14 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
           {/* Prazos + Data Previsão */}
           <div className="grid grid-cols-2 gap-2">
             {prazoInfo && !isEdit && (
-              <div className="rounded-md border p-2" style={{ backgroundColor: "#e8f2fa", borderColor: "#b3d4ed" }}>
-                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "#1a6fa8" }}>
+              <div className="rounded-md border border-info/30 bg-info/10 p-2">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-info">
                   Prazos Calculados
                 </p>
                 <div className="space-y-0.5 text-xs">
                   <div>
-                    <span style={{ color: "#4a6278" }}>Início: </span>
-                    <span className="font-medium" style={{ color: "#0f1e2d" }}>
+                    <span className="text-muted-foreground">Início: </span>
+                    <span className="font-medium text-foreground">
                       {form.originada_diagnostico && isCorretiva
                         ? "IMEDIATO"
                         : prazoInfo.prazoInicio
@@ -632,8 +629,8 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: "#4a6278" }}>Solução: </span>
-                    <span className="font-medium" style={{ color: "#0f1e2d" }}>
+                    <span className="text-muted-foreground">Solução: </span>
+                    <span className="font-medium text-foreground">
                       {prazoInfo.isOS
                         ? "Definido na OS"
                         : prazoInfo.prazoSolucao
@@ -697,12 +694,7 @@ export function DemandaForm({ open, onClose, onSubmit, situacaoInicial, demanda 
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button
-            style={{ backgroundColor: "#1a6fa8" }}
-            className="hover:opacity-90 text-white"
-            onClick={handle}
-            disabled={loading}
-          >
+          <Button onClick={handle} disabled={loading}>
             {loading ? (isEdit ? "Salvando..." : "Criando...") : isEdit ? "Salvar Alterações" : "Criar Demanda"}
           </Button>
         </DialogFooter>

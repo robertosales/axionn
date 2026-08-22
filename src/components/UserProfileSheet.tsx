@@ -109,7 +109,7 @@ export interface UserRow {
   module_access:        string;
   is_active:            boolean;
   must_change_password: boolean;
-  teams:                { id: string; name: string }[];
+  teams:                { id: string; name: string; module: ModuleKey | string; role: string }[];
   moduleRoles:          ModuleAccess[];
   contract_role?:       "admin_contrato" | "member" | null;
 }
@@ -382,7 +382,9 @@ export function UserProfileSheet({
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Times</p>
                   <div className="flex flex-wrap gap-1.5">
                     {user.teams.map(t => (
-                      <Badge key={t.id} variant="outline" className="text-[10px] font-normal">{t.name}</Badge>
+                      <Badge key={t.id} variant="outline" className="text-[10px] font-normal">
+                        {t.name} · {MODULES.find(module => module.key === t.module)?.label ?? t.module} · {t.role}
+                      </Badge>
                     ))}
                   </div>
                 </div>

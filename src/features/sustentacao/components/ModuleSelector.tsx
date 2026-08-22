@@ -47,7 +47,7 @@ function ThemeToggle() {
     <button
       onClick={toggle}
       aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
-      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
       {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </button>
@@ -88,9 +88,9 @@ function ModuleCard({ title, description, badge, icon: Icon, accent, accentBg, o
       onClick={onClick}
       disabled={!allowed}
       className={cn(
-        "group relative text-left w-full rounded-2xl border bg-card p-6 transition-all duration-200",
-        "shadow-sm hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-        allowed ? "hover:border-primary/40 hover:-translate-y-0.5 cursor-pointer" : "opacity-40 cursor-not-allowed",
+        "group relative min-h-44 w-full rounded-2xl border bg-card p-6 text-left shadow-sm transition-[border-color,box-shadow] duration-200",
+        "hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+        allowed ? "cursor-pointer hover:border-primary/40" : "cursor-not-allowed opacity-40",
       )}
     >
       {/* Icon */}
@@ -122,7 +122,7 @@ function ModuleCard({ title, description, badge, icon: Icon, accent, accentBg, o
         )}
       >
         <span>Acessar módulo</span>
-        <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+        <ChevronRight className="h-3.5 w-3.5" />
       </div>
     </button>
   );
@@ -137,9 +137,9 @@ export function ModuleSelector() {
   const canSust = isAdmin || access === "admin" || access === "sustentacao";
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="flex min-h-dvh flex-col bg-background">
       {/* Top bar */}
-      <header className="h-14 border-b border-border flex items-center justify-between px-6">
+      <header className="flex min-h-14 items-center justify-between gap-3 border-b border-border px-4 sm:px-6">
         <AxionBrand />
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground hidden sm:block">
@@ -148,7 +148,7 @@ export function ModuleSelector() {
           <ThemeToggle />
           <button
             onClick={signOut}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
+            className="flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <LogOut className="h-3.5 w-3.5" />
             Sair

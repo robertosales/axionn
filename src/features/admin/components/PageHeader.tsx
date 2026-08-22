@@ -1,5 +1,5 @@
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageHeader as SharedPageHeader } from "@/shared/components/common/PageHeader";
 import type { LucideIcon } from "lucide-react";
 
 interface ActionButton {
@@ -46,34 +46,14 @@ export function PageHeader({
   children,
 }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      {/* Subtítulo + badges */}
-      <div className="flex min-h-9 flex-wrap items-center gap-2">
-        {Icon && (
-          <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} aria-hidden="true" />
-        )}
-        {description && (
-          <span className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{description}</span>
-        )}
-        {badges.map((b, i) => {
-          const BIcon = b.icon;
-          return (
-            <Badge
-              key={i}
-              variant="outline"
-              className={b.className ?? "gap-1 text-[11px] font-medium"}
-            >
-              {BIcon && <BIcon className="h-3 w-3" />}
-              {b.label}
-            </Badge>
-          );
-        })}
-      </div>
-
-      {/* Ações + slot customizado */}
-      {(actions.length > 0 || children) && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {children}
+    <SharedPageHeader
+      variant="admin"
+      description={description}
+      icon={Icon}
+      iconClassName={`bg-transparent p-0 ${iconColor}`}
+      badges={badges}
+      actions={actions.length > 0 ? (
+        <>
           {actions.map((a, i) => {
             const AIcon = a.icon;
             return (
@@ -84,13 +64,15 @@ export function PageHeader({
                 className="gap-1.5"
                 onClick={a.onClick}
               >
-                {AIcon && <AIcon className="h-4 w-4" />}
+                {AIcon && <AIcon className="h-4 w-4" aria-hidden="true" />}
                 {a.label}
               </Button>
             );
           })}
-        </div>
-      )}
-    </div>
+        </>
+      ) : undefined}
+    >
+      {children}
+    </SharedPageHeader>
   );
 }

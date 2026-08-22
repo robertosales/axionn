@@ -12,7 +12,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   fetchActiveWorkflowSteps,
   replaceWorkflowSteps,
+  type WorkflowStepRow,
 } from "../services/workflowSteps.service";
+import { SkeletonList } from "@/shared/components/common/SkeletonList";
 
 interface SustentacaoStep {
   id?: string;
@@ -72,13 +74,13 @@ export function SustentacaoWorkflow() {
       if (data && data.length > 0) {
         // Deduplicate by nome
         const seen = new Set<string>();
-        const unique = data.filter((d: any) => {
+        const unique = data.filter((d: WorkflowStepRow) => {
           const key = d.nome;
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
         });
-        setDraft(unique.map((d: any) => ({
+        setDraft(unique.map((d: WorkflowStepRow) => ({
           id: d.id, key: d.nome.toLowerCase().replace(/\s+/g, '_'), label: d.nome, hex: d.cor,
         })));
       } else {
@@ -183,15 +185,15 @@ export function SustentacaoWorkflow() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <GitBranch className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-bold tracking-tight">Fluxo de Trabalho — Sustentação</h2>
           </div>
           <p className="text-sm text-muted-foreground mt-1">Fluxo único e global, compartilhado por todos os times.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={restore} disabled={saving}>
             <RotateCcw className="h-3.5 w-3.5" /> Restaurar Padrão
           </Button>
@@ -207,7 +209,9 @@ export function SustentacaoWorkflow() {
       <Card>
         <CardContent className="p-4">
           {loadingDb ? (
-            <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            <div aria-busy="true" aria-label="Carregando etapas do fluxo">
+              <SkeletonList count={5} variant="row" />
+            </div>
           ) : (
             <DragDropContext onDragEnd={onDragEnd}>
               <Droppable droppableId="sustentacao-workflow-steps">
@@ -222,7 +226,7 @@ export function SustentacaoWorkflow() {
                             className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${snapshot.isDragging ? "bg-accent shadow-md" : "bg-background hover:bg-muted/50"}`}
                             style={{ ...provided.draggableProps.style, borderLeftWidth: "4px", borderLeftColor: getActiveHex(step) }}
                           >
-                            <div {...provided.dragHandleProps} className="cursor-grab text-muted-foreground"><GripVertical className="h-4 w-4" /></div>
+                            <div {...provided.dragHandleProps} className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-muted" aria-label={`Reordenar etapa ${step.label}`}><GripVertical className="h-4 w-4" /></div>
                             <span className="text-xs font-mono text-muted-foreground w-5 text-center shrink-0">{idx + 1}</span>
                             <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: getActiveHex(step) }} />
                             {editingKey === step.key ? (
@@ -239,16 +243,16 @@ export function SustentacaoWorkflow() {
                                     ))}
                                   </SelectContent>
                                 </Select>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={confirmEdit}><Check className="h-3.5 w-3.5 text-primary" /></Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingKey(null)}><X className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={`Confirmar edição de ${step.label}`} onClick={confirmEdit}><Check className="h-3.5 w-3.5 text-primary" /></Button>
+                                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={`Cancelar edição de ${step.label}`} onClick={() => setEditingKey(null)}><X className="h-3.5 w-3.5" /></Button>
                               </div>
                             ) : (
                               <span className="text-sm font-medium flex-1 min-w-0 truncate">{step.label}</span>
                             )}
                             {editingKey !== step.key && (
                               <div className="flex items-center gap-1 shrink-0">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(step)}><Pencil className="h-3.5 w-3.5" /></Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => removeStep(step.key)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={`Editar etapa ${step.label}`} onClick={() => startEdit(step)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive" aria-label={`Remover etapa ${step.label}`} onClick={() => removeStep(step.key)}><Trash2 className="h-3.5 w-3.5" /></Button>
                               </div>
                             )}
                           </div>

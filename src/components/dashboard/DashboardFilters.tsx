@@ -139,6 +139,7 @@ export function DashboardFilters({ filters, onChange, sprints, teams, members, i
                 <button
                   onClick={() => removeFilter(key as keyof DashboardFilterState)}
                   className="ml-0.5 hover:text-destructive transition-colors"
+                  aria-label={`Remover filtro de ${FILTER_LABELS[key as keyof DashboardFilterState]}`}
                 >
                   <X className="h-3 w-3" />
                 </button>

@@ -49,9 +49,9 @@ export function ApfBaselineTab() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Projeto</Label>
+              <Label htmlFor="apf-baseline-project">Projeto Ágil da baseline</Label>
               <Select value={baseline.projectId} onValueChange={baseline.setProjectId}>
-                <SelectTrigger><SelectValue placeholder="Selecione o projeto" /></SelectTrigger>
+                <SelectTrigger id="apf-baseline-project"><SelectValue placeholder="Selecione um projeto Ágil" /></SelectTrigger>
                 <SelectContent>
                   {baseline.projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>

@@ -8,13 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar, Code2 } from "lucide-react";
+import { Trash2, Users, UserPlus, Shield, Search, Filter, ArrowUpDown, Calendar, Code2, Pencil, AlertCircle, RefreshCw } from "lucide-react";
 import { getRoleLabel, type AppRole } from "@/hooks/usePermissions";
 import { getInitials } from "@/lib/nameUtils";
+import { groupTeamMembershipsByUser } from "@/lib/teamMemberships";
+import { ConfirmDialog } from "@/shared/components/common/ConfirmDialog";
+import { SkeletonList } from "@/shared/components/common/SkeletonList";
 
 const PREDEFINED_ROLES = [
   "Analista de Requisitos",
@@ -34,39 +37,60 @@ interface TeamMember {
   user_roles?: AppRole[];
 }
 
+interface ProfileCandidate {
+  user_id: string;
+  display_name: string;
+  email: string;
+  teams: { id: string; name: string; module: string; role: string }[];
+}
+
+const MODULE_LABELS: Record<string, string> = {
+  sala_agil: "Sala Ágil",
+  sustentacao: "Sustentação",
+  rdm: "RDM",
+};
+
 export function TeamMembersManager() {
-  const { currentTeamId, isAdmin } = useAuth();
+  const { currentTeamId, isAdmin, teams } = useAuth();
   const { currentOrganizationId, enabled: orgEnabled } = useOrganization();
   const permissions = useTeamManagementPermissions();
   const canAdd = permissions.canAddTeamMember;
+  const canUpdate = permissions.canUpdateTeamMember;
   const canRemove = permissions.canRemoveTeamMember;
-  const canManage = canAdd || canRemove;
+  const canManage = canAdd || canUpdate || canRemove;
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [allProfiles, setAllProfiles] = useState<
-    { user_id: string; display_name: string; email: string }[]
-  >([]);
+  const [allProfiles, setAllProfiles] = useState<ProfileCandidate[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [memberRole, setMemberRole] = useState("Desenvolvedor Fullstack");
   const [customRole, setCustomRole] = useState("");
   const [showCustom, setShowCustom] = useState(false);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [profilesError, setProfilesError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"name" | "recent" | "oldest">("name");
+  const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
+  const [memberToEdit, setMemberToEdit] = useState<TeamMember | null>(null);
+  const [editRole, setEditRole] = useState("");
+  const [editCustomRole, setEditCustomRole] = useState("");
+  const [editUsesCustomRole, setEditUsesCustomRole] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
 
   const fetchMembers = async () => {
     if (!currentTeamId) return;
     setLoading(true);
+    setLoadError(null);
 
     if (orgEnabled && currentOrganizationId) {
       const { data: rpcMembers, error: rpcError } = await (supabase as any).rpc(
         "get_organization_team_members_v2",
         { p_org_id: currentOrganizationId, p_team_id: currentTeamId },
       );
-      if (!rpcError && rpcMembers) {
+      if (!rpcError) {
         setMembers(
-          (rpcMembers as any[]).map((row) => ({
+          ((rpcMembers || []) as any[]).map((row) => ({
             id: String(row.team_member_id),
             user_id: String(row.user_id),
             role: String(row.role ?? "member"),
@@ -88,13 +112,29 @@ export function TeamMembersManager() {
           "[TeamMembersManager] get_organization_team_members_v2:",
           rpcError,
         );
+        setMembers([]);
+        setLoadError(
+          resolveOrganizationOperationalError(
+            rpcError,
+            "Não foi possível carregar os membros deste time.",
+          ),
+        );
+        setLoading(false);
+        return;
       }
     }
 
-    const { data: tmData } = await supabase
+    const { data: tmData, error: teamMembersError } = await supabase
       .from("team_members")
       .select("*")
       .eq("team_id", currentTeamId);
+
+    if (teamMembersError) {
+      setMembers([]);
+      setLoadError("Não foi possível carregar os membros deste time.");
+      setLoading(false);
+      return;
+    }
 
     const memberList = tmData || [];
     const userIds = memberList.map((m: any) => m.user_id);
@@ -130,21 +170,49 @@ export function TeamMembersManager() {
   };
 
   const fetchAllProfiles = async () => {
-    if (!canManage) return;
+    if (!canAdd) return;
+    setProfilesError(null);
 
     if (orgEnabled && currentOrganizationId) {
       const { data: orgMembers, error: orgError } = await (supabase as any).rpc(
         "get_organization_members_v2",
         { p_org_id: currentOrganizationId },
       );
-      if (!orgError && orgMembers) {
+      if (!orgError) {
+        const organizationTeams = teams.filter(
+          (team) => !team.organizationId || team.organizationId === currentOrganizationId,
+        );
+        let membershipsByUser = new Map<string, ProfileCandidate["teams"]>();
+        if (organizationTeams.length > 0) {
+          const { data: memberships, error: membershipsError } = await supabase.rpc(
+            "get_team_members_for_teams_v2",
+            {
+              p_org_id: currentOrganizationId,
+              p_team_ids: organizationTeams.map((team) => team.id),
+            },
+          );
+          if (membershipsError) {
+            console.error("[TeamMembersManager] get_team_members_for_teams_v2:", membershipsError);
+            setAllProfiles([]);
+            setProfilesError(
+              resolveOrganizationOperationalError(
+                membershipsError,
+                "Não foi possível carregar as participações das pessoas.",
+              ),
+            );
+            return;
+          } else {
+            membershipsByUser = groupTeamMembershipsByUser(organizationTeams, memberships || []);
+          }
+        }
         setAllProfiles(
-          (orgMembers as any[])
+          ((orgMembers || []) as any[])
             .filter((row) => row.is_active !== false)
             .map((row) => ({
               user_id: String(row.user_id),
               display_name: String(row.display_name ?? row.email ?? "Usuário"),
               email: String(row.email ?? ""),
+              teams: membershipsByUser.get(String(row.user_id)) || [],
             })),
         );
         return;
@@ -154,20 +222,33 @@ export function TeamMembersManager() {
           "[TeamMembersManager] get_organization_members_v2:",
           orgError,
         );
+        setAllProfiles([]);
+        setProfilesError(
+          resolveOrganizationOperationalError(
+            orgError,
+            "Não foi possível carregar as pessoas da organização.",
+          ),
+        );
+        return;
       }
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("user_id, display_name, email")
       .eq("is_active", true);
-    setAllProfiles(data || []);
+    if (error) {
+      setAllProfiles([]);
+      setProfilesError("Não foi possível carregar as pessoas disponíveis.");
+      return;
+    }
+    setAllProfiles((data || []).map((profile) => ({ ...profile, teams: [] })));
   };
 
   useEffect(() => {
     fetchMembers();
     fetchAllProfiles();
-  }, [currentTeamId, currentOrganizationId, orgEnabled]);
+  }, [currentTeamId, currentOrganizationId, orgEnabled, teams]);
 
   const handleAddMember = async () => {
     if (!currentTeamId || !selectedUserId) {
@@ -237,8 +318,6 @@ export function TeamMembersManager() {
       );
       return;
     }
-    if (!confirm("Remover este membro do time?")) return;
-
     if (orgEnabled && currentOrganizationId) {
       const { error: rpcError } = await (supabase as any).rpc(
         "remove_organization_team_member_v2",
@@ -259,12 +338,90 @@ export function TeamMembersManager() {
     }
 
     toast.success("Membro removido");
+    setMemberToRemove(null);
     await fetchMembers();
+  };
+
+  const openRoleEditor = (member: TeamMember) => {
+    const predefined = PREDEFINED_ROLES.includes(member.role);
+    setMemberToEdit(member);
+    setEditRole(predefined ? member.role : "");
+    setEditCustomRole(predefined ? "" : member.role);
+    setEditUsesCustomRole(!predefined);
+  };
+
+  const closeRoleEditor = () => {
+    if (savingRole) return;
+    setMemberToEdit(null);
+    setEditRole("");
+    setEditCustomRole("");
+    setEditUsesCustomRole(false);
+  };
+
+  const handleUpdateMemberRole = async () => {
+    if (!memberToEdit || !currentTeamId) return;
+    if (!canUpdate) {
+      toast.error(
+        permissions.writeBlockedReason ??
+          "Você não tem permissão para gerenciar membros deste time.",
+      );
+      return;
+    }
+
+    const nextRole = (editUsesCustomRole ? editCustomRole : editRole).trim();
+    if (!nextRole) {
+      toast.error("Informe a função do membro");
+      return;
+    }
+    if (nextRole === memberToEdit.role) {
+      closeRoleEditor();
+      return;
+    }
+
+    setSavingRole(true);
+    try {
+      if (orgEnabled && currentOrganizationId) {
+        const { error: rpcError } = await supabase.rpc(
+          "update_organization_team_member_role_v2",
+          {
+            p_org_id: currentOrganizationId,
+            p_team_member_id: memberToEdit.id,
+            p_role: nextRole,
+          },
+        );
+        if (rpcError) {
+          console.error("[TeamMembersManager] update_organization_team_member_role_v2:", rpcError);
+          toast.error(
+            resolveOrganizationOperationalError(rpcError, "Erro ao atualizar função"),
+          );
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from("team_members")
+          .update({ role: nextRole })
+          .eq("id", memberToEdit.id)
+          .eq("team_id", currentTeamId);
+        if (error) {
+          toast.error("Erro ao atualizar função");
+          return;
+        }
+      }
+
+      toast.success("Função no time atualizada");
+      setMemberToEdit(null);
+      await fetchMembers();
+    } finally {
+      setSavingRole(false);
+    }
   };
 
   const availableProfiles = allProfiles.filter(
     (p) => !members.find((m) => m.user_id === p.user_id)
   );
+  const selectedProfile = availableProfiles.find((profile) => profile.user_id === selectedUserId);
+  const activeTeam = teams.find((team) => team.id === currentTeamId);
+  const activeModuleLabel = activeTeam ? MODULE_LABELS[activeTeam.module] || activeTeam.module : "Módulo";
 
   const filteredMembers = members.filter((m) => {
     const term = search.toLowerCase();
@@ -318,32 +475,49 @@ export function TeamMembersManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="space-y-1">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">
-            Membros do Time
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Membros do Time</h2>
+            {activeTeam && <Badge variant="secondary">{activeTeam.name} · {activeModuleLabel}</Badge>}
+          </div>
           <p className="text-sm text-muted-foreground">
-            Gerencie os membros e perfis de acesso associados a este time
+            Gerencie as participações neste time. A identidade e os outros vínculos da pessoa são preservados.
           </p>
         </div>
 
-        {canManage && (
+        {canAdd && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="min-h-11 sm:min-h-9">
                 <UserPlus className="h-4 w-4 mr-2" /> Adicionar Membro
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Adicionar Membro ao Time</DialogTitle>
+                <DialogDescription>
+                  Selecione uma pessoa já cadastrada na organização. Esta ação cria apenas um novo vínculo com o time atual.
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                {profilesError && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3" role="alert">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                      <div className="space-y-2">
+                        <p className="text-sm text-foreground">{profilesError}</p>
+                        <Button type="button" variant="outline" size="sm" onClick={() => void fetchAllProfiles()}>
+                          <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div>
-                  <Label>Usuário *</Label>
+                  <Label htmlFor="team-member-user">Usuário *</Label>
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger>
+                    <SelectTrigger id="team-member-user" className="min-h-11">
                       <SelectValue placeholder="Selecione um usuário" />
                     </SelectTrigger>
                     <SelectContent>
@@ -354,6 +528,22 @@ export function TeamMembersManager() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {selectedProfile && (
+                    <div className="mt-3 rounded-lg border bg-muted/30 p-3" aria-live="polite">
+                      <p className="text-xs font-medium text-foreground">Participações atuais</p>
+                      {selectedProfile.teams.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {selectedProfile.teams.map((team) => (
+                            <Badge key={team.id} variant="outline" className="font-normal">
+                              {team.name} · {MODULE_LABELS[team.module] || team.module} · {team.role}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-muted-foreground">Esta será a primeira participação da pessoa em um time.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -463,7 +653,24 @@ export function TeamMembersManager() {
       </div>
 
       <div className="space-y-3">
-        {sortedMembers.map((member) => {
+        {loading && <SkeletonList count={4} variant="row" />}
+        {loadError && !loading && (
+          <Card className="border-destructive/40 bg-destructive/5" role="alert">
+            <CardContent className="flex flex-col items-start gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+                <div>
+                  <p className="font-medium text-foreground">Falha ao carregar membros</p>
+                  <p className="text-sm text-muted-foreground">{loadError}</p>
+                </div>
+              </div>
+              <Button type="button" variant="outline" onClick={() => void fetchMembers()} className="min-h-11 sm:min-h-9">
+                <RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+        {!loading && !loadError && sortedMembers.map((member) => {
           const name = member.profile?.display_name || "Usuário";
           return (
             <Card
@@ -487,14 +694,30 @@ export function TeamMembersManager() {
                         </p>
                       </div>
                       {canManage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 -mr-1 -mt-1"
-                          onClick={() => handleRemoveMember(member.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <div className="-mr-1 -mt-1 flex items-center gap-1">
+                          {canUpdate && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="min-h-11 min-w-11"
+                              onClick={() => openRoleEditor(member)}
+                              aria-label={`Editar função de ${name} no time ${activeTeam?.name || "atual"}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canRemove && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="min-h-11 min-w-11"
+                              onClick={() => setMemberToRemove(member)}
+                              aria-label={`Remover ${name} do time ${activeTeam?.name || "atual"}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -539,7 +762,7 @@ export function TeamMembersManager() {
         })}
       </div>
 
-      {sortedMembers.length === 0 && !loading && (
+      {sortedMembers.length === 0 && !loading && !loadError && (
         <Card className="border-dashed p-8 text-center">
           <p className="text-muted-foreground">
             {search
@@ -548,6 +771,84 @@ export function TeamMembersManager() {
           </p>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={Boolean(memberToRemove)}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setMemberToRemove(null); }}
+        title="Remover participação do time?"
+        description={`O vínculo de ${memberToRemove?.profile?.display_name || "esta pessoa"} será removido apenas de ${activeTeam?.name || "este time"} (${activeModuleLabel}). A identidade, os perfis RBAC e as participações em outros times serão preservados.`}
+        confirmLabel="Remover deste time"
+        onConfirm={() => { if (memberToRemove) void handleRemoveMember(memberToRemove.id); }}
+      />
+
+      <Dialog open={Boolean(memberToEdit)} onOpenChange={(nextOpen) => { if (!nextOpen) closeRoleEditor(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar função no time</DialogTitle>
+            <DialogDescription>
+              Altere apenas a função de {memberToEdit?.profile?.display_name || "esta pessoa"} em {activeTeam?.name || "este time"} ({activeModuleLabel}). A identidade, os perfis RBAC e os outros vínculos não serão modificados.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-team-member-role">Função no time *</Label>
+            {!editUsesCustomRole ? (
+              <Select
+                value={editRole}
+                onValueChange={(value) => {
+                  if (value === "__custom__") {
+                    setEditUsesCustomRole(true);
+                    setEditCustomRole("");
+                  } else {
+                    setEditRole(value);
+                  }
+                }}
+              >
+                <SelectTrigger id="edit-team-member-role" className="min-h-11">
+                  <SelectValue placeholder="Selecione uma função" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PREDEFINED_ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                  ))}
+                  <SelectItem value="__custom__">Outra função...</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  id="edit-team-member-role"
+                  className="min-h-11"
+                  value={editCustomRole}
+                  onChange={(event) => setEditCustomRole(event.target.value)}
+                  placeholder="Digite a função personalizada"
+                  autoFocus
+                />
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0"
+                  onClick={() => {
+                    setEditUsesCustomRole(false);
+                    setEditRole(PREDEFINED_ROLES[0]);
+                  }}
+                >
+                  Escolher uma função predefinida
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeRoleEditor} disabled={savingRole}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={() => void handleUpdateMemberRole()} disabled={savingRole}>
+              {savingRole ? "Salvando..." : "Salvar função"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

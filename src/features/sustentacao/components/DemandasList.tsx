@@ -131,13 +131,13 @@ export function DemandasList() {
     setSelected(d);
   }
 
-  async function handleEditSubmit(data: Record<string, any>) {
+  async function handleEditSubmit(data: Record<string, unknown>) {
     if (!editTarget) return;
     try {
       await update(editTarget.id, data);
       toast.success("Demanda atualizada com sucesso!");
-    } catch (e: any) {
-      toast.error("Erro ao atualizar demanda: " + (e?.message ?? ""));
+    } catch (error: unknown) {
+      toast.error("Erro ao atualizar demanda: " + (error instanceof Error ? error.message : ""));
     }
   }
 
@@ -164,7 +164,7 @@ export function DemandasList() {
 
   if (loading) return <SkeletonList count={5} />;
   if (error)
-    return <div className="text-center py-10 text-destructive">{error}</div>;
+    return <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center text-sm text-destructive">{error}</div>;
 
   const sharedViewProps = {
     items: paginated,
@@ -182,12 +182,9 @@ export function DemandasList() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5" style={{ color: "#0bbcaf" }} />
+            <FileText className="h-5 w-5 text-primary" />
             <h1 className="text-xl font-semibold tracking-tight">Demandas</h1>
-            <span
-              className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-              style={{ background: "rgba(11,188,175,0.12)", color: "#0bbcaf" }}
-            >
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
               {filtered.length}
             </span>
           </div>
@@ -198,10 +195,7 @@ export function DemandasList() {
         </div>
         <Button
           size="sm"
-          className="gap-1.5 text-white"
-          style={{ background: "#0bbcaf" }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#09a89d")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "#0bbcaf")}
+          className="gap-1.5"
           onClick={() => setShowForm(true)}
         >
           <Plus className="h-4 w-4" /> Nova Demanda
@@ -211,13 +205,14 @@ export function DemandasList() {
       {/* ── Filtros ── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          {searching
+            ? <Loader2 className="absolute left-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+            : <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />}
           <Input
             placeholder="Buscar por RHM, projeto ou título..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 rounded-lg focus-visible:ring-1"
-            style={{ "--tw-ring-color": "#0bbcaf" } as any}
+            className="h-9 rounded-lg pl-9 focus-visible:ring-2"
           />
         </div>
         <Select value={filterTipo} onValueChange={setFilterTipo}>
@@ -247,26 +242,30 @@ export function DemandasList() {
         {/* Toggle cards / tabela */}
         <div className="flex items-center border rounded-lg overflow-hidden h-9">
           <button
+            type="button"
+            aria-label="Exibir demandas em cartões"
+            aria-pressed={viewMode === "cards"}
             onClick={() => setViewMode("cards")}
             className={cn(
               "px-2.5 h-full flex items-center transition-colors",
               viewMode === "cards"
-                ? "text-[#0bbcaf]"
+                ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-muted",
             )}
-            style={viewMode === "cards" ? { background: "rgba(11,188,175,0.12)" } : {}}
           >
             <LayoutGrid className="h-4 w-4" />
           </button>
           <button
+            type="button"
+            aria-label="Exibir demandas em tabela"
+            aria-pressed={viewMode === "table"}
             onClick={() => setViewMode("table")}
             className={cn(
               "px-2.5 h-full flex items-center transition-colors",
               viewMode === "table"
-                ? "text-[#0bbcaf]"
+                ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-muted",
             )}
-            style={viewMode === "table" ? { background: "rgba(11,188,175,0.12)" } : {}}
           >
             <LayoutList className="h-4 w-4" />
           </button>
@@ -314,7 +313,7 @@ export function DemandasList() {
                     variant={n === currentPage ? "default" : "outline"}
                     size="icon"
                     className="h-8 w-8 text-xs"
-                    style={n === currentPage ? { background: "#0bbcaf", borderColor: "#0bbcaf" } : {}}
+                    aria-current={n === currentPage ? "page" : undefined}
                     onClick={() => setPage(n)}
                   >
                     {n}
@@ -362,7 +361,7 @@ export function DemandasList() {
         open={showForm}
         onClose={() => setShowForm(false)}
         onSubmit={async (d) => {
-          await create(d as any);
+          await create(d as Partial<Demanda>);
           setShowForm(false);
         }}
       />
@@ -403,30 +402,13 @@ function CardView({
           <div
             key={d.id}
             onClick={() => onSelect(d)}
-            className="group relative flex flex-col gap-3 p-4 rounded-xl border bg-card cursor-pointer transition-all duration-200"
-            style={{ borderColor: "hsl(var(--border))" }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "rgba(11,188,175,0.4)";
-              e.currentTarget.style.boxShadow   = "0 4px 16px rgba(11,188,175,0.08)";
-              e.currentTarget.style.transform   = "translateY(-1px)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "hsl(var(--border))";
-              e.currentTarget.style.boxShadow   = "none";
-              e.currentTarget.style.transform   = "none";
-            }}
+            className="group relative flex cursor-pointer flex-col gap-3 rounded-xl border bg-card p-4 transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-sm focus-within:border-primary/50"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
                 {/* Accent bar teal */}
-                <span
-                  className="h-[18px] w-[3px] rounded-full shrink-0"
-                  style={{ background: "#0bbcaf" }}
-                />
-                <span
-                  className="font-mono text-sm font-bold"
-                  style={{ color: "#0bbcaf" }}
-                >
+                <span className="h-[18px] w-[3px] shrink-0 rounded-full bg-primary" />
+                <span className="font-mono text-sm font-bold text-primary">
                   {d.rhm}
                 </span>
               </div>
@@ -471,8 +453,7 @@ function CardView({
               {responsavel && (
                 <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
                   <div
-                    className="h-5 w-5 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: "rgba(11,188,175,0.15)", color: "#0bbcaf" }}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
                   >
                     <User className="h-3 w-3" />
                   </div>
@@ -499,7 +480,7 @@ function TableView({
   onNovaAtividade?: (d: Demanda) => void;
 }) {
   return (
-    <div className="border rounded-xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+    <div className="overflow-hidden rounded-xl border shadow-sm">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40">
@@ -523,7 +504,7 @@ function TableView({
                 onClick={() => onSelect(d)}
               >
                 <TableCell>
-                  <span className="font-mono font-bold text-sm" style={{ color: "#0bbcaf" }}>
+                  <span className="font-mono text-sm font-bold text-primary">
                     {d.rhm}
                   </span>
                 </TableCell>

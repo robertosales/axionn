@@ -90,6 +90,7 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   const {
     user,
     session,
+    isPlatformAdmin: isAuthPlatformAdmin,
     refreshTeams,
     setCurrentTeamId,
     hasModuleAccess: hasLegacyModuleAccess,
@@ -375,9 +376,13 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     [currentOrganizationId, organizations],
   );
 
-  const isPlatformAdmin = organizations.some(
-    (organization) => organization.isPlatformAdmin,
-  );
+  // A autorização global vem do RPC `is_platform_admin` carregado pelo AuthContext.
+  // A lista de organizações também informa esse papel, mas não deve ser a única
+  // fonte: uma resposta antiga/incompleta do seletor escondia a administração da
+  // plataforma mesmo para um administrador global autenticado.
+  const isPlatformAdmin =
+    isAuthPlatformAdmin ||
+    organizations.some((organization) => organization.isPlatformAdmin);
   const isOrganizationAdmin = Boolean(
     currentOrganization &&
       (currentOrganization.isPlatformAdmin ||

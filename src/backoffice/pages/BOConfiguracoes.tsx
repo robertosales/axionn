@@ -25,7 +25,7 @@ export default function BOConfiguracoes() {
           <Button asChild className="min-h-11 shrink-0"><Link to="/security/mfa">{mfaEnabled ? "Verificar sessão" : "Configurar agora"}<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
         </div>
         <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2">
-          <div className="flex items-start gap-2 text-sm">{BACKOFFICE_MFA_REQUIRED ? <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" /> : <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />}<span>Política do ambiente: <strong>{BACKOFFICE_MFA_REQUIRED ? "obrigatória" : "modo de preparação"}</strong></span></div>
+          <div className="flex items-start gap-2 text-sm">{BACKOFFICE_MFA_REQUIRED ? <CheckCircle2 className="mt-0.5 h-4 w-4 text-success" /> : <AlertTriangle className="mt-0.5 h-4 w-4 text-warning" />}<span>Política do ambiente: <strong>{BACKOFFICE_MFA_REQUIRED ? "obrigatória" : "modo de preparação"}</strong></span></div>
           <div className="flex items-start gap-2 text-sm"><ShieldCheck className="mt-0.5 h-4 w-4 text-primary" /><span>Sessão atual: <strong>{currentLevel === "aal2" ? "AAL2 confirmada" : "AAL1"}</strong></span></div>
         </div>
       </section>

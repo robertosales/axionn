@@ -17,6 +17,7 @@ describe("operational console routing contract", () => {
     "/organization/teams",
     "/organization/members",
     "/organization/usage",
+    "/organization/subscription",
     "/organization/settings",
     "/platform/plans",
     "/platform/subscriptions",
@@ -32,6 +33,15 @@ describe("operational console routing contract", () => {
     expect(app).toContain("isPlatformAdmin");
     expect(app).toContain(
       "const { loading: organizationLoading, isPlatformAdmin } = useOrganization();",
+    );
+  });
+
+  it("keeps global platform authority when the organization payload is incomplete", () => {
+    const organizationContext = source("src/contexts/OrganizationContext.tsx");
+
+    expect(organizationContext).toContain("isPlatformAdmin: isAuthPlatformAdmin");
+    expect(organizationContext).toMatch(
+      /const isPlatformAdmin =\s+isAuthPlatformAdmin \|\|\s+organizations\.some/,
     );
   });
 
@@ -78,6 +88,10 @@ describe("backoffice routing contract", () => {
 
     expect(layout).toContain('to: "/backoffice/briefing-ia"');
     expect(layout).toContain('to: "/backoffice/retencao-briefing"');
+    expect(layout).toContain("bg-sidebar");
+    expect(layout).toContain("<ThemeToggle />");
+    expect(layout).toContain('aria-label="Abrir menu"');
+    expect(layout).not.toContain("bg-slate-950");
   });
 
   it("keeps backoffice outside the organization operational guard", () => {
@@ -119,7 +133,25 @@ describe("platform plan management contract", () => {
     expect(platformShell).toContain('to: "/platform/plans"');
     expect(platformShell).toContain('to: "/platform/subscriptions"');
     expect(platformShell).toContain('to: "/platform/ai-providers"');
+    expect(platformShell).toContain("bg-sidebar");
+    expect(platformShell).toContain("<ThemeToggle />");
+    expect(platformShell).not.toContain("bg-slate-950");
     expect(aiProvidersPage).toContain("<PlatformShell>");
+  });
+
+  it("exposes plans and billing from the central module selector", () => {
+    const selector = source(
+      "src/features/organization/components/OrganizationModuleSelector.tsx",
+    );
+    const organizationShell = source(
+      "src/features/organization/components/OrganizationAdminShell.tsx",
+    );
+
+    expect(selector).toContain("Configurações e planos");
+    expect(selector).toContain('navigate("/platform/plans")');
+    expect(selector).toContain("<ThemeToggle />");
+    expect(organizationShell).toContain('to: "/organization/subscription"');
+    expect(organizationShell).toContain("Assinatura e cobrança");
   });
 
   it("exposes only platform-admin RPCs for plan and subscription mutations", () => {

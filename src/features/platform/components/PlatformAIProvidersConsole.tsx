@@ -331,7 +331,7 @@ export function PlatformAIProvidersConsole() {
                     </TableCell>
                     <TableCell>
                       {provider.has_key ? (
-                        <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600">
+                        <span className="inline-flex items-center gap-1.5 text-sm text-success">
                           <CheckCircle2 className="h-4 w-4" /> Configurada
                         </span>
                       ) : (
@@ -345,7 +345,7 @@ export function PlatformAIProvidersConsole() {
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : result ? (
                         <span
-                          className={result.ok ? "text-sm text-emerald-600" : "text-sm text-destructive"}
+                          className={result.ok ? "text-sm text-success" : "text-sm text-destructive"}
                           title={result.message}
                         >
                           {result.ok ? `${result.latencyMs} ms` : result.message}

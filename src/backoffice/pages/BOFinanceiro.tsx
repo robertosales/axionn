@@ -420,7 +420,7 @@ export default function BOFinanceiro() {
                 <div className="flex items-center justify-end gap-1">
                   {BILLING_STATUS_TRANSITIONS[record.status].includes("paid") && (
                     <Button variant="ghost" size="sm" title="Marcar como pago" aria-label={`Marcar como pago ${record.tenantName}`} onClick={() => void applyStatus(record, "paid")}>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <CheckCircle2 className="h-4 w-4 text-success" />
                     </Button>
                   )}
                   <Button variant="ghost" size="sm" title="Editar detalhes" aria-label={`Editar detalhes ${record.tenantName}`} onClick={() => openDetails(record)}>
@@ -487,7 +487,7 @@ export default function BOFinanceiro() {
         const base = priceBaseline.current.find((item) => item.id === plan.id);
         const changed = !!base && (base.monthlyPrice !== plan.monthlyPrice || base.annualPrice !== plan.annualPrice || base.currency !== plan.currency);
         return <div key={plan.id} className="grid items-end gap-3 rounded-md border p-3 sm:grid-cols-[1fr_auto_auto]">
-        <div><p className="font-medium">{plan.name}{changed && <span className="ml-2 align-middle text-xs font-medium text-cyan-700">alterado</span>}</p><p className="text-xs text-muted-foreground">{plan.code}</p></div>
+        <div><p className="font-medium">{plan.name}{changed && <span className="ml-2 align-middle text-xs font-medium text-primary">alterado</span>}</p><p className="text-xs text-muted-foreground">{plan.code}</p></div>
         <div className="space-y-1"><Label>Mensal (R$)</Label><Input type="number" min="0" step="0.01" className="w-32" value={plan.monthlyPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, monthlyPrice: Number(e.target.value) } : item))} /></div>
         <div className="space-y-1"><Label>Anual (R$)</Label><Input type="number" min="0" step="0.01" className="w-32" value={plan.annualPrice} onChange={(e) => setPlans((items) => items.map((item, i) => i === index ? { ...item, annualPrice: Number(e.target.value) } : item))} /></div>
       </div>;

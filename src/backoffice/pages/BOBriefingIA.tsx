@@ -140,7 +140,7 @@ export default function BOBriefingIA() {
                     <p className="text-sm text-muted-foreground">{String(label)}</p>
                     <p className="mt-1 text-2xl font-semibold">{String(value)}</p>
                   </div>
-                  <Icon className="h-6 w-6 text-cyan-700" />
+                  <Icon className="h-6 w-6 text-primary" />
                 </CardContent>
               </Card>
             ))}

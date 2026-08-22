@@ -19,7 +19,7 @@ export default function BOAnalitico() {
   ] as const;
   return <div className="space-y-5"><div><h1 className="text-xl font-semibold">Analytics SaaS</h1><p className="text-sm text-muted-foreground">Indicadores calculados a partir da operação atual.</p></div>
     {loading ? <Loader2 className="mx-auto my-16 h-6 w-6 animate-spin" /> : <>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{cards.map(([label, value, Icon]) => <Card key={label}><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div><Icon className="h-6 w-6 text-cyan-700" /></CardContent></Card>)}</div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{cards.map(([label, value, Icon]) => <Card key={label}><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div><Icon className="h-6 w-6 text-primary" /></CardContent></Card>)}</div>
       <div className="rounded-lg border bg-white p-5"><h2 className="font-semibold">Resumo comercial</h2><div className="mt-4 grid gap-4 sm:grid-cols-3"><div><p className="text-xs text-muted-foreground">Em trial</p><p className="text-xl font-medium">{metrics.trialTenants}</p></div><div><p className="text-xs text-muted-foreground">Churned</p><p className="text-xl font-medium">{metrics.churnedTenants}</p></div><div><p className="text-xs text-muted-foreground">Receita paga no mês</p><p className="text-xl font-medium">{formatCurrencyBRL(metrics.paidRevenue)}</p></div></div></div>
     </>}
   </div>;

@@ -60,7 +60,7 @@ export function ModuleQuickAccess({ kpis }: Props) {
         kpis.impedimentosAbertos > 0
           ? `${kpis.impedimentosAbertos} impedimento${kpis.impedimentosAbertos !== 1 ? "s" : ""}`
           : null,
-      href: "/sala-agil",
+      href: "/sala-agil/dashboard",
       tone: "agil",
     },
     {
@@ -70,7 +70,7 @@ export function ModuleQuickAccess({ kpis }: Props) {
       icon: Shield,
       badge: `${kpis.timesSustentacao} time${kpis.timesSustentacao !== 1 ? "s" : ""}`,
       alert: kpis.slaEmRisco > 0 ? `${kpis.slaEmRisco} SLA em risco` : null,
-      href: "/sustentacao",
+      href: "/sustentacao/dashboard",
       tone: "sust",
     },
     {
@@ -80,7 +80,7 @@ export function ModuleQuickAccess({ kpis }: Props) {
       icon: GitBranch,
       badge: "Mudanças",
       alert: null,
-      href: "/rdm",
+      href: "/rdm/dashboard",
       tone: "neutral",
     },
   ];

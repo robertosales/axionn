@@ -19,6 +19,7 @@ import {
 import { SprintProvider } from "@/contexts/SprintContext";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useAppResilience } from "@/hooks/useAppResilience";
+import { resolveHomePath } from "@/lib/homeRoute";
 import { supabase } from "@/integrations/supabase/client";
 import type { BackofficeRole } from "@/backoffice/types/backoffice.types";
 import { OKR_V2_ENABLED } from "@/lib/featureFlags";
@@ -188,47 +189,6 @@ function PageLoader() {
       </div>
     </div>
   );
-}
-
-function resolveHomePath(options: {
-  isAdmin: boolean;
-  isPlatformAdmin: boolean;
-  isOrganizationAdmin: boolean;
-  hasModuleAccess: (module: string) => boolean;
-  roles: string[];
-}): string {
-  const {
-    isAdmin,
-    isPlatformAdmin,
-    isOrganizationAdmin,
-    hasModuleAccess,
-    roles,
-  } = options;
-
-  // O administrador global atua em vários contextos e escolhe o ambiente
-  // conscientemente na Central Axionn.
-  if (isPlatformAdmin) return "/modulos";
-
-  // Admins de organização que também têm acesso a módulos operacionais
-  // devem ir para o dashboard de módulos, não para o console administrativo.
-  // Apenas admins sem nenhum módulo operacional vão direto para /organization/admin.
-  const agil = hasModuleAccess("sala_agil");
-  const sustentacao = hasModuleAccess("sustentacao");
-  const rdm = hasModuleAccess("rdm");
-  const hasAnyModule = agil || sustentacao || rdm;
-
-  if (isOrganizationAdmin && !hasAnyModule) return "/organization/admin";
-
-  if (isAdmin) return "/dashboard-admin";
-  if (roles.includes("admin_contrato")) return "/meu-contrato";
-
-  const count = [agil, sustentacao, rdm].filter(Boolean).length;
-
-  if (count >= 2) return "/modulos";
-  if (sustentacao) return "/sustentacao";
-  if (agil) return "/sala-agil/dashboard";
-  if (rdm) return "/rdm";
-  return "/modulos";
 }
 
 function resolveSafeNextPath(search: string) {

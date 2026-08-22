@@ -7,6 +7,8 @@ import {
   type BackofficeStaffMember,
   type BillingRecord,
   type BillingStatus,
+  type PlanPriceHistoryEntry,
+  type SaaSSnapshot,
   type SaaSMetrics,
   type SupportStatus,
   type SupportTicket,
@@ -121,6 +123,7 @@ function normalizeBilling(row: Record<string, unknown>): BillingRecord {
     paidAt: row.paid_at == null ? null : String(row.paid_at),
     invoiceUrl: row.invoice_url == null ? null : String(row.invoice_url),
     notes: row.notes == null ? null : String(row.notes),
+    lastReminderAt: row.last_reminder_at == null ? null : String(row.last_reminder_at),
     createdAt: String(row.created_at ?? ""),
   };
 }
@@ -260,6 +263,53 @@ export async function linkApfBillingRequest(payload: {
     p_mark_invoiced: payload.markInvoiced,
   });
   if (error) throw error;
+}
+
+export async function recordBillingReminder(id: string, note?: string) {
+  const { error } = await (supabase as any).rpc("record_billing_reminder", {
+    p_billing_id: id,
+    p_note: note?.trim() ? note.trim() : null,
+  });
+  if (error) throw error;
+}
+
+export async function listPlanPriceHistory(limit = 50): Promise<PlanPriceHistoryEntry[]> {
+  const { data, error } = await (supabase as any).rpc("list_backoffice_plan_price_history", {
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    actionAt: String(row.action_at ?? ""),
+    planCode: String(row.plan_code ?? ""),
+    planName: String(row.plan_name ?? ""),
+    monthlyPrice: toNumber(row.monthly_price),
+    annualPrice: toNumber(row.annual_price),
+    currency: String(row.currency ?? "BRL"),
+    actorName: String(row.actor_name ?? ""),
+    actorEmail: String(row.actor_email ?? ""),
+  }));
+}
+
+export async function listSaasSnapshots(limit = 90): Promise<SaaSSnapshot[]> {
+  const { data, error } = await (supabase as any).rpc("list_backoffice_saas_snapshots", {
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    snapshotDate: String(row.snapshot_date ?? ""),
+    totalTenants: toNumber(row.total_tenants),
+    activeTenants: toNumber(row.active_tenants),
+    trialTenants: toNumber(row.trial_tenants),
+    churnedTenants: toNumber(row.churned_tenants),
+    mrr: toNumber(row.mrr),
+    arr: toNumber(row.arr),
+    newMrr: toNumber(row.new_mrr),
+    churnedMrr: toNumber(row.churned_mrr),
+    totalUsers: toNumber(row.total_users),
+    activeUsers30d: toNumber(row.active_users_30d),
+    openTickets: toNumber(row.open_tickets),
+    createdAt: String(row.created_at ?? ""),
+  }));
 }
 
 function normalizeTicket(row: Record<string, unknown>): SupportTicket {

@@ -66,6 +66,34 @@ export interface BillingRecord {
   paidAt: string | null;
   invoiceUrl: string | null;
   notes: string | null;
+  lastReminderAt: string | null;
+  createdAt: string;
+}
+
+export interface PlanPriceHistoryEntry {
+  actionAt: string;
+  planCode: string;
+  planName: string;
+  monthlyPrice: number;
+  annualPrice: number;
+  currency: string;
+  actorName: string;
+  actorEmail: string;
+}
+
+export interface SaasSnapshot {
+  snapshotDate: string;
+  totalTenants: number;
+  activeTenants: number;
+  trialTenants: number;
+  churnedTenants: number;
+  mrr: number;
+  arr: number;
+  newMrr: number;
+  churnedMrr: number;
+  totalUsers: number;
+  activeUsers30d: number;
+  openTickets: number;
   createdAt: string;
 }
 
